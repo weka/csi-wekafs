@@ -1,0 +1,1 @@
+../util/deploy-wekafs.sh

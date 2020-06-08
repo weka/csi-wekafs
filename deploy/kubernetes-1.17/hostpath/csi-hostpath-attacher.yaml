@@ -1,0 +1,60 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: csi-wekafs-attacher
+  labels:
+    app: csi-wekafs-attacher
+spec:
+  selector:
+    app: csi-wekafs-attacher
+  ports:
+    - name: dummy
+      port: 12345
+
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: csi-wekafs-attacher
+spec:
+  serviceName: "csi-wekafs-attacher"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-wekafs-attacher
+  template:
+    metadata:
+      labels:
+        app: csi-wekafs-attacher
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - csi-wekafsplugin
+            topologyKey: kubernetes.io/hostname
+      serviceAccountName: csi-attacher
+      containers:
+        - name: csi-attacher
+          image: quay.io/k8scsi/csi-attacher:v3.0.0-rc1
+          args:
+            - --v=5
+            - --csi-address=/csi/csi.sock
+          securityContext:
+            # This is necessary only for systems with SELinux, where
+            # non-privileged sidecar containers cannot access unix domain socket
+            # created by privileged CSI driver container.
+            privileged: true
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
+
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/plugins/csi-wekafs
+            type: DirectoryOrCreate
+          name: socket-dir

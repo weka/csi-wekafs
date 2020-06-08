@@ -1,0 +1,59 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: csi-wekafs-snapshotter
+  labels:
+    app: csi-wekafs-snapshotter
+spec:
+  selector:
+    app: csi-wekafs-snapshotter
+  ports:
+    - name: dummy
+      port: 12345
+
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: csi-wekafs-snapshotter
+spec:
+  serviceName: "csi-wekafs-snapshotter"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: csi-wekafs-snapshotter
+  template:
+    metadata:
+      labels:
+        app: csi-wekafs-snapshotter
+    spec:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - csi-wekafsplugin
+            topologyKey: kubernetes.io/hostname
+      serviceAccount: csi-snapshotter
+      containers:
+        - name: csi-snapshotter
+          image: quay.io/k8scsi/csi-snapshotter:v1.2.0
+          args:
+            - -v=5
+            - --csi-address=/csi/csi.sock
+          securityContext:
+            # This is necessary only for systems with SELinux, where
+            # non-privileged sidecar containers cannot access unix domain socket
+            # created by privileged CSI driver container.
+            privileged: true
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/plugins/csi-wekafs
+            type: DirectoryOrCreate
+          name: socket-dir

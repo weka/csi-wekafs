@@ -1,0 +1,14 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-filesystem
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-filesystem
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
+  parameters:
+    mountMode: driver-readcache
