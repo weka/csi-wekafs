@@ -1,0 +1,15 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-dirquota
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-dirquota
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
+  parameters:
+    wekaFilesystem: default
+    mountMode: driver-readcache
