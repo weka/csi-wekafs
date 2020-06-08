@@ -167,7 +167,7 @@ configvar CSI_PROW_WORK "$(mkdir -p "$GOPATH/pkg" && mktemp -d "$GOPATH/pkg/csip
 #   for the situation that a component becomes incompatible with the
 #   shared deployment, because then it can (temporarily!) provide its
 #   own example until the shared one can be updated; it's also how
-#   csi-driver-host-path itself provides the example.
+#   csi-wekafs itself provides the example.
 #
 # - CSI_PROW_DRIVER_VERSION of the CSI_PROW_DRIVER_REPO is checked
 #   out: this allows other repos to reference a version of the example
