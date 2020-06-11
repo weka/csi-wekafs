@@ -19,6 +19,7 @@ package wekafs
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/golang/glog"
@@ -88,7 +89,14 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	notMnt, err := mount.New("").IsLikelyNotMountPoint(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if err = os.MkdirAll(targetPath, 0750); err != nil {
+			if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
+				if os.IsExist(err) {
+					return nil, status.Error(codes.Internal, err.Error())
+				}
+			}
+			if err = os.Mkdir(targetPath, 0750); err != nil {
+				// If failed to create directory - other call succeded and not this one,
+				// return error and let it retry if needed
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 			notMnt = true

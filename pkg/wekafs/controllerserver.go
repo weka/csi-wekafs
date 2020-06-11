@@ -159,9 +159,14 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	// Check arguments
+	volumeID := req.GetVolumeId()
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
+	}
+
 	volume, err := NewVolume(req.GetVolumeId())
 	if err != nil {
-		return nil, err
+		return &csi.DeleteVolumeResponse{}, nil // Should return invalid on incorrect ID
 	}
 
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
@@ -174,6 +179,9 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	err = volume.moveToTrash(cs.mounter)
 	cs.gc.triggerGcVolume(volume)
+	if os.IsNotExist(err){
+		return &csi.DeleteVolumeResponse{}, nil
+	}
 	return &csi.DeleteVolumeResponse{}, err
 }
 
