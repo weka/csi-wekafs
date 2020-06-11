@@ -93,10 +93,11 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 
 func (hp *wekaFsDriver) Run() {
 	// Create GRPC servers
-	mounter := &wekaMounter{}
+	mounter := &wekaMounter{mountMap: mountsMap{}}
+	gc := &dirVolumeGc{mounter: mounter}
 	hp.ids = NewIdentityServer(hp.name, hp.version)
-	hp.ns = NewNodeServer(hp.nodeID, hp.maxVolumesPerNode, mounter)
-	hp.cs = NewControllerServer(hp.nodeID, mounter)
+	hp.ns = NewNodeServer(hp.nodeID, hp.maxVolumesPerNode, mounter, gc)
+	hp.cs = NewControllerServer(hp.nodeID, mounter, gc)
 
 	//discoverExistingSnapshots()
 	s := NewNonBlockingGRPCServer()

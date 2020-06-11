@@ -24,8 +24,10 @@ type wekaMount struct {
 	kMounter   mount.Interface
 }
 
+type mountsMap map[fsRequest]*wekaMount
+
 type wekaMounter struct {
-	mountMap map[fsRequest]*wekaMount
+	mountMap mountsMap
 	lock     sync.Mutex
 	kMounter mount.Interface
 }
@@ -116,7 +118,7 @@ func (m *wekaMounter) mountParams(fs string, xattr bool) (string, error, Unmount
 	return mounter.mountPoint, nil, func() {
 		if mountErr == nil {
 			if err := m.mountMap[request].decRef(); err != nil {
-				glog.V(3).Info("Failed unmounting %s at %s", fs, mounter.mountPoint)
+				glog.V(3).Infof("Failed unmounting %s at %s", fs, mounter.mountPoint)
 			}
 		}
 	}

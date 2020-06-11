@@ -36,6 +36,7 @@ type nodeServer struct {
 	nodeID            string
 	maxVolumesPerNode int64
 	mounter           *wekaMounter
+	gc                *dirVolumeGc
 }
 
 func (ns *nodeServer) NodeGetVolumeStats(c context.Context, request *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
@@ -46,11 +47,12 @@ func (ns *nodeServer) NodeExpandVolume(c context.Context, request *csi.NodeExpan
 	panic("implement me")
 }
 
-func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter) *nodeServer {
+func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
 	return &nodeServer{
 		nodeID:            nodeId,
 		maxVolumesPerNode: maxVolumesPerNode,
 		mounter:           mounter,
+		gc:                gc,
 	}
 }
 
@@ -82,6 +84,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	// check that mount target exists (or create it) and is not a mount point already
+	//TODO: Add support for -o ro, i.e Readonly volumes
 	notMnt, err := mount.New("").IsNotMountPoint(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {

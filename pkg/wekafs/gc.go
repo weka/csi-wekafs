@@ -15,30 +15,33 @@ type dirVolumeGc struct {
 	mounter *wekaMounter
 }
 
-func (gc *dirVolumeGc) triggerGc(fs string){
+func (gc *dirVolumeGc) triggerGc(fs string) {
 	gc.Lock()
 	defer gc.Unlock()
-	if gc.isRunning[fs]{
+	if gc.isRunning[fs] {
 		gc.isDeferred[fs] = true
 		return
 	}
-	gc.isRunning[fs]=true
+	gc.isRunning[fs] = true
 	go gc.purgeLeftovers(fs)
 }
 
-func (gc *dirVolumeGc) triggerGcVolume(fs, innerPath string){
+func (gc *dirVolumeGc) triggerGcVolume(volume dirVolume) {
+	fs := volume.fs
 	gc.Lock()
 	defer gc.Unlock()
-	if gc.isRunning[fs]{
+	if gc.isRunning[fs] {
 		gc.isDeferred[fs] = true
 		return
 	}
-	gc.isRunning[fs]=true
-	gc.isDeferred[fs]=true
-	go gc.purgeVolume(fs, innerPath)
+	gc.isRunning[fs] = true
+	gc.isDeferred[fs] = true
+	go gc.purgeVolume(volume)
 }
 
-func (gc *dirVolumeGc) purgeVolume(fs, innerPath string){
+func (gc *dirVolumeGc) purgeVolume(volume dirVolume) {
+	fs := volume.fs
+	innerPath := volume.dirName
 	defer gc.finishGcCycle(fs)
 	path, err, unmount := gc.mounter.Mount(fs)
 	defer unmount()
@@ -50,7 +53,7 @@ func (gc *dirVolumeGc) purgeVolume(fs, innerPath string){
 	glog.Warningf("TODO: GC Volume/path %s", filepath.Join(path, innerPath)) //TODO: To implement deletion of single volume
 }
 
-func (gc *dirVolumeGc) purgeLeftovers(fs string){
+func (gc *dirVolumeGc) purgeLeftovers(fs string) {
 	defer gc.finishGcCycle(fs)
 	path, err, unmount := gc.mounter.Mount(fs)
 	defer unmount()
@@ -62,11 +65,11 @@ func (gc *dirVolumeGc) purgeLeftovers(fs string){
 	glog.Warningf("TODO: GC Volume in %s", path) //TODO: To implement deletion of whole garbage folder
 }
 
-func (gc *dirVolumeGc) finishGcCycle(fs string){
+func (gc *dirVolumeGc) finishGcCycle(fs string) {
 	gc.Lock()
-	gc.isRunning[fs]=false
+	gc.isRunning[fs] = false
 	if gc.isDeferred[fs] {
-		gc.isDeferred[fs]=false
+		gc.isDeferred[fs] = false
 		go gc.triggerGc(fs)
 	}
 	gc.Unlock()

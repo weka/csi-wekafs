@@ -4,6 +4,8 @@ import (
 	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"os"
+	"path/filepath"
 	"syscall"
 )
 
@@ -14,8 +16,28 @@ type dirVolume struct {
 	dirName    string
 }
 
+func (v dirVolume) moveToTrash(mounter *wekaMounter) error {
+	// TODO: Implement move to
+	mountPath, err, unmount := mounter.Mount(v.fs)
+	defer unmount()
+	if err != nil {
+		err = os.MkdirAll(filepath.Join(mountPath, garbagePath), 0750)
+		if err != nil {
+			return err
+		}
+		return os.Rename(v.getFullPath(mountPath), filepath.Join(mountPath, garbagePath ,v.dirName))
+	}
+	return err
+}
+
+func (v dirVolume) getFullPath(mountPath string) string {
+	return filepath.Join(mountPath, v.dirName)
+}
+
 func NewVolume(volumeId string) (dirVolume, error) {
-	// TODO: Validate volumeId
+	if err := validateVolumeId(volumeId); err != nil {
+		return dirVolume{}, err
+	}
 	return dirVolume{
 		id:         volumeId,
 		fs:         GetFSName(volumeId),
@@ -42,8 +64,7 @@ func updateDirCapacity(volumePath string, capacity int64) error {
 	return updateXattrs(volumePath, m)
 }
 
-func dirQuotaAsyncDelete(mounter *wekaMounter, fsname, dirname string) error {
-	vol := dirVolumeGc{mounter: mounter}
-	vol.triggerGcVolume(fsname, dirname)
+func dirQuotaAsyncDelete(gc *dirVolumeGc, volume dirVolume) error {
+	gc.triggerGcVolume(volume)
 	return nil
 }

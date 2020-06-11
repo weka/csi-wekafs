@@ -34,7 +34,7 @@ const (
 type controllerServer struct {
 	caps    []*csi.ControllerServiceCapability
 	nodeID  string
-	gc      dirVolumeGc
+	gc      *dirVolumeGc
 	mounter *wekaMounter
 }
 
@@ -66,8 +66,7 @@ func (cs *controllerServer) ListSnapshots(c context.Context, request *csi.ListSn
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, mounter *wekaMounter) *controllerServer {
-	mounter.mountMap = make(map[fsRequest]*wekaMount)
+func NewControllerServer(nodeID string, mounter *wekaMounter, gc *dirVolumeGc) *controllerServer {
 	return &controllerServer{
 		caps: getControllerServiceCapabilities(
 			[]csi.ControllerServiceCapability_RPC_Type{
@@ -75,7 +74,7 @@ func NewControllerServer(nodeID string, mounter *wekaMounter) *controllerServer 
 			}),
 		nodeID:  nodeID,
 		mounter: mounter,
-		gc:      dirVolumeGc{mounter: mounter},
+		gc:      gc,
 	}
 }
 
@@ -122,11 +121,11 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	if PathExists(volPath) {
 		glog.V(3).Infof("Directory already exists: %v", volPath)
 		currentCapacity := getVolumeSize(volPath)
+		// TODO: Once we have everything working - review this, big potential of race of several CreateVolume requests
 		if currentCapacity != capacity {
-			return nil, status.Errorf(codes.Unknown, "Volume with same ID exists with different capacity volumeID %s")
+			return nil, status.Errorf(codes.Unknown, "Volume with same ID exists with different capacity volumeID %s: [current]%d!=%d[requested]", volumeID, currentCapacity, capacity)
 		}
 	} else {
-		//Actually create a directory on pre-mounted filesystem
 		maxStorageCapacity, err := getMaxDirCapacity(volPath)
 		if err != nil {
 			return nil, status.Errorf(codes.Unknown, "Cannot obtain free capacity for volume %s", volumeID)
@@ -156,8 +155,9 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	// Check arguments
-	if len(req.GetVolumeId()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
+	volume, err := NewVolume(req.GetVolumeId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	// obtain volume ID and check it's sanity
@@ -174,10 +174,9 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	// Perform mount in order to be able to access Xattrs and get a full volume root path
 	glog.V(4).Infof("deleting volume %s", volumeID)
 
-	if err := dirQuotaAsyncDelete(cs.mounter, GetFSName(volumeID), GetVolumeDirName(volumeID)); err != nil {
-		glog.V(4).Infof("volume %s entered garbage collection state", volumeID)
-	}
-	return &csi.DeleteVolumeResponse{}, nil
+	err = volume.moveToTrash(cs.mounter)
+	cs.gc.triggerGcVolume(volume)
+	return &csi.DeleteVolumeResponse{}, err
 }
 
 func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {

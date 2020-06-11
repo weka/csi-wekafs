@@ -171,7 +171,9 @@ func validateVolumeId(volumeId string) error {
 		if len(volumeId) == 0 && len(volumeId) > maxVolumeIdLength {
 			return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")
 		}
-		r := VolumeTypeDirV1 + "/" + "[^/]*" + "[0-9a-f]{40}" + "/" + "[A-Za-z0-9_-.:]+" + "$"
+		// TODO: Reuse ascii ranges directly
+		// TODO: validate dirName part against ascii filter
+		r := VolumeTypeDirV1 + "/" + "[^/]*" + "[0-9a-f]{40}" + "-" + "[A-Za-z0-9_-.:]+" + "$"
 		re := regexp.MustCompile(r)
 		if !re.MatchString(volumeId) {
 			return status.Errorf(codes.InvalidArgument, "invalid volume ID specified")
@@ -179,7 +181,7 @@ func validateVolumeId(volumeId string) error {
 	default:
 		return status.Errorf(codes.InvalidArgument, "unsupported not ID specified")
 	}
-	return status.Errorf(codes.Internal, "volume ID could not be verified")
+	return nil
 }
 
 func updateXattrs(volPath string, attrs map[string][]byte) error {
