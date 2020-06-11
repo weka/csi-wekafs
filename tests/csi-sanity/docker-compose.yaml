@@ -9,7 +9,7 @@ services:
       - SYS_ADMIN
   sanity:
     build: .
-    command: csi-sanity --csi.endpoint /tmp/weka-csi-test/csi.sock -csi.mountdir=/tmp/weka-csi-test/sanity-workspace/ -ginkgo.failFast -csi.testvolumeparameters /test/wekafs-vol.yaml  -ginkgo.trace -ginkgo.v
+    command: run_sanity
     volumes:
       - test-volume:/tmp/weka-csi-test
 volumes:
