@@ -29,8 +29,11 @@ func init() {
 }
 
 var (
-	endpoint          = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
-	driverName        = flag.String("drivername", "wekafs.csi.k8s.io", "name of the driver")
+	endpoint   = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
+	driverName = flag.String("drivername", "wekafs.csi.k8s.io", "name of the driver")
+	debugPath  = flag.String("debugpath", "",
+		"Debug path to use instead of actually mounting weka, can be local fs or wekafs,"+
+			" virtual FS will be created in this path instead of actual mounting")
 	nodeID            = flag.String("nodeid", "", "node id")
 	maxVolumesPerNode = flag.Int64("maxvolumespernode", 0, "limit of volumes per node")
 	showVersion       = flag.Bool("version", false, "Show version.")
@@ -52,7 +55,7 @@ func main() {
 }
 
 func handle() {
-	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

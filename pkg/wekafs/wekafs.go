@@ -18,9 +18,7 @@ package wekafs
 
 import (
 	"errors"
-	"fmt"
 	"github.com/golang/glog"
-	"os"
 )
 
 const (
@@ -41,24 +39,17 @@ type wekaFsDriver struct {
 	mountMode         string
 	mockMount         bool
 
-	ids *identityServer
-	ns  *nodeServer
-	cs  *controllerServer
+	ids       *identityServer
+	ns        *nodeServer
+	cs        *controllerServer
+	debugPath string
 }
 
 var (
 	vendorVersion = "dev"
 )
 
-const (
-	dataRoot = "/wekafs"
-)
-
-func init() {
-
-}
-
-func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string) (*wekaFsDriver, error) {
+func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string) (*wekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -74,11 +65,6 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 		vendorVersion = version
 	}
 
-	// Check that the wekafs directory exists
-	if _, err := os.Stat(dataRoot); os.IsNotExist(err) {
-		return nil, fmt.Errorf("wekafs directory not exists on host, weka may be not installed: %v", err)
-	}
-
 	glog.Infof("Driver: %v ", driverName)
 	glog.Infof("Version: %s", vendorVersion)
 
@@ -88,21 +74,22 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 		nodeID:            nodeID,
 		endpoint:          endpoint,
 		maxVolumesPerNode: maxVolumesPerNode,
+		debugPath:         debugPath,
 	}, nil
 }
 
-func (hp *wekaFsDriver) Run() {
+func (driver *wekaFsDriver) Run() {
 	// Create GRPC servers
-	mounter := &wekaMounter{mountMap: mountsMap{}}
+	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath}
 	gc := initDirVolumeGc()
 
-	hp.ids = NewIdentityServer(hp.name, hp.version)
-	hp.ns = NewNodeServer(hp.nodeID, hp.maxVolumesPerNode, mounter, gc)
-	hp.cs = NewControllerServer(hp.nodeID, mounter, gc)
+	driver.ids = NewIdentityServer(driver.name, driver.version)
+	driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, mounter, gc)
+	driver.cs = NewControllerServer(driver.nodeID, mounter, gc)
 
 	//discoverExistingSnapshots()
 	s := NewNonBlockingGRPCServer()
-	s.Start(hp.endpoint, hp.ids, hp.cs, hp.ns)
+	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
 }
 

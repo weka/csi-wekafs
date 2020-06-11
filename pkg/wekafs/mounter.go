@@ -9,8 +9,6 @@ import (
 	"sync"
 )
 
-const debugMode = true
-
 type fsRequest struct {
 	fs    string
 	xattr bool
@@ -22,14 +20,16 @@ type wekaMount struct {
 	refCount   int
 	lock       sync.Mutex
 	kMounter   mount.Interface
+	debugPath  string
 }
 
 type mountsMap map[fsRequest]*wekaMount
 
 type wekaMounter struct {
-	mountMap mountsMap
-	lock     sync.Mutex
-	kMounter mount.Interface
+	mountMap  mountsMap
+	lock      sync.Mutex
+	kMounter  mount.Interface
+	debugPath string
 }
 
 func (m *wekaMount) incRef() error {
@@ -64,10 +64,10 @@ func (m *wekaMount) doMount() error {
 	if err := os.MkdirAll(m.mountPoint, 0750); err != nil {
 		return err
 	}
-	if !debugMode {
+	if m.debugPath == "" {
 		return m.kMounter.Mount(m.fs, m.mountPoint, "wekafs", []string{})
 	} else {
-		fakePath := filepath.Join("/tmp/csi-wekafs-fakemounts", m.fs)
+		fakePath := filepath.Join(m.debugPath, m.fs)
 		if err := os.MkdirAll(fakePath, 0750); err != nil {
 			panic("Failed to create directory")
 		}
@@ -89,6 +89,7 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 		mount := &wekaMount{
 			kMounter:   m.kMounter,
 			fs:         fs.fs,
+			debugPath:  m.debugPath,
 			mountPoint: "/var/run/weka-mounts/" + getAsciiPart(fs.fs, 64) + "-" + mountPointUuid.String(),
 			// TODO: We might need versioning context, as right now there is no support for different Mount options
 			//		 But no need for it now
