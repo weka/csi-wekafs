@@ -27,7 +27,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/utils/mount"
 )
 
 const TopologyKeyNode = "topology.wekafs.csi/node"
@@ -85,7 +85,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	// check that mount target exists (or create it) and is not a mount point already
 	//TODO: Add support for -o ro, i.e Readonly volumes
-	notMnt, err := mount.New("").IsNotMountPoint(targetPath)
+	notMnt, err := mount.New("").IsLikelyNotMountPoint(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			if err = os.MkdirAll(targetPath, 0750); err != nil {
@@ -122,7 +122,9 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 	mounter := mount.New("")
 	fsName := volume.fs
+	glog.V(4).Info("Calling mount")
 	mountPoint, err, _ := ns.mounter.Mount(fsName)
+	glog.V(4).Info("Mounted")
 	fullPath := GetVolumeFullPath(mountPoint, volume.id)
 
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
@@ -154,6 +156,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		}
 	} else if !notMnt {
 		// Unmounting the image or filesystem.
+		glog.V(4).Infof("Unmounting %s at %s", volume.id, targetPath)
 		err = mount.New("").Unmount(targetPath)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())

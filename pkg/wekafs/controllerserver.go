@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
+	"sync"
 )
 
 const (
@@ -36,6 +37,7 @@ type controllerServer struct {
 	nodeID  string
 	gc      *dirVolumeGc
 	mounter *wekaMounter
+	creatLock sync.Mutex
 }
 
 func (cs *controllerServer) ControllerPublishVolume(c context.Context, request *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
@@ -79,6 +81,8 @@ func NewControllerServer(nodeID string, mounter *wekaMounter, gc *dirVolumeGc) *
 }
 
 func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+	cs.creatLock.Lock()
+	defer cs.creatLock.Unlock()
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		glog.V(3).Infof("invalid create volume req: %v", req)
 		return nil, err
@@ -123,7 +127,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		currentCapacity := getVolumeSize(volPath)
 		// TODO: Once we have everything working - review this, big potential of race of several CreateVolume requests
 		if currentCapacity != capacity {
-			return nil, status.Errorf(codes.Unknown, "Volume with same ID exists with different capacity volumeID %s: [current]%d!=%d[requested]", volumeID, currentCapacity, capacity)
+			return nil, status.Errorf(codes.AlreadyExists, "Volume with same ID exists with different capacity volumeID %s: [current]%d!=%d[requested]", volumeID, currentCapacity, capacity)
 		}
 	} else {
 		maxStorageCapacity, err := getMaxDirCapacity(mountPoint)

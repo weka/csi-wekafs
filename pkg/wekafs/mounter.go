@@ -3,7 +3,7 @@ package wekafs
 import (
 	"github.com/golang/glog"
 	"github.com/google/uuid"
-	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/utils/mount"
 	"os"
 	"path/filepath"
 	"sync"
@@ -46,13 +46,13 @@ func (m *wekaMount) incRef() error {
 
 func (m *wekaMount) decRef() error {
 	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.refCount--
 	if m.refCount <= 0 {
 		if err := m.doUnmount(); err != nil {
 			return err
 		}
 	}
-	m.lock.Unlock()
 	return nil
 }
 
@@ -72,6 +72,7 @@ func (m *wekaMount) doMount() error {
 			panic("Failed to create directory")
 		}
 
+		glog.V(3).Infof("Calling k8s mounter for fs: %s", m.fs)
 		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
 	}
 }
