@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 if [[ $1 != "--keep" ]]; then
     TO_STOP=--exit-code-from=sanity
 fi

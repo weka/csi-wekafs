@@ -115,6 +115,7 @@ func (m *wekaMounter) mountParams(fs string, xattr bool) (string, error, Unmount
 	mountErr := mounter.incRef()
 
 	if mountErr != nil {
+		glog.Errorf("Failed mounting %s at %s: %e", fs, mounter.mountPoint, mounter)
 		return "", mountErr, func() {}
 	}
 	return mounter.mountPoint, nil, func() {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/golang/glog"
 	"github.com/pkg/xattr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -194,6 +195,7 @@ func updateXattrs(volPath string, attrs map[string][]byte) error {
 			return status.Errorf(codes.Internal, "failed to update volume attribute %s: %s", key, val)
 		}
 	}
+	glog.V(3).Infof("Xattrs updated on volume: %v", volPath)
 	return nil
 }
 

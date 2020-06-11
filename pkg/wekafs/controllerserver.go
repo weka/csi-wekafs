@@ -141,11 +141,11 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		if err = os.MkdirAll(volPath, 0750); err != nil {
 			return nil, err
 		}
-	}
-
-	// Update volume metadata on directory using xattrs
-	if err := setVolumeProperties(volPath, capacity, req.GetName()); err != nil {
-		return nil, err
+		glog.V(3).Infof("Created volume in: %v", volPath)
+		// Update volume metadata on directory using xattrs
+		if err := setVolumeProperties(volPath, capacity, req.GetName()); err != nil {
+			return nil, err
+		}
 	}
 
 	return &csi.CreateVolumeResponse{
@@ -177,9 +177,9 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	// Perform mount in order to be able to access Xattrs and get a full volume root path
 	glog.V(4).Infof("deleting volume %s", volume.id)
 
-	err = volume.moveToTrash(cs.mounter)
-	cs.gc.triggerGcVolume(volume)
+	err = volume.moveToTrash(cs.mounter, cs.gc)
 	if os.IsNotExist(err){
+		glog.V(4).Infof("Volume not found %s, but returning success for idempotence", volume.id)
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 	return &csi.DeleteVolumeResponse{}, err
