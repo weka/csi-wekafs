@@ -184,8 +184,13 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	if len(req.GetStagingTargetPath()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
+
 	if req.GetVolumeCapability() == nil {
 		return nil, status.Error(codes.InvalidArgument, "Error occured, volume Capability missing in request")
+	}
+
+	if req.GetVolumeCapability().GetBlock() != nil {
+		return nil, status.Error(codes.InvalidArgument, "Block accessType is unsupported")
 	}
 	glog.V(4).Infof("wekafs: volume %s has been staged.", volume.id)
 

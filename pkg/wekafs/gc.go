@@ -15,6 +15,13 @@ type dirVolumeGc struct {
 	mounter *wekaMounter
 }
 
+func initDirVolumeGc() *dirVolumeGc {
+	gc := dirVolumeGc{}
+	gc.isRunning = make(map[string]bool)
+	gc.isDeferred = make(map[string]bool)
+	return &gc
+}
+
 func (gc *dirVolumeGc) triggerGc(fs string) {
 	gc.Lock()
 	defer gc.Unlock()

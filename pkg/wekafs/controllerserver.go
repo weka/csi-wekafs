@@ -126,7 +126,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			return nil, status.Errorf(codes.Unknown, "Volume with same ID exists with different capacity volumeID %s: [current]%d!=%d[requested]", volumeID, currentCapacity, capacity)
 		}
 	} else {
-		maxStorageCapacity, err := getMaxDirCapacity(volPath)
+		maxStorageCapacity, err := getMaxDirCapacity(mountPoint)
 		if err != nil {
 			return nil, status.Errorf(codes.Unknown, "Cannot obtain free capacity for volume %s", volumeID)
 		}
@@ -195,7 +195,7 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 
 	capacity := int64(capRange.GetRequiredBytes())
 
-	maxStorageCapacity, err := getMaxDirCapacity(volPath)
+	maxStorageCapacity, err := getMaxDirCapacity(mountPoint)
 	if err != nil {
 		return nil, status.Errorf(codes.Unknown, "Cannot obtain free capacity for volume %s", volumeID)
 	}

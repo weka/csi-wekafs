@@ -76,7 +76,10 @@ func GetVolumeFullPath(mountPoint, volumeID string) string {
 
 func GetVolumeType(volumeID string) string {
 	slices := strings.Split(volumeID, "/")
-	return slices[0]
+	if len(slices) >= 2 {
+		return strings.Join(slices[0:2], "/")
+	}
+	return ""
 }
 
 func TruncateString(s string, i int) string {
@@ -168,12 +171,13 @@ func validateVolumeId(volumeId string) error {
 		// e.g.
 		// "dir/v1/default/63008f52b44ca664dfac8a64f0c17a28e1754213-my-awesome-folder"
 		// length limited to maxVolumeIdLength
+		//slices := strings.Split(volumeId, "/")[2:]
 		if len(volumeId) == 0 && len(volumeId) > maxVolumeIdLength {
 			return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")
 		}
 		// TODO: Reuse ascii ranges directly
 		// TODO: validate dirName part against ascii filter
-		r := VolumeTypeDirV1 + "/" + "[^/]*" + "[0-9a-f]{40}" + "-" + "[A-Za-z0-9_-.:]+" + "$"
+		r := VolumeTypeDirV1 + "/" + "[^/]*/" + "[0-9a-f]{40}" + "-" + "[A-Za-z0-9_.:-]+" + "$"
 		re := regexp.MustCompile(r)
 		if !re.MatchString(volumeId) {
 			return status.Errorf(codes.InvalidArgument, "invalid volume ID specified")

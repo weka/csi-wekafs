@@ -54,7 +54,8 @@ func getMaxDirCapacity(mountPath string) (int64, error) {
 		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity on mount path %s", mountPath)
 	}
 	// Available blocks * size per block = available space in bytes
-	return int64(stat.Bavail * uint64(stat.Bsize)), nil
+	maxCapacity := int64(stat.Bavail * uint64(stat.Bsize))
+	return maxCapacity, nil
 }
 
 func updateDirCapacity(volumePath string, capacity int64) error {
