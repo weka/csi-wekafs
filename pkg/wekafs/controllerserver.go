@@ -157,13 +157,7 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	// Check arguments
 	volume, err := NewVolume(req.GetVolumeId())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	// obtain volume ID and check it's sanity
-	volumeID := req.GetVolumeId()
-	if err := validateVolumeId(volumeID); err != nil {
-		return &csi.DeleteVolumeResponse{}, status.Errorf(codes.InvalidArgument, "Invalid volumeID encountered")
+		return nil, err
 	}
 
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
@@ -172,7 +166,7 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 
 	// Perform mount in order to be able to access Xattrs and get a full volume root path
-	glog.V(4).Infof("deleting volume %s", volumeID)
+	glog.V(4).Infof("deleting volume %s", volume.id)
 
 	err = volume.moveToTrash(cs.mounter)
 	cs.gc.triggerGcVolume(volume)

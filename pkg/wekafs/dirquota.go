@@ -25,7 +25,7 @@ func (v dirVolume) moveToTrash(mounter *wekaMounter) error {
 		if err != nil {
 			return err
 		}
-		return os.Rename(v.getFullPath(mountPath), filepath.Join(mountPath, garbagePath ,v.dirName))
+		return os.Rename(v.getFullPath(mountPath), filepath.Join(mountPath, garbagePath, v.dirName))
 	}
 	return err
 }
@@ -62,9 +62,4 @@ func updateDirCapacity(volumePath string, capacity int64) error {
 	m := make(map[string][]byte)
 	m[xattrCapacity] = []byte(string(capacity))
 	return updateXattrs(volumePath, m)
-}
-
-func dirQuotaAsyncDelete(gc *dirVolumeGc, volume dirVolume) error {
-	gc.triggerGcVolume(volume)
-	return nil
 }

@@ -58,6 +58,11 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter,
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 
+	volume, err := NewVolume(req.GetVolumeId())
+	if err != nil {
+		return &csi.NodePublishVolumeResponse{}, err
+	}
+
 	// Check volume capabitily arguments
 	if req.GetVolumeCapability() == nil {
 		return nil, status.Error(codes.InvalidArgument, "Volume capability missing in request")
@@ -70,11 +75,6 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	// check that requested capability is a mount
 	if req.GetVolumeCapability().GetBlock() != nil {
 		return nil, status.Error(codes.InvalidArgument, "block volume mount not supported")
-	}
-
-	// check volume ID
-	if err := validateVolumeId(req.GetVolumeId()); err != nil {
-		return &csi.NodePublishVolumeResponse{}, err
 	}
 
 	// check targetPath
@@ -110,21 +110,20 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	readOnly := req.GetReadonly()
-	volumeId := req.GetVolumeId()
 	attrib := req.GetVolumeContext()
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
 
 	glog.V(4).Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeId %v\nattributes %v\nmountflags %v\n",
-		targetPath, fsType, deviceId, readOnly, volumeId, attrib, mountFlags)
+		targetPath, fsType, deviceId, readOnly, volume.id, attrib, mountFlags)
 
 	options := []string{"bind"}
 	if readOnly {
 		options = append(options, "ro")
 	}
 	mounter := mount.New("")
-	fsName := GetFSName(volumeId)
+	fsName := volume.fs
 	mountPoint, err, _ := ns.mounter.Mount(fsName)
-	fullPath := GetVolumeFullPath(mountPoint, volumeId)
+	fullPath := GetVolumeFullPath(mountPoint, volume.id)
 
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
 		var errList strings.Builder
@@ -138,22 +137,15 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 
 	// Check arguments
-	if len(req.GetVolumeId()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
-	}
-	if err := validateVolumeId(req.GetVolumeId()); err != nil {
-		return nil, err
+	volume, err := NewVolume(req.GetVolumeId())
+	if err != nil {
+		return &csi.NodeUnpublishVolumeResponse{}, err
 	}
 
 	if len(req.GetTargetPath()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 	targetPath := req.GetTargetPath()
-	volumeID := req.GetVolumeId()
-	// TODO: We don't really need volume object. All we need here is validateVolumeId call
-	if _, err := NewVolume(volumeID); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
 
 	// Unmount only if the target path is really a Mount point.
 	if notMnt, err := mount.IsNotMountPoint(mount.New(""), targetPath); err != nil {
@@ -177,23 +169,25 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	if err := os.RemoveAll(targetPath); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	glog.V(4).Infof("wekafs: volume %s has been unpublished.", targetPath)
+	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.id)
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
 func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 
-	// Check arguments
-	if len(req.GetVolumeId()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
+	volume, err := NewVolume(req.GetVolumeId())
+	if err != nil {
+		return &csi.NodeStageVolumeResponse{}, err
 	}
+	// Check arguments
 	if len(req.GetStagingTargetPath()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 	if req.GetVolumeCapability() == nil {
-		return nil, status.Error(codes.InvalidArgument, "Volume Capability missing in request")
+		return nil, status.Error(codes.InvalidArgument, "Error occured, volume Capability missing in request")
 	}
+	glog.V(4).Infof("wekafs: volume %s has been staged.", volume.id)
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
@@ -201,12 +195,15 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 
 	// Check arguments
-	if len(req.GetVolumeId()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
+	volume, err := NewVolume(req.GetVolumeId())
+	if err != nil {
+		return &csi.NodeUnstageVolumeResponse{}, err
 	}
+
 	if len(req.GetStagingTargetPath()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
+	glog.V(4).Infof("wekafs: volume %s has been unstaged.", volume.id)
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
