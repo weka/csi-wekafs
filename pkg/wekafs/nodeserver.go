@@ -79,36 +79,40 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	// check targetPath
-	targetPath := req.GetTargetPath()
+	targetPath := filepath.Clean(req.GetTargetPath())
+	mounter := mount.New("")
 	if len(targetPath) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 
-	// check that mount target exists (or create it) and is not a mount point already
-	//TODO: Add support for -o ro, i.e Readonly volumes
-	notMnt, err := mount.New("").IsLikelyNotMountPoint(targetPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
-				if os.IsExist(err) {
-					return nil, status.Error(codes.Internal, err.Error())
-				}
-			}
-			if err = os.Mkdir(targetPath, 0750); err != nil {
-				// If failed to create directory - other call succeded and not this one,
-				// return error and let it retry if needed
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-			notMnt = true
-		} else {
-			return nil, status.Error(codes.Internal, err.Error())
-		}
-	}
 
-	if !notMnt {
-		// already mounted, no need to do anything more
-		return &csi.NodePublishVolumeResponse{}, nil
-	}
+	//// check that mount target exists (or create it) and is not a mount point already
+	//TODO: Add support for -o ro, i.e Readonly volumes
+	//notMnt, err := mounter.GetMountRefs(targetPath)
+	//if err != nil {
+	//	if os.IsNotExist(err) {
+	//		if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
+	//			if os.IsExist(err) {
+	//				return nil, status.Error(codes.Internal, err.Error())
+	//			}
+	//		}
+	//		if err = os.Mkdir(targetPath, 0750); err != nil {
+	//			// If failed to create directory - other call succeded and not this one,
+	//			// return error and let it retry if needed
+	//			return nil, status.Error(codes.Internal, err.Error())
+	//		}
+	//		notMnt = true
+	//	} else {
+	//		return nil, status.Error(codes.Internal, err.Error())
+	//	}
+	//}
+
+	//if !notMnt {
+	//	// already mounted, no need to do anything more
+	//	glog.Info("Already mounted, returing success for %s", volume.id)
+	//	return &csi.NodePublishVolumeResponse{}, nil
+	//}
+	//
 
 	fsType := req.GetVolumeCapability().GetMount().GetFsType()
 
@@ -128,12 +132,33 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if readOnly {
 		options = append(options, "ro")
 	}
-	mounter := mount.New("")
 	fsName := volume.fs
-	glog.V(4).Info("Calling mount")
 	mountPoint, err, _ := ns.mounter.Mount(fsName)
-	glog.V(4).Info("Mounted")
 	fullPath := GetVolumeFullPath(mountPoint, volume.id)
+
+	if _, err = validatedVolume(mountPoint, err, req.GetVolumeId()); err != nil {
+		return nil, err
+	}
+
+
+	currentMounts, err := mounter.GetMountRefs(targetPath)
+	for _, mounted := range currentMounts{
+		if targetPath == mounted{
+			glog.Info("Already mounted, returing success for %s", volume.id)
+			return &csi.NodePublishVolumeResponse{}, nil
+		}
+	}
+
+	if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
+		if os.IsExist(err) {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	}
+	if err = os.Mkdir(targetPath, 0750); err != nil {
+		// If failed to create directory - other call succeded and not this one,
+		// return error and let it retry if needed
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
 		var errList strings.Builder
@@ -181,6 +206,10 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.id)
+	err = ns.mounter.Unmount(volume.fs)
+	if err != nil {
+		glog.Errorf("Post-unpublish unmount failed %s", err)
+	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

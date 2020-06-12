@@ -37,7 +37,7 @@ func (v dirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
 		glog.V(4).Infof("Moved %s to trash", v.id)
 		return err
 	}else{
-		glog.V(4).Infof("Failed moving %s to trash: %s", v.id, err)
+		glog.V(4).Infof("Failed moving %s to trash: %s", v.getFullPath(mountPath), err)
 		return err
 	}
 }
