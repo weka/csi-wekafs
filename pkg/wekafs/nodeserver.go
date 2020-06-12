@@ -137,6 +137,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	fullPath := GetVolumeFullPath(mountPoint, volume.id)
 
 	if _, err = validatedVolume(mountPoint, err, req.GetVolumeId()); err != nil {
+		glog.Info("Volume not found on filesystem %s %s", volume.fs, volume.id)
 		return nil, err
 	}
 
@@ -206,6 +207,8 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.id)
 	err = ns.mounter.Unmount(volume.fs)
 	if err != nil {
+		//TODO: unmount here is not really on-par with PublishVolume as PublishVolume can be called multiple times(or none)
+		//TODO: It can try to unmount when some other call just mounted and has no open descriptor, causing writes against underlying filesystem
 		glog.Errorf("Post-unpublish unmount failed %s", err)
 	}
 

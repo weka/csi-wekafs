@@ -39,8 +39,8 @@ func (m *wekaMount) incRef() error {
 		if err := m.doMount(); err != nil {
 			return err
 		}
-		m.refCount++
 	}
+	m.refCount++
 	return nil
 }
 
@@ -57,6 +57,7 @@ func (m *wekaMount) decRef() error {
 }
 
 func (m *wekaMount) doUnmount() error {
+	glog.V(3).Infof("Calling k8s unmounter for fs: %s @ %s", m.fs, m.mountPoint)
 	return m.kMounter.Unmount(m.mountPoint)
 }
 
@@ -72,7 +73,7 @@ func (m *wekaMount) doMount() error {
 			panic("Failed to create directory")
 		}
 
-		glog.V(3).Infof("Calling k8s mounter for fs: %s", m.fs)
+		glog.V(3).Infof("Calling k8s mounter for fs: %s @ %s", m.fs, m.mountPoint)
 		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
 	}
 }
