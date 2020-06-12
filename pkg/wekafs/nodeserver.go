@@ -150,9 +150,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
-		if os.IsExist(err) {
-			return nil, status.Error(codes.Internal, err.Error())
-		}
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if err = os.Mkdir(targetPath, 0750); err != nil {
 		// If failed to create directory - other call succeded and not this one,
