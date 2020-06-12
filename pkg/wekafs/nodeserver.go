@@ -133,38 +133,41 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		options = append(options, "ro")
 	}
 	fsName := volume.fs
-	mountPoint, err, _ := ns.mounter.Mount(fsName)
+	mountPoint, err, unmount := ns.mounter.Mount(fsName)
 	fullPath := GetVolumeFullPath(mountPoint, volume.id)
 
 	if _, err = validatedVolume(mountPoint, err, req.GetVolumeId()); err != nil {
-		glog.Info("Volume not found on filesystem %s %s", volume.fs, volume.id)
+		glog.Infof("Volume not found on filesystem %s %s", volume.fs, volume.id)
+		unmount()
 		return nil, err
 	}
 
-
-	currentMounts, err := mounter.GetMountRefs(targetPath)
-	for _, mounted := range currentMounts{
-		if targetPath == mounted{
-			glog.Info("Already mounted, returing success for %s", volume.id)
-			return &csi.NodePublishVolumeResponse{}, nil
-		}
-	}
 
 	if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if err = os.Mkdir(targetPath, 0750); err != nil {
 		// If failed to create directory - other call succeded and not this one,
-		// return error and let it retry if needed
-		return nil, status.Error(codes.Internal, err.Error())
+		// TODO: Returning success, but this is not completely right.
+		// As potentially some other process holds. Need a good way to inspect binds
+		// SearchMountPoints and GetMountRefs failed to do the job
+		if os.IsExist(err){
+			unmount()
+			return &csi.NodePublishVolumeResponse{}, nil
+		}else{
+			unmount()
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 	}
 
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
 		var errList strings.Builder
 		errList.WriteString(err.Error())
+		unmount()
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
 	}
 
+	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind succesffully
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -181,34 +184,24 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	}
 	targetPath := req.GetTargetPath()
 
-	// Unmount only if the target path is really a Mount point.
-	if notMnt, err := mount.IsNotMountPoint(mount.New(""), targetPath); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, status.Error(codes.Internal, err.Error())
-		}
-	} else if !notMnt {
-		// Unmounting the image or filesystem.
-		glog.V(4).Infof("Unmounting %s at %s", volume.id, targetPath)
-		err = mount.New("").Unmount(targetPath)
-		if err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
+	// TODO: Verify that targetPath is indeed equals to expected source of bind mount
+	//		 Which is not straightforward in case plugin was restarted, as in this case
+	//		 we lose information of source. Probably Context can be used
+	if _, err := os.Stat(targetPath); err != nil {
+		if os.IsNotExist(err) {
+			return &csi.NodeUnpublishVolumeResponse{}, nil
 		}
 	}
-	// Delete the Mount point.
-	// Does not return error for non-existent path, repeated calls OK for idempotency.
-	//TODO: IMPORTANT!
-	//		Ensure that path is no longer mount point
-	//		and is empty dir and remove dir, not recursive removal
-	//		Also, we can have race here with another pod mounting same volume
-	//		So this must be under a lock, common with PublishVolume
-	if err := os.RemoveAll(targetPath); err != nil {
+	if err := mount.New("").Unmount(targetPath); err != nil{
+		glog.Errorf("failed unmounting volume %s at %s : %s", volume.id, targetPath, err)
+	}
+	if err := os.Remove(targetPath); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.id)
+	// Doing this only in case both bind unmount and remove succeeded
 	err = ns.mounter.Unmount(volume.fs)
 	if err != nil {
-		//TODO: unmount here is not really on-par with PublishVolume as PublishVolume can be called multiple times(or none)
-		//TODO: It can try to unmount when some other call just mounted and has no open descriptor, causing writes against underlying filesystem
 		glog.Errorf("Post-unpublish unmount failed %s", err)
 	}
 

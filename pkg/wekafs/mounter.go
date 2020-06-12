@@ -41,6 +41,7 @@ func (m *wekaMount) incRef() error {
 		}
 	}
 	m.refCount++
+	glog.V(7).Infof("Refcount +1 =  %d @ %s", m.refCount, m.mountPoint)
 	return nil
 }
 
@@ -48,6 +49,7 @@ func (m *wekaMount) decRef() error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.refCount--
+	glog.V(7).Infof("Refcount -1 =  %d @ %s", m.refCount, m.mountPoint)
 	if m.refCount <= 0 {
 		if err := m.doUnmount(); err != nil {
 			return err
@@ -58,7 +60,11 @@ func (m *wekaMount) decRef() error {
 
 func (m *wekaMount) doUnmount() error {
 	glog.V(3).Infof("Calling k8s unmounter for fs: %s @ %s", m.fs, m.mountPoint)
-	return m.kMounter.Unmount(m.mountPoint)
+	err := m.kMounter.Unmount(m.mountPoint)
+	if err != nil {
+		glog.V(3).Infof("Failed unmounting %s at %s: %s", m.fs, m.mountPoint, err)
+	}
+	return err
 }
 
 func (m *wekaMount) doMount() error {
@@ -88,7 +94,7 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 		if err != nil {
 			panic(err)
 		}
-		mount := &wekaMount{
+		wMount := &wekaMount{
 			kMounter:   m.kMounter,
 			fs:         fs.fs,
 			debugPath:  m.debugPath,
@@ -102,7 +108,7 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 			//       Even without version/Mount options change - plugin restart will lead to dangling mounts
 			//       We also might use VolumeContext to save it's parent FS Mount path instead of calculating
 		}
-		m.mountMap[fs] = mount
+		m.mountMap[fs] = wMount
 	}
 	m.lock.Unlock()
 }
@@ -121,9 +127,7 @@ func (m *wekaMounter) mountParams(fs string, xattr bool) (string, error, Unmount
 	}
 	return mounter.mountPoint, nil, func() {
 		if mountErr == nil {
-			if err := m.mountMap[request].decRef(); err != nil {
-				glog.V(3).Infof("Failed unmounting %s at %s", fs, mounter.mountPoint)
-			}
+			_ = m.mountMap[request].decRef()
 		}
 	}
 }

@@ -210,6 +210,7 @@ func setVolumeProperties(volPath string, capacity int64, volName string) error {
 	}
 	return updateXattrs(volPath, xattrs)
 }
+
 func pathIsDirectory(filename string) error {
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -220,3 +221,4 @@ func pathIsDirectory(filename string) error {
 	}
 	return nil
 }
+

@@ -69,7 +69,7 @@ func (gc *dirVolumeGc) purgeLeftovers(fs string) {
 		return
 	}
 
-	glog.Warningf("TODO: GC Volume in %s", path) //TODO: To implement deletion of whole garbage folder
+	glog.Warningf("TODO: GC filesystem in %s", path) //TODO: To implement deletion of whole garbage folder
 }
 
 func (gc *dirVolumeGc) finishGcCycle(fs string) {
