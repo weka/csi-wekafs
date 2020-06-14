@@ -15,7 +15,7 @@ type fsRequest struct {
 }
 
 type wekaMount struct {
-	fs           string
+	fsRequest    *fsRequest
 	mountPoint   string
 	refCount     int
 	lock         sync.Mutex
@@ -60,10 +60,10 @@ func (m *wekaMount) decRef() error {
 }
 
 func (m *wekaMount) doUnmount() error {
-	glog.V(3).Infof("Calling k8s unmounter for fs: %s @ %s", m.fs, m.mountPoint)
+	glog.V(3).Infof("Calling k8s unmounter for fs: %s @ %s", m.fsRequest.fs, m.mountPoint)
 	err := m.kMounter.Unmount(m.mountPoint)
 	if err != nil {
-		glog.V(3).Infof("Failed unmounting %s at %s: %s", m.fs, m.mountPoint, err)
+		glog.V(3).Infof("Failed unmounting %s at %s: %s", m.fsRequest.fs, m.mountPoint, err)
 	}
 	return err
 }
@@ -73,16 +73,24 @@ func (m *wekaMount) doMount() error {
 		return err
 	}
 	if m.debugPath == "" {
-		return m.kMounter.Mount(m.fs, m.mountPoint, "wekafs", m.mountOptions)
+		return m.kMounter.Mount(m.fsRequest.fs, m.mountPoint, "wekafs", getMountOptions(m.fsRequest))
 	} else {
-		fakePath := filepath.Join(m.debugPath, m.fs)
+		fakePath := filepath.Join(m.debugPath, m.fsRequest.fs)
 		if err := os.MkdirAll(fakePath, 0750); err != nil {
 			panic("Failed to create directory")
 		}
 
-		glog.V(3).Infof("Calling k8s mounter for fs: %s @ %s", m.fs, m.mountPoint)
+		glog.V(3).Infof("Calling k8s mounter for fs: %s @ %s", m.fsRequest.fs, m.mountPoint)
 		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
 	}
+}
+
+func getMountOptions(fs *fsRequest) []string {
+	var mountOptions []string
+	if fs.xattr {
+		mountOptions = append(mountOptions, "acl")
+	}
+	return mountOptions
 }
 
 func (m *wekaMounter) initFsMountObject(fs fsRequest) {
@@ -102,7 +110,7 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 		}
 		wMount := &wekaMount{
 			kMounter:   m.kMounter,
-			fs:         fs.fs,
+			fsRequest:  &fs,
 			debugPath:  m.debugPath,
 			mountPoint: "/var/run/weka-fs-mounts/" + getAsciiPart(fs.fs, 64) + "-" + mountPointUuid.String(),
 			// TODO: We might need versioning context, as right now there is no support for different Mount options

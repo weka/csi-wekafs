@@ -249,7 +249,7 @@ func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	}
 
 	if err := validateVolumeId(req.GetVolumeId()); err != nil {
-		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Error(codes.NotFound, "Volume with ID cannot be found")
+		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Errorf(codes.NotFound, "Volume ID %s not found", req.GetVolumeId())
 
 	}
 
