@@ -33,10 +33,10 @@ const (
 )
 
 type controllerServer struct {
-	caps    []*csi.ControllerServiceCapability
-	nodeID  string
-	gc      *dirVolumeGc
-	mounter *wekaMounter
+	caps      []*csi.ControllerServiceCapability
+	nodeID    string
+	gc        *dirVolumeGc
+	mounter   *wekaMounter
 	creatLock sync.Mutex
 }
 
@@ -178,7 +178,7 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	glog.V(4).Infof("deleting volume %s", volume.id)
 
 	err = volume.moveToTrash(cs.mounter, cs.gc)
-	if os.IsNotExist(err){
+	if os.IsNotExist(err) {
 		glog.V(4).Infof("Volume not found %s, but returning success for idempotence", volume.id)
 		return &csi.DeleteVolumeResponse{}, nil
 	}
@@ -242,18 +242,26 @@ func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 
 	// Check arguments
 	if len(req.GetVolumeId()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID cannot be empty")
+		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Error(codes.InvalidArgument, "Volume ID cannot be empty")
 	}
 	if len(req.GetVolumeCapabilities()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, req.VolumeId)
 	}
 
-	fs := GetFSName(req.GetVolumeId())
+	if err := validateVolumeId(req.GetVolumeId()); err != nil {
+		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Error(codes.NotFound, "Volume with ID cannot be found")
+
+	}
+
+	volume, err := NewVolume(req.GetVolumeId())
+	if err != nil {
+		return &csi.ValidateVolumeCapabilitiesResponse{}, err
+	}
 	// TODO: Mount/validate in xattr if there is anything to validate. Right now mounting just to see if folder exists
-	mountPoint, err, unmount := cs.mounter.Mount(fs)
+	mountPoint, err, unmount := cs.mounter.Mount(volume.fs)
 	defer unmount()
 	if _, err := validatedVolume(mountPoint, err, req.GetVolumeId()); err != nil {
-		return nil, err
+		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Errorf(codes.NotFound, "Could not find volume %s", req.VolumeId)
 	}
 
 	for _, capability := range req.GetVolumeCapabilities() {

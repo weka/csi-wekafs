@@ -15,12 +15,13 @@ type fsRequest struct {
 }
 
 type wekaMount struct {
-	fs         string
-	mountPoint string
-	refCount   int
-	lock       sync.Mutex
-	kMounter   mount.Interface
-	debugPath  string
+	fs           string
+	mountPoint   string
+	refCount     int
+	lock         sync.Mutex
+	kMounter     mount.Interface
+	debugPath    string
+	mountOptions []string
 }
 
 type mountsMap map[fsRequest]*wekaMount
@@ -72,7 +73,7 @@ func (m *wekaMount) doMount() error {
 		return err
 	}
 	if m.debugPath == "" {
-		return m.kMounter.Mount(m.fs, m.mountPoint, "wekafs", []string{})
+		return m.kMounter.Mount(m.fs, m.mountPoint, "wekafs", m.mountOptions)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fs)
 		if err := os.MkdirAll(fakePath, 0750); err != nil {
@@ -94,6 +95,11 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 		if err != nil {
 			panic(err)
 		}
+		var mountOptions []string
+		if fs.xattr == true {
+			mountOptions = append(mountOptions, "acl")
+
+		}
 		wMount := &wekaMount{
 			kMounter:   m.kMounter,
 			fs:         fs.fs,
@@ -107,6 +113,7 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 			//		 In general..this might need more thinking, but getting to working version ASAP is a priority
 			//       Even without version/Mount options change - plugin restart will lead to dangling mounts
 			//       We also might use VolumeContext to save it's parent FS Mount path instead of calculating
+			mountOptions: mountOptions,
 		}
 		m.mountMap[fs] = wMount
 	}
