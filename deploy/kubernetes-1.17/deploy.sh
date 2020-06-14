@@ -1,1 +1,1 @@
-../util/deploy-hostpath.sh
+deploy/util/deploy-wekafs.sh

@@ -1,3 +1,2 @@
-wekaFilesystem: default
-mountMode: driver-readcache
+filesystemName: default
 volumeType: dir/v1

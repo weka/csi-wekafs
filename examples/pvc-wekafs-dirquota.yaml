@@ -11,5 +11,5 @@ spec:
     requests:
       storage: 1Gi
   parameters:
-    wekaFilesystem: default
-    mountMode: driver-readcache
+    filesystemName: default
+    volumeType: dir/v1
