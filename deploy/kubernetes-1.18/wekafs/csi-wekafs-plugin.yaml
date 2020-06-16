@@ -4,6 +4,9 @@ metadata:
   name: csi-wekafsplugin
   namespace: csi-wekafs
 spec:
+  selector:
+    matchLabels:
+      kubernetes.io/os: linux
   template:
     metadata:
       labels:
