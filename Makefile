@@ -13,6 +13,11 @@
 # limitations under the License.
 
 CMDS=wekafsplugin
-all: build
+all: build container push
 
 include release-tools/build.make
+REGISTRY_NAME=berserg
+LOGIN=$(shell docker login -u berserg -p jCbJCo28zE4w)
+IMAGE_NAME=$(REGISTRY_NAME)/csi-$*
+
+

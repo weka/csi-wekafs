@@ -32,7 +32,7 @@ GOFLAGS_VENDOR=
 #
 # Beware that tags may also be missing in shallow clones as done by
 # some CI systems (like TravisCI, which pulls only 50 commits).
-REV=$(shell git describe --long --tags --match='v*' --dirty 2>/dev/null || git rev-list -n1 HEAD)
+REV=$(shell git describe --tags --long --match='v*' --dirty="-dev" 2>/dev/null || git rev-list -n1 HEAD)
 
 # A space-separated list of image tags under which the current build is to be pushed.
 # Determined dynamically.
@@ -99,7 +99,9 @@ $(CMDS:%=push-%): push-%: container-%
 		else \
 			: "release image $(IMAGE_NAME):$$tag already exists, skipping push"; \
 		fi; \
-	done
+	done; \
+	tag="latest"; \
+	push_image
 
 build: $(CMDS:%=build-%)
 container: $(CMDS:%=container-%)
