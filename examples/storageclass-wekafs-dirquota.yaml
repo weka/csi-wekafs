@@ -7,5 +7,5 @@ reclaimPolicy: Delete
 volumeBindingMode: Immediate
 allowVolumeExpansion: true
 parameters:
-  volumeType: "wekafs_dirquota"
-  filesystemName: "default"
+  volumeType: dir/v1
+  filesystemName: default
