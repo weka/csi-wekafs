@@ -2,7 +2,6 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: csi-wekafsplugin
-  namespace: csi-wekafs
 spec:
   selector:
     matchLabels:
