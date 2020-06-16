@@ -1,27 +1,9 @@
-# Service defined here, plus serviceName below in StatefulSet,
-# are needed only because of condition explained in
-# https://github.com/kubernetes/kubernetes/issues/69608
-
-kind: Service
-apiVersion: v1
-metadata:
-  name: csi-wekafsplugin
-  labels:
-    app: csi-wekafsplugin
-spec:
-  selector:
-    app: csi-wekafsplugin
-  ports:
-    - name: dummy
-      port: 12345
----
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: csi-wekafsplugin
   namespace: csi-wekafs
 spec:
-  serviceName: "csi-wekafsplugin"
   template:
     metadata:
       labels:
