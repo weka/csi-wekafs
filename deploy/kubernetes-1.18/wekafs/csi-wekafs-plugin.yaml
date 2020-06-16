@@ -22,7 +22,7 @@ metadata:
 spec:
   serviceName: "csi-wekafsplugin"
   # One replica only:
-  # Host path driver only works when everything runs
+  # csi-wekafs driver only works when everything runs
   # on a single node. We achieve that by starting it once and then
   # co-locate all other pods via inter-pod affinity
   replicas: 1

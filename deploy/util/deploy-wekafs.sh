@@ -200,9 +200,3 @@ while [ $(kubectl get pods 2>/dev/null | grep '^csi-wekafs.* Running ' | wc -l) 
     cnt=$(($cnt + 1))
     sleep 10
 done
-
-# Create a test driver configuration in the place where the prow job
-# expects it?
-if [ "${CSI_PROW_TEST_DRIVER}" ]; then
-    cp "${BASE_DIR}/test-driver.yaml" "${CSI_PROW_TEST_DRIVER}"
-fi

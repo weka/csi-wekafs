@@ -69,7 +69,7 @@ csi-wekafsplugin-0         3/3     Running   0          4m20s
 From the root directory, deploy the application pods including a storage class, a PVC, and a pod which mounts a volume using the csi-wekafs driver found in directory `./examples`:
 
 ```shell
-$ for i in ./examples/csi-storageclass.yaml ./examples/csi-pvc.yaml ./examples/csi-app.yaml; do kubectl apply -f $i; done
+$ for i in ./examples/storageclass-wekafs-dirquota.yaml pvc-wekafs-dirquota.yaml ./examples/csi-app.yaml; do kubectl apply -f $i; done
 storageclass.storage.k8s.io/csi-wekafs-sc created
 persistentvolumeclaim/csi-pvc created
 pod/my-csi-app created

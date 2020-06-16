@@ -4,17 +4,14 @@
 
 StorageClass:
   FromName: true
-SnapshotClass:
-  FromName: true
 DriverInfo:
   Name: wekafs.csi.k8s.io
   Capabilities:
-    block: true
-    controllerExpansion: true
+    block: false
+    controllerExpansion: false
     exec: true
     multipods: true
-    nodeExpansion: true
+    nodeExpansion: false
     persistence: true
-    singleNodeVolume: true
-    snapshotDataSource: true
-    topology: true
+    singleNodeVolume: false
+    topology: false
