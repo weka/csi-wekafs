@@ -26,16 +26,16 @@ clusterrole.rbac.authorization.k8s.io/external-attacher-runner created
 clusterrolebinding.rbac.authorization.k8s.io/csi-attacher-role created
 role.rbac.authorization.k8s.io/external-attacher-cfg created
 rolebinding.rbac.authorization.k8s.io/csi-attacher-role-cfg created
-deploying csi-wekafs components
+deploying wekafs components
    deploy/kubernetes-latest/wekafs/csi-wekafs-attacher.yaml
-        using           image: quay.io/k8scsi/csi-attacher:v2.1.0
+        using           image: quay.io/k8scsi/csi-attacher:v3.0.0-rc1
 service/csi-wekafs-attacher created
 statefulset.apps/csi-wekafs-attacher created
    deploy/kubernetes-latest/wekafs/csi-wekafs-driverinfo.yaml
 csidriver.storage.k8s.io/wekafs.csi.k8s.io created
    deploy/kubernetes-latest/wekafs/csi-wekafs-plugin.yaml
         using           image: quay.io/k8scsi/csi-node-driver-registrar:v1.2.0
-        using           image: quay.io/k8scsi/wekafsplugin:v1.3.0
+        using           image: quay.io/k8scsi/wekafsplugin:latest
         using           image: quay.io/k8scsi/livenessprobe:v1.1.0
 service/csi-wekafsplugin created
 statefulset.apps/csi-wekafsplugin created
@@ -69,7 +69,7 @@ csi-wekafsplugin-0         3/3     Running   0          4m20s
 From the root directory, deploy the application pods including a storage class, a PVC, and a pod which mounts a volume using the csi-wekafs driver found in directory `./examples`:
 
 ```shell
-$ for i in ./examples/storageclass-wekafs-dirquota.yaml pvc-wekafs-dirquota.yaml ./examples/csi-app.yaml; do kubectl apply -f $i; done
+$ for i in ./examples/storageclass-wekafs-dirquota.yaml ./examples/pvc-wekafs-dirquota.yaml ./examples/csi-app-on-dirquota.yaml; do kubectl apply -f $i; done
 storageclass.storage.k8s.io/csi-wekafs-sc created
 persistentvolumeclaim/csi-pvc created
 pod/my-csi-app created
