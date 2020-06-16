@@ -10,6 +10,7 @@ spec:
     metadata:
       labels:
         app: csi-wekafsplugin
+        kubernetes.io/os: linux
     spec:
       containers:
         - name: node-driver-registrar
