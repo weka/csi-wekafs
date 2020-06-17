@@ -2,6 +2,9 @@ package wekafs
 
 import (
 	"github.com/golang/glog"
+	"io"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 )
@@ -52,12 +55,41 @@ func (gc *dirVolumeGc) purgeVolume(volume dirVolume) {
 	defer gc.finishGcCycle(fs)
 	path, err, unmount := gc.mounter.Mount(fs)
 	defer unmount()
+	fullPath := filepath.Join(path, garbagePath, innerPath)
 	if err != nil {
 		glog.Errorf("Failed mounting FS %s for GC", fs)
-		return
 	}
+	if err := purgeDirectory(fullPath); err != nil {
+		glog.Errorf("Failed to remove directory %s", fullPath)
+	}
+	glog.Infof("Directory %s was successfully deleted", fullPath)
+}
 
-	glog.Warningf("TODO: GC Volume/path %s", filepath.Join(path, innerPath)) //TODO: To implement deletion of single volume
+func purgeDirectory(path string) error {
+	if !PathExists(path) {
+		glog.Warningf("GC failed to remove directory %s, not since it doesn't exist", path)
+		return nil
+	}
+	for !pathIsEmptyDir(path) { // to make sure that if new files still appeared during invocation
+		files, err := ioutil.ReadDir(path)
+		if err != nil {
+			glog.Warningf("GC failed to read contents of %s", path)
+			return err
+		}
+		for _, f := range files {
+			fp := filepath.Join(path, f.Name())
+			if f.IsDir() {
+				if err := purgeDirectory(fp); err != nil {
+					return err
+				}
+
+			}
+			if err := os.Remove(fp); err != nil {
+				glog.Warningf("Failed to remove entry %s", fp)
+			}
+		}
+	}
+	return os.Remove(path)
 }
 
 func (gc *dirVolumeGc) purgeLeftovers(fs string) {
@@ -80,4 +112,16 @@ func (gc *dirVolumeGc) finishGcCycle(fs string) {
 		go gc.triggerGc(fs)
 	}
 	gc.Unlock()
+}
+
+// pathIsEmptyDir is a simple check to determine if directory is empty or not.
+func pathIsEmptyDir(p string) bool {
+	f, err := os.Open(p)
+	if err != nil {
+		return true
+	}
+	defer f.Close()
+
+	_, err = f.Readdir(1)
+	return err == io.EOF
 }

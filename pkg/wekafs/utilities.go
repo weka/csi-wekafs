@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/xattr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -110,23 +109,6 @@ func getVolumeName(path string) string {
 	return "" //TODO: Reconsider, it should return error, as we always supposed to set it
 }
 
-// VolumeIsEmpty is a simple check to determine if the specified wekafs_dirqouta directory
-// is empty or not.
-func VolumeIsEmpty(p string) (bool, error) {
-	f, err := os.Open(p)
-	if err != nil {
-		return true, fmt.Errorf("unable to open wekafs_dirqouta"+
-			" volume, error: %v", err)
-	}
-	defer f.Close()
-
-	_, err = f.Readdir(1)
-	if err == io.EOF {
-		return true, nil
-	}
-	return false, err
-}
-
 func PathExists(p string) bool {
 	file, err := os.Open(p)
 	if err != nil {
@@ -221,4 +203,3 @@ func pathIsDirectory(filename string) error {
 	}
 	return nil
 }
-
