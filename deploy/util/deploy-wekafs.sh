@@ -184,9 +184,9 @@ done
 
 # Wait until all pods are running. We have to make some assumptions
 # about the deployment here, otherwise we wouldn't know what to wait
-# for: the expectation is that we run attacher, provisioner,
-# socat and wekafs plugin in the default namespace.
+# for: the expectation is that we run attacher, provisioner, and wekafs plugin in the default namespace.
 expected_running_pods=6
+# TODO: change validation to make sure that for each node a single instance of each pod is running
 cnt=0
 while [ $(kubectl get pods 2>/dev/null | grep '^csi-wekafs.* Running ' | wc -l) -lt ${expected_running_pods} ]; do
     if [ $cnt -gt 30 ]; then
