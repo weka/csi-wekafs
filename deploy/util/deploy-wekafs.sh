@@ -185,12 +185,21 @@ done
 # Wait until all pods are running. We have to make some assumptions
 # about the deployment here, otherwise we wouldn't know what to wait
 # for: the expectation is that we run attacher, provisioner, and wekafs plugin in the default namespace.
-expected_running_pods=6
-# TODO: change validation to make sure that for each node a single instance of each pod is running
+
+# check number of plugins to be running
+non_master_nodes=$(kubectl get nodes 2>/dev/null | grep -vw master | grep -vw AGE -c)
+master_node=$(kubectl get nodes 2>/dev/null | grep -vw master |awk '{print $1}')
+kubectl describe nodes "$master_node" 2>/dev/null | grep "node-role.kubernetes.io/master:NoSchedule" &>/dev/null \
+  && master_has_csi=1 \
+  || master_has_csi=0
+
+expected_plugins=$(( non_master_nodes + master_has_csi ))
+expected_running_pods=$(( expected_plugins +2 ))
+
 cnt=0
-while [ $(kubectl get pods 2>/dev/null | grep '^csi-wekafs.* Running ' | wc -l) -lt ${expected_running_pods} ]; do
+while [ $(kubectl get pods 2>/dev/null | grep '^csi-wekafs.* Running ' -c) -lt ${expected_running_pods} ]; do
     if [ $cnt -gt 30 ]; then
-        echo "$(kubectl get pods 2>/dev/null | grep '^csi-wekafs.* Running ' | wc -l) running pods:"
+        echo "$(kubectl get pods 2>/dev/null | grep '^csi-wekafs.* Running ' -c) running pods:"
         kubectl describe pods
 
         echo >&2 "ERROR: wekafs deployment not ready after over 5min"
