@@ -209,3 +209,6 @@ while [ $(kubectl get pods 2>/dev/null | grep '^csi-wekafs.* Running ' -c) -lt $
     cnt=$(($cnt + 1))
     sleep 10
 done
+echo $(date +%H:%M:%S) "deployment completed successfully"
+echo $(date +%H:%M:%S) "$expected_plugins plugin pods, and 2 sidecar pods running:"
+kubectl get pods 2>/dev/null | grep '^csi-wekafs.* Running '
