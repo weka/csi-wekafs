@@ -110,7 +110,6 @@ metadata:
   name: csi-wekafsplugin
   namespace: csi-wekafsplugin
 spec:
-  serviceAccountName: csi-wekafsplugin
   selector:
     matchLabels:
       kubernetes.io/os: linux
@@ -120,6 +119,7 @@ spec:
         app: csi-wekafsplugin
         kubernetes.io/os: linux
     spec:
+      serviceAccountName: csi-wekafsplugin
       containers:
         - name: node-driver-registrar
           image: quay.io/k8scsi/csi-node-driver-registrar:v1.3.0
