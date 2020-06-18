@@ -1,7 +1,167 @@
+# service accounts
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-wekafs-attacher
+  namespace: csi-wekafsplugin
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-wekafs-provisioner
+  namespace: csi-wekafsplugin
+
+# cluster roles
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-wekafs-attacher-runner
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments/status"]
+    verbs: ["patch"]
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-wekafs-provisioner-runner
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["get", "list"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+
+
+# cluster role bindings
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-wekafs-attacher-role
+subjects:
+  - kind: ServiceAccount
+    name: csi-wekafs-attacher
+    namespace: csi-wekafsplugin
+roleRef:
+  kind: ClusterRole
+  name: csi-wekafs-attacher-runner
+  apiGroup: rbac.authorization.k8s.io
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-wekafs-provisioner-role
+subjects:
+  - kind: ServiceAccount
+    name: csi-wekafs-provisioner
+    namespace: csi-wekafsplugin
+roleRef:
+  kind: ClusterRole
+  name: csi-wekafs-provisioner-runner
+  apiGroup: rbac.authorization.k8s.io
+
+
+# roles
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: csi-wekafsplugin
+  name: csi-wekafs-attacher-cfg
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: csi-wekafsplugin
+  name: csi-wekafs-provisioner-cfg
+rules:
+  # Only one of the following rules for endpoints or leases is required based on
+  # what is set for `--leader-election-type`. Endpoints are deprecated in favor of Leases.
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+
+
+# role bindings
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-wekafs-attacher-role-cfg
+  namespace: csi-wekafsplugin
+subjects:
+  - kind: ServiceAccount
+    name: csi-wekafs-attacher
+    namespace: csi-wekafsplugin
+roleRef:
+  kind: Role
+  name: csi-wekafs-attacher-cfg
+  apiGroup: rbac.authorization.k8s.io
+
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-wekafs-provisioner-role-cfg
+  namespace: csi-wekafsplugin
+subjects:
+  - kind: ServiceAccount
+    name: csi-wekafs-provisioner
+    namespace: csi-wekafsplugin
+roleRef:
+  kind: Role
+  name: csi-wekafs-provisioner-cfg
+  apiGroup: rbac.authorization.k8s.io
+
+# plugin pod definition
+---
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: csi-wekafsplugin
+  namespace: csi-wekafsplugin
 spec:
   selector:
     matchLabels:
@@ -80,6 +240,7 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
+
         - name: liveness-probe
           volumeMounts:
           - mountPath: /csi
@@ -88,6 +249,35 @@ spec:
           args:
           - --csi-address=/csi/csi.sock
           - --health-port=9898
+
+        - name: csi-provisioner
+          image: quay.io/k8scsi/csi-provisioner:v1.6.0
+          args:
+            - -v=5
+            - --csi-address=/csi/csi.sock
+            - --feature-gates=Topology=true
+          securityContext:
+            # This is necessary only for systems with SELinux, where
+            # non-privileged sidecar containers cannot access unix domain socket
+            # created by privileged CSI driver container.
+            privileged: true
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+
+        - name: csi-attacher
+          image: quay.io/k8scsi/csi-attacher:v3.0.0-rc1
+          args:
+            - --v=5
+            - --csi-address=/csi/csi.sock
+          securityContext:
+            # This is necessary only for systems with SELinux, where
+            # non-privileged sidecar containers cannot access unix domain socket
+            # created by privileged CSI driver container.
+            privileged: true
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
 
       volumes:
         - hostPath:
