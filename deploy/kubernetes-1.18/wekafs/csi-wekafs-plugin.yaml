@@ -102,7 +102,7 @@ roleRef:
   name: csi-wekafsplugin-role
   apiGroup: rbac.authorization.k8s.io
 
-# plugin pod definition
+# plugin daemonset definition
 ---
 kind: DaemonSet
 apiVersion: apps/v1
