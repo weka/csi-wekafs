@@ -77,5 +77,5 @@ while (( $(kubectl get pods --namespace "$WEKAFS_NAMESPACE" 2>/dev/null | grep '
     sleep 10
 done
 echo $(date +%H:%M:%S) "deployment completed successfully"
-echo $(date +%H:%M:%S) "$expected_plugins plugin pods, and 2 sidecar pods running:"
+echo $(date +%H:%M:%S) "$expected_running_pods plugin pods are running:"
 kubectl get pods --namespace "$WEKAFS_NAMESPACE" 2>/dev/null | grep '^csi-wekafs.* Running '
