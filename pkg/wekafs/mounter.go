@@ -69,10 +69,12 @@ func (m *wekaMount) doUnmount() error {
 }
 
 func (m *wekaMount) doMount() error {
+	glog.Infof("Creating mount for filesystem %s on mount point %s", m.fsRequest.fs, m.mountPoint)
 	if err := os.MkdirAll(m.mountPoint, 0750); err != nil {
 		return err
 	}
 	if m.debugPath == "" {
+		glog.V(3).Infof("Calling debugPath k8s mounter for fs: %s @ %s", m.fsRequest.fs, m.mountPoint)
 		return m.kMounter.Mount(m.fsRequest.fs, m.mountPoint, "wekafs", getMountOptions(m.fsRequest))
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fs)
@@ -161,4 +163,23 @@ func (m *wekaMounter) Unmount(fs string) error {
 
 func (m *wekaMounter) UnmountXattr(fs string) error {
 	return m.mountMap[fsRequest{fs, true}].decRef()
+}
+
+func (m *wekaMounter) LogActiveMounts() {
+	if len(m.mountMap) > 0 {
+		count := 0
+		glog.Infof("There are currently %v distinct mounts in map:", len(m.mountMap))
+		for mnt := range m.mountMap {
+			mapEntry := m.mountMap[mnt]
+			if mapEntry.refCount < 0 {
+				glog.Errorf("There is a negative refcount on mount %s", mapEntry)
+			} else if mapEntry.refCount > 0 {
+				glog.Infof("Active mount: %s -> %s, xattr: %s", mnt.fs, mapEntry.mountPoint, mnt.xattr)
+				count++
+			}
+		}
+		glog.Infof("Total %v of active mounts", count)
+	} else {
+		glog.Info("There are currently no active mounts")
+	}
 }

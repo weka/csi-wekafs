@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-func GetVolumeIdFromRequest(req *csi.CreateVolumeRequest) (string, error) {
+func createVolumeIdFromRequest(req *csi.CreateVolumeRequest) (string, error) {
 	name := req.GetName()
 
 	var volId string
@@ -100,15 +100,6 @@ func getVolumeSize(path string) int64 {
 	return 0 //TODO: Reconsider, it should return error, as we always supposed to set it
 }
 
-func getVolumeName(path string) string {
-	// since we strip the non-ASCII characters and may also truncate the name - can't rely on that.
-	// Instead, we will take this from Xattrs
-	if volName, err := xattr.Get(path, xattrVolumeName); err == nil {
-		return string(volName)
-	}
-	return "" //TODO: Reconsider, it should return error, as we always supposed to set it
-}
-
 func PathExists(p string) bool {
 	file, err := os.Open(p)
 	if err != nil {
@@ -127,11 +118,12 @@ func PathExists(p string) bool {
 	return true
 }
 
-func validatedVolume(mountPath string, mountErr error, volumeId string) (string, error) {
+func validatedVolume(mountPath string, mountErr error, volume dirVolume) (string, error) {
+	glog.Infof("Validating if volume %s exists in %s", volume.id, mountPath)
 	if mountErr != nil {
 		return "", status.Error(codes.Internal, mountErr.Error())
 	}
-	volumePath := filepath.Join(mountPath, GetVolumeDirName(volumeId))
+	volumePath := volume.getFullPath(mountPath)
 	if _, err := os.Stat(volumePath); err != nil {
 		if os.IsNotExist(err) {
 			return "", status.Error(codes.NotFound, err.Error())
@@ -142,6 +134,7 @@ func validatedVolume(mountPath string, mountErr error, volumeId string) (string,
 	if err := pathIsDirectory(mountPath); err != nil {
 		return "", status.Error(codes.Internal, err.Error())
 	}
+	glog.Infof("Volume %s exists and accessible via %s", volume.id, volumePath)
 	return volumePath, nil
 }
 

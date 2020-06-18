@@ -34,6 +34,7 @@ func (gc *dirVolumeGc) triggerGc(fs string) {
 	}
 	gc.isRunning[fs] = true
 	go gc.purgeLeftovers(fs)
+	gc.mounter.LogActiveMounts()
 }
 
 func (gc *dirVolumeGc) triggerGcVolume(volume dirVolume) {
@@ -56,6 +57,7 @@ func (gc *dirVolumeGc) purgeVolume(volume dirVolume) {
 	path, err, unmount := gc.mounter.Mount(fs)
 	defer unmount()
 	fullPath := filepath.Join(path, garbagePath, innerPath)
+	glog.Infof("Purging deleted volume data in %s", fullPath)
 	if err != nil {
 		glog.Errorf("Failed mounting FS %s for GC", fs)
 	}
@@ -73,7 +75,7 @@ func purgeDirectory(path string) error {
 	for !pathIsEmptyDir(path) { // to make sure that if new files still appeared during invocation
 		files, err := ioutil.ReadDir(path)
 		if err != nil {
-			glog.Warningf("GC failed to read contents of %s", path)
+			glog.Infof("GC failed to read contents of %s", path)
 			return err
 		}
 		for _, f := range files {
@@ -85,7 +87,7 @@ func purgeDirectory(path string) error {
 
 			}
 			if err := os.Remove(fp); err != nil {
-				glog.Warningf("Failed to remove entry %s", fp)
+				glog.Infof("Failed to remove entry %s", fp)
 			}
 		}
 	}

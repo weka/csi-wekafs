@@ -85,7 +85,6 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 
-
 	//// check that mount target exists (or create it) and is not a mount point already
 	//TODO: Add support for -o ro, i.e Readonly volumes
 	//notMnt, err := mounter.GetMountRefs(targetPath)
@@ -136,12 +135,11 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	mountPoint, err, unmount := ns.mounter.Mount(fsName)
 	fullPath := GetVolumeFullPath(mountPoint, volume.id)
 
-	if _, err = validatedVolume(mountPoint, err, req.GetVolumeId()); err != nil {
+	if _, err = validatedVolume(mountPoint, err, volume); err != nil {
 		glog.Infof("Volume not found on filesystem %s %s", volume.fs, volume.id)
 		unmount()
 		return nil, err
 	}
-
 
 	if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -151,10 +149,10 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// TODO: Returning success, but this is not completely right.
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
-		if os.IsExist(err){
+		if os.IsExist(err) {
 			unmount()
 			return &csi.NodePublishVolumeResponse{}, nil
-		}else{
+		} else {
 			unmount()
 			return nil, status.Error(codes.Internal, err.Error())
 		}
@@ -192,7 +190,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		}
 	}
-	if err := mount.New("").Unmount(targetPath); err != nil{
+	if err := mount.New("").Unmount(targetPath); err != nil {
 		glog.Errorf("failed unmounting volume %s at %s : %s", volume.id, targetPath, err)
 	}
 	if err := os.Remove(targetPath); err != nil {
@@ -266,8 +264,7 @@ func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetC
 		Capabilities: []*csi.NodeServiceCapability{
 			{
 				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{
-					},
+					Rpc: &csi.NodeServiceCapability_RPC{},
 				},
 			},
 			//{

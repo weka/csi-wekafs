@@ -24,19 +24,22 @@ func (v dirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
 		glog.Errorf("Error mounting %s for deletion %s", v.id, err)
 		return err
 	}
-
-	err = os.MkdirAll(filepath.Join(mountPath, garbagePath), 0750)
+	garbageFullPath := filepath.Join(mountPath, garbagePath)
+	glog.Infof("Ensuring that garbagePath %s exists", garbageFullPath)
+	err = os.MkdirAll(garbageFullPath, 0750)
 	if err != nil {
+		glog.Errorf("Failed to create garbagePath %s", garbageFullPath)
 		return err
 	}
-	u,_ := uuid.NewUUID()
-	volumeTrashLoc :=  filepath.Join(mountPath, garbagePath, u.String())
-	if err = os.Rename(v.getFullPath(mountPath), volumeTrashLoc);err==nil{
+	u, _ := uuid.NewUUID()
+	volumeTrashLoc := filepath.Join(garbageFullPath, u.String())
+	glog.Infof("Attempting to move volume %s %s -> %s", v.id, v.getFullPath(mountPath), volumeTrashLoc)
+	if err = os.Rename(v.getFullPath(mountPath), volumeTrashLoc); err == nil {
 		v.dirName = u.String()
 		gc.triggerGcVolume(v) // TODO: Better to preserve immutability some way , needed due to recreation of volumes with same name
 		glog.V(4).Infof("Moved %s to trash", v.id)
 		return err
-	}else{
+	} else {
 		glog.V(4).Infof("Failed moving %s to trash: %s", v.getFullPath(mountPath), err)
 		return err
 	}
