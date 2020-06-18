@@ -226,10 +226,6 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-          roleRef:
-            kind: clusterRole
-            name: csi-wekafs-attacher-runner
-            apiGroup: rbac.authorization.k8s.io
 
       volumes:
         - hostPath:
