@@ -116,7 +116,7 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 			kMounter:   m.kMounter,
 			fsRequest:  &fs,
 			debugPath:  m.debugPath,
-			mountPoint: "/var/run/weka-fs-mounts/" + getAsciiPart(fs.fs, 64) + "-" + mountPointUuid.String(),
+			mountPoint: "/csi-data-dir/" + getAsciiPart(fs.fs, 64) + "-" + mountPointUuid.String(),
 			// TODO: We might need versioning context, as right now there is no support for different Mount options
 			//		 But no need for it now
 			//		 In case we reach there - worst case we get dangling mounts
