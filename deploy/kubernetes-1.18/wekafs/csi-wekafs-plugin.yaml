@@ -184,7 +184,7 @@ spec:
             - mountPath: /var/lib/kubelet/plugins
               mountPropagation: Bidirectional
               name: plugins-dir
-            - mountPath: /csi-data-dir
+            - mountPath: /var/lib/csi-wekafs-data
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
