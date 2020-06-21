@@ -193,19 +193,25 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	// TODO: Verify that targetPath is indeed equals to expected source of bind mount
 	//		 Which is not straightforward in case plugin was restarted, as in this case
 	//		 we lose information of source. Probably Context can be used
+	glog.Infof("Checking if target path %s exists", targetPath)
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
+			glog.Warningf("Seems like volume %s is not published under target path , assuming repeating unpublish request", volume.id, targetPath)
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		}
+		glog.Infof("Seems like volume %s exists and is published on target path %s", volume.id, targetPath)
 	}
+	glog.Infof("Attempting to perform unmount of target path %s", targetPath)
 	if err := mount.New("").Unmount(targetPath); err != nil {
 		glog.Errorf("failed unmounting volume %s at %s : %s", volume.id, targetPath, err)
 	}
+	glog.Infof("Attempting to remove target path %s", targetPath)
 	if err := os.Remove(targetPath); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.id)
 	// Doing this only in case both bind unmount and remove succeeded
+	glog.Infof("Calling decrease refcount on mount %s", volume.id)
 	err = ns.mounter.Unmount(volume.fs)
 	if err != nil {
 		glog.Errorf("Post-unpublish unmount failed %s", err)
