@@ -163,12 +163,25 @@ func (m *wekaMounter) MountXattr(fs string) (string, error, UnmountFunc) {
 
 func (m *wekaMounter) Unmount(fs string) error {
 	m.LogActiveMounts()
-	return m.mountMap[fsRequest{fs, false}].decRef()
+	fsReq := fsRequest{fs, false}
+	if mount, ok := m.mountMap[fsReq]; ok {
+		return mount.decRef()
+	} else {
+		glog.Warningf("Attempted to access mount point which is not known to the system (filesystem %s)", fs)
+		return nil
+	}
+
 }
 
 func (m *wekaMounter) UnmountXattr(fs string) error {
 	m.LogActiveMounts()
-	return m.mountMap[fsRequest{fs, true}].decRef()
+	fsReq := fsRequest{fs, true}
+	if mount, ok := m.mountMap[fsReq]; ok {
+		return mount.decRef()
+	} else {
+		glog.Warningf("Attempted to access mount point which is not known to the system (filesystem %s)", fs)
+		return nil
+	}
 }
 
 func (m *wekaMounter) LogActiveMounts() {
