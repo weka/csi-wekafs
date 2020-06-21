@@ -74,6 +74,10 @@ func GetVolumeFullPath(mountPoint, volumeID string) string {
 	return filepath.Join(mountPoint, GetVolumeDirName(volumeID))
 }
 
+func GetExternalPath(path string) string {
+	return strings.Replace(path, "/csi-wekafs-data", "/var/lib/csi-wekafs-data", 1)
+}
+
 func GetVolumeType(volumeID string) string {
 	slices := strings.Split(volumeID, "/")
 	if len(slices) >= 2 {

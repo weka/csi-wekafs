@@ -166,7 +166,16 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	glog.Infof("Attempting mount bind between volume contents and mount target")
-	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
+
+	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
+	var globalPath string
+	if ns.mounter.debugPath == "" {
+		globalPath = GetExternalPath(fullPath)
+	} else {
+		globalPath = fullPath
+	}
+
+	if err := mounter.Mount(globalPath, targetPath, "", options); err != nil {
 		var errList strings.Builder
 		errList.WriteString(err.Error())
 		unmount() // unmount only if mount bind failed

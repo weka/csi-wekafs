@@ -1,4 +1,4 @@
-kind: Pod
+kind: Pod"echo", "HELLO WORLD", ">", "/data/hello.txt", ";",
 apiVersion: v1
 metadata:
   name: my-csi-app-inline
