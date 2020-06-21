@@ -12,18 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: build-% build container-% container push-% push clean test
 
-# A space-separated list of all commands in the repository, must be
-# set in main Makefile of a repository.
-# CMDS=
+BASE_DOCKER_URL="berserg/csi-wekafsplugin"
+.PHONY: build-% build container-% container push-% push clean test
 
 # This is the default. It can be overridden in the main Makefile after
 # including build.make.
-REGISTRY_NAME=quay.io/k8scsi
-
-# Can be set to -mod=vendor to ensure that the "vendor" directory is used.
-GOFLAGS_VENDOR=
+REGISTRY_NAME=quay.io/csi-wekafs
 
 # Revision that gets built into each binary via the main.version
 # string. Uses the `git describe` output based on the most recent
@@ -34,22 +29,6 @@ GOFLAGS_VENDOR=
 # some CI systems (like TravisCI, which pulls only 50 commits).
 REV=$(shell git describe --tags --long --match='v*' --dirty="-dev" 2>/dev/null || git rev-list -n1 HEAD)
 
-# A space-separated list of image tags under which the current build is to be pushed.
-# Determined dynamically.
-IMAGE_TAGS=
-
-# A "canary" image gets built if the current commit is the head of the remote "master" branch.
-# That branch does not exist when building some other branch in TravisCI.
-IMAGE_TAGS+=$(shell if [ "$$(git rev-list -n1 HEAD)" = "$$(git rev-list -n1 origin/master 2>/dev/null)" ]; then echo "canary"; fi)
-
-# A "X.Y.Z-canary" image gets built if the current commit is the head of a "origin/release-X.Y.Z" branch.
-# The actual suffix does not matter, only the "release-" prefix is checked.
-IMAGE_TAGS+=$(shell git branch -r --points-at=HEAD | grep 'origin/release-' | grep -v -e ' -> ' | sed -e 's;.*/release-\(.*\);\1-canary;')
-
-# A release image "vX.Y.Z" gets built if there is a tag of that format for the current commit.
-# --abbrev=0 suppresses long format, only showing the closest tag.
-IMAGE_TAGS+=$(shell tagged="$$(git describe --tags --match='v*' --abbrev=0)"; if [ "$$tagged" ] && [ "$$(git rev-list -n1 HEAD)" = "$$(git rev-list -n1 $$tagged)" ]; then echo $$tagged; fi)
-
 # Images are named after the command contained in them.
 IMAGE_NAME=$(REGISTRY_NAME)/$*
 
@@ -59,15 +38,6 @@ TESTARGS = -v -args -alsologtostderr -v 5
 else
 TESTARGS =
 endif
-
-# Specific packages can be excluded from each of the tests below by setting the *_FILTER_CMD variables
-# to something like "| grep -v 'github.com/kubernetes-csi/project/pkg/foobar'". See usage below.
-
-# BUILD_PLATFORMS contains a set of <os> <arch> <suffix> triplets,
-# separated by semicolon. An empty variable or empty entry (= just a
-# semicolon) builds for the default platform of the current Go
-# toolchain.
-BUILD_PLATFORMS =
 
 # This builds each command (= the sub-directories of ./cmd) for the target platform(s)
 # defined by BUILD_PLATFORMS.
@@ -81,26 +51,17 @@ $(CMDS:%=build-%): build-%: check-go-version-go
 	done
 
 $(CMDS:%=container-%): container-%: build-%
-	docker build -t $*:latest -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
+	docker build -t $*:$(REV) -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
 
 $(CMDS:%=push-%): push-%: container-%
 	set -ex; \
 	push_image () { \
-		docker tag $*:latest $(IMAGE_NAME):$$tag; \
-		docker push $(IMAGE_NAME):$$tag; \
+		docker tag $*:$(REV) $(IMAGE_NAME):$(REV); \
+		docker push $(IMAGE_NAME):$(REV); \
+		sed -i deploy/kubernetes-latest/wekafs/csi-wekafs-plugin.yaml -e \
+           's|image: '$(BASE_DOCKER_URL)'.*|image: '$(BASE_DOCKER_URL):$(REV)'|1'; \
 	}; \
-	for tag in $(IMAGE_TAGS); do \
-		if [ "$$tag" = "canary" ] || echo "$$tag" | grep -q -e '-canary$$'; then \
-			: "creating or overwriting canary image"; \
-			push_image; \
-		elif docker pull $(IMAGE_NAME):$$tag 2>&1 | tee /dev/stderr | grep -q "manifest for $(IMAGE_NAME):$$tag not found"; then \
-			: "creating release image"; \
-			push_image; \
-		else \
-			: "release image $(IMAGE_NAME):$$tag already exists, skipping push"; \
-		fi; \
-	done; \
-	tag="latest"; \
+	echo "Pushing under tag $(REV)"; \
 	push_image
 
 build: $(CMDS:%=build-%)
