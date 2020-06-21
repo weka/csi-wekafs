@@ -136,11 +136,11 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	fullPath := GetVolumeFullPath(mountPoint, volume.id)
 
 	if _, err = validatedVolume(mountPoint, err, volume); err != nil {
-		glog.Infof("Volume %s not found on filesystem %s", volume.fs, volume.id)
+		glog.Infof("Volume %s not found on filesystem %s", volume.id, volume.fs)
 		unmount()
 		return nil, err
 	} else {
-		glog.Infof("Volume %s was found on filesystem %s", volume.fs, volume.id)
+		glog.Infof("Volume %s was found on filesystem %s", volume.id, volume.fs)
 	}
 
 	glog.Infof("Ensuring target mount root directory exists: %s", filepath.Dir(targetPath))
@@ -155,9 +155,18 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
-			glog.Infof("Target path directory %s already exists, assuming this is a repeating mount request", targetPath)
-			unmount()
-			return &csi.NodePublishVolumeResponse{}, nil
+			if ns.mounter.debugPath == "" {
+				if PathIsWekaMount(targetPath) {
+					glog.Infof("Target path directory %s already exists and is a Weka filesystem mount", targetPath)
+					unmount()
+					return &csi.NodePublishVolumeResponse{}, nil
+				} else {
+					glog.Infof("Target path directory %s already exists but is not mounted", targetPath)
+				}
+			} else {
+				glog.Infof("Assuming debug execution and not validating WekaFS mount")
+			}
+
 		} else {
 			glog.Errorf("Target path directory %s could not be created, %s", targetPath, err)
 			unmount()
@@ -165,7 +174,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		}
 	}
 
-	glog.Infof("Attempting mount bind between volume contents and mount target")
+	glog.Infof("Attempting mount bind between volume %s and mount target %s", volume.id, targetPath)
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {

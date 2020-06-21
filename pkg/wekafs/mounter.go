@@ -42,7 +42,7 @@ func (m *wekaMount) incRef() error {
 		}
 	}
 	m.refCount++
-	glog.V(7).Infof("Refcount +1 =  %d @ %s", m.refCount, m.mountPoint)
+	glog.V(4).Infof("Refcount +1 =  %d @ %s", m.refCount, m.mountPoint)
 	return nil
 }
 
@@ -50,7 +50,7 @@ func (m *wekaMount) decRef() error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.refCount--
-	glog.V(7).Infof("Refcount -1 =  %d @ %s", m.refCount, m.mountPoint)
+	glog.V(4).Infof("Refcount -1 =  %d @ %s", m.refCount, m.mountPoint)
 	if m.refCount <= 0 {
 		if err := m.doUnmount(); err != nil {
 			return err

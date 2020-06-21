@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"os/exec"
 )
 
 func createVolumeIdFromRequest(req *csi.CreateVolumeRequest) (string, error) {
@@ -116,6 +117,13 @@ func PathExists(p string) bool {
 		panic("A file was found instead of directory in mount point")
 	}
 	return true
+}
+
+func PathIsWekaMount(path string ) bool {
+	glog.Infof("Checking if %s is wekafs mount", path)
+	mountcmd := "mount -t wekafs | grep " + path
+	res, _ := exec.Command("sh", "-c", mountcmd).Output()
+	return strings.Contains(string(res), path)
 }
 
 func validatedVolume(mountPath string, mountErr error, volume dirVolume) (string, error) {
