@@ -167,6 +167,7 @@ func (m *wekaMounter) Unmount(fs string) error {
 }
 
 func (m *wekaMounter) UnmountXattr(fs string) error {
+	m.LogActiveMounts()
 	return m.mountMap[fsRequest{fs, true}].decRef()
 }
 

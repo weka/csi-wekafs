@@ -198,16 +198,23 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		if os.IsNotExist(err) {
 			glog.Warningf("Seems like volume %s is not published under target path , assuming repeating unpublish request", volume.id, targetPath)
 			return &csi.NodeUnpublishVolumeResponse{}, nil
+		} else {
+			return &csi.NodeUnpublishVolumeResponse{}, status.Errorf(codes.Internal, " unexpected situation")
 		}
+
+	} else {
 		glog.Infof("Seems like volume %s exists and is published on target path %s", volume.id, targetPath)
 	}
+
 	glog.Infof("Attempting to perform unmount of target path %s", targetPath)
 	if err := mount.New("").Unmount(targetPath); err != nil {
+		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
 		glog.Errorf("failed unmounting volume %s at %s : %s", volume.id, targetPath, err)
-	}
-	glog.Infof("Attempting to remove target path %s", targetPath)
-	if err := os.Remove(targetPath); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+	} else {
+		glog.Infof("Attempting to remove target path %s", targetPath)
+		if err := os.Remove(targetPath); err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 	}
 	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.id)
 	// Doing this only in case both bind unmount and remove succeeded
