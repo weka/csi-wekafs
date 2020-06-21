@@ -9,7 +9,8 @@ spec:
       volumeMounts:
       - mountPath: "/data"
         name: my-csi-volume
-      command: [ "echo", "HELLO WORLD `hostname`", ">", "/data/hello.txt", ";", "sleep", "1000000" ]
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do echo `date` hello >> /data/temp.txt; sleep 10;done"]
   volumes:
     - name: my-csi-volume
       persistentVolumeClaim:
