@@ -58,7 +58,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter,
 }
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-
+	glog.Infof("Received a NodePublishVolumeRequest %s", req)
 	volume, err := NewVolume(req.GetVolumeId())
 	if err != nil {
 		return &csi.NodePublishVolumeResponse{}, err
@@ -136,32 +136,40 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	fullPath := GetVolumeFullPath(mountPoint, volume.id)
 
 	if _, err = validatedVolume(mountPoint, err, volume); err != nil {
-		glog.Infof("Volume not found on filesystem %s %s", volume.fs, volume.id)
+		glog.Infof("Volume %s not found on filesystem %s", volume.fs, volume.id)
 		unmount()
 		return nil, err
+	} else {
+		glog.Infof("Volume %s was found on filesystem %s", volume.fs, volume.id)
 	}
 
+	glog.Infof("Ensuring target mount root directory exists: %s", filepath.Dir(targetPath))
 	if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
+	glog.Infof("Ensuring mount target directory exists: %s", targetPath)
 	if err = os.Mkdir(targetPath, 0750); err != nil {
 		// If failed to create directory - other call succeded and not this one,
 		// TODO: Returning success, but this is not completely right.
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
+			glog.Infof("Target path directory %s already exists, assuming this is a repeating mount request", targetPath)
 			unmount()
 			return &csi.NodePublishVolumeResponse{}, nil
 		} else {
+			glog.Errorf("Target path directory %s could not be created, %s", targetPath, err)
 			unmount()
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
 
+	glog.Infof("Attempting mount bind between volume contents and mount target")
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
 		var errList strings.Builder
 		errList.WriteString(err.Error())
-		unmount()
+		unmount() // unmount only if mount bind failed
 		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
 	}
 
@@ -170,7 +178,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 }
 
 func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-
+	glog.Infof("Received NodeUnpublishVolume request %s", req)
 	// Check arguments
 	volume, err := NewVolume(req.GetVolumeId())
 	if err != nil {

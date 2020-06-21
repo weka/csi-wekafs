@@ -60,10 +60,12 @@ func (m *wekaMount) decRef() error {
 }
 
 func (m *wekaMount) doUnmount() error {
-	glog.V(3).Infof("Calling k8s unmounter for fs: %s @ %s", m.fsRequest.fs, m.mountPoint)
+	glog.V(3).Infof("Calling k8s unmounter for fs: %s (xattr %s) @ %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint)
 	err := m.kMounter.Unmount(m.mountPoint)
 	if err != nil {
 		glog.V(3).Infof("Failed unmounting %s at %s: %s", m.fsRequest.fs, m.mountPoint, err)
+	} else {
+		glog.V(3).Infof("Successfully unmounted %s (xattr %s) at %s: %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, err)
 	}
 	return err
 }
@@ -74,15 +76,15 @@ func (m *wekaMount) doMount() error {
 		return err
 	}
 	if m.debugPath == "" {
-		glog.V(3).Infof("Calling debugPath k8s mounter for fs: %s @ %s", m.fsRequest.fs, m.mountPoint)
+		glog.V(3).Infof("Calling k8s mounter for fs: %s (xattr %s) @ %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint)
 		return m.kMounter.Mount(m.fsRequest.fs, m.mountPoint, "wekafs", getMountOptions(m.fsRequest))
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fs)
 		if err := os.MkdirAll(fakePath, 0750); err != nil {
 			panic("Failed to create directory")
 		}
+		glog.V(3).Infof("Calling debugPath k8s mounter for fs: %s (xattr %s) @ %s on fakePath %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, fakePath)
 
-		glog.V(3).Infof("Calling k8s mounter for fs: %s @ %s", m.fsRequest.fs, m.mountPoint)
 		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
 	}
 }
