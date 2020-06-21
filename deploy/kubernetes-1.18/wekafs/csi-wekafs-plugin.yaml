@@ -147,7 +147,7 @@ spec:
             name: csi-data-dir
 
         - name: wekafs
-          image: berserg/csi-wekafsplugin:v0.0.1-32-gb1300ef-dev
+          image: berserg/csi-wekafsplugin:v0.0.1-36-g8b93665
           args:
             - "--drivername=wekafs.csi.k8s.io"
             - "--v=5"
