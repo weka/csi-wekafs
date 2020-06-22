@@ -85,34 +85,6 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 
-	//// check that mount target exists (or create it) and is not a mount point already
-	//TODO: Add support for -o ro, i.e Readonly volumes
-	//notMnt, err := mounter.GetMountRefs(targetPath)
-	//if err != nil {
-	//	if os.IsNotExist(err) {
-	//		if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
-	//			if os.IsExist(err) {
-	//				return nil, status.Error(codes.Internal, err.Error())
-	//			}
-	//		}
-	//		if err = os.Mkdir(targetPath, 0750); err != nil {
-	//			// If failed to create directory - other call succeded and not this one,
-	//			// return error and let it retry if needed
-	//			return nil, status.Error(codes.Internal, err.Error())
-	//		}
-	//		notMnt = true
-	//	} else {
-	//		return nil, status.Error(codes.Internal, err.Error())
-	//	}
-	//}
-
-	//if !notMnt {
-	//	// already mounted, no need to do anything more
-	//	glog.Info("Already mounted, returing success for %s", volume.id)
-	//	return &csi.NodePublishVolumeResponse{}, nil
-	//}
-	//
-
 	fsType := req.GetVolumeCapability().GetMount().GetFsType()
 
 	deviceId := ""
@@ -165,6 +137,8 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 				}
 			} else {
 				glog.Infof("Assuming debug execution and not validating WekaFS mount")
+				unmount()
+				return &csi.NodePublishVolumeResponse{}, nil
 			}
 
 		} else {
@@ -215,21 +189,26 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 	}
 	// check if this path is a wekafs mount
-	if PathIsWekaMount(targetPath) {
-		glog.Infof("Seems like volume %s exists and is published on target path %s", volume.id, targetPath)
-		glog.Infof("Attempting to perform unmount of target path %s", targetPath)
-		if err := mount.New("").Unmount(targetPath); err != nil {
-			//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
-			glog.Errorf("failed unmounting volume %s at %s : %s", volume.id, targetPath, err)
+	if ns.mounter.debugPath == "" {
+		if PathIsWekaMount(targetPath) {
+			glog.Infof("Directory %s exists and is weka mount [%s]", targetPath, volume.id)
 		} else {
-			glog.Infof("Successfully unmounted %s", targetPath)
+			msg := fmt.Sprintf("Directory %s exists, but not a weka mount", targetPath)
+			glog.Info()
+			return nil, status.Error(codes.Internal, msg)
 		}
-
-	} else {
-		glog.Infof("Although volume %s exists, seems it is not a valid weka mount", targetPath)
 	}
 
-	glog.Infof("Attempting to remove target path %s", targetPath)
+	glog.Infof("Attempting to perform unmount of target path %s", targetPath)
+	if err := mount.New("").Unmount(targetPath); err != nil {
+		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
+		glog.Errorf("failed unmounting volume %s at %s : %s", volume.id, targetPath, err)
+		return nil, status.Error(codes.Internal, err.Error())
+	} else {
+		glog.Infof("Successfully unmounted %s", targetPath)
+	}
+
+	glog.Infof("Attempting to remove target path %s [%s]", targetPath, volume.id)
 	if err := os.Remove(targetPath); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
