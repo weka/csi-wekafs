@@ -56,7 +56,7 @@ $(CMDS:%=push-%): push-%: container-%
 	set -ex; \
 	push_image () { \
 		docker push $(IMAGE_NAME):$(REV); \
-		sed -i -e "s@image: $(IMAGE_NAME).*@image: $(IMAGE_NAME):$(REV)@1" deploy/kubernetes-latest/wekafs/csi-wekafs-plugin.yaml; \
+		sed -e "s@image: $(IMAGE_NAME).*@image: $(IMAGE_NAME):$(REV)@1" -i deploy/kubernetes-latest/wekafs/csi-wekafs-plugin.yaml; \
 	}; \
 	echo "Pushing under tag $(REV)"; \
 	push_image
