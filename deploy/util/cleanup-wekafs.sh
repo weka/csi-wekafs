@@ -13,11 +13,11 @@ if [[ $FORCE_REMOVE_DATA ]]; then
 fi
 
 
-echo "removing wekafs plugin daemonset"
+echo "Removing wekafs plugin daemonset"
 kubectl -n csi-wekafsplugin get daemonsets.apps csi-wekafsplugin 2>/dev/null && \
   kubectl -n csi-wekafsplugin delete daemonsets.apps csi-wekafsplugin
 
-echo "removing wekafs plugin roles and permissions"
+echo "Removing wekafs plugin roles and permissions"
 kubectl -n csi-wekafsplugin get clusterrolebindings.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role-binding 2>/dev/null && \
   kubectl -n csi-wekafsplugin delete clusterrolebindings.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role-binding
 
@@ -33,14 +33,13 @@ kubectl -n csi-wekafsplugin get roles.rbac.authorization.k8s.io csi-wekafsplugin
 kubectl -n csi-wekafsplugin get serviceaccounts csi-wekafsplugin 2>/dev/null && \
   kubectl -n csi-wekafsplugin delete serviceaccounts csi-wekafsplugin
 
-
-echo "removing  wekafsplugin namespace"
+echo "Removing wekafsplugin namespace"
 kubectl get namespace "$WEKAFS_NAMESPACE" 2>/dev/null && kubectl delete namespace "$WEKAFS_NAMESPACE"
-
-
-echo $(date +%H:%M:%S) "cleanup completed successfully"
 
 echo "Please note that user-created entities of the following types are not removed:"
 echo - persistentvolumeclaim
 echo - persisentvolume
 echo - storageclasses.storage.k8s.io
+
+echo "Cleanup completed successfully"
+
