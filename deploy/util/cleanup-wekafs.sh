@@ -14,7 +14,8 @@ fi
 
 
 echo "removing wekafs plugin daemonset"
-kubectl -n csi-wekafsplugin delete daemonsets.apps csi-wekafsplugin
+kubectl -n csi-wekafsplugin get daemonsets.apps csi-wekafsplugin 2>/dev/null && \
+  kubectl -n csi-wekafsplugin delete daemonsets.apps csi-wekafsplugin
 
 echo "removing wekafs plugin roles and permissions"
 kubectl -n csi-wekafsplugin get clusterrolebindings.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role-binding 2>/dev/null && \
