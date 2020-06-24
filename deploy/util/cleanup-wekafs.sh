@@ -17,14 +17,24 @@ echo "removing wekafs plugin daemonset"
 kubectl -n csi-wekafsplugin delete daemonsets.apps csi-wekafsplugin
 
 echo "removing wekafs plugin roles and permissions"
-kubectl -n csi-wekafsplugin delete clusterrolebindings.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role-binding
-kubectl -n csi-wekafsplugin delete clusterroles.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role
-kubectl -n csi-wekafsplugin delete rolebindings.rbac.authorization.k8s.io csi-wekafsplugin-role-binding
-kubectl -n csi-wekafsplugin delete roles.rbac.authorization.k8s.io csi-wekafsplugin-role
-kubectl -n csi-wekafsplugin delete serviceaccounts csi-wekafsplugin
+kubectl -n csi-wekafsplugin get clusterrolebindings.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role-binding 2>/dev/null && \
+  kubectl -n csi-wekafsplugin delete clusterrolebindings.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role-binding
+
+kubectl -n csi-wekafsplugin get clusterroles.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role 2>/dev/null && \
+  kubectl -n csi-wekafsplugin delete clusterroles.rbac.authorization.k8s.io csi-wekafsplugin-cluster-role
+
+kubectl -n csi-wekafsplugin get rolebindings.rbac.authorization.k8s.io csi-wekafsplugin-role-binding 2>/dev/null && \
+  kubectl -n csi-wekafsplugin delete rolebindings.rbac.authorization.k8s.io csi-wekafsplugin-role-binding
+
+kubectl -n csi-wekafsplugin get roles.rbac.authorization.k8s.io csi-wekafsplugin-role 2>/dev/null && \
+  kubectl -n csi-wekafsplugin delete roles.rbac.authorization.k8s.io csi-wekafsplugin-role
+
+kubectl -n csi-wekafsplugin get serviceaccounts csi-wekafsplugin 2>/dev/null && \
+  kubectl -n csi-wekafsplugin delete serviceaccounts csi-wekafsplugin
+
 
 echo "removing  wekafsplugin namespace"
-kubectl delete namespace "$WEKAFS_NAMESPACE"
+kubectl get namespace "$WEKAFS_NAMESPACE" && kubectl delete namespace "$WEKAFS_NAMESPACE"
 
 
 echo $(date +%H:%M:%S) "cleanup completed successfully"
