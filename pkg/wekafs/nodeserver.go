@@ -19,6 +19,7 @@ package wekafs
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -32,7 +33,7 @@ import (
 )
 
 const TopologyKeyNode = "topology.wekafs.csi/node"
-
+const WekaModule = "wekafsgw"
 type nodeServer struct {
 	nodeID            string
 	maxVolumesPerNode int64
@@ -49,12 +50,22 @@ func (ns *nodeServer) NodeExpandVolume(c context.Context, request *csi.NodeExpan
 }
 
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
+	if mounter.debugPath == "" && ! isWekaInstalled() {
+		panic("weka OS driver module not installed, exiting")
+	}
 	return &nodeServer{
 		nodeID:            nodeId,
 		maxVolumesPerNode: maxVolumesPerNode,
 		mounter:           mounter,
 		gc:                gc,
 	}
+}
+
+func isWekaInstalled() bool {
+	glog.Info("Checking if wekafs is installed on host")
+	cmd := fmt.Sprintf("lsmod | grep -w %s", WekaModule)
+	res, _ := exec.Command("sh", "-c", cmd).Output()
+	return strings.Contains(string(res), WekaModule)
 }
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
