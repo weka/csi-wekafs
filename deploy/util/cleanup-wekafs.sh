@@ -35,7 +35,7 @@ kubectl -n csi-wekafsplugin get serviceaccounts csi-wekafsplugin 2>/dev/null && 
 
 
 echo "removing  wekafsplugin namespace"
-kubectl get namespace "$WEKAFS_NAMESPACE" && kubectl delete namespace "$WEKAFS_NAMESPACE"
+kubectl get namespace "$WEKAFS_NAMESPACE" 2>/dev/null && kubectl delete namespace "$WEKAFS_NAMESPACE"
 
 
 echo $(date +%H:%M:%S) "cleanup completed successfully"
