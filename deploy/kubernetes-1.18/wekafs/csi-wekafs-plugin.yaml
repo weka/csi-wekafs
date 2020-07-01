@@ -4,6 +4,7 @@ kind: Namespace
 metadata:
   name: csi-wekafsplugin
 
+---
 # csi driver definition
 ---
 apiVersion: storage.k8s.io/v1
