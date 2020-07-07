@@ -3,6 +3,7 @@ package wekafs
 import (
 	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"io/ioutil"
 	"k8s.io/utils/mount"
 	"os"
 	"path/filepath"
@@ -81,7 +82,9 @@ func (m *wekaMount) doMount() error {
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fs)
 		if err := os.MkdirAll(fakePath, 0750); err != nil {
-			panic("Failed to create directory")
+			exitMsg := "Failed to create directory"
+			_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+			panic(exitMsg)
 		}
 		glog.V(3).Infof("Calling debugPath k8s mounter for fs: %s (xattr %t) @ %s on fakePath %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, fakePath)
 

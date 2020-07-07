@@ -9,12 +9,13 @@ import (
 	"github.com/pkg/xattr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"os/exec"
 )
 
 func createVolumeIdFromRequest(req *csi.CreateVolumeRequest) (string, error) {
@@ -36,7 +37,10 @@ func createVolumeIdFromRequest(req *csi.CreateVolumeRequest) (string, error) {
 		return "", status.Errorf(codes.InvalidArgument, "missing VolumeType in CreateVolumeRequest")
 
 	default:
-		panic("Unsupported CreateVolumeRequest")
+		exitMsg := "Unsupported CreateVolumeRequest"
+		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+
+		panic(exitMsg)
 	}
 }
 
@@ -114,12 +118,14 @@ func PathExists(p string) bool {
 	}
 
 	if !fi.IsDir() {
-		panic("A file was found instead of directory in mount point")
+		exitMsg := "A file was found instead of directory in mount point"
+		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+		panic(exitMsg)
 	}
 	return true
 }
 
-func PathIsWekaMount(path string ) bool {
+func PathIsWekaMount(path string) bool {
 	glog.Infof("Checking if %s is wekafs mount", path)
 	mountcmd := "mount -t wekafs | grep " + path
 	res, _ := exec.Command("sh", "-c", mountcmd).Output()
