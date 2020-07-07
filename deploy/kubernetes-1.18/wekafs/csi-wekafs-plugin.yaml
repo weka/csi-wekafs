@@ -154,7 +154,7 @@ spec:
             name: csi-data-dir
 
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:v0.0.2-18-g15a96a3
+          image: quay.io/weka.io/csi-wekafs:v0.0.2-24-g4e61090
           args:
             - "--drivername=wekafs.csi.k8s.io"
             - "--v=5"

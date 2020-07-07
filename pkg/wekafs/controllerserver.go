@@ -73,6 +73,7 @@ func NewControllerServer(nodeID string, mounter *wekaMounter, gc *dirVolumeGc) *
 		caps: getControllerServiceCapabilities(
 			[]csi.ControllerServiceCapability_RPC_Type{
 				csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
+				csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 			}),
 		nodeID:  nodeID,
 		mounter: mounter,
@@ -201,6 +202,9 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 
+	if len(req.GetVolumeId()) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
+	}
 	volume, err := NewVolume(req.GetVolumeId())
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", volume.id)
@@ -234,6 +238,7 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}
 
 	currentSize := getVolumeSize(volPath)
+	glog.Infof("Volume %s: current capacity: %d, expanding to %d", volume.id, currentSize, capacity)
 	if currentSize < capacity {
 		if err := updateDirCapacity(volPath, capacity); err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not update volume %s: %v", volume, err)

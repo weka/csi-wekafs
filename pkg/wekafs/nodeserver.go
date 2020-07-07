@@ -18,14 +18,13 @@ package wekafs
 
 import (
 	"fmt"
+	"github.com/golang/glog"
+	"golang.org/x/net/context"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
@@ -47,8 +46,54 @@ func (ns *nodeServer) NodeGetVolumeStats(c context.Context, request *csi.NodeGet
 	panic("implement me")
 }
 
-func (ns *nodeServer) NodeExpandVolume(c context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	panic("implement me")
+func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+
+	if len(req.GetVolumeId()) == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
+	}
+	volume, err := NewVolume(req.GetVolumeId())
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", volume.id)
+	}
+
+	capRange := req.GetCapacityRange()
+	if capRange == nil {
+		return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
+	}
+
+	// Perform mount in order to be able to access Xattrs and get a full volume root path
+	mountPoint, err, unmount := ns.mounter.MountXattr(volume.fs)
+	defer unmount()
+	if err != nil {
+		return nil, err
+	}
+	volPath := volume.getFullPath(mountPoint)
+
+	capacity := int64(capRange.GetRequiredBytes())
+
+	maxStorageCapacity, err := getMaxDirCapacity(mountPoint)
+	if err != nil {
+		return nil, status.Errorf(codes.Unknown, "Cannot obtain free capacity for volume %s", volume)
+	}
+	if capacity > maxStorageCapacity {
+		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity)
+	}
+
+	if volPath, err = validatedVolume(mountPoint, err, volume); err != nil {
+		return nil, err
+	}
+
+	currentSize := getVolumeSize(volPath)
+	glog.Infof("Volume %s: current capacity: %d, expanding to %d", volume.id, currentSize, capacity)
+	if currentSize < capacity {
+		if err := updateDirCapacity(volPath, capacity); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not update volume %s: %v", volume, err)
+		}
+	}
+
+	return &csi.NodeExpandVolumeResponse{
+		CapacityBytes: capacity,
+	}, nil
 }
 
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
@@ -300,13 +345,13 @@ func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetC
 					Rpc: &csi.NodeServiceCapability_RPC{},
 				},
 			},
-			//{
-			//	Type: &csi.NodeServiceCapability_Rpc{
-			//		Rpc: &csi.NodeServiceCapability_RPC{
-			//			Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
-			//		},
-			//	},
-			//},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
+					},
+				},
+			},
 		},
 	}, nil
 }
