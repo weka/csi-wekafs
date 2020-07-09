@@ -1,0 +1,12 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-readonlymany
+spec:
+  accessModes:
+    - ReadOnlyMany
+  storageClassName: storageclass-wekafs-dirquota
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
