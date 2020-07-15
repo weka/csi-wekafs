@@ -151,18 +151,28 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if req.GetPublishContext() != nil {
 		deviceId = req.GetPublishContext()[deviceID]
 	}
-
+	var options []string
 	readOnly := req.GetReadonly()
+	if !readOnly {
+		if req.GetVolumeCapability().GetAccessMode().Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
+			readOnly = true
+		}
+		if req.GetVolumeCapability().GetAccessMode().Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY {
+			readOnly = true
+		}
+	}
+	if readOnly {
+		options = []string{"ro", "bind", "remount"}
+	} else {
+		options = []string{"bind", "remount"}
+	}
+
 	attrib := req.GetVolumeContext()
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
 
 	glog.V(4).Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeId %v\nattributes %v\nmountflags %v\n",
 		targetPath, fsType, deviceId, readOnly, volume.id, attrib, mountFlags)
 
-	options := []string{"bind"}
-	if readOnly {
-		options = append(options, "ro")
-	}
 	fsName := volume.fs
 	mountPoint, err, unmount := ns.mounter.Mount(fsName)
 	fullPath := GetVolumeFullPath(mountPoint, volume.id)
@@ -208,7 +218,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		}
 	}
 
-	glog.Infof("Attempting mount bind between volume %s and mount target %s", volume.id, targetPath)
+	glog.Infof("Attempting mount bind between volume %s and mount target %s, options: %s", volume.id, targetPath, options)
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
