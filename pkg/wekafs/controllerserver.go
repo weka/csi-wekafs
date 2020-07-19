@@ -104,6 +104,9 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return &csi.CreateVolumeResponse{}, status.Errorf(codes.InvalidArgument, "Failed to resolve VolumeType from CreateVolumeRequest")
 	}
 	volume, err := NewVolume(volumeID)
+	if err != nil {
+		return &csi.CreateVolumeResponse{}, status.Errorf(codes.InvalidArgument, "Failed to resolve VolumeType from CreateVolumeRequest")
+	}
 	// Validate access type in request
 	for _, capability := range caps {
 		if capability.GetBlock() != nil {
@@ -125,9 +128,10 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// If directory already exists, return the create response for idempotence if size matches, or error
 	if PathExists(volPath) {
 		glog.V(3).Infof("Directory already exists: %v", volPath)
+
 		currentCapacity := getVolumeSize(volPath)
 		// TODO: Once we have everything working - review this, big potential of race of several CreateVolume requests
-		if currentCapacity != capacity {
+		if currentCapacity != capacity && currentCapacity != 0{
 			return nil, status.Errorf(codes.AlreadyExists, "Volume with same ID exists with different capacity volumeID %s: [current]%d!=%d[requested]", volumeID, currentCapacity, capacity)
 		}
 		return &csi.CreateVolumeResponse{

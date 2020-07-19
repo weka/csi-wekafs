@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: storageclass-wekafs-existingpath
+provisioner: wekafs.csi.k8s.io
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+parameters:
+  volumeType: existingPath/v1
+  filesystemName: default
+  innerPath: /my/internal/path

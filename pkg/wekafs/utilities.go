@@ -33,6 +33,21 @@ func createVolumeIdFromRequest(req *csi.CreateVolumeRequest) (string, error) {
 		folderName := hash + "-" + asciiPart
 		volId = volType + "/" + filesystemName + "/" + folderName
 		return TruncateString(volId, maxVolumeIdLength), nil
+
+	case VolumeTypeExistingPathV1:
+		filesystemName := GetFSNameFromRequest(req)
+		innerPath := GetInnerPathFromRequest(req)
+		switch innerPath {
+		case "":
+			return "", status.Errorf(codes.InvalidArgument, "missing dirName in CreateVolumeRequest")
+		case "/":
+			return "", status.Errorf(codes.InvalidArgument, "Root directory is not supported in %s volume type", VolumeTypeExistingPathV1)
+		default:
+			volId = volType + "/" + filesystemName + "/" + innerPath
+			volId = strings.Replace(volId, "//", "/", 1)
+		}
+		return TruncateString(volId, maxVolumeIdLength), nil
+
 	case "":
 		return "", status.Errorf(codes.InvalidArgument, "missing VolumeType in CreateVolumeRequest")
 
@@ -60,6 +75,10 @@ func GetFSNameFromRequest(req *csi.CreateVolumeRequest) string {
 	return filesystemName
 }
 
+func GetInnerPathFromRequest(req *csi.CreateVolumeRequest) string {
+	return req.GetParameters()["innerPath"]
+}
+
 func GetFSName(volumeID string) string {
 	// VolID format:
 	// "dir/v1/<WEKA_FS_NAME>/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
@@ -72,7 +91,10 @@ func GetFSName(volumeID string) string {
 
 func GetVolumeDirName(volumeID string) string {
 	slices := strings.Split(volumeID, "/")
-	return slices[len(slices)-1] // last part is a folder name
+	if len(slices) < 3 {
+		return ""
+	}
+	return strings.Join(slices[3:], "/") // may be either directory name or innerPath
 }
 
 func GetVolumeFullPath(mountPoint, volumeID string) string {
@@ -161,7 +183,6 @@ func validateVolumeId(volumeId string) error {
 		// e.g.
 		// "dir/v1/default/63008f52b44ca664dfac8a64f0c17a28e1754213-my-awesome-folder"
 		// length limited to maxVolumeIdLength
-		//slices := strings.Split(volumeId, "/")[2:]
 		if len(volumeId) == 0 && len(volumeId) > maxVolumeIdLength {
 			return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")
 		}
@@ -172,8 +193,24 @@ func validateVolumeId(volumeId string) error {
 		if !re.MatchString(volumeId) {
 			return status.Errorf(codes.InvalidArgument, "invalid volume ID specified")
 		}
+
+	case VolumeTypeExistingPathV1:
+		// VolID format is as following:
+		// "<VolType>/<WEKA_FS_NAME>/<INNER_PATH>"
+		// e.g.
+		// "existingPath/v1/default/my/inner/path"
+		// length limited to maxVolumeIdLength
+		if len(volumeId) == 0 && len(volumeId) > maxVolumeIdLength {
+			return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")
+		}
+		r := VolumeTypeExistingPathV1 + "/" + ".*"
+		re := regexp.MustCompile(r)
+		if !re.MatchString(volumeId) {
+			return status.Errorf(codes.InvalidArgument, "invalid volume ID specified")
+		}
+
 	default:
-		return status.Errorf(codes.InvalidArgument, "unsupported not ID specified")
+		return status.Errorf(codes.InvalidArgument, "unsupported ID specified")
 	}
 	return nil
 }
