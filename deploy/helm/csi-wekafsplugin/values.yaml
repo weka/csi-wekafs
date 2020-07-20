@@ -1,0 +1,22 @@
+image:
+  pullPolicy: IfNotPresent
+  repository: quay.io/weka.io/csi-wekafs
+  tag: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "csi-wekafsplugin"
+
+podAnnotations: {}
+
+nodeSelector:
+
+tolerations: []
+
+affinity: {}
+
+
+fullnameOverride: ""
+imagePullSecrets: []
+nameOverride: ""

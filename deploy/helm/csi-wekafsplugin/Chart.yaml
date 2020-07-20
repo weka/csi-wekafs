@@ -1,0 +1,12 @@
+apiVersion: v2
+appVersion: 0.0.4-0.dev-helm
+description: WekaIO WekaFS CSI Plugin
+icon: https://www.weka.io/wp-content/themes/wekaio/templates/assets/images/navigation/new-logo.png
+kubeVersion: '>= 1.13.0'
+maintainers:
+- email: support@weka.io
+  name: WekaIO
+  url: https://www.weka.io
+name: csi-wekafsplugin
+type: application
+version: 0.0.4-0.dev-helm+a4057f4

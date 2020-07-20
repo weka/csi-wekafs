@@ -7,6 +7,7 @@ reclaimPolicy: Retain
 volumeBindingMode: Immediate
 allowVolumeExpansion: true
 parameters:
-  volumeType: existingPath/v1
+  volumeType: path/v1
   filesystemName: default
   innerPath: /my/internal/path
+  allowNonExistentPath: false
