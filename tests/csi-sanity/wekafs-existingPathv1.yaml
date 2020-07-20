@@ -1,3 +1,4 @@
 filesystemName: default
-volumeType: existingPath/v1
+volumeType: path/v1
 innerPath: /test/my/path
+allowNonExistentPath: true
