@@ -95,5 +95,5 @@ func (driver *wekaFsDriver) Run() {
 
 const (
 	VolumeTypeDirV1          = "dir/v1"
-	VolumeTypeExistingPathV1 = "existingPath/v1"
+	VolumeTypeExistingPathV1 = "path/v1"
 )

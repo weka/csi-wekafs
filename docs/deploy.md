@@ -145,7 +145,7 @@ Events:
 
 ## Confirm csi-wekafs driver works
 The csi-wekafs driver is configured to create new directories inside the wekafs filesystem, which is specified in 
-[storageclass](../examples/storageclass-wekafs-dirquota.yaml) parameters.
+[storageclass](../examples/dir/storageclass-wekafs-dirquota.yaml) parameters.
 
 Eventually, those directories are mounted as a persistentvolume and available to one or more pods, 
 across any number of nodes in the cluster.

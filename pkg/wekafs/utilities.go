@@ -79,6 +79,15 @@ func GetInnerPathFromRequest(req *csi.CreateVolumeRequest) string {
 	return req.GetParameters()["innerPath"]
 }
 
+func IsNonExistentPathAllowed(req *csi.CreateVolumeRequest) (allowNonExistentPath bool) {
+	v := req.GetParameters()["allowNonExistentPath"]
+	switch v {
+	case "": return false
+	case "true": return true
+	default: return false
+	}
+}
+
 func GetFSName(volumeID string) string {
 	// VolID format:
 	// "dir/v1/<WEKA_FS_NAME>/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
@@ -198,7 +207,7 @@ func validateVolumeId(volumeId string) error {
 		// VolID format is as following:
 		// "<VolType>/<WEKA_FS_NAME>/<INNER_PATH>"
 		// e.g.
-		// "existingPath/v1/default/my/inner/path"
+		// "path/v1/default/my/inner/path"
 		// length limited to maxVolumeIdLength
 		if len(volumeId) == 0 && len(volumeId) > maxVolumeIdLength {
 			return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")

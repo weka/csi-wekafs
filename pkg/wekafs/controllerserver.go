@@ -131,7 +131,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 		currentCapacity := getVolumeSize(volPath)
 		// TODO: Once we have everything working - review this, big potential of race of several CreateVolume requests
-		if currentCapacity != capacity && currentCapacity != 0{
+		if currentCapacity != capacity && currentCapacity != 0 {
 			return nil, status.Errorf(codes.AlreadyExists, "Volume with same ID exists with different capacity volumeID %s: [current]%d!=%d[requested]", volumeID, currentCapacity, capacity)
 		}
 		return &csi.CreateVolumeResponse{
@@ -143,6 +143,10 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}, nil
 	}
 
+	// At this stage directory is non-existent, we need to check if it is OK
+	if volume.volumeType == VolumeTypeExistingPathV1 && !IsNonExistentPathAllowed(req) {
+		return nil, status.Errorf(codes.NotFound, "Could not create %s, %s does not exist in filesystem %s", volume.volumeType, volume.dirName, volume.fs)
+	}
 	// validate minimum capacity before create new volume
 	maxStorageCapacity, err := getMaxDirCapacity(mountPoint)
 	if err != nil {
