@@ -56,6 +56,10 @@ func (m *wekaMount) decRef() error {
 		if err := m.doUnmount(); err != nil {
 			return err
 		}
+		if m.refCount < 0 {
+			glog.Errorf("During decRef negative refcount encountered, %v", m.refCount)
+			m.refCount = 0 // to make sure that we don't have negative refcount later
+		}
 	}
 	return nil
 }
