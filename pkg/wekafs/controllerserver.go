@@ -17,6 +17,8 @@ limitations under the License.
 package wekafs
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -80,8 +82,17 @@ func NewControllerServer(nodeID string, mounter *wekaMounter, gc *dirVolumeGc) *
 		gc:      gc,
 	}
 }
+func createKeyValuePairs(m map[string]string) string {
+	b := new(bytes.Buffer)
+	for key, value := range m {
+		fmt.Fprintf(b, "%s=\"%s\"\n", key, value)
+	}
+	return b.String()
+}
 
 func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+	glog.V(3).Infof("Received a CreateVolume request: %s", createKeyValuePairs(req.GetParameters()))
+	defer glog.V(3).Infof("Completed processing request: %s", createKeyValuePairs(req.GetParameters()))
 	cs.creatLock.Lock()
 	defer cs.creatLock.Unlock()
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
@@ -255,7 +266,7 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         capacity,
-		NodeExpansionRequired: false, // since this is filesystem, no need to resize on node
+		NodeExpansionRequired: true, // since this is filesystem, no need to resize on node
 	}, nil
 }
 
