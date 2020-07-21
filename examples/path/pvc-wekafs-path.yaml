@@ -1,11 +1,12 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: pvc-wekafs-readonlymany
+  name: pvc-wekafs-path
 spec:
   accessModes:
-    - ReadOnlyMany
-  storageClassName: storageclass-wekafs-dirquota
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-path
+  volumeName: pv-wekafs-path
   volumeMode: Filesystem
   resources:
     requests:

@@ -1,7 +1,7 @@
 kind: Pod
 apiVersion: v1
 metadata:
-  name: my-csi-app
+  name: csi-app-on-path
 spec:
   containers:
     - name: my-frontend
@@ -14,4 +14,4 @@ spec:
   volumes:
     - name: my-csi-volume
       persistentVolumeClaim:
-        claimName: pvc-wekafs-dirquota # defined in pvc-wekafs-dirquota.yaml
+        claimName: pvc-wekafs-path # defined in pvc-wekafs-dir.yaml

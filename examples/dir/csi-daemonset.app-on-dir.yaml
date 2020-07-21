@@ -16,10 +16,10 @@ spec:
           image: busybox
           volumeMounts:
           - mountPath: "/data"
-            name: csi-wekafs-dirquota
+            name: csi-wekafs-dir
           command: ["/bin/sh"]
           args: ["-c", "while true; do echo `date` hello >> /data/`hostname`.txt; sleep 10;done"]
       volumes:
-        - name: csi-wekafs-dirquota
+        - name: csi-wekafs-dir
           persistentVolumeClaim:
-            claimName: pvc-wekafs-dirquota # defined in pvc-wekafs-dirquota.yaml
+            claimName: pvc-wekafs-dir # defined in pvc-wekafs-dir.yaml
