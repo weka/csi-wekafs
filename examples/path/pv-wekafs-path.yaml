@@ -6,6 +6,7 @@ spec:
   storageClassName: storageclass-wekafs-path
   accessModes:
     - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
   volumeMode: Filesystem
   capacity:
     storage: 1Gi
