@@ -5,7 +5,7 @@
 StorageClass:
   FromName: true
 DriverInfo:
-  Name: wekafs.csi.k8s.io
+  Name: csi.weka.io
   Capabilities:
     block: false
     controllerExpansion: false

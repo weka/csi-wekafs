@@ -30,7 +30,7 @@ func init() {
 
 var (
 	endpoint   = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
-	driverName = flag.String("drivername", "wekafs.csi.k8s.io", "name of the driver")
+	driverName = flag.String("drivername", "csi.weka.io", "name of the driver")
 	debugPath  = flag.String("debugpath", "",
 		"Debug path to use instead of actually mounting weka, can be local fs or wekafs,"+
 			" virtual FS will be created in this path instead of actual mounting")

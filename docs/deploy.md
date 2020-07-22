@@ -22,7 +22,7 @@ deploying wekafs components
         using           image: quay.io/k8scsi/livenessprobe:v1.1.0
         using           image: quay.io/k8scsi/csi-provisioner:v1.6.0
         using           image: quay.io/k8scsi/csi-attacher:v3.0.0-rc1
-csidriver.storage.k8s.io/wekafs.csi.k8s.io unchanged
+csidriver.storage.k8s.io/csi.weka.io unchanged
 serviceaccount/csi-wekafsplugin created
 clusterrole.rbac.authorization.k8s.io/csi-wekafsplugin-cluster-role created
 clusterrolebinding.rbac.authorization.k8s.io/csi-wekafsplugin-cluster-role-binding created

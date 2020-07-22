@@ -8,6 +8,7 @@ require (
 	github.com/golang/lint v0.0.0-20180702182130-06c8688daad7 // indirect
 	github.com/google/uuid v1.1.1
 	github.com/kubernetes-csi/csi-lib-utils v0.7.0
+	github.com/kubernetes-csi/docs v0.0.0-20200714231321-af397c0c87a7 // indirect
 	github.com/pkg/xattr v0.4.1
 	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
 	google.golang.org/grpc v1.26.0

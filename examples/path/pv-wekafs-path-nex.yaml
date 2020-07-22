@@ -10,5 +10,5 @@ spec:
   capacity:
     storage: 1Gi
   csi:
-    driver: wekafs.csi.k8s.io
+    driver: csi.weka.io
     volumeHandle: path/v1/default/non/existing/path

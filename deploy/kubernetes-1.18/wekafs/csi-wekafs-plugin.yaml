@@ -10,7 +10,7 @@ metadata:
 apiVersion: storage.k8s.io/v1
 kind: CSIDriver
 metadata:
-  name: wekafs.csi.k8s.io
+  name: csi.weka.io
 spec:
   # Supports persistent volumes.
   volumeLifecycleModes:
@@ -159,7 +159,7 @@ spec:
         - name: wekafs
           image: quay.io/weka.io/csi-wekafs:v0.0.3-4-g9b090d6-dev
           args:
-            - "--drivername=wekafs.csi.k8s.io"
+            - "--drivername=csi.weka.io"
             - "--v=5"
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodeid=$(KUBE_NODE_NAME)"
