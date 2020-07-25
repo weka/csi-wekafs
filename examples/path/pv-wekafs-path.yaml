@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-wekafs-path
+spec:
+  storageClassName: storageclass-wekafs-path
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  capacity:
+    storage: 1Gi
+  csi:
+    driver: csi.weka.io
+    volumeHandle: path/v1/default/test/path

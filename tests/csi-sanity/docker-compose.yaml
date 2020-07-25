@@ -1,0 +1,15 @@
+version: '3'
+services:
+  plugin:
+    build: .
+    command: wekafsplugin -nodeid 1 -alsologtostderr -v 9 --endpoint=unix://tmp/weka-csi-test/csi.sock --debugpath=/tmp/weka-csi-test/filesystems
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    privileged: true
+  sanity:
+    build: .
+    command: run_sanity
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+volumes:
+  test-volume:

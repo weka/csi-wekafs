@@ -1,0 +1,17 @@
+# This file describes how to test this deployment of the CSI wekafs driver
+# using the Kubernetes 1.18 E2E test suite. For details see:
+# https://github.com/kubernetes/kubernetes/tree/v1.18.0/test/e2e/storage/external
+
+StorageClass:
+  FromName: true
+DriverInfo:
+  Name: csi.weka.io
+  Capabilities:
+    block: false
+    controllerExpansion: true
+    exec: true
+    multipods: true
+    nodeExpansion: true
+    persistence: true
+    singleNodeVolume: false
+    topology: false
