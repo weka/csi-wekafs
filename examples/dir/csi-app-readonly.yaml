@@ -1,7 +1,7 @@
 kind: Pod
 apiVersion: v1
 metadata:
-  name: csi-app-on-dir
+  name: csi-app-readonly
 spec:
   containers:
     - name: my-frontend
@@ -9,9 +9,10 @@ spec:
       volumeMounts:
       - mountPath: "/data"
         name: my-csi-volume
+        readOnly: true
       command: ["/bin/sh"]
       args: ["-c", "while true; do echo `date` hello >> /data/temp.txt; sleep 10;done"]
   volumes:
     - name: my-csi-volume
       persistentVolumeClaim:
-        claimName: pvc-wekafs-dir # defined in pvc-wekafs-dir.yaml
+        claimName: pvc-wekafs-dir-readonly # defined in pvc-wekafs-dir.yaml
