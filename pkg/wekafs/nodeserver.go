@@ -153,18 +153,11 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 	var options []string
 	readOnly := req.GetReadonly()
-	if !readOnly {
-		if req.GetVolumeCapability().GetAccessMode().Mode == csi.VolumeCapability_AccessMode_MULTI_NODE_READER_ONLY {
-			readOnly = true
-		}
-		if req.GetVolumeCapability().GetAccessMode().Mode == csi.VolumeCapability_AccessMode_SINGLE_NODE_READER_ONLY {
-			readOnly = true
-		}
-	}
+
 	if readOnly {
-		options = []string{"ro", "bind", "remount"}
+		options = []string{"ro", "bind"}
 	} else {
-		options = []string{"bind", "remount"}
+		options = []string{"bind"}
 	}
 
 	attrib := req.GetVolumeContext()
