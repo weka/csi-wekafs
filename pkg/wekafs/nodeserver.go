@@ -119,9 +119,18 @@ func isWekaInstalled() bool {
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	glog.Infof("Received a NodePublishVolumeRequest %s", req)
-	volume, err := NewVolume(req.GetVolumeId())
-	if err != nil {
-		return &csi.NodePublishVolumeResponse{}, err
+	volumeId := req.GetVolumeId()
+
+	if volumeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID may not be empty")
+	}
+
+	var volume dirVolume
+	volume = dirVolume{
+		id:         volumeId,
+		fs:         GetFSName(volumeId),
+		volumeType: GetVolumeType(volumeId),
+		dirName:    GetVolumeDirName(volumeId),
 	}
 
 	// Check volume capabitily arguments
