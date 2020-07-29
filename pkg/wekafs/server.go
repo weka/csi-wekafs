@@ -32,9 +32,8 @@ import (
 )
 
 const (
-	maxCapacityForNewFileSystem = tib100
-	xattrCapacity               = "user.weka_capacity"
-	xattrVolumeName             = "user.weka_k8s_volname"
+	xattrCapacity   = "user.weka_capacity"
+	xattrVolumeName = "user.weka_k8s_volname"
 )
 
 func NewNonBlockingGRPCServer() *nonBlockingGRPCServer {

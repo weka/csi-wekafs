@@ -164,6 +164,7 @@ spec:
             - "--v=5"
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodeid=$(KUBE_NODE_NAME)"
+            - "--dynamic-path=csi-volumes"
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock

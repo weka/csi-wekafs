@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-wekafs-dir-static
+spec:
+  storageClassName: storageclass-wekafs-dir-static
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  capacity:
+    storage: 1Gi
+  csi:
+    driver: csi.weka.io
+    # volumeHandle must be formatted as following:
+    # dir/v1/<FILE_SYSTEM_NAME>/<INNER_PATH_IN_FILESYSTEM>
+    # The path must exist, otherwise publish request will fail
+    volumeHandle: dir/v1/default/test/path

@@ -1,12 +1,12 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: pvc-wekafs-path
+  name: pvc-wekafs-dir-static
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: storageclass-wekafs-path
-  volumeName: pv-wekafs-path
+  storageClassName: storageclass-wekafs-dir-static
+  volumeName: pv-wekafs-dir-static
   volumeMode: Filesystem
   resources:
     requests:

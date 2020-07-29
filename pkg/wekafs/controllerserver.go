@@ -31,15 +31,16 @@ import (
 const (
 	deviceID              = "deviceID"
 	defaultFilesystemName = "default"
-	maxVolumeIdLength     = 128
+	maxVolumeIdLength     = 1920
 )
 
 type controllerServer struct {
-	caps      []*csi.ControllerServiceCapability
-	nodeID    string
-	gc        *dirVolumeGc
-	mounter   *wekaMounter
-	creatLock sync.Mutex
+	caps           []*csi.ControllerServiceCapability
+	nodeID         string
+	gc             *dirVolumeGc
+	mounter        *wekaMounter
+	creatLock      sync.Mutex
+	dynamicVolPath string
 }
 
 func (cs *controllerServer) ControllerPublishVolume(c context.Context, request *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
@@ -70,18 +71,20 @@ func (cs *controllerServer) ListSnapshots(c context.Context, request *csi.ListSn
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, mounter *wekaMounter, gc *dirVolumeGc) *controllerServer {
+func NewControllerServer(nodeID string, mounter *wekaMounter, gc *dirVolumeGc, dynamicVolPath string) *controllerServer {
 	return &controllerServer{
 		caps: getControllerServiceCapabilities(
 			[]csi.ControllerServiceCapability_RPC_Type{
 				csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 				csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 			}),
-		nodeID:  nodeID,
-		mounter: mounter,
-		gc:      gc,
+		nodeID:         nodeID,
+		mounter:        mounter,
+		gc:             gc,
+		dynamicVolPath: dynamicVolPath,
 	}
 }
+
 func createKeyValuePairs(m map[string]string) string {
 	b := new(bytes.Buffer)
 	for key, value := range m {
@@ -110,13 +113,13 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	// Need to calculate volumeID first thing due to possible mapping to multiple FSes
-	volumeID, err := createVolumeIdFromRequest(req)
+	volumeID, err := createVolumeIdFromRequest(req, cs.dynamicVolPath)
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Errorf(codes.InvalidArgument, "Failed to resolve VolumeType from CreateVolumeRequest")
 	}
 	volume, err := NewVolume(volumeID)
 	if err != nil {
-		return &csi.CreateVolumeResponse{}, status.Errorf(codes.InvalidArgument, "Failed to resolve VolumeType from CreateVolumeRequest")
+		return &csi.CreateVolumeResponse{}, err
 	}
 	// Validate access type in request
 	for _, capability := range caps {
@@ -154,10 +157,6 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}, nil
 	}
 
-	// At this stage directory is non-existent, we need to check if it is OK
-	if volume.volumeType == VolumeTypeExistingPathV1 && !IsNonExistentPathAllowed(req) {
-		return nil, status.Errorf(codes.NotFound, "Could not create %s, %s does not exist in filesystem %s", volume.volumeType, volume.dirName, volume.fs)
-	}
 	// validate minimum capacity before create new volume
 	maxStorageCapacity, err := getMaxDirCapacity(mountPoint)
 	if err != nil {
@@ -226,7 +225,7 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}
 	volume, err := NewVolume(req.GetVolumeId())
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", volume.id)
+		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", req.GetVolumeId())
 	}
 
 	capRange := req.GetCapacityRange()

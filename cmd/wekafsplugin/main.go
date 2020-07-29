@@ -37,6 +37,8 @@ var (
 	nodeID            = flag.String("nodeid", "", "node id")
 	maxVolumesPerNode = flag.Int64("maxvolumespernode", 0, "limit of volumes per node")
 	showVersion       = flag.Bool("version", false, "Show version.")
+	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
+		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
 	// Set by the build process
 	version = ""
 )
@@ -55,7 +57,7 @@ func main() {
 }
 
 func handle() {
-	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, *dynamicSubPath)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

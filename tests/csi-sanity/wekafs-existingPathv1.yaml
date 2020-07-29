@@ -1,4 +1,1 @@
-filesystemName: default
-volumeType: path/v1
-innerPath: /test/my/path
-allowNonExistentPath: true
+volumeType: dir/v1

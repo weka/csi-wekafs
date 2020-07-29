@@ -21,15 +21,6 @@ import (
 	"github.com/golang/glog"
 )
 
-const (
-	kib    int64 = 1024
-	mib    int64 = kib * 1024
-	gib    int64 = mib * 1024
-	gib100 int64 = gib * 100
-	tib    int64 = gib * 1024
-	tib100 int64 = tib * 100
-)
-
 type wekaFsDriver struct {
 	name              string
 	nodeID            string
@@ -39,17 +30,18 @@ type wekaFsDriver struct {
 	mountMode         string
 	mockMount         bool
 
-	ids       *identityServer
-	ns        *nodeServer
-	cs        *controllerServer
-	debugPath string
+	ids            *identityServer
+	ns             *nodeServer
+	cs             *controllerServer
+	debugPath      string
+	dynamicVolPath string
 }
 
 var (
 	vendorVersion = "dev"
 )
 
-func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string) (*wekaFsDriver, error) {
+func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string) (*wekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -75,6 +67,7 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 		endpoint:          endpoint,
 		maxVolumesPerNode: maxVolumesPerNode,
 		debugPath:         debugPath,
+		dynamicVolPath:    dynmamicVolPath,
 	}, nil
 }
 
@@ -85,7 +78,7 @@ func (driver *wekaFsDriver) Run() {
 
 	driver.ids = NewIdentityServer(driver.name, driver.version)
 	driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, mounter, gc)
-	driver.cs = NewControllerServer(driver.nodeID, mounter, gc)
+	driver.cs = NewControllerServer(driver.nodeID, mounter, gc, driver.dynamicVolPath)
 
 	//discoverExistingSnapshots()
 	s := NewNonBlockingGRPCServer()
@@ -94,6 +87,5 @@ func (driver *wekaFsDriver) Run() {
 }
 
 const (
-	VolumeTypeDirV1          = "dir/v1"
-	VolumeTypeExistingPathV1 = "path/v1"
+	VolumeTypeDirV1 = "dir/v1"
 )

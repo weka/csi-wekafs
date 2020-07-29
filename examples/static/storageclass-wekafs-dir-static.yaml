@@ -1,11 +1,10 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: storageclass-wekafs-path
+  name: storageclass-wekafs-dir-static
 provisioner: csi.weka.io
 reclaimPolicy: Retain
 volumeBindingMode: Immediate
 allowVolumeExpansion: true
 parameters:
-  volumeType: path/v1
-  allowNonExistentPath: "false"
+  volumeType: dir/v1

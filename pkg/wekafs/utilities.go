@@ -18,7 +18,7 @@ import (
 	"strings"
 )
 
-func createVolumeIdFromRequest(req *csi.CreateVolumeRequest) (string, error) {
+func createVolumeIdFromRequest(req *csi.CreateVolumeRequest, dynamicVolPath string) (string, error) {
 	name := req.GetName()
 
 	var volId string
@@ -30,29 +30,19 @@ func createVolumeIdFromRequest(req *csi.CreateVolumeRequest) (string, error) {
 		filesystemName := GetFSNameFromRequest(req)
 		asciiPart := getAsciiPart(name, 64)
 		hash := getStringSha1(name)
-		folderName := hash + "-" + asciiPart
-		volId = volType + "/" + filesystemName + "/" + folderName
-		return TruncateString(volId, maxVolumeIdLength), nil
-
-	case VolumeTypeExistingPathV1:
-		filesystemName := GetFSNameFromRequest(req)
-		innerPath := GetInnerPathFromRequest(req)
-		switch innerPath {
-		case "":
-			return "", status.Errorf(codes.InvalidArgument, "missing dirName in CreateVolumeRequest")
-		case "/":
-			return "", status.Errorf(codes.InvalidArgument, "Root directory is not supported in %s volume type", VolumeTypeExistingPathV1)
-		default:
-			volId = volType + "/" + filesystemName + "/" + innerPath
-			volId = strings.Replace(volId, "//", "/", 1)
+		folderName := asciiPart + "-" + hash
+		if dynamicVolPath != "" {
+			volId = filepath.Join(volType, filesystemName, dynamicVolPath, folderName)
+		} else {
+			volId = filepath.Join(volType, filesystemName, folderName)
 		}
-		return TruncateString(volId, maxVolumeIdLength), nil
+		return volId, nil
 
 	case "":
 		return "", status.Errorf(codes.InvalidArgument, "missing VolumeType in CreateVolumeRequest")
 
 	default:
-		exitMsg := "Unsupported CreateVolumeRequest"
+		exitMsg := "Unsupported volumeType in CreateVolumeRequest"
 		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
 
 		panic(exitMsg)
@@ -73,22 +63,6 @@ func GetFSNameFromRequest(req *csi.CreateVolumeRequest) string {
 		filesystemName = defaultFilesystemName
 	}
 	return filesystemName
-}
-
-func GetInnerPathFromRequest(req *csi.CreateVolumeRequest) string {
-	return req.GetParameters()["innerPath"]
-}
-
-func IsNonExistentPathAllowed(req *csi.CreateVolumeRequest) (allowNonExistentPath bool) {
-	v := req.GetParameters()["allowNonExistentPath"]
-	switch v {
-	case "":
-		return false
-	case "true":
-		return true
-	default:
-		return false
-	}
 }
 
 func GetFSName(volumeID string) string {
@@ -187,6 +161,13 @@ func validatedVolume(mountPath string, mountErr error, volume dirVolume) (string
 }
 
 func validateVolumeId(volumeId string) error {
+	if len(volumeId) == 0 {
+		return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")
+	}
+	if len(volumeId) > maxVolumeIdLength {
+		return status.Errorf(codes.InvalidArgument, "volume ID exceeds max length")
+	}
+
 	volumeType := GetVolumeType(volumeId)
 	switch volumeType {
 	case VolumeTypeDirV1:
@@ -195,36 +176,13 @@ func validateVolumeId(volumeId string) error {
 		// e.g.
 		// "dir/v1/default/63008f52b44ca664dfac8a64f0c17a28e1754213-my-awesome-folder"
 		// length limited to maxVolumeIdLength
-		if len(volumeId) == 0 && len(volumeId) > maxVolumeIdLength {
-			return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")
-		}
-		// TODO: Reuse ascii ranges directly
-		// TODO: validate dirName part against ascii filter
-		r := VolumeTypeDirV1 + "/" + "[^/]*/" + "[0-9a-f]{40}" + "-" + "[A-Za-z0-9_.:-]+" + "$"
+		r := VolumeTypeDirV1 + "/[^/]*/.+"
 		re := regexp.MustCompile(r)
-		if !re.MatchString(volumeId) {
-			return status.Errorf(codes.InvalidArgument, "invalid volume ID specified")
+		if re.MatchString(volumeId) {
+			return nil
 		}
-
-	case VolumeTypeExistingPathV1:
-		// VolID format is as following:
-		// "<VolType>/<WEKA_FS_NAME>/<INNER_PATH>"
-		// e.g.
-		// "path/v1/default/my/inner/path"
-		// length limited to maxVolumeIdLength
-		if len(volumeId) == 0 && len(volumeId) > maxVolumeIdLength {
-			return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")
-		}
-		r := VolumeTypeExistingPathV1 + "/" + ".*"
-		re := regexp.MustCompile(r)
-		if !re.MatchString(volumeId) {
-			return status.Errorf(codes.InvalidArgument, "invalid volume ID specified")
-		}
-
-	default:
-		return status.Errorf(codes.InvalidArgument, "unsupported ID specified")
 	}
-	return nil
+	return status.Errorf(codes.InvalidArgument, "unsupported volumeID")
 }
 
 func updateXattrs(volPath string, attrs map[string][]byte) error {
