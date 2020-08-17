@@ -1,8 +1,14 @@
 version: '3'
 services:
-  plugin:
+  plugin_controller:
     build: .
-    command: wekafsplugin -nodeid 1 -alsologtostderr -v 9 --endpoint=unix://tmp/weka-csi-test/csi.sock --debugpath=/tmp/weka-csi-test/filesystems
+    command: wekafsplugin -nodeid 1 -alsologtostderr -v 9 --endpoint=unix://tmp/weka-csi-test/controller.sock --debugpath=/tmp/weka-csi-test/filesystems --csimode=controller
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    privileged: true
+  plugin_node:
+    build: .
+    command: wekafsplugin -nodeid 1 -alsologtostderr -v 9 --endpoint=unix://tmp/weka-csi-test/node.sock --debugpath=/tmp/weka-csi-test/filesystems --csimode=node
     volumes:
       - test-volume:/tmp/weka-csi-test
     privileged: true

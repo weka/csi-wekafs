@@ -61,7 +61,7 @@ done
 # for: the expectation is that we run attacher, provisioner, and wekafs plugin in the default namespace.
 
 # check number of plugins to be running
-expected_running_pods=$(kubectl describe nodes | grep Taints | grep -v "^Taints.*NoSchedule" -c)
+expected_running_pods=$(( $(kubectl describe nodes | grep Taints | grep -v "^Taints.*NoSchedule" -c) + 1 ))
 
 cnt=0
 while (( $(kubectl get pods --namespace "$WEKAFS_NAMESPACE" 2>/dev/null | grep '^csi-wekafs.* Running ' -c) < expected_running_pods )); do
@@ -77,5 +77,5 @@ while (( $(kubectl get pods --namespace "$WEKAFS_NAMESPACE" 2>/dev/null | grep '
     sleep 10
 done
 echo $(date +%H:%M:%S) "deployment completed successfully"
-echo $(date +%H:%M:%S) "$expected_running_pods plugin pods are running:"
+echo $(date +%H:%M:%S) "$expected_running_node_pods plugin pods are running:"
 kubectl get pods --namespace "$WEKAFS_NAMESPACE" 2>/dev/null | grep '^csi-wekafs.* Running '

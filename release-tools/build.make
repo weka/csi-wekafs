@@ -26,10 +26,14 @@ REGISTRY_NAME=quay.io/weka.io
 #
 # Beware that tags may also be missing in shallow clones as done by
 # some CI systems (like TravisCI, which pulls only 50 commits).
-REV=$(shell git describe --tags --long --match='v*' --dirty="-dev" 2>/dev/null || git rev-list -n1 HEAD)
+IMAGE_UNIQUE_TAG=$(shell uuid -v 4 | cut -d- -f1)
+LATEST_TAG=$(shell git describe --tags --abbrev=0)
+AFTER_LATEST=$(shell git rev-list $(LATEST_TAG)..HEAD | wc -l)
 
+REV=$(shell git describe --tags --abbrev=0 --match='v*' --dirty=-post$(AFTER_LATEST))
 # Images are named after the command contained in them.
 IMAGE_NAME=$(REGISTRY_NAME)/csi-wekafs
+
 
 ifdef V
 # Adding "-alsologtostderr" assumes that all test binaries contain glog. This is not guaranteed.
@@ -50,14 +54,16 @@ $(CMDS:%=build-%): build-%: check-go-version-go
 	done
 
 $(CMDS:%=container-%): container-%: build-%
-	docker build -t $(IMAGE_NAME):latest -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
+	docker build -t $(IMAGE_NAME):$(REV) -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) . ;\
+	sed -i ./deploy/kubernetes-latest/wekafs/csi-wekafs-plugin.yaml -e 's|quay.io/weka.io/csi-wekafs:.*|quay.io/weka.io/csi-wekafs:$(REV)|g'
+
 
 $(CMDS:%=push-%): push-%: container-%
 	set -ex; \
 	push_image () { \
-		docker push $(IMAGE_NAME):latest; \
+		docker push $(IMAGE_NAME):$(REV); \
 	}; \
-	echo "Pushing under tag latest"; \
+	echo "Pushing under tag $(REV)"; \
 	push_image
 
 build: $(CMDS:%=build-%)
