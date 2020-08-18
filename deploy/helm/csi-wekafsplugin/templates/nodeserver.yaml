@@ -103,7 +103,7 @@ spec:
             - name: X_CSI_MODE
               value: node
           volumeMounts:
-            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
+            - mountPath: /csi
               name: socket-dir
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
@@ -118,7 +118,7 @@ spec:
 
         - name: liveness-probe
           volumeMounts:
-            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
+            - mountPath: /csi
               name: socket-dir
           image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
           args:
@@ -143,7 +143,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
           volumeMounts:
-            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
+            - mountPath: /csi
               name: socket-dir
             - mountPath: /registration
               name: registration-dir

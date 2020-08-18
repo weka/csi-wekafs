@@ -115,7 +115,7 @@ spec:
               value: unix:///csi/csi.sock
           volumeMounts:
             - name: socket-dir
-              mountPath: /var/lib/kubelet/plugins/csi.weka.io
+              mountPath: /csi
         - name: csi-provisioner
           image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
           args:
@@ -138,7 +138,7 @@ spec:
               value: unix:///csi/csi.sock
           volumeMounts:
             - name: socket-dir
-              mountPath: /var/lib/kubelet/plugins/csi.weka.io
+              mountPath: /csi
 
         - name: wekafs
           securityContext:
@@ -182,7 +182,7 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
           volumeMounts:
-            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
+            - mountPath: /csi
               name: socket-dir
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
@@ -197,7 +197,7 @@ spec:
 
         - name: liveness-probe
           volumeMounts:
-            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
+            - mountPath: /csi
               name: socket-dir
           image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
           args:
