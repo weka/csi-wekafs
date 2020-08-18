@@ -189,7 +189,7 @@ spec:
                   apiVersion: v1
                   fieldPath: spec.nodeName
           volumeMounts:
-          - mountPath: /csi
+          - mountPath: /var/lib/kubelet/plugins/csi.weka.io
             name: socket-dir
           - mountPath: /registration
             name: registration-dir
@@ -197,7 +197,7 @@ spec:
             name: csi-data-dir
 
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:v0.6.0
+          image: quay.io/weka.io/csi-wekafs:v0.6.0-0
           imagePullPolicy: Always
           args:
             - "--drivername=csi.weka.io"
@@ -282,7 +282,7 @@ spec:
             # created by privileged CSI driver container.
             privileged: true
           volumeMounts:
-            - mountPath: /csi
+            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
               name: socket-dir
 
         - name: csi-resizer
@@ -296,7 +296,7 @@ spec:
             # created by privileged CSI driver container.
             privileged: true
           volumeMounts:
-            - mountPath: /csi
+            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
               name: socket-dir
 
       volumes:
@@ -364,7 +364,7 @@ spec:
                   apiVersion: v1
                   fieldPath: spec.nodeName
           volumeMounts:
-          - mountPath: /csi
+          - mountPath: /var/lib/kubelet/plugins/csi.weka.io
             name: socket-dir
           - mountPath: /registration
             name: registration-dir
@@ -372,7 +372,7 @@ spec:
             name: csi-data-dir
 
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:v0.6.0
+          image: quay.io/weka.io/csi-wekafs:v0.6.0-0
           imagePullPolicy: Always
           args:
             - "--drivername=csi.weka.io"
@@ -408,7 +408,7 @@ spec:
             timeoutSeconds: 3
             periodSeconds: 2
           volumeMounts:
-            - mountPath: /csi
+            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
               name: socket-dir
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
@@ -423,7 +423,7 @@ spec:
 
         - name: liveness-probe
           volumeMounts:
-          - mountPath: /csi
+          - mountPath: /var/lib/kubelet/plugins/csi.weka.io
             name: socket-dir
           image: quay.io/k8scsi/livenessprobe:v1.1.0
           args:
