@@ -112,10 +112,10 @@ spec:
             - "--v=5"
           env:
             - name: ADDRESS
-              value: unix:///csi/csi.sock
+              value: unix:////var/lib/kubelet/plugins/csi.weka.io/csi.sock
           volumeMounts:
             - name: socket-dir
-              mountPath: /csi
+              mountPath: /var/lib/kubelet/plugins/csi.weka.io
         - name: csi-provisioner
           image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
           args:
@@ -124,7 +124,7 @@ spec:
             - "--feature-gates=Topology=true"
           env:
             - name: ADDRESS
-              value: unix:///csi/csi.sock
+              value: unix:////var/lib/kubelet/plugins/csi.weka.io/csi.sock
           volumeMounts:
             - name: socket-dir
               mountPath: "/csi"
@@ -135,10 +135,10 @@ spec:
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
-              value: unix:///csi/csi.sock
+              value: unix:////var/lib/kubelet/plugins/csi.weka.io/csi.sock
           volumeMounts:
             - name: socket-dir
-              mountPath: /csi
+              mountPath: /var/lib/kubelet/plugins/csi.weka.io
 
         - name: wekafs
           securityContext:
@@ -166,7 +166,7 @@ spec:
             periodSeconds: 2
           env:
             - name: CSI_ENDPOINT
-              value: unix:///csi/csi.sock
+              value: unix:////var/lib/kubelet/plugins/csi.weka.io/csi.sock
             - name: CSI_DRIVER_NAME
               value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
             - name: CSI_DRIVER_VERSION
@@ -182,7 +182,7 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
           volumeMounts:
-            - mountPath: /csi
+            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
               name: socket-dir
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
@@ -197,7 +197,7 @@ spec:
 
         - name: liveness-probe
           volumeMounts:
-            - mountPath: /csi
+            - mountPath: /var/lib/kubelet/plugins/csi.weka.io
               name: socket-dir
           image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
           args:
@@ -206,7 +206,7 @@ spec:
             - "--health-port=$(HEALTH_PORT)"
           env:
             - name: ADDRESS
-              value: unix:///csi/csi.sock
+              value: unix:////var/lib/kubelet/plugins/csi.weka.io/csi.sock
             - name: HEALTH_PORT
               value: "9898"
 

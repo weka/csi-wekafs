@@ -27,10 +27,12 @@ REGISTRY_NAME=quay.io/weka.io
 # Beware that tags may also be missing in shallow clones as done by
 # some CI systems (like TravisCI, which pulls only 50 commits).
 IMAGE_UNIQUE_TAG=$(shell uuid -v 4 | cut -d- -f1)
-LATEST_TAG=$(shell git describe --tags --abbrev=0)
-AFTER_LATEST=$(shell git rev-list $(LATEST_TAG)..HEAD | wc -l)
-
-REV=$(shell git describe --tags --abbrev=0 --match='v*' --dirty=-post$(AFTER_LATEST))
+# freeze revision from git tag so even if
+LATEST_TAG::=$(shell git describe --tags --abbrev=0)
+AFTER_LATEST::=$(shell git rev-list $(LATEST_TAG)..HEAD | wc -l)
+DIRTY::=$(shell git diff --quiet || echo '-dev')
+REV::=$(shell git describe --tags --abbrev=0 --match='v*')$(DIRTY)-$(AFTER_LATEST)
+$(eval VERSION := $$$(REV))
 # Images are named after the command contained in them.
 IMAGE_NAME=$(REGISTRY_NAME)/csi-wekafs
 
@@ -54,8 +56,10 @@ $(CMDS:%=build-%): build-%: check-go-version-go
 	done
 
 $(CMDS:%=container-%): container-%: build-%
-	docker build -t $(IMAGE_NAME):$(REV) -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) . ;\
+	docker build -t $(IMAGE_NAME):$(REV) -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
 	sed -i ./deploy/kubernetes-latest/wekafs/csi-wekafs-plugin.yaml -e 's|quay.io/weka.io/csi-wekafs:.*|quay.io/weka.io/csi-wekafs:$(REV)|g'
+	sed -i ./deploy/helm/csi-wekafsplugin/Chart.yaml -e 's|^version: .*|version: "$(VERSION)"|1' -e 's|^appVersion: .*|appVersion: "$(VERSION)"|1'
+	sed -i ./deploy/helm/csi-wekafsplugin/values.yaml -e 's|\(\&csiDriverVersion \).*|\1 "$(VERSION)"|1'
 
 
 $(CMDS:%=push-%): push-%: container-%
