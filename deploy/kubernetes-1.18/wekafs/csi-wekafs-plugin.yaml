@@ -197,7 +197,7 @@ spec:
             name: csi-data-dir
 
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:v0.6.0-0
+          image: quay.io/weka.io/csi-wekafs:v0.6.1-0
           imagePullPolicy: Always
           args:
             - "--drivername=csi.weka.io"
@@ -372,7 +372,7 @@ spec:
             name: csi-data-dir
 
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:v0.6.0-0
+          image: quay.io/weka.io/csi-wekafs:v0.6.1-0
           imagePullPolicy: Always
           args:
             - "--drivername=csi.weka.io"
