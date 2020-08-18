@@ -171,31 +171,6 @@ spec:
     spec:
       serviceAccountName: csi-wekafsplugin-controller
       containers:
-        - name: node-driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.3.0
-          args:
-            - "--v=5"
-            - "--csi-address=/csi/csi.sock"
-            - "--kubelet-registration-path=/var/lib/kubelet/plugins/csi-wekafs/csi.sock"
-          securityContext:
-            # This is necessary only for systems with SELinux, where
-            # non-privileged sidecar containers cannot access unix domain socket
-            # created by privileged CSI driver container.
-            privileged: true
-          env:
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: spec.nodeName
-          volumeMounts:
-          - mountPath: /csi
-            name: socket-dir
-          - mountPath: /registration
-            name: registration-dir
-          - mountPath: /var/lib/csi-wekafs-data
-            name: csi-data-dir
-
         - name: wekafs
           image: quay.io/weka.io/csi-wekafs:v0.6.1-1
           imagePullPolicy: Always
