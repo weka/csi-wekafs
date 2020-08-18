@@ -136,7 +136,7 @@ spec:
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            - --kubelet-registration-path=/csi/csi.sock
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/csi-wekafs/csi.sock"
           securityContext:
             privileged: true
           env:
