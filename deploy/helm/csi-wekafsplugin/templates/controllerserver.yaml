@@ -95,7 +95,7 @@ spec:
     matchLabels:
       app: {{ .Release.Name }}-controller
   serviceName: {{ .Release.Name }}-controller
-  replicas: {{ required "count of instances required." .Values.instanceCount }}
+  replicas: 1
   template:
     metadata:
       labels:

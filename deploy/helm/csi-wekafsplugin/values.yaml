@@ -1,19 +1,15 @@
-# Default values for csi-wekafs-driver.
+# Default values for csi-wekafsplugin.
 
-replicaCount: 1
-instanceCount: 1
-
-# prefix for pv name
+# directory in root of file system where dynamic volumes are provisioned
 dynamicProvisionPath: "csi-volumes"
 
 # name of the driver
 #  note same name will be used for provisioner name
 csiDriverName : "csi.weka.io"
-
 csiDriverVersion : &csiDriverVersion  "0.6.2-dev-1"
+
 # Image paths
 images:
-
   # "images.liveness-probe-sidecar" defines the container image used for the csi liveness probe sidecar
   livenessprobesidecar: quay.io/k8scsi/livenessprobe:v1.1.0
 
