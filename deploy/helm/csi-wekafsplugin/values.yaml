@@ -32,3 +32,13 @@ images:
   # images.csidriver defines csidriver image used for external provisioning
   csidriver: quay.io/weka.io/csi-wekafs
   csidriverTag: *csiDriverVersion
+
+globalPluginTolerations: &globalPluginTolerations
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+
+controllerPluginTolerations: *globalPluginTolerations
+
+nodePluginTolerations: *globalPluginTolerations
+
