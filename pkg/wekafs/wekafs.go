@@ -36,14 +36,16 @@ type wekaFsDriver struct {
 	debugPath      string
 	dynamicVolPath string
 
-	csiMode string
+	csiMode CsiModeType
 }
 
 var (
 	vendorVersion = "dev"
 )
 
-func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode string) (*wekaFsDriver, error) {
+type CsiModeType string
+
+func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode CsiModeType) (*wekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -85,7 +87,7 @@ func (driver *wekaFsDriver) Run() {
 	glog.Info("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver.name, driver.version)
 
-	if driver.csiMode == "controller" || driver.csiMode == "all" {
+	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		glog.Infof("Loading ControllerServer")
 		// bring up controller part
 		driver.cs = NewControllerServer(driver.nodeID, mounter, gc, driver.dynamicVolPath)
@@ -93,7 +95,7 @@ func (driver *wekaFsDriver) Run() {
 		driver.cs = &controllerServer{}
 	}
 
-	if driver.csiMode == "node" || driver.csiMode == "all" {
+	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
 
 		// bring up node part
 		glog.Infof("Loading NodeServer")
@@ -109,4 +111,7 @@ func (driver *wekaFsDriver) Run() {
 
 const (
 	VolumeTypeDirV1 = "dir/v1"
+	CsiModeNode = "node"
+	CsiModeController = "controller"
+	CsiModeAll = "all"
 )
