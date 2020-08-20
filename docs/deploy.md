@@ -32,8 +32,9 @@ daemonset.apps/csi-wekafsplugin created
 10:29:07 waiting for wekafs deployment to complete, attempt #0
 10:29:17 deployment completed successfully
 10:29:17 2 plugin pods are running:
-csi-wekafsplugin-6gk86   5/5     Running   0          10s
-csi-wekafsplugin-sfmgd   5/5     Running   0          10s
+csi-wekafsplugin-controller-0  5/5     Running   0          1m10s
+csi-wekafsplugin-node-6gk86    3/3     Running   0          1m11s
+csi-wekafsplugin-node-sfmgd    3/3     Running   0          1m10s
 ```
 > **Note**: 
 > 1. the number of running `csi-wekafsplugin-node-*` pods should be equal to number of K8s nodes 
@@ -45,7 +46,8 @@ Next, validate the deployment.  First, ensure all expected pods are running prop
 
 ```shell script
 $ kubectl get pods --namespace csi-wekafsplugin
-NAME                     READY   STATUS    RESTARTS   AGE
-csi-wekafsplugin-6gk86   5/5     Running   0          2m54s
-csi-wekafsplugin-sfmgd   5/5     Running   0          2m54s
+NAME                           READY   STATUS    RESTARTS   AGE
+csi-wekafsplugin-controller-0  5/5     Running   0          2m54s
+csi-wekafsplugin-node-6gk86    3/3     Running   0          2m54s
+csi-wekafsplugin-node-sfmgd    3/3     Running   0          2m54s
 ```
