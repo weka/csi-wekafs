@@ -36,16 +36,14 @@ type wekaFsDriver struct {
 	debugPath      string
 	dynamicVolPath string
 
-	csiMode CsiModeType
+	csiMode CsiPluginMode
 }
 
 var (
 	vendorVersion = "dev"
 )
 
-type CsiModeType string
-
-func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode CsiModeType) (*wekaFsDriver, error) {
+func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode CsiPluginMode) (*wekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -111,7 +109,23 @@ func (driver *wekaFsDriver) Run() {
 
 const (
 	VolumeTypeDirV1 = "dir/v1"
-	CsiModeNode = "node"
-	CsiModeController = "controller"
-	CsiModeAll = "all"
 )
+
+type CsiPluginMode string
+
+const CsiModeNode CsiPluginMode = "node"
+const CsiModeController CsiPluginMode = "controller"
+const CsiModeAll CsiPluginMode = "all"
+
+func GetCsiPluginMode(mode *string) CsiPluginMode {
+	ret := CsiPluginMode(*mode)
+	switch ret {
+	case CsiModeNode,
+		CsiModeController,
+		CsiModeAll:
+		return ret
+	default:
+		glog.Fatalln("Unsupported plugin mode", ret)
+		return ""
+	}
+}

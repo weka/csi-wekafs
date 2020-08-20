@@ -36,7 +36,7 @@ const (
 	xattrVolumeName = "user.weka_k8s_volname"
 )
 
-func NewNonBlockingGRPCServer(mode CsiModeType) *nonBlockingGRPCServer {
+func NewNonBlockingGRPCServer(mode CsiPluginMode) *nonBlockingGRPCServer {
 	return &nonBlockingGRPCServer{
 		csiMmode: mode,
 	}
@@ -46,7 +46,7 @@ func NewNonBlockingGRPCServer(mode CsiModeType) *nonBlockingGRPCServer {
 type nonBlockingGRPCServer struct {
 	wg       sync.WaitGroup
 	server   *grpc.Server
-	csiMmode CsiModeType
+	csiMmode CsiPluginMode
 }
 
 func (s *nonBlockingGRPCServer) Start(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
@@ -103,7 +103,7 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 			csi.RegisterControllerServer(server, cs)
 		}
 	}
-	if s.csiMmode == CsiModeNode|| s.csiMmode == CsiModeAll {
+	if s.csiMmode == CsiModeNode || s.csiMmode == CsiModeAll {
 		if ns != nil {
 			csi.RegisterNodeServer(server, ns)
 		}

@@ -40,16 +40,11 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csiMode  = getCsiMode(flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)"))
+	csiMode = wekafs.GetCsiPluginMode(flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)"))
 	// Set by the build process
 	version = ""
-
 )
 
-func getCsiMode(mode *string) wekafs.CsiModeType {
-	ret := wekafs.CsiModeType(*mode)
-	return ret
-}
 func main() {
 	flag.Parse()
 
