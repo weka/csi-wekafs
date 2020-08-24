@@ -35,13 +35,15 @@ type wekaFsDriver struct {
 	cs             *controllerServer
 	debugPath      string
 	dynamicVolPath string
+
+	csiMode CsiPluginMode
 }
 
 var (
 	vendorVersion = "dev"
 )
 
-func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string) (*wekaFsDriver, error) {
+func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode CsiPluginMode) (*wekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -60,6 +62,8 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 	glog.Infof("Driver: %v ", driverName)
 	glog.Infof("Version: %s", vendorVersion)
 
+	glog.Infof("csiMode: %s", csiMode)
+
 	return &wekaFsDriver{
 		name:              driverName,
 		version:           vendorVersion,
@@ -68,6 +72,7 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 		maxVolumesPerNode: maxVolumesPerNode,
 		debugPath:         debugPath,
 		dynamicVolPath:    dynmamicVolPath,
+		csiMode:           csiMode, // either "controller", "node", "all"
 	}, nil
 }
 
@@ -76,12 +81,28 @@ func (driver *wekaFsDriver) Run() {
 	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath}
 	gc := initDirVolumeGc(mounter)
 
+	// identity server runs always
+	glog.Info("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver.name, driver.version)
-	driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, mounter, gc)
-	driver.cs = NewControllerServer(driver.nodeID, mounter, gc, driver.dynamicVolPath)
 
-	//discoverExistingSnapshots()
-	s := NewNonBlockingGRPCServer()
+	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+		glog.Infof("Loading ControllerServer")
+		// bring up controller part
+		driver.cs = NewControllerServer(driver.nodeID, mounter, gc, driver.dynamicVolPath)
+	} else {
+		driver.cs = &controllerServer{}
+	}
+
+	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
+
+		// bring up node part
+		glog.Infof("Loading NodeServer")
+		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, mounter, gc)
+	} else {
+		driver.ns = &nodeServer{}
+	}
+
+	s := NewNonBlockingGRPCServer(driver.csiMode)
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
 }
@@ -89,3 +110,22 @@ func (driver *wekaFsDriver) Run() {
 const (
 	VolumeTypeDirV1 = "dir/v1"
 )
+
+type CsiPluginMode string
+
+const CsiModeNode CsiPluginMode = "node"
+const CsiModeController CsiPluginMode = "controller"
+const CsiModeAll CsiPluginMode = "all"
+
+func GetCsiPluginMode(mode *string) CsiPluginMode {
+	ret := CsiPluginMode(*mode)
+	switch ret {
+	case CsiModeNode,
+		CsiModeController,
+		CsiModeAll:
+		return ret
+	default:
+		glog.Fatalln("Unsupported plugin mode", ret)
+		return ""
+	}
+}

@@ -17,27 +17,34 @@ spec:
     - Persistent
   podInfoOnMount: true
 
-# service account
+# service accounts
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: csi-wekafsplugin
+  name: csi-wekafsplugin-controller
   namespace: csi-wekafsplugin
 
-# cluster role
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: csi-wekafsplugin-node
+  namespace: csi-wekafsplugin
+
+# cluster roles
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: csi-wekafsplugin-cluster-role
+  name: csi-wekafsplugin-controller
 rules:
   - apiGroups: [""]
     resources: ["persistentvolumes"]
     verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "update"]
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims/status"]
     verbs: ["update", "patch"]
@@ -47,12 +54,6 @@ rules:
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["list", "watch", "create", "update", "patch"]
-  - apiGroups: ["snapshot.storage.k8s.io"]
-    resources: ["volumesnapshots"]
-    verbs: ["get", "list"]
-  - apiGroups: ["snapshot.storage.k8s.io"]
-    resources: ["volumesnapshotcontents"]
-    verbs: ["get", "list"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["csinodes"]
     verbs: ["get", "list", "watch"]
@@ -65,106 +66,121 @@ rules:
   - apiGroups: ["storage.k8s.io"]
     resources: ["volumeattachments/status"]
     verbs: ["patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["csinodeinfos"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["create", "list", "watch", "delete", "get", "update"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents"]
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotcontents/status"]
+    verbs: ["update", "create", "get", "list", "watch", "delete", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["get", "list", "watch", "update", "create", "delete", "patch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots/status"]
+    verbs: ["get", "list", "watch", "update", "create", "delete", "patch"]
 
-# cluster role binding
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-wekafsplugin-node
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["create", "delete", "get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["persistentvolumesclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update"]
+
+
+# cluster role bindings
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: csi-wekafsplugin-cluster-role-binding
+  name: csi-wekafsplugin-controller
 subjects:
   - kind: ServiceAccount
-    name: csi-wekafsplugin
+    name: csi-wekafsplugin-controller
     namespace: csi-wekafsplugin
 roleRef:
   kind: ClusterRole
-  name: csi-wekafsplugin-cluster-role
+  name: csi-wekafsplugin-controller
   apiGroup: rbac.authorization.k8s.io
 
-# role
 ---
-kind: Role
+kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  namespace: csi-wekafsplugin
-  name: csi-wekafsplugin-role
-rules:
-  - apiGroups: ["coordination.k8s.io"]
-    resources: ["leases"]
-    verbs: ["get", "watch", "list", "delete", "update", "create"]
-  - apiGroups: [""]
-    resources: ["endpoints"]
-    verbs: ["get", "watch", "list", "delete", "update", "create"]
-
-# role binding
----
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: csi-wekafsplugin-role-binding
-  namespace: csi-wekafsplugin
+  name: csi-wekafsplugin-node
 subjects:
   - kind: ServiceAccount
-    name: csi-wekafsplugin
+    name: csi-wekafsplugin-node
     namespace: csi-wekafsplugin
 roleRef:
-  kind: Role
-  name: csi-wekafsplugin-role
+  kind: ClusterRole
+  name: csi-wekafsplugin-node
   apiGroup: rbac.authorization.k8s.io
 
-# plugin daemonset definition
+
+# controller pod StatefulSet definition
 ---
-kind: DaemonSet
+kind: StatefulSet
 apiVersion: apps/v1
 metadata:
-  name: csi-wekafsplugin
+  name: csi-wekafsplugin-controller
   namespace: csi-wekafsplugin
 spec:
+  serviceName: csi-wekafsplugin-controller
   selector:
     matchLabels:
       kubernetes.io/os: linux
+  replicas: 1
   template:
     metadata:
       labels:
         app: csi-wekafsplugin
         kubernetes.io/os: linux
     spec:
-      serviceAccountName: csi-wekafsplugin
+      serviceAccountName: csi-wekafsplugin-controller
       containers:
-        - name: node-driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.3.0
-          args:
-            - --v=5
-            - --csi-address=/csi/csi.sock
-            - --kubelet-registration-path=/var/lib/kubelet/plugins/csi-wekafs/csi.sock
-          securityContext:
-            # This is necessary only for systems with SELinux, where
-            # non-privileged sidecar containers cannot access unix domain socket
-            # created by privileged CSI driver container.
-            privileged: true
-          env:
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: spec.nodeName
-          volumeMounts:
-          - mountPath: /csi
-            name: socket-dir
-          - mountPath: /registration
-            name: registration-dir
-          - mountPath: /var/lib/csi-wekafs-data
-            name: csi-data-dir
-
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:latest
+          image: quay.io/weka.io/csi-wekafs:v0.6.2-0
           imagePullPolicy: Always
           args:
             - "--drivername=csi.weka.io"
             - "--v=5"
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodeid=$(KUBE_NODE_NAME)"
-            - "--dynamic-path=csi-volumes"
+            - "--dynamic-path=$(CSI_DYNAMIC_PATH)"
+            - "--csimode=$(X_CSI_MODE)"
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
@@ -173,6 +189,10 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
+            - name: CSI_DYNAMIC_PATH
+              value: "csi-volumes"
+            - name: X_CSI_MODE
+              value: "controller"
           securityContext:
             privileged: true
           ports:
@@ -207,15 +227,15 @@ spec:
             name: socket-dir
           image: quay.io/k8scsi/livenessprobe:v1.1.0
           args:
-          - --csi-address=/csi/csi.sock
-          - --health-port=9898
+          - "--csi-address=/csi/csi.sock"
+          - "--health-port=9898"
 
         - name: csi-provisioner
           image: quay.io/k8scsi/csi-provisioner:v1.6.0
           args:
-            - -v=5
-            - --csi-address=/csi/csi.sock
-            - --feature-gates=Topology=true
+            - "-v=5"
+            - "--csi-address=/csi/csi.sock"
+            - "--feature-gates=Topology=true"
 
           securityContext:
             # This is necessary only for systems with SELinux, where
@@ -253,6 +273,137 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
+
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/plugins/csi-wekafs
+            type: DirectoryOrCreate
+          name: socket-dir
+        - hostPath:
+            path: /var/lib/kubelet/pods
+            type: DirectoryOrCreate
+          name: mountpoint-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+          name: registration-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins
+            type: Directory
+          name: plugins-dir
+        - hostPath:
+            # 'path' is where PV data is persisted on host.
+            # using /tmp is also possible while the PVs will not available after plugin container recreation or host reboot
+            path: /var/lib/csi-wekafs-data/
+            type: DirectoryOrCreate
+          name: csi-data-dir
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev-dir
+
+# node pod DaemonSet definition
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-wekafsplugin-node
+  namespace: csi-wekafsplugin
+spec:
+  selector:
+    matchLabels:
+      kubernetes.io/os: linux
+  template:
+    metadata:
+      labels:
+        app: csi-wekafsplugin
+        kubernetes.io/os: linux
+    spec:
+      serviceAccountName: csi-wekafsplugin-node
+      containers:
+        - name: node-driver-registrar
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.3.0
+          args:
+            - "--v=5"
+            - "--csi-address=/csi/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/csi-wekafs/csi.sock"
+          securityContext:
+            # This is necessary only for systems with SELinux, where
+            # non-privileged sidecar containers cannot access unix domain socket
+            # created by privileged CSI driver container.
+            privileged: true
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
+          - mountPath: /registration
+            name: registration-dir
+          - mountPath: /var/lib/csi-wekafs-data
+            name: csi-data-dir
+
+        - name: wekafs
+          image: quay.io/weka.io/csi-wekafs:v0.6.2-0
+          imagePullPolicy: Always
+          args:
+            - "--drivername=csi.weka.io"
+            - "--v=5"
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--nodeid=$(KUBE_NODE_NAME)"
+            - "--dynamic-path=$(CSI_DYNAMIC_PATH)"
+            - "--csimode=$(X_CSI_MODE)"
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: CSI_DYNAMIC_PATH
+              value: "csi-volumes"
+            - name: X_CSI_MODE
+              value: "node"
+          securityContext:
+            privileged: true
+          ports:
+          - containerPort: 9898
+            name: healthz
+            protocol: TCP
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 2
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+              name: mountpoint-dir
+            - mountPath: /var/lib/kubelet/plugins
+              mountPropagation: Bidirectional
+              name: plugins-dir
+            - mountPath: /var/lib/csi-wekafs-data
+              name: csi-data-dir
+            - mountPath: /dev
+              name: dev-dir
+
+        - name: liveness-probe
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
+          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          args:
+          - --csi-address=/csi/csi.sock
+          - --health-port=9898
 
       volumes:
         - hostPath:

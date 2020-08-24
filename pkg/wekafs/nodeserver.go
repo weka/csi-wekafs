@@ -36,13 +36,14 @@ const TopologyKeyNode = "topology.wekafs.csi/node"
 const WekaModule = "wekafsgw"
 
 type nodeServer struct {
+	caps              []*csi.NodeServiceCapability
 	nodeID            string
 	maxVolumesPerNode int64
 	mounter           *wekaMounter
 	gc                *dirVolumeGc
 }
 
-func (ns *nodeServer) NodeGetVolumeStats(c context.Context, request *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+func (ns *nodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	panic("implement me")
 }
 
@@ -103,6 +104,11 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter,
 		panic(exitMsg)
 	}
 	return &nodeServer{
+		caps: getNodeServiceCapabilities(
+			[]csi.NodeServiceCapability_RPC_Type{
+				csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
+			},
+		),
 		nodeID:            nodeId,
 		maxVolumesPerNode: maxVolumesPerNode,
 		mounter:           mounter,
@@ -222,6 +228,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind succesffully
+	glog.Infof("Successfully published volume %s", volume.id)
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -283,7 +290,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	if err != nil {
 		glog.Errorf("Post-unpublish unmount failed %s", err)
 	}
-
+	glog.Infof("Successfully unpublished volume %s", volume.id)
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -342,19 +349,23 @@ func (ns *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 
 	return &csi.NodeGetCapabilitiesResponse{
-		Capabilities: []*csi.NodeServiceCapability{
-			{
-				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{},
-				},
-			},
-			{
-				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{
-						Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
-					},
-				},
-			},
-		},
+		Capabilities: ns.caps,
 	}, nil
+}
+
+func getNodeServiceCapabilities(nl []csi.NodeServiceCapability_RPC_Type) []*csi.NodeServiceCapability {
+	var nsc []*csi.NodeServiceCapability
+
+	for _, capability := range nl {
+		glog.Infof("Enabling node service capability: %v", capability.String())
+		nsc = append(nsc, &csi.NodeServiceCapability{
+			Type: &csi.NodeServiceCapability_Rpc{
+				Rpc: &csi.NodeServiceCapability_RPC{
+					Type: capability,
+				},
+			},
+		})
+	}
+
+	return nsc
 }

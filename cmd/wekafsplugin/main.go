@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/golang/glog"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs"
 	"os"
 	"path"
@@ -39,6 +40,7 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
+	csiMode = wekafs.GetCsiPluginMode(flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)"))
 	// Set by the build process
 	version = ""
 )
@@ -51,13 +53,17 @@ func main() {
 		fmt.Println(baseName, version)
 		return
 	}
+	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode {
+		panic("Invalid mode specified for CSI driver")
+	}
+	glog.Infof("Running in mode: %s", csiMode)
 
 	handle()
 	os.Exit(0)
 }
 
 func handle() {
-	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, *dynamicSubPath)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, *dynamicSubPath, csiMode)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

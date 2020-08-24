@@ -36,14 +36,17 @@ const (
 	xattrVolumeName = "user.weka_k8s_volname"
 )
 
-func NewNonBlockingGRPCServer() *nonBlockingGRPCServer {
-	return &nonBlockingGRPCServer{}
+func NewNonBlockingGRPCServer(mode CsiPluginMode) *nonBlockingGRPCServer {
+	return &nonBlockingGRPCServer{
+		csiMmode: mode,
+	}
 }
 
 // NonBlocking server
 type nonBlockingGRPCServer struct {
-	wg     sync.WaitGroup
-	server *grpc.Server
+	wg       sync.WaitGroup
+	server   *grpc.Server
+	csiMmode CsiPluginMode
 }
 
 func (s *nonBlockingGRPCServer) Start(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
@@ -95,11 +98,15 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 	if ids != nil {
 		csi.RegisterIdentityServer(server, ids)
 	}
-	if cs != nil {
-		csi.RegisterControllerServer(server, cs)
+	if s.csiMmode == CsiModeController || s.csiMmode == CsiModeAll {
+		if cs != nil {
+			csi.RegisterControllerServer(server, cs)
+		}
 	}
-	if ns != nil {
-		csi.RegisterNodeServer(server, ns)
+	if s.csiMmode == CsiModeNode || s.csiMmode == CsiModeAll {
+		if ns != nil {
+			csi.RegisterNodeServer(server, ns)
+		}
 	}
 
 	glog.Infof("Listening for connections on address: %#v", listener.Addr())
@@ -119,7 +126,7 @@ func parseEndpoint(ep string) (string, string, error) {
 }
 
 func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	glog.V(3).Infof("GRPC call: %s", info.FullMethod)
+	glog.V(6).Infof("GRPC call: %s", info.FullMethod)
 	glog.V(6).Infof("GRPC request: %+v", protosanitizer.StripSecrets(req))
 	resp, err := handler(ctx, req)
 	if err != nil {
