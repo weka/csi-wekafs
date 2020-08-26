@@ -58,7 +58,7 @@ $(CMDS:%=build-%): build-%: check-go-version-go
 $(CMDS:%=container-%): container-%: build-%
 	docker build -t $(IMAGE_NAME):$(REV) -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
 	sed -i ./deploy/kubernetes-latest/wekafs/csi-wekafs-plugin.yaml -e 's|quay.io/weka.io/csi-wekafs:.*|quay.io/weka.io/csi-wekafs:$(REV)|g'
-	sed -i ./deploy/helm/csi-wekafsplugin/Chart.yaml -e 's|^version: .*|version: "$(VERSION)"|1' -e 's|^appVersion: .*|appVersion: "$(VERSION)"|1'
+	sed -i ./deploy/helm/csi-wekafsplugin/Chart.yaml -e 's|^version: .*|version: "$(LATEST_TAG)"|1' -e 's|^appVersion: .*|appVersion: "$(VERSION)"|1'
 	sed -i ./deploy/helm/csi-wekafsplugin/values.yaml -e 's|\(\&csiDriverVersion \).*|\1 "$(VERSION)"|1'
 
 
