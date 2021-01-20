@@ -1,3 +1,14 @@
+# Release 0.6.3
+## New Features
+- Deployment supported via Helm public repo
+- Repository listed on ArtifactHub
+
+## Improvements
+- Fixed version strings SymVer2 compatibility
+- Added values.schema.json
+- Added post-installation notes
+- Added documentation on values
+
 # Release 0.6.2
 ## New Features
 - Separation of controller and node plugin components for increased performance and stability 
@@ -23,8 +34,9 @@ the previous version has to be uninstalled first:
 ```
 
 Then, a new version can be deployed, by following either one of the procedures below:
+- [helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
 - [deploy script](./README.md)
-- [helm chart](./deploy/helm/csi-wekafsplugin/Readme.md)
+- [helm local installation](deploy/helm/csi-wekafsplugin/LOCAL.md)
 
 
 # Release 0.5.0

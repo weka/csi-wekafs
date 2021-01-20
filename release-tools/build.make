@@ -18,6 +18,7 @@
 # This is the default. It can be overridden in the main Makefile after
 # including build.make.
 REGISTRY_NAME=quay.io/weka.io
+HELM_REPO_URL=https://weka.github.io/csi-wekafs/
 
 # Revision that gets built into each binary via the main.version
 # string. Uses the `git describe` output based on the most recent
@@ -26,13 +27,25 @@ REGISTRY_NAME=quay.io/weka.io
 #
 # Beware that tags may also be missing in shallow clones as done by
 # some CI systems (like TravisCI, which pulls only 50 commits).
+
 IMAGE_UNIQUE_TAG=$(shell uuid -v 4 | cut -d- -f1)
 # freeze revision from git tag so even if
 LATEST_TAG::=$(shell git describe --tags --abbrev=0)
 AFTER_LATEST::=$(shell git rev-list $(LATEST_TAG)..HEAD | wc -l)
-DIRTY::=$(shell git diff --quiet || echo '-dev')
-REV::=$(shell git describe --tags --abbrev=0 --match='v*')$(DIRTY)-$(AFTER_LATEST)
+
+ifeq "$(AFTER_LATEST)" "0"
+  AFTER_LATEST:=
+else
+  AFTER_LATEST:=-$(AFTER_LATEST)
+endif
+DIRTY::=$(shell git diff --quiet || echo '-dirty')
+$(info $$AFTER_LATEST is [${AFTER_LATEST}])
+
+REV::=$(LATEST_TAG)$(AFTER_LATEST)$(DIRTY)
 $(eval VERSION := $$$(REV))
+$(eval HELM_CHART_VERSION := $$$(LATEST_TAG))
+$(info $$VERSION is [${VERSION}])
+$(info $$REV is [${REV}])
 # Images are named after the command contained in them.
 IMAGE_NAME=$(REGISTRY_NAME)/csi-wekafs
 
@@ -58,8 +71,6 @@ $(CMDS:%=build-%): build-%: check-go-version-go
 $(CMDS:%=container-%): container-%: build-%
 	docker build -t $(IMAGE_NAME):$(REV) -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
 	sed -i ./deploy/kubernetes-latest/wekafs/csi-wekafs-plugin.yaml -e 's|quay.io/weka.io/csi-wekafs:.*|quay.io/weka.io/csi-wekafs:$(REV)|g'
-	sed -i ./deploy/helm/csi-wekafsplugin/Chart.yaml -e 's|^version: .*|version: "$(LATEST_TAG)"|1' -e 's|^appVersion: .*|appVersion: "$(VERSION)"|1'
-	sed -i ./deploy/helm/csi-wekafsplugin/values.yaml -e 's|\(\&csiDriverVersion \).*|\1 "$(VERSION)"|1'
 
 
 $(CMDS:%=push-%): push-%: container-%
@@ -70,9 +81,31 @@ $(CMDS:%=push-%): push-%: container-%
 	echo "Pushing under tag $(REV)"; \
 	push_image
 
+$(CMDS:%=helm-%): helm-%:
+	set -ex; \
+	sed -i ./deploy/helm/csi-wekafsplugin/Chart.yaml -e 's|^version: .*|version: "$(VERSION)"|1' -e 's|^appVersion: .*|appVersion: "$(VERSION)"|1' ;\
+	sed -i ./deploy/helm/csi-wekafsplugin/Chart.yaml -e 's|\(https://github.com/weka/csi-wekafs/tree/\).*\(/deploy/helm/csi-wekafsplugin\)|\1$(REV)\2|1' ;\
+	sed -i ./deploy/helm/csi-wekafsplugin/values.yaml -e 's|\(\&csiDriverVersion \).*|\1 "$(VERSION)"|1' ;\
+	helm package deploy/helm/csi-wekafsplugin ;\
+	TEMP_DIR=`mktemp -d` ;\
+	git clone git@github.com:weka/csi-wekafs.git -q -b gh-pages $$TEMP_DIR ;\
+    touch $$TEMP_DIR/index.yaml ;\
+	mv csi-wekafsplugin-$(VERSION).tgz $$TEMP_DIR; \
+	cur_dir=`pwd` ;\
+	cd $$TEMP_DIR ;\
+	helm repo index $$TEMP_DIR --url "$(HELM_REPO_URL)" ;\
+	git add . ;\
+	git commit -m "Added version $(VERSION)" ;\
+	git push
+	cd $$cur_dir ;\
+	rm -rf $$TEMP_DIR; \
+	echo "New Helm Chart version pushed successfully to repository, index updated"
+
+
 build: $(CMDS:%=build-%)
 container: $(CMDS:%=container-%)
 push: $(CMDS:%=push-%)
+helm: $(CMDS:%=helm-%)
 
 clean:
 	-rm -rf bin
@@ -130,6 +163,7 @@ test-fmt:
 # We rely on that to find such changes.
 #
 # Vendoring is optional when using go.mod.
+
 .PHONY: test-vendor
 test: test-vendor
 test-vendor:

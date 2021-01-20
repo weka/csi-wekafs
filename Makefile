@@ -13,6 +13,6 @@
 # limitations under the License.
 
 CMDS=wekafsplugin
-all: build container push
+all: build container push helm
 
 include release-tools/build.make
