@@ -1,0 +1,15 @@
+apiVersion: v1
+entries:
+  csi-wekafsplugin:
+  - apiVersion: v2
+    appVersion: 0.6.2-0
+    created: "2021-01-21T13:56:42.2449079+02:00"
+    description:
+    digest: b13c56e589beb31b61cfae7643ad47b70f60b28a8f160cd05741fd7ccf6404fb
+    icon: https://weka.github.io/csi-wekafs/logo.png
+    name: csi-wekafsplugin
+    type: application
+    urls:
+    - https://weka.github.io/csi-wekafs/csi-wekafsplugin-0.6.2-0.tgz
+    version: 0.6.2-0
+generated: "2021-01-21T13:56:42.244417599+02:00"
