@@ -3,9 +3,9 @@ entries:
   csi-wekafsplugin:
   - apiVersion: v2
     appVersion: 0.6.4
-    created: "2021-01-26T10:33:29.446383059+02:00"
+    created: "2021-01-26T10:40:21.038177276+02:00"
     description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
-    digest: 60589871d083e8d4a745879884fd3a681d3eabf8e255511d67395f0501cf550e
+    digest: 0972b0a8a665e25e35a371074a1f77f585a76852e3b5982c18b50e9bb01f515e
     home: https://github.com/weka/csi-wekafs
     icon: https://weka.github.io/csi-wekafs/logo.png
     name: csi-wekafsplugin
@@ -17,7 +17,7 @@ entries:
     version: 0.6.4
   - apiVersion: v2
     appVersion: 0.6.3
-    created: "2021-01-26T10:33:29.445869084+02:00"
+    created: "2021-01-26T10:40:21.037576466+02:00"
     description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastests filesystem
     digest: f53ffe4f2c48d85ed29e4253b93c72c53740b709cacdbc0ae38ffecbefe9c68c
     home: https://github.com/weka/csi-wekafs
@@ -31,7 +31,7 @@ entries:
     version: 0.6.3
   - apiVersion: v2
     appVersion: 0.6.2-0
-    created: "2021-01-26T10:33:29.445384958+02:00"
+    created: "2021-01-26T10:40:21.036968978+02:00"
     description: A Helm chart for Deploy Weka wekafs CSI plugin
     digest: b13c56e589beb31b61cfae7643ad47b70f60b28a8f160cd05741fd7ccf6404fb
     icon: https://www.weka.io/wp-content/themes/wekaio/templates/assets/images/navigation/new-logo.png
@@ -40,4 +40,4 @@ entries:
     urls:
     - https://weka.github.io/csi-wekafs/csi-wekafsplugin-0.6.2-0.tgz
     version: 0.6.2-0
-generated: "2021-01-26T10:33:29.444742023+02:00"
+generated: "2021-01-26T10:40:21.036244456+02:00"
