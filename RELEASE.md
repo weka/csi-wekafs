@@ -1,3 +1,7 @@
+# Release 0.6.4
+## Improvements
+- CSI node driver does not crash when node is not configured as Weka client
+
 # Release 0.6.3
 ## New Features
 - Deployment supported via Helm public repo
