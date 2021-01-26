@@ -12,7 +12,7 @@ This repository hosts the CSI WekaFS driver and all of its build and dependent c
 ## Deployment
 ```shell
 helm repo add csi-wekafs https://weka.github.io/csi-wekafs
-helm install csi-wekafs csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace
+helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace
 ```
 
 ## Usage

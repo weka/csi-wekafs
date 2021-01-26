@@ -172,7 +172,7 @@ spec:
       serviceAccountName: csi-wekafsplugin-controller
       containers:
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:v0.6.3
+          image: quay.io/weka.io/csi-wekafs:v0.6.4
           imagePullPolicy: Always
           args:
             - "--drivername=csi.weka.io"
@@ -347,7 +347,7 @@ spec:
             name: csi-data-dir
 
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:v0.6.3
+          image: quay.io/weka.io/csi-wekafs:v0.6.4
           imagePullPolicy: Always
           args:
             - "--drivername=csi.weka.io"

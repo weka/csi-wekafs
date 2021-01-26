@@ -34,6 +34,7 @@ import (
 
 const TopologyKeyNode = "topology.wekafs.csi/node"
 const WekaModule = "wekafsgw"
+const crashOnNoWeka = false
 
 type nodeServer struct {
 	caps              []*csi.NodeServiceCapability
@@ -98,7 +99,7 @@ func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
 }
 
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
-	if mounter.debugPath == "" && !isWekaInstalled() {
+	if mounter.debugPath == "" && !isWekaInstalled() && crashOnNoWeka == true {
 		exitMsg := "weka OS driver module not installed, exiting"
 		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
 		panic(exitMsg)
