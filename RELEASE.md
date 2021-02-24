@@ -1,3 +1,7 @@
+# Release 0.6.5
+## Bug fixes
+- In rare circumstances, CSI plugin may fail to publish a volume after node server pod restart
+
 # Release 0.6.4
 ## Improvements
 - CSI node driver does not crash when node is not configured as Weka client

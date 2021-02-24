@@ -37,6 +37,10 @@ type wekaMounter struct {
 func (m *wekaMount) incRef() error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+	if m.refCount < 0 {
+		glog.V(4).Infof("During incRef negative refcount encountered, %v", m.refCount)
+		m.refCount = 0 // to make sure that we don't have negative refcount later
+	}
 	if m.refCount == 0 {
 		if err := m.doMount(); err != nil {
 			return err
@@ -52,13 +56,13 @@ func (m *wekaMount) decRef() error {
 	defer m.lock.Unlock()
 	m.refCount--
 	glog.V(4).Infof("Refcount -1 =  %d @ %s", m.refCount, m.mountPoint)
-	if m.refCount <= 0 {
+	if m.refCount < 0 {
+		glog.V(4).Infof("During decRef negative refcount encountered, %v", m.refCount)
+		m.refCount = 0 // to make sure that we don't have negative refcount later
+	}
+	if m.refCount == 0 {
 		if err := m.doUnmount(); err != nil {
 			return err
-		}
-		if m.refCount < 0 {
-			glog.Errorf("During decRef negative refcount encountered, %v", m.refCount)
-			m.refCount = 0 // to make sure that we don't have negative refcount later
 		}
 	}
 	return nil
@@ -70,7 +74,7 @@ func (m *wekaMount) doUnmount() error {
 	if err != nil {
 		glog.V(3).Infof("Failed unmounting %s at %s: %s", m.fsRequest.fs, m.mountPoint, err)
 	} else {
-		glog.V(3).Infof("Successfully unmounted %s (xattr %t) at %s: %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, err)
+		glog.V(3).Infof("Successfully unmounted %s (xattr %t) at %s, error: %v", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, err)
 	}
 	return err
 }
@@ -169,23 +173,20 @@ func (m *wekaMounter) MountXattr(fs string) (string, error, UnmountFunc) {
 }
 
 func (m *wekaMounter) Unmount(fs string) error {
-	m.LogActiveMounts()
-	fsReq := fsRequest{fs, false}
-	if mount, ok := m.mountMap[fsReq]; ok {
-		return mount.decRef()
-	} else {
-		glog.Warningf("Attempted to access mount point which is not known to the system (filesystem %s)", fs)
-		return nil
-	}
-
+	return m.unmount(fs, false)
 }
 
 func (m *wekaMounter) UnmountXattr(fs string) error {
+	return m.unmount(fs, true)
+}
+
+func (m *wekaMounter) unmount(fs string, xattr bool) error {
 	m.LogActiveMounts()
-	fsReq := fsRequest{fs, true}
-	if mount, ok := m.mountMap[fsReq]; ok {
-		return mount.decRef()
+	fsReq := fsRequest{fs, xattr}
+	if mnt, ok := m.mountMap[fsReq]; ok {
+		return mnt.decRef()
 	} else {
+		// TODO: this could happen if the plugin was rebooted with this mount intact. Maybe we might add it to map?
 		glog.Warningf("Attempted to access mount point which is not known to the system (filesystem %s)", fs)
 		return nil
 	}
@@ -200,7 +201,7 @@ func (m *wekaMounter) LogActiveMounts() {
 			if mapEntry.refCount < 0 {
 				glog.Errorf("There is a negative refcount on mount %s", mapEntry)
 			} else if mapEntry.refCount > 0 {
-				glog.Infof("Active mount: %s -> %s, xattr: %s", mnt.fs, mapEntry.mountPoint, mnt.xattr)
+				glog.Infof("Active mount: %s -> %s, xattr: %t, refcount: %d", mnt.fs, mapEntry.mountPoint, mnt.xattr, mapEntry.refCount)
 				count++
 			}
 		}

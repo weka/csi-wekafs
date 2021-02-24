@@ -134,7 +134,7 @@ func PathExists(p string) bool {
 }
 
 func PathIsWekaMount(path string) bool {
-	glog.Infof("Checking if %s is wekafs mount", path)
+	glog.V(2).Infof("Checking if %s is wekafs mount", path)
 	mountcmd := "mount -t wekafs | grep " + path
 	res, _ := exec.Command("sh", "-c", mountcmd).Output()
 	return strings.Contains(string(res), path)

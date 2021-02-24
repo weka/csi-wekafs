@@ -249,7 +249,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	// TODO: Verify that targetPath is indeed equals to expected source of bind mount
 	//		 Which is not straightforward in case plugin was restarted, as in this case
 	//		 we lose information of source. Probably Context can be used
-	glog.Infof("Checking if target path %s exists", targetPath)
+	glog.V(2).Infof("Checking if target path %s exists", targetPath)
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
 			glog.Warningf("Seems like volume %s is not published under target path , assuming repeating unpublish request", volume.id, targetPath)
@@ -270,7 +270,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		}
 	}
 
-	glog.Infof("Attempting to perform unmount of target path %s", targetPath)
+	glog.V(2).Infof("Attempting to perform unmount of target path %s", targetPath)
 	if err := mount.New("").Unmount(targetPath); err != nil {
 		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
 		glog.Errorf("failed unmounting volume %s at %s : %s", volume.id, targetPath, err)
