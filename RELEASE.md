@@ -1,3 +1,7 @@
+# Release 0.6.6
+## Bug fixes
+- Changed default mount options to writecache to improve inter-pod performance over CSI volumes
+
 # Release 0.6.5
 ## Bug fixes
 - In rare circumstances, CSI plugin may fail to publish a volume after node server pod restart
