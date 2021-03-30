@@ -100,8 +100,12 @@ func (m *wekaMount) doMount() error {
 	}
 }
 
+func getDefaultMountOptions() []string {
+	return []string{"writecache"}
+}
+
 func getMountOptions(fs *fsRequest) []string {
-	var mountOptions []string
+	var mountOptions = getDefaultMountOptions()
 	if fs.xattr {
 		mountOptions = append(mountOptions, "acl")
 	}
@@ -118,11 +122,6 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 		if err != nil {
 			panic(err)
 		}
-		var mountOptions []string
-		if fs.xattr == true {
-			mountOptions = append(mountOptions, "acl")
-
-		}
 		wMount := &wekaMount{
 			kMounter:   m.kMounter,
 			fsRequest:  &fs,
@@ -136,7 +135,7 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 			//		 In general..this might need more thinking, but getting to working version ASAP is a priority
 			//       Even without version/Mount options change - plugin restart will lead to dangling mounts
 			//       We also might use VolumeContext to save it's parent FS Mount path instead of calculating
-			mountOptions: mountOptions,
+			mountOptions: getMountOptions(&fs),
 		}
 		m.mountMap[fs] = wMount
 	}
