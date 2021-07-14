@@ -10,14 +10,14 @@ import (
 	"syscall"
 )
 
-type dirVolume struct {
+type DirVolume struct {
 	id         string
 	fs         string
 	volumeType string
 	dirName    string
 }
 
-func (v dirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
+func (v DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
 	mountPath, err, unmount := mounter.Mount(v.fs)
 	defer unmount()
 	if err != nil {
@@ -45,15 +45,15 @@ func (v dirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
 	}
 }
 
-func (v dirVolume) getFullPath(mountPath string) string {
+func (v DirVolume) getFullPath(mountPath string) string {
 	return filepath.Join(mountPath, v.dirName)
 }
 
-func NewVolume(volumeId string) (dirVolume, error) {
+func NewVolume(volumeId string) (DirVolume, error) {
 	if err := validateVolumeId(volumeId); err != nil {
-		return dirVolume{}, err
+		return DirVolume{}, err
 	}
-	return dirVolume{
+	return DirVolume{
 		id:         volumeId,
 		fs:         GetFSName(volumeId),
 		volumeType: GetVolumeType(volumeId),
@@ -62,7 +62,6 @@ func NewVolume(volumeId string) (dirVolume, error) {
 }
 
 func getMaxDirCapacity(mountPath string) (int64, error) {
-
 	var stat syscall.Statfs_t
 	err := syscall.Statfs(mountPath, &stat)
 	if err != nil {
