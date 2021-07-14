@@ -151,7 +151,7 @@ func (m *wekaMounter) mountParams(fs string, xattr bool) (string, error, Unmount
 	mountErr := mounter.incRef()
 
 	if mountErr != nil {
-		glog.Errorf("Failed mounting %s at %s: %e", fs, mounter.mountPoint, mounter)
+		glog.Errorf("Failed mounting %s at %s: %e", fs, mounter.mountPoint, mountErr)
 		return "", mountErr, func() {}
 	}
 	return mounter.mountPoint, nil, func() {
@@ -198,7 +198,7 @@ func (m *wekaMounter) LogActiveMounts() {
 		for mnt := range m.mountMap {
 			mapEntry := m.mountMap[mnt]
 			if mapEntry.refCount < 0 {
-				glog.Errorf("There is a negative refcount on mount %s", mapEntry)
+				glog.Errorf("There is a negative refcount on mount %s", mapEntry.mountPoint)
 			} else if mapEntry.refCount > 0 {
 				glog.Infof("Active mount: %s -> %s, xattr: %t, refcount: %d", mnt.fs, mapEntry.mountPoint, mnt.xattr, mapEntry.refCount)
 				count++

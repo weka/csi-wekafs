@@ -179,7 +179,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		glog.Warningf("Removed previously created volume %s in %s due to error setting attrs", volume.id, volPath)
 		return nil, err
 	} else {
-		glog.Infof("Volume %s: set volume properties to %s", volumeID)
+		glog.Infof("Volume %s: set volume properties to %d", volumeID, capacity)
 	}
 
 	return &csi.CreateVolumeResponse{
