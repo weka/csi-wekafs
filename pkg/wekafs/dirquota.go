@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc/status"
 	"os"
 	"path/filepath"
+	"strconv"
 	"syscall"
 )
 
@@ -75,6 +76,6 @@ func getMaxDirCapacity(mountPath string) (int64, error) {
 func updateDirCapacity(volumePath string, capacity int64) error {
 	glog.V(4).Infof("updating wekafs volume: %s", volumePath)
 	m := make(map[string][]byte)
-	m[xattrCapacity] = []byte(string(capacity))
+	m[xattrCapacity] = []byte(strconv.FormatInt(capacity, 10))
 	return updateXattrs(volumePath, m)
 }
