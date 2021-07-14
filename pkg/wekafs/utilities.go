@@ -140,7 +140,7 @@ func PathIsWekaMount(path string) bool {
 	return strings.Contains(string(res), path)
 }
 
-func validatedVolume(mountPath string, mountErr error, volume dirVolume) (string, error) {
+func validatedVolume(mountPath string, mountErr error, volume DirVolume) (string, error) {
 	glog.Infof("Validating if volume %s exists in %s", volume.id, mountPath)
 	if mountErr != nil {
 		return "", status.Error(codes.Internal, mountErr.Error())

@@ -37,7 +37,7 @@ func (gc *dirVolumeGc) triggerGc(fs string) {
 	gc.mounter.LogActiveMounts()
 }
 
-func (gc *dirVolumeGc) triggerGcVolume(volume dirVolume) {
+func (gc *dirVolumeGc) triggerGcVolume(volume DirVolume) {
 	fs := volume.fs
 	gc.Lock()
 	defer gc.Unlock()
@@ -50,7 +50,7 @@ func (gc *dirVolumeGc) triggerGcVolume(volume dirVolume) {
 	go gc.purgeVolume(volume)
 }
 
-func (gc *dirVolumeGc) purgeVolume(volume dirVolume) {
+func (gc *dirVolumeGc) purgeVolume(volume DirVolume) {
 	fs := volume.fs
 	innerPath := volume.dirName
 	defer gc.finishGcCycle(fs)
