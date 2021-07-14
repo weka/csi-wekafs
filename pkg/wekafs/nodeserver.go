@@ -252,7 +252,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	glog.V(2).Infof("Checking if target path %s exists", targetPath)
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
-			glog.Warningf("Seems like volume %s is not published under target path , assuming repeating unpublish request", volume.id, targetPath)
+			glog.Warningf("Seems like volume %s is not published under target path %s, assuming repeating unpublish request", volume.id, targetPath)
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		} else {
 			return &csi.NodeUnpublishVolumeResponse{}, status.Errorf(codes.Internal, " unexpected situation")
