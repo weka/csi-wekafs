@@ -119,7 +119,14 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, status.Errorf(codes.InvalidArgument, "Failed to resolve VolumeType from CreateVolumeRequest")
 	}
-	volume, err := NewVolume(volumeID)
+	apiClient, err := cs.api.FromSecrets(req.Secrets)
+	if err != nil {
+		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
+	} else {
+		glog.V(4).Infof("Successfully initialized API backend for request")
+	}
+
+	volume, err := NewVolume(volumeID, apiClient)
 	if err != nil {
 		return &csi.CreateVolumeResponse{}, err
 	}
@@ -199,7 +206,14 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
 
-	volume, err := NewVolume(volumeID)
+	apiClient, err := cs.api.FromSecrets(req.Secrets)
+	if err != nil {
+		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
+	} else {
+		glog.V(4).Infof("Successfully initialized API backend for request")
+	}
+
+	volume, err := NewVolume(volumeID, apiClient)
 	if err != nil {
 		return &csi.DeleteVolumeResponse{}, nil // Should return invalid on incorrect ID
 	}
@@ -225,7 +239,14 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if len(req.GetVolumeId()) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
 	}
-	volume, err := NewVolume(req.GetVolumeId())
+	apiClient, err := cs.api.FromSecrets(req.Secrets)
+	if err != nil {
+		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
+	} else {
+		glog.V(4).Infof("Successfully initialized API backend for request")
+	}
+
+	volume, err := NewVolume(req.GetVolumeId(), apiClient)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", req.GetVolumeId())
 	}
@@ -291,7 +312,14 @@ func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Errorf(codes.NotFound, "Volume ID %s not found", req.GetVolumeId())
 
 	}
-	volume, err := NewVolume(req.GetVolumeId())
+	apiClient, err := cs.api.FromSecrets(req.Secrets)
+	if err != nil {
+		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
+	} else {
+		glog.V(4).Infof("Successfully initialized API backend for request")
+	}
+
+	volume, err := NewVolume(req.GetVolumeId(), apiClient)
 	if err != nil {
 		return &csi.ValidateVolumeCapabilitiesResponse{}, err
 	}

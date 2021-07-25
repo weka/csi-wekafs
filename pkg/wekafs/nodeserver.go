@@ -54,7 +54,7 @@ func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
 	if len(req.GetVolumeId()) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
 	}
-	volume, err := NewVolume(req.GetVolumeId())
+	volume, err := NewVolume(req.GetVolumeId(), nil)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", req.GetVolumeId())
 	}
@@ -128,7 +128,13 @@ func isWekaInstalled() bool {
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	glog.Infof("Received a NodePublishVolumeRequest %s", req)
-	volume, err := NewVolume(req.GetVolumeId())
+	apiClient, err := ns.api.FromSecrets(req.Secrets)
+	if err != nil {
+		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
+	} else {
+		glog.V(4).Infof("Successfully initialized API backend for request")
+	}
+	volume, err := NewVolume(req.GetVolumeId(), apiClient)
 	if err != nil {
 		return &csi.NodePublishVolumeResponse{}, err
 	}
@@ -238,7 +244,8 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	glog.Infof("Received NodeUnpublishVolume request %s", req)
 	// Check arguments
-	volume, err := NewVolume(req.GetVolumeId())
+
+	volume, err := NewVolume(req.GetVolumeId(), nil)
 	if err != nil {
 		return &csi.NodeUnpublishVolumeResponse{}, err
 	}
@@ -298,8 +305,14 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 }
 
 func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	apiClient, err := ns.api.FromSecrets(req.Secrets)
+	if err != nil {
+		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
+	} else {
+		glog.V(4).Infof("Successfully initialized API backend for request")
+	}
 
-	volume, err := NewVolume(req.GetVolumeId())
+	volume, err := NewVolume(req.GetVolumeId(), apiClient)
 	if err != nil {
 		return &csi.NodeStageVolumeResponse{}, err
 	}
@@ -323,7 +336,7 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 
 	// Check arguments
-	volume, err := NewVolume(req.GetVolumeId())
+	volume, err := NewVolume(req.GetVolumeId(), nil)
 	if err != nil {
 		return &csi.NodeUnstageVolumeResponse{}, err
 	}

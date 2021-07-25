@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
@@ -18,6 +19,7 @@ type DirVolume struct {
 	fs         string
 	volumeType string
 	dirName    string
+	apiClient  *apiclient.ApiClient
 }
 
 func (v DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
@@ -52,7 +54,7 @@ func (v DirVolume) getFullPath(mountPath string) string {
 	return filepath.Join(mountPath, v.dirName)
 }
 
-func NewVolume(volumeId string) (DirVolume, error) {
+func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (DirVolume, error) {
 	if err := validateVolumeId(volumeId); err != nil {
 		return DirVolume{}, err
 	}
@@ -61,6 +63,7 @@ func NewVolume(volumeId string) (DirVolume, error) {
 		fs:         GetFSName(volumeId),
 		volumeType: GetVolumeType(volumeId),
 		dirName:    GetVolumeDirName(volumeId),
+		apiClient:  apiClient,
 	}, nil
 }
 
@@ -90,8 +93,8 @@ func (v DirVolume) updateCapacity(capacity int64) error {
 	return updateDirCapacity(volumePath, capacity)
 }
 
-func (v DirVolume) New(volumeId string) (Volume, error) {
-	return NewVolume(volumeId)
+func (v DirVolume) New(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) {
+	return NewVolume(volumeId, apiClient)
 }
 
 func updateDirCapacity(volumePath string, capacity int64) error {
