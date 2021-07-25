@@ -1,6 +1,8 @@
 package wekafs
 
 import (
+	"errors"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -71,6 +73,25 @@ func getMaxDirCapacity(mountPath string) (int64, error) {
 	// Available blocks * size per block = available space in bytes
 	maxCapacity := int64(stat.Bavail * uint64(stat.Bsize))
 	return maxCapacity, nil
+}
+
+//getDirInodeId used for obtaining the mount Path inode ID (to set quota on it later)
+func getDirInodeId(mountPath string) (uint64, error) {
+	fileinfo, _ := os.Stat(mountPath)
+	stat, ok := fileinfo.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, errors.New(fmt.Sprintf("failed to obtain inodeId from %s", mountPath))
+	}
+	return stat.Ino, nil
+}
+
+func (v DirVolume) updateCapacity(capacity int64) error {
+	volumePath := ""
+	return updateDirCapacity(volumePath, capacity)
+}
+
+func (v DirVolume) New(volumeId string) (Volume, error) {
+	return NewVolume(volumeId)
 }
 
 func updateDirCapacity(volumePath string, capacity int64) error {
