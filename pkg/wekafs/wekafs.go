@@ -19,8 +19,8 @@ package wekafs
 import (
 	"errors"
 	"github.com/golang/glog"
+	"github.com/google/uuid"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	v1 "k8s.io/api/core/v1"
 	"strings"
 	"sync"
 )
@@ -45,7 +45,8 @@ type wekaFsDriver struct {
 }
 
 var (
-	vendorVersion = "dev"
+	vendorVersion    = "dev"
+	ApiNotFoundError = errors.New("could not get API client by cluster guid")
 )
 
 // apiStore hashmap of all APIs defined by credentials + endpoints
@@ -65,18 +66,25 @@ func (api *apiStore) getByHash(key uint32) *apiclient.ApiClient {
 	return nil
 }
 
-// FromSecret returns a pointer to API by secret contents
-func (api *apiStore) FromSecret(secret *v1.Secret) (*apiclient.ApiClient, error) {
-	print(secret.Data)
-	username := secret.Data["username"]
-	password := secret.Data["password"]
-	organization := secret.Data["organization"]
-	endpointsRaw := secret.Data["endpoints"]
+func (api *apiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, error) {
+	for _, val := range api.apis {
+		if val.ClusterGuid == guid {
+			return val, nil
+		}
+	}
+	glog.Errorln("Could not fetch API client for cluster GUID", guid.String())
+	return nil, ApiNotFoundError
+}
+
+// FromSecrets returns a pointer to API by secret contents
+func (api *apiStore) FromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
+	username := secrets["username"]
+	password := secrets["password"]
+	organization := secrets["organization"]
+	endpointsRaw := secrets["endpoints"]
 	endpoints := strings.Split(string(endpointsRaw), ",")
-	scheme := strings.Split(string(endpoints[0]), "://")[0]
-	glog.Errorln(secret, username, password, organization, endpoints, scheme)
-	//panic("implement me!")
-	return api.fromParams(string(username), string(password), string(organization), scheme, endpoints)
+	scheme := secrets["scheme"]
+	return api.fromParams(username, password, organization, scheme, endpoints)
 }
 
 // fromParams returns a pointer to API by credentials and endpoints
