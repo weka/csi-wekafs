@@ -42,6 +42,7 @@ type nodeServer struct {
 	maxVolumesPerNode int64
 	mounter           *wekaMounter
 	gc                *dirVolumeGc
+	api               *apiStore
 }
 
 func (ns *nodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
@@ -98,7 +99,7 @@ func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandV
 	}, nil
 }
 
-func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
+func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *apiStore, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
 	if mounter.debugPath == "" && !isWekaInstalled() && crashOnNoWeka == true {
 		exitMsg := "weka OS driver module not installed, exiting"
 		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
@@ -114,6 +115,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, mounter *wekaMounter,
 		maxVolumesPerNode: maxVolumesPerNode,
 		mounter:           mounter,
 		gc:                gc,
+		api:               api,
 	}
 }
 

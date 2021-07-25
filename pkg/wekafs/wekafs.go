@@ -19,6 +19,10 @@ package wekafs
 import (
 	"errors"
 	"github.com/golang/glog"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	v1 "k8s.io/api/core/v1"
+	"strings"
+	"sync"
 )
 
 type wekaFsDriver struct {
@@ -33,6 +37,7 @@ type wekaFsDriver struct {
 	ids            *identityServer
 	ns             *nodeServer
 	cs             *controllerServer
+	api            *apiStore
 	debugPath      string
 	dynamicVolPath string
 
@@ -42,6 +47,66 @@ type wekaFsDriver struct {
 var (
 	vendorVersion = "dev"
 )
+
+// apiStore hashmap of all APIs defined by credentials + endpoints
+type apiStore struct {
+	sync.Mutex
+	apis map[uint32]*apiclient.ApiClient
+}
+
+// getByHash returns pointer to existing API if found by hash, or nil
+func (api *apiStore) getByHash(key uint32) *apiclient.ApiClient {
+	if val, ok := api.apis[key]; ok {
+		return val
+	}
+	if val, ok := api.apis[key]; ok {
+		return val
+	}
+	return nil
+}
+
+// FromSecret returns a pointer to API by secret contents
+func (api *apiStore) FromSecret(secret *v1.Secret) (*apiclient.ApiClient, error) {
+	print(secret.Data)
+	username := secret.Data["username"]
+	password := secret.Data["password"]
+	organization := secret.Data["organization"]
+	endpointsRaw := secret.Data["endpoints"]
+	endpoints := strings.Split(string(endpointsRaw), ",")
+	scheme := strings.Split(string(endpoints[0]), "://")[0]
+	glog.Errorln(secret, username, password, organization, endpoints, scheme)
+	//panic("implement me!")
+	return api.fromParams(string(username), string(password), string(organization), scheme, endpoints)
+}
+
+// fromParams returns a pointer to API by credentials and endpoints
+// If this is a new API, it will be created and put in hashmap
+func (api *apiStore) fromParams(Username, Password, Organization, Scheme string, Endpoints []string) (*apiclient.ApiClient, error) {
+	// doing this to fetch a client hash
+	client, err := (&apiclient.ApiClient{}).New(Username, Password, Organization, Endpoints, Scheme)
+	if err != nil {
+		return nil, errors.New("could not create API client object from supplied params")
+	}
+	hash := client.Hash()
+	if existingApi := api.getByHash(hash); existingApi != nil {
+		return existingApi, nil
+	}
+	api.Lock()
+	defer api.Unlock()
+	glog.V(4).Infoln("Creating new Weka API client", client.Username, "@", strings.Join(client.Endpoints, ","))
+	if api.getByHash(hash) != nil {
+		return api.getByHash(hash), nil
+	}
+	api.apis[hash] = client
+	return client, nil
+}
+
+func NewApiStore() *apiStore {
+	return &apiStore{
+		Mutex: sync.Mutex{},
+		apis:  make(map[uint32]*apiclient.ApiClient),
+	}
+}
 
 func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode CsiPluginMode) (*wekaFsDriver, error) {
 	if driverName == "" {
@@ -73,6 +138,7 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 		debugPath:         debugPath,
 		dynamicVolPath:    dynmamicVolPath,
 		csiMode:           csiMode, // either "controller", "node", "all"
+		api:               NewApiStore(),
 	}, nil
 }
 
@@ -88,7 +154,7 @@ func (driver *wekaFsDriver) Run() {
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		glog.Infof("Loading ControllerServer")
 		// bring up controller part
-		driver.cs = NewControllerServer(driver.nodeID, mounter, gc, driver.dynamicVolPath)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, gc, driver.dynamicVolPath)
 	} else {
 		driver.cs = &controllerServer{}
 	}
@@ -97,7 +163,7 @@ func (driver *wekaFsDriver) Run() {
 
 		// bring up node part
 		glog.Infof("Loading NodeServer")
-		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, mounter, gc)
+		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, gc)
 	} else {
 		driver.ns = &nodeServer{}
 	}
