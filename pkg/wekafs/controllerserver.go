@@ -41,6 +41,7 @@ type controllerServer struct {
 	mounter        *wekaMounter
 	creatLock      sync.Mutex
 	dynamicVolPath string
+	api            *apiStore
 }
 
 func (cs *controllerServer) ControllerPublishVolume(c context.Context, request *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
@@ -71,7 +72,7 @@ func (cs *controllerServer) ListSnapshots(c context.Context, request *csi.ListSn
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, mounter *wekaMounter, gc *dirVolumeGc, dynamicVolPath string) *controllerServer {
+func NewControllerServer(nodeID string, api *apiStore, mounter *wekaMounter, gc *dirVolumeGc, dynamicVolPath string) *controllerServer {
 	return &controllerServer{
 		caps: getControllerServiceCapabilities(
 			[]csi.ControllerServiceCapability_RPC_Type{
@@ -82,6 +83,7 @@ func NewControllerServer(nodeID string, mounter *wekaMounter, gc *dirVolumeGc, d
 		mounter:        mounter,
 		gc:             gc,
 		dynamicVolPath: dynamicVolPath,
+		api:            api,
 	}
 }
 
