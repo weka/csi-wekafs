@@ -40,6 +40,9 @@ metadata:
   name: csi-wekafsplugin-controller
 rules:
   - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
     resources: ["persistentvolumes"]
     verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
   - apiGroups: [""]
@@ -97,6 +100,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: csi-wekafsplugin-node
 rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
   - apiGroups: [""]
     resources: ["persistentvolumes"]
     verbs: ["create", "delete", "get", "list", "watch", "update"]
