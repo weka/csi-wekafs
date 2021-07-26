@@ -103,23 +103,23 @@ func (a *ApiClient) DeleteFileSystem(r *FileSystemDeleteRequest) error {
 	return nil
 }
 
-func (f *FileSystem) GetType() string {
+func (fs *FileSystem) GetType() string {
 	return "filesystem"
 }
 
-func (f *FileSystem) GetBasePath() string {
+func (fs *FileSystem) GetBasePath() string {
 	return "fileSystems"
 }
 
-func (f *FileSystem) GetApiUrl() string {
-	url, err := urlutil.URLJoin(f.GetBasePath(), f.Uid.String())
+func (fs *FileSystem) GetApiUrl() string {
+	url, err := urlutil.URLJoin(fs.GetBasePath(), fs.Uid.String())
 	if err != nil {
 		return url
 	}
 	return ""
 }
 
-func (f *FileSystem) getImmutableFields() []string {
+func (fs *FileSystem) getImmutableFields() []string {
 	return []string{
 		"Name",
 		"TotalCapacity",
@@ -127,8 +127,8 @@ func (f *FileSystem) getImmutableFields() []string {
 	}
 }
 
-func (f *FileSystem) EQ(q ApiObject) bool {
-	return ObjectsAreEqual(q, f)
+func (fs *FileSystem) EQ(q ApiObject) bool {
+	return ObjectsAreEqual(q, fs)
 }
 
 type FileSystemCreateRequest struct {
