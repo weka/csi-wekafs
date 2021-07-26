@@ -55,6 +55,7 @@ type ApiClient struct {
 	refreshTokenExpiryDate     time.Time
 	Timeout                    time.Duration
 	CompatibilityMap           *WekaCompatibilityMap
+	clientHash                 uint32
 }
 
 type WekaCompatibilityRequiredVersions struct {
@@ -123,6 +124,7 @@ func (a *ApiClient) New(username, password, organization string, endpoints []str
 	a.Timeout = time.Duration(ApiHttpTimeOutSeconds) * time.Second
 	a.currentEndpointId = -1
 	a.CompatibilityMap = &WekaCompatibilityMap{}
+	a.clientHash = a.generateHash()
 	return a, nil
 }
 
@@ -418,12 +420,17 @@ func (a *ApiClient) Log(level glog.Level, message ...interface{}) {
 	glog.V(level).Infoln(fmt.Sprintf("API client: %s (%s)", a.ClusterName, a.ClusterGuid.String()), message)
 }
 
-// Hash used for storing multiple clients in hash table
-func (a *ApiClient) Hash() uint32 {
+// generateHash used for storing multiple clients in hash table. Hash() is created once as connection params might change
+func (a *ApiClient) generateHash() uint32 {
 	h := fnv.New32a()
 	s := fmt.Sprintln(a.Username, a.Password, a.Organization, a.Endpoints)
 	_, _ = h.Write([]byte(s))
 	return h.Sum32()
+}
+
+// Hash returns the client hash as it was generated once client was initialized
+func (a *ApiClient) Hash() uint32 {
+	return a.clientHash
 }
 
 // Init checks if API token refresh is required and transparently refreshes or fails back to (re)login

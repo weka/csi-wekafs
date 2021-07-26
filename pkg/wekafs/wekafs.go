@@ -60,9 +60,6 @@ func (api *apiStore) getByHash(key uint32) *apiclient.ApiClient {
 	if val, ok := api.apis[key]; ok {
 		return val
 	}
-	if val, ok := api.apis[key]; ok {
-		return val
-	}
 	return nil
 }
 
@@ -91,23 +88,24 @@ func (api *apiStore) fromSecrets(secrets map[string]string) (*apiclient.ApiClien
 // If this is a new API, it will be created and put in hashmap
 func (api *apiStore) fromParams(Username, Password, Organization, Scheme string, Endpoints []string) (*apiclient.ApiClient, error) {
 	// doing this to fetch a client hash
-	client, err := (&apiclient.ApiClient{}).New(Username, Password, Organization, Endpoints, Scheme)
+	newClient, err := (&apiclient.ApiClient{}).New(Username, Password, Organization, Endpoints, Scheme)
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
 	}
-	hash := client.Hash()
+	hash := newClient.Hash()
+
 	if existingApi := api.getByHash(hash); existingApi != nil {
-		glog.V(4).Infoln("Found an existing Weka API client", client.Username, "@", strings.Join(client.Endpoints, ","))
+		glog.V(4).Infoln("Found an existing Weka API client", newClient.Username, "@", strings.Join(newClient.Endpoints, ","))
 		return existingApi, nil
 	}
 	api.Lock()
 	defer api.Unlock()
-	glog.V(4).Infoln("Creating new Weka API client", client.Username, "@", strings.Join(client.Endpoints, ","))
+	glog.V(4).Infoln("Creating new Weka API client", newClient.Username, "@", strings.Join(newClient.Endpoints, ","))
 	if api.getByHash(hash) != nil {
 		return api.getByHash(hash), nil
 	}
-	api.apis[hash] = client
-	return client, nil
+	api.apis[hash] = newClient
+	return newClient, nil
 }
 
 func (api *apiStore) GetClientFromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
