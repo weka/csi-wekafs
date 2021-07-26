@@ -1,5 +1,6 @@
 package wekafs
 
+// TODO: fix emplementation of VolumeGC
 import (
 	"github.com/golang/glog"
 	"io"
@@ -16,12 +17,14 @@ type dirVolumeGc struct {
 	isDeferred map[string]bool
 	sync.Mutex
 	mounter *wekaMounter
+	api     *apiStore
 }
 
-func initDirVolumeGc(mounter *wekaMounter) *dirVolumeGc {
+func initDirVolumeGc(mounter *wekaMounter, api *apiStore) *dirVolumeGc {
 	gc := dirVolumeGc{mounter: mounter}
 	gc.isRunning = make(map[string]bool)
 	gc.isDeferred = make(map[string]bool)
+	gc.api = api
 	return &gc
 }
 
@@ -38,7 +41,7 @@ func (gc *dirVolumeGc) triggerGc(fs string) {
 }
 
 func (gc *dirVolumeGc) triggerGcVolume(volume DirVolume) {
-	fs := volume.fs
+	fs := volume.Filesystem
 	gc.Lock()
 	defer gc.Unlock()
 	if gc.isRunning[fs] {
@@ -51,7 +54,7 @@ func (gc *dirVolumeGc) triggerGcVolume(volume DirVolume) {
 }
 
 func (gc *dirVolumeGc) purgeVolume(volume DirVolume) {
-	fs := volume.fs
+	fs := volume.Filesystem
 	innerPath := volume.dirName
 	defer gc.finishGcCycle(fs)
 	path, err, unmount := gc.mounter.Mount(fs)
@@ -122,7 +125,7 @@ func pathIsEmptyDir(p string) bool {
 	if err != nil {
 		return true
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	_, err = f.Readdir(1)
 	return err == io.EOF
