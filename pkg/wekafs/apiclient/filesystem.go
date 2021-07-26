@@ -45,7 +45,8 @@ func (a *ApiClient) GetFileSystemByUid(uid uuid.UUID, fs *FileSystem) error {
 	return a.Get(ret.GetApiUrl(), nil, fs)
 }
 
-func (a *ApiClient) GetFileSystemsByFilter(query *FileSystem, resultSet *[]FileSystem) error {
+// FindFileSystemsByFilter returns result set of 0-many objects matching filter
+func (a *ApiClient) FindFileSystemsByFilter(query *FileSystem, resultSet *[]FileSystem) error {
 	ret := &[]FileSystem{}
 	err := a.Get(query.GetBasePath(), nil, ret)
 	if err != nil {
@@ -57,6 +58,23 @@ func (a *ApiClient) GetFileSystemsByFilter(query *FileSystem, resultSet *[]FileS
 		}
 	}
 	return nil
+}
+
+// GetFilesystemByFilter expected to return exactly one result of FindFileSystemsByFilter (error)
+func (a *ApiClient) GetFilesystemByFilter(query *FileSystem) (*FileSystem, error) {
+	rs := &[]FileSystem{}
+	err := a.FindFileSystemsByFilter(query, rs)
+	if err != nil {
+		return nil, err
+	}
+	if *rs == nil || len(*rs) == 0 {
+		return nil, ApiObjectNotFoundError
+	}
+	if len(*rs) > 1 {
+		return nil, ApiMultipleObjectsFoundError
+	}
+	result := &(*rs)[0]
+	return result, nil
 }
 
 func (a *ApiClient) CreateFileSystem(r *FileSystemCreateRequest, fs *FileSystem) error {
@@ -75,7 +93,7 @@ func (a *ApiClient) CreateFileSystem(r *FileSystemCreateRequest, fs *FileSystem)
 	return nil
 }
 
-func (a *ApiClient) UpdateFileSystem(r *FileSystemUpdateRequest, fs *FileSystem) error {
+func (a *ApiClient) UpdateFileSystem(r *FileSystemResizeRequest, fs *FileSystem) error {
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -156,15 +174,34 @@ func (fsc *FileSystemCreateRequest) getRelatedObject() ApiObject {
 	return &FileSystem{}
 }
 
-type FileSystemUpdateRequest struct {
-	Uid           uuid.UUID `json:"-"`
-	NewName       string    `json:"new_name,omitempty"`
-	TotalCapacity int64     `json:"total_capacity,omitempty"`
-	SsdCapacity   int64     `json:"ssd_capacity,omitempty"`
-	AuthRequired  bool      `json:"auth_required,omitempty"`
+func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64) (*FileSystemCreateRequest, error) {
+	ret := &FileSystemCreateRequest{
+		Name:          name,
+		GroupName:     groupName,
+		TotalCapacity: totalCapacity,
+	}
+	return ret, nil
 }
 
-func (fsu *FileSystemUpdateRequest) getApiUrl() string {
+type FileSystemResizeRequest struct {
+	Uid           uuid.UUID `json:"-"`
+	TotalCapacity *int64    `json:"total_capacity,omitempty"`
+	SsdCapacity   *int64    `json:"ssd_capacity,omitempty"`
+}
+
+func NewFilesystemUpdateRequest(fsUid uuid.UUID, totalCapacity, ssdCapacity *int64) *FileSystemResizeRequest {
+	ret := &FileSystemResizeRequest{
+		Uid: fsUid,
+	}
+	if totalCapacity != nil {
+		ret.TotalCapacity = totalCapacity
+	}
+	if ssdCapacity != nil {
+		ret.SsdCapacity = ssdCapacity
+	}
+	return ret
+}
+func (fsu *FileSystemResizeRequest) getApiUrl() string {
 	url, err := urlutil.URLJoin(fsu.getRelatedObject().GetBasePath(), fsu.Uid.String())
 	if err != nil {
 		return ""
@@ -172,15 +209,15 @@ func (fsu *FileSystemUpdateRequest) getApiUrl() string {
 	return url
 }
 
-func (fsu *FileSystemUpdateRequest) getRequiredFields() []string {
+func (fsu *FileSystemResizeRequest) getRequiredFields() []string {
 	return []string{"Uid"}
 }
 
-func (fsu *FileSystemUpdateRequest) getRelatedObject() ApiObject {
+func (fsu *FileSystemResizeRequest) getRelatedObject() ApiObject {
 	return &FileSystem{}
 }
 
-func (fsu *FileSystemUpdateRequest) hasRequiredFields() bool {
+func (fsu *FileSystemResizeRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(fsu)
 }
 

@@ -45,62 +45,67 @@ type nodeServer struct {
 	api               *apiStore
 }
 
+func (ns *nodeServer) NodeExpandVolume(c context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+	panic("implement me")
+}
+
 func (ns *nodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	panic("implement me")
 }
 
-func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-
-	if len(req.GetVolumeId()) == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
-	}
-	volume, err := NewVolume(req.GetVolumeId(), nil)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", req.GetVolumeId())
-	}
-
-	capRange := req.GetCapacityRange()
-	if capRange == nil {
-		return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
-	}
-
-	// Perform mount in order to be able to access Xattrs and get a full volume root path
-	mountPoint, err, unmount := ns.mounter.MountXattr(volume.fs)
-	defer unmount()
-	if err != nil {
-		return nil, err
-	}
-	volPath := volume.getFullPath(mountPoint)
-
-	capacity := int64(capRange.GetRequiredBytes())
-
-	maxStorageCapacity, err := getMaxDirCapacity(mountPoint)
-	if err != nil {
-		return nil, status.Errorf(codes.Unknown, "Cannot obtain free capacity for volume %s", volume)
-	}
-	if capacity > maxStorageCapacity {
-		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity)
-	}
-
-	if volPath, err = validatedVolume(mountPoint, err, volume); err != nil {
-		return nil, err
-	}
-
-	currentSize := getVolumeSize(volPath)
-	glog.Infof("Volume %s: current capacity: %d, expanding to %d", volume.id, currentSize, capacity)
-	if currentSize < capacity {
-		if err := updateDirCapacity(volPath, capacity); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not update volume %s: %v", volume, err)
-		}
-	}
-
-	return &csi.NodeExpandVolumeResponse{
-		CapacityBytes: capacity,
-	}, nil
-}
+//func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
+//
+//	if len(req.GetVolumeId()) == 0 {
+//		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
+//	}
+//	req.S
+//	volume, err := NewVolume(req.GetVolumeId(), nil)
+//	if err != nil {
+//		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", req.GetVolumeId())
+//	}
+//
+//	capRange := req.GetCapacityRange()
+//	if capRange == nil {
+//		return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
+//	}
+//
+//	// Perform mount in order to be able to access Xattrs and get a full volume root path
+//	mountPoint, err, unmount := ns.mounter.MountXattr(volume.Filesystem)
+//	defer unmount()
+//	if err != nil {
+//		return nil, err
+//	}
+//	volPath := volume.getFullPath(mountPoint)
+//
+//	capacity := int64(capRange.GetRequiredBytes())
+//
+//	maxStorageCapacity, err := getMaxDirCapacity(mountPoint)
+//	if err != nil {
+//		return nil, status.Errorf(codes.Unknown, "Cannot obtain free capacity for volume %s", volume)
+//	}
+//	if capacity > maxStorageCapacity {
+//		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity)
+//	}
+//
+//	if volPath, err = validatedVolume(mountPoint, err, volume); err != nil {
+//		return nil, err
+//	}
+//
+//	currentSize := getVolumeSize(volPath)
+//	glog.Infof("Volume %s: current capacity: %d, expanding to %d", volume.id, currentSize, capacity)
+//	if currentSize < capacity {
+//		if err := updateDirCapacity(volPath, capacity); err != nil {
+//			return nil, status.Errorf(codes.Internal, "Could not update volume %s: %v", volume, err)
+//		}
+//	}
+//
+//	return &csi.NodeExpandVolumeResponse{
+//		CapacityBytes: capacity,
+//	}, nil
+//}
 
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *apiStore, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
-	if mounter.debugPath == "" && !isWekaInstalled() && crashOnNoWeka == true {
+	if mounter.debugPath == "" && !isWekaInstalled() && crashOnNoWeka {
 		exitMsg := "weka OS driver module not installed, exiting"
 		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
 		panic(exitMsg)
@@ -108,7 +113,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *apiStore, mounte
 	return &nodeServer{
 		caps: getNodeServiceCapabilities(
 			[]csi.NodeServiceCapability_RPC_Type{
-				csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
+				//csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
 			},
 		),
 		nodeID:            nodeId,
@@ -177,19 +182,18 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
 
 	glog.V(4).Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeId %v\nattributes %v\nmountflags %v\n",
-		targetPath, fsType, deviceId, readOnly, volume.id, attrib, mountFlags)
+		targetPath, fsType, deviceId, readOnly, volume.GetId(), attrib, mountFlags)
 
-	fsName := volume.fs
-	mountPoint, err, unmount := ns.mounter.Mount(fsName)
-	fullPath := GetVolumeFullPath(mountPoint, volume.id)
-
-	if _, err = validatedVolume(mountPoint, err, volume); err != nil {
-		glog.Infof("Volume %s not found on filesystem %s", volume.id, volume.fs)
-		unmount()
-		return nil, err
-	} else {
-		glog.Infof("Volume %s was found on filesystem %s", volume.id, volume.fs)
+	mountPoint, err, unmount := volume.Mount(ns.mounter, false)
+	ok, err := volume.Exists(mountPoint)
+	if err != nil {
+		return &csi.NodePublishVolumeResponse{}, status.Error(codes.Internal, err.Error())
 	}
+	if !ok {
+		unmount()
+		return &csi.NodePublishVolumeResponse{}, err
+	}
+	fullPath := volume.getFullPath(mountPoint)
 
 	glog.Infof("Ensuring target mount root directory exists: %s", filepath.Dir(targetPath))
 	if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
@@ -224,7 +228,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		}
 	}
 
-	glog.Infof("Attempting mount bind between volume %s and mount target %s, options: %s", volume.id, targetPath, options)
+	glog.Infof("Attempting mount bind between volume %s and mount target %s, options: %s", volume.GetId(), targetPath, options)
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
@@ -235,7 +239,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind succesffully
-	glog.Infof("Successfully published volume %s", volume.id)
+	glog.Infof("Successfully published volume %s", volume.GetId())
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -259,7 +263,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	glog.V(2).Infof("Checking if target path %s exists", targetPath)
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
-			glog.Warningf("Seems like volume %s is not published under target path %s, assuming repeating unpublish request", volume.id, targetPath)
+			glog.Warningf("Seems like volume %s is not published under target path %s, assuming repeating unpublish request", volume.GetId(), targetPath)
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		} else {
 			return &csi.NodeUnpublishVolumeResponse{}, status.Errorf(codes.Internal, " unexpected situation")
@@ -269,7 +273,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	// check if this path is a wekafs mount
 	if ns.mounter.debugPath == "" {
 		if PathIsWekaMount(targetPath) {
-			glog.Infof("Directory %s exists and is weka mount [%s]", targetPath, volume.id)
+			glog.Infof("Directory %s exists and is weka mount [%s]", targetPath, volume.GetId())
 		} else {
 			msg := fmt.Sprintf("Directory %s exists, but not a weka mount", targetPath)
 			glog.Info()
@@ -280,25 +284,25 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	glog.V(2).Infof("Attempting to perform unmount of target path %s", targetPath)
 	if err := mount.New("").Unmount(targetPath); err != nil {
 		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
-		glog.Errorf("failed unmounting volume %s at %s : %s", volume.id, targetPath, err)
+		glog.Errorf("failed unmounting volume %s at %s : %s", volume.GetId(), targetPath, err)
 		return nil, status.Error(codes.Internal, err.Error())
 	} else {
 		glog.Infof("Successfully unmounted %s", targetPath)
 	}
 
-	glog.Infof("Attempting to remove target path %s [%s]", targetPath, volume.id)
+	glog.Infof("Attempting to remove target path %s [%s]", targetPath, volume.GetId())
 	if err := os.Remove(targetPath); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.id)
+	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.GetId())
 	// Doing this only in case both bind unmount and remove succeeded
-	glog.Infof("Calling decrease refcount on mount %s", volume.id)
-	err = ns.mounter.Unmount(volume.fs)
+	glog.Infof("Calling decrease refcount on mount %s", volume.GetId())
+	err = volume.Unmount(ns.mounter)
 	if err != nil {
 		glog.Errorf("Post-unpublish unmount failed %s", err)
 	}
-	glog.Infof("Successfully unpublished volume %s", volume.id)
+	glog.Infof("Successfully unpublished volume %s", volume.GetId())
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -323,7 +327,7 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	if req.GetVolumeCapability().GetBlock() != nil {
 		return nil, status.Error(codes.InvalidArgument, "Block accessType is unsupported")
 	}
-	glog.V(4).Infof("wekafs: volume %s has been staged.", volume.id)
+	glog.V(4).Infof("wekafs: volume %s has been staged.", volume.GetId())
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
@@ -339,7 +343,7 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	if len(req.GetStagingTargetPath()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
-	glog.V(4).Infof("wekafs: volume %s has been unstaged.", volume.id)
+	glog.V(4).Infof("wekafs: volume %s has been unstaged.", volume.GetId())
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }

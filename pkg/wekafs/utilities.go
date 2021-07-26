@@ -25,7 +25,10 @@ func createVolumeIdFromRequest(req *csi.CreateVolumeRequest, dynamicVolPath stri
 	volType := req.GetParameters()["volumeType"]
 
 	switch volType {
-	case VolumeTypeDirV1:
+	case "":
+		return "", status.Errorf(codes.InvalidArgument, "missing VolumeType in CreateVolumeRequest")
+
+	case string(VolumeTypeDirV1):
 		// we have a dir in request or no info
 		filesystemName := GetFSNameFromRequest(req)
 		asciiPart := getAsciiPart(name, 64)
@@ -37,9 +40,6 @@ func createVolumeIdFromRequest(req *csi.CreateVolumeRequest, dynamicVolPath stri
 			volId = filepath.Join(volType, filesystemName, folderName)
 		}
 		return volId, nil
-
-	case "":
-		return "", status.Errorf(codes.InvalidArgument, "missing VolumeType in CreateVolumeRequest")
 
 	default:
 		exitMsg := "Unsupported volumeType in CreateVolumeRequest"
@@ -118,7 +118,7 @@ func PathExists(p string) bool {
 	if err != nil {
 		return false
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	fi, err := file.Stat()
 	if err != nil {
@@ -170,14 +170,14 @@ func validateVolumeId(volumeId string) error {
 
 	volumeType := GetVolumeType(volumeId)
 	switch volumeType {
-	case VolumeTypeDirV1:
+	case string(VolumeTypeDirV1):
 		// VolID format is as following:
 		// "<VolType>/<WEKA_FS_NAME>/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
 		// e.g.
 		// "dir/v1/default/63008f52b44ca664dfac8a64f0c17a28e1754213-my-awesome-folder"
 		// length limited to maxVolumeIdLength
 		r := VolumeTypeDirV1 + "/[^/]*/.+"
-		re := regexp.MustCompile(r)
+		re := regexp.MustCompile(string(r))
 		if re.MatchString(volumeId) {
 			return nil
 		}

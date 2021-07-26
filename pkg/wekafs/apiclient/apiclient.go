@@ -97,6 +97,9 @@ var ApiConflictError = errors.New("conflict 409")
 var ApiInternalError = errors.New("internal error 500")
 var ApiUnhandledError = errors.New("unhandled error")
 var ApiRetriesExceeded = errors.New("api retries exceeded")
+var ApiObjectNotFoundError = errors.New("object not found")
+var ApiMultipleObjectsFoundError = errors.New("ambiguous filter, multiple objects match")
+var UnsupportedOperationError = errors.New("operation is not supported on object of this type")
 
 var RequestMissingParams = errors.New("request cannot be sent since some required params are missing")
 

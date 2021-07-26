@@ -9,6 +9,7 @@ allowVolumeExpansion: true
 parameters:
   volumeType: dir/v1
   filesystemName: default
+  capacityEnforcement: HARD
   csi.storage.k8s.io/provisioner-secret-name: &secretName csi-wekafs-api-secret
   csi.storage.k8s.io/provisioner-secret-namespace: &secretNamespace csi-wekafs
   csi.storage.k8s.io/controller-publish-secret-name: *secretName
