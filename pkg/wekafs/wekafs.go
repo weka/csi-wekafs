@@ -44,6 +44,8 @@ type wekaFsDriver struct {
 	csiMode CsiPluginMode
 }
 
+type VolumeType string
+
 var (
 	vendorVersion    = "dev"
 	ApiNotFoundError = errors.New("could not get API client by cluster guid")
@@ -199,7 +201,7 @@ func (driver *wekaFsDriver) Run() {
 }
 
 const (
-	VolumeTypeDirV1 = "dir/v1"
+	VolumeTypeDirV1 VolumeType = "dir/v1"
 )
 
 type CsiPluginMode string
