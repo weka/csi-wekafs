@@ -323,7 +323,7 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 		case s == http.StatusOK:
 			return nil
 		case s == http.StatusUnauthorized:
-			_ = a.lazyRefresh()
+			_ = a.Init()
 			return reqErr
 		case s == http.StatusConflict:
 			u := uuid.New()
@@ -341,7 +341,7 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 
 // Request makes sure that client is logged in and has a non-expired token
 func (a *ApiClient) Request(Method string, Path string, Payload *[]byte, Query *map[string]string, Response interface{}) error {
-	if err := a.lazyRefresh(); err != nil {
+	if err := a.Init(); err != nil {
 		a.Log(1, fmt.Sprintf("Failed to perform request since failed to re-authenticate: %s", err.Error()))
 	}
 	err := a.request(Method, Path, Payload, Query, Response)
@@ -426,8 +426,8 @@ func (a *ApiClient) Hash() uint32 {
 	return h.Sum32()
 }
 
-// lazyRefresh checks if API token refresh is required and transparently refreshes or fails back to (re)login
-func (a *ApiClient) lazyRefresh() error {
+// Init checks if API token refresh is required and transparently refreshes or fails back to (re)login
+func (a *ApiClient) Init() error {
 	a.Log(5, "Validating authentication token is not expired")
 	if a.apiTokenExpiryDate.After(time.Now()) {
 		return nil
