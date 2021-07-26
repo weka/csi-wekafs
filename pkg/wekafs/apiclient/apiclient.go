@@ -21,10 +21,6 @@ import (
 	"time"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 const (
 	ApiHttpTimeOutSeconds         = 60
 	ApiRetryIntervalSeconds       = 1

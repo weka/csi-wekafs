@@ -1,6 +1,6 @@
 FROM alpine
-LABEL maintainers="Weka.IO"
-LABEL description="Weka Matrix CSI Driver"
+LABEL maintainers="Weka"
+LABEL description="Weka CSI Driver"
 ARG binary=./bin/wekafsplugin
 
 # Add util-linux to get a new version of losetup.

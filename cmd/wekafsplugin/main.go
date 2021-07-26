@@ -21,15 +21,19 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs"
+	"math/rand"
 	"os"
 	"path"
+	"time"
 )
 
 func init() {
 	_ = flag.Set("logtostderr", "true")
+	rand.Seed(time.Now().UnixNano())
 }
 
 var (
+	csiMode    = wekafs.CsiPluginMode("all")
 	endpoint   = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
 	driverName = flag.String("drivername", "csi.weka.io", "name of the driver")
 	debugPath  = flag.String("debugpath", "",
@@ -40,14 +44,14 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csiMode = wekafs.GetCsiPluginMode(flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)"))
+	csimodetext = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
 	// Set by the build process
 	version = ""
 )
 
 func main() {
 	flag.Parse()
-
+	csiMode = wekafs.GetCsiPluginMode(csimodetext)
 	if *showVersion {
 		baseName := path.Base(os.Args[0])
 		fmt.Println(baseName, version)
