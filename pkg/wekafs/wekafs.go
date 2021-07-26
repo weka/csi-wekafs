@@ -76,8 +76,8 @@ func (api *apiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 	return nil, ApiNotFoundError
 }
 
-// FromSecrets returns a pointer to API by secret contents
-func (api *apiStore) FromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
+// fromSecrets returns a pointer to API by secret contents
+func (api *apiStore) fromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
 	username := secrets["username"]
 	password := secrets["password"]
 	organization := secrets["organization"]
@@ -97,6 +97,7 @@ func (api *apiStore) fromParams(Username, Password, Organization, Scheme string,
 	}
 	hash := client.Hash()
 	if existingApi := api.getByHash(hash); existingApi != nil {
+		glog.V(4).Infoln("Found an existing Weka API client", client.Username, "@", strings.Join(client.Endpoints, ","))
 		return existingApi, nil
 	}
 	api.Lock()
@@ -107,6 +108,24 @@ func (api *apiStore) fromParams(Username, Password, Organization, Scheme string,
 	}
 	api.apis[hash] = client
 	return client, nil
+}
+
+func (api *apiStore) GetClientFromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
+	if len(secrets) > 0 {
+		client, err := api.fromSecrets(secrets)
+		if err != nil {
+			glog.V(4).Infof("API service was not found for request, switching to legacy mode")
+		} else {
+			glog.V(4).Infof("Successfully initialized API backend for request")
+			if err := client.Init(); err != nil {
+				glog.Errorln("Failed to initialize API client", client.Username, "@", client.Endpoints)
+				return nil, err
+			}
+		}
+	} else {
+		glog.V(4).Infof("No API service for request, switching to legacy mode")
+	}
+	return nil, nil
 }
 
 func NewApiStore() *apiStore {

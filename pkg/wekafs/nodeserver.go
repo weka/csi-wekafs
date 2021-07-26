@@ -128,13 +128,11 @@ func isWekaInstalled() bool {
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	glog.Infof("Received a NodePublishVolumeRequest %s", req)
-	apiClient, err := ns.api.FromSecrets(req.Secrets)
+	client, err := ns.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
-	} else {
-		glog.V(4).Infof("Successfully initialized API backend for request")
+		return &csi.NodePublishVolumeResponse{}, status.Errorf(codes.Internal, "Failed to initialize Weka API client for the request")
 	}
-	volume, err := NewVolume(req.GetVolumeId(), apiClient)
+	volume, err := NewVolume(req.GetVolumeId(), client)
 	if err != nil {
 		return &csi.NodePublishVolumeResponse{}, err
 	}
@@ -305,14 +303,11 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 }
 
 func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	apiClient, err := ns.api.FromSecrets(req.Secrets)
+	client, err := ns.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
-	} else {
-		glog.V(4).Infof("Successfully initialized API backend for request")
+		return &csi.NodeStageVolumeResponse{}, status.Errorf(codes.Internal, "Failed to initialize Weka API client for the request")
 	}
-
-	volume, err := NewVolume(req.GetVolumeId(), apiClient)
+	volume, err := NewVolume(req.GetVolumeId(), client)
 	if err != nil {
 		return &csi.NodeStageVolumeResponse{}, err
 	}
