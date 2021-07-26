@@ -451,6 +451,16 @@ func (a *ApiClient) Init() error {
 	return nil
 }
 
+func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
+	return a.CompatibilityMap.QuotaDirectoryAsVolume
+}
+func (a *ApiClient) SupportsFilesystemAsVolume() bool {
+	return a.CompatibilityMap.FilesystemAsVolume
+}
+func (a *ApiClient) SupportsDirectoryAsVolume() bool {
+	return a.CompatibilityMap.DirectoryAsVolume
+}
+
 // marshalRequest converts interface to bytes
 func marshalRequest(r interface{}) (*[]byte, error) {
 	j, err := json.Marshal(r)
