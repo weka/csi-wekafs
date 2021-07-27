@@ -87,6 +87,8 @@ $(CMDS:%=helm-%): helm-%:
 	sed -i ./deploy/helm/csi-wekafsplugin/Chart.yaml -e 's|\(https://github.com/weka/csi-wekafs/tree/\).*\(/deploy/helm/csi-wekafsplugin\)|\1$(REV)\2|1' ;\
 	sed -i ./deploy/helm/csi-wekafsplugin/values.yaml -e 's|\(\&csiDriverVersion \).*|\1 "$(VERSION)"|1' ;\
 	helm package deploy/helm/csi-wekafsplugin ;\
+
+$(CMDS:%=hub-%): helm-%: hub-%:
 	TEMP_DIR=`mktemp -d` ;\
 	git clone git@github.com:weka/csi-wekafs.git -q -b gh-pages $$TEMP_DIR ;\
     touch $$TEMP_DIR/index.yaml ;\
