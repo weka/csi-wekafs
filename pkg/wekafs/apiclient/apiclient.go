@@ -122,13 +122,15 @@ func NewApiClient(username, password, organization string, endpoints []string, s
 		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
 		currentEndpointId: -1,
 	}
-	a.Log(3, "Creating new client for endpoints", endpoints)
+	a.Log(3, "Creating new API client for endpoints", endpoints)
 	a.clientHash = a.generateHash()
 	return a, nil
 }
 
 // fetchMountEndpoints used to obtain actual data plane IP addresses
 func (a *ApiClient) fetchMountEndpoints() error {
+	f := a.Log(4, "Fetching mount points")
+	defer f()
 	a.MountEndpoints = []string{}
 	nodes := &[]WekaNode{}
 	err := a.GetNodesByRole(NodeRoleBackend, nodes)
@@ -167,6 +169,7 @@ func (a *ApiClient) chooseRandomEndpoint() {
 		panic("cannot initialize API client without at least 1 endpoint")
 	}
 	a.currentEndpointId = rand.Intn(len(a.Endpoints))
+	a.Log(4, "Choosing random endpoint", a.getEndpoint())
 }
 
 //getEndpoint returns last known endpoint to work against
@@ -297,6 +300,8 @@ func (a *ApiClient) handleNetworkErrors(err error) error {
 
 // request wraps do with retries and some more error handling
 func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *map[string]string, v interface{}) error {
+	f := a.Log(5, "Performing request:", Method, Path)
+	defer f()
 	return retryBackoff(ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() error {
 		rawResponse, reqErr := a.do(Method, Path, Payload, Query)
 		if a.handleNetworkErrors(reqErr) != nil { // transient network errors
@@ -386,7 +391,8 @@ func (a *ApiClient) Login() error {
 	}
 	a.Lock()
 	defer a.Unlock()
-	a.Log(2, "Logging in to endpoint", a.getEndpoint())
+	f := a.Log(2, "Logging in to endpoint", a.getEndpoint())
+	defer f()
 
 	r := LoginRequest{
 		Username: a.Username,
@@ -416,12 +422,16 @@ func (a *ApiClient) Login() error {
 	return nil
 }
 
-func (a *ApiClient) Log(level glog.Level, message ...interface{}) {
+func (a *ApiClient) Log(level glog.Level, message ...interface{}) func() {
 	glog.V(level).Infoln(fmt.Sprintf("API client: %s (%s)", a.ClusterName, a.ClusterGuid.String()), message)
+	return func() {
+		glog.V(level).Infoln(fmt.Sprintf("API client: %s (%s)", a.ClusterName, a.ClusterGuid.String()), message, "completed")
+	}
 }
 
 // generateHash used for storing multiple clients in hash table. Hash() is created once as connection params might change
 func (a *ApiClient) generateHash() uint32 {
+	a.Log(5, "Generating API hash")
 	h := fnv.New32a()
 	s := fmt.Sprintln(a.Username, a.Password, a.Organization, a.Endpoints)
 	_, _ = h.Write([]byte(s))
@@ -435,6 +445,8 @@ func (a *ApiClient) Hash() uint32 {
 
 // Init checks if API token refresh is required and transparently refreshes or fails back to (re)login
 func (a *ApiClient) Init() error {
+	f := a.Log(4, "Initializing API client")
+	defer f()
 	a.Log(5, "Validating authentication token is not expired")
 	if a.apiTokenExpiryDate.After(time.Now()) {
 		return nil

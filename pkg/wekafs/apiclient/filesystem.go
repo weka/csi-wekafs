@@ -62,6 +62,7 @@ func (a *ApiClient) FindFileSystemsByFilter(query *FileSystem, resultSet *[]File
 
 // GetFilesystemByFilter expected to return exactly one result of FindFileSystemsByFilter (error)
 func (a *ApiClient) GetFilesystemByFilter(query *FileSystem) (*FileSystem, error) {
+	a.Log(3, "Querying API for filesystem", query.Name, query.Uid.String())
 	rs := &[]FileSystem{}
 	err := a.FindFileSystemsByFilter(query, rs)
 	if err != nil {
@@ -78,6 +79,8 @@ func (a *ApiClient) GetFilesystemByFilter(query *FileSystem) (*FileSystem, error
 }
 
 func (a *ApiClient) CreateFileSystem(r *FileSystemCreateRequest, fs *FileSystem) error {
+	f := a.Log(3, "Creating filesystem", r)
+	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -94,6 +97,8 @@ func (a *ApiClient) CreateFileSystem(r *FileSystemCreateRequest, fs *FileSystem)
 }
 
 func (a *ApiClient) UpdateFileSystem(r *FileSystemResizeRequest, fs *FileSystem) error {
+	f := a.Log(3, "Updating filesystem", r)
+	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -110,6 +115,8 @@ func (a *ApiClient) UpdateFileSystem(r *FileSystemResizeRequest, fs *FileSystem)
 }
 
 func (a *ApiClient) DeleteFileSystem(r *FileSystemDeleteRequest) error {
+	f := a.Log(3, "Deleting filesystem", r)
+	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -189,7 +196,7 @@ type FileSystemResizeRequest struct {
 	SsdCapacity   *int64    `json:"ssd_capacity,omitempty"`
 }
 
-func NewFilesystemUpdateRequest(fsUid uuid.UUID, totalCapacity, ssdCapacity *int64) *FileSystemResizeRequest {
+func NewFileSystemResizeRequest(fsUid uuid.UUID, totalCapacity, ssdCapacity *int64) *FileSystemResizeRequest {
 	ret := &FileSystemResizeRequest{
 		Uid: fsUid,
 	}

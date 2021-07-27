@@ -185,6 +185,8 @@ func (qd *QuotaDeleteRequest) getRelatedObject() ApiObject {
 }
 
 func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForCompletion bool) error {
+	f := a.Log(3, "Creating quota", qr, "wait for completion:", waitForCompletion)
+	defer f()
 	if !qr.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -230,6 +232,8 @@ func (a *ApiClient) FindQuotaByFilter(query *Quota, resultSet *[]Quota) error {
 }
 
 func (a *ApiClient) GetQuotaByFilter(query *Quota) (*Quota, error) {
+	f := a.Log(3, "Looking for quota", query)
+	defer f()
 	rs := &[]Quota{}
 	err := a.FindQuotaByFilter(query, rs)
 	if err != nil {
@@ -257,6 +261,8 @@ func (a *ApiClient) IsQuotaActive(query *Quota) (done bool, err error) {
 }
 
 func (a *ApiClient) UpdateQuota(r *QuotaUpdateRequest, q *Quota) error {
+	f := a.Log(3, "Updating quota", r)
+	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -273,6 +279,8 @@ func (a *ApiClient) UpdateQuota(r *QuotaUpdateRequest, q *Quota) error {
 }
 
 func (a *ApiClient) DeleteQuota(r *QuotaDeleteRequest) error {
+	f := a.Log(3, "Deleting quota", r)
+	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
