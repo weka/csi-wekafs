@@ -455,7 +455,7 @@ func (a *ApiClient) Init() error {
 
 	a.Log(5, "Performing Bearer token refresh")
 	r := RefreshRequest{RefreshToken: a.refreshToken}
-	responseData := RefreshResponse{}
+	responseData := &RefreshResponse{}
 	payload, _ := marshalRequest(r)
 	if err := a.request("POST", ApiPathRefresh, payload, nil, responseData); err != nil {
 		a.Log(4, "Failed to refresh auth token, logging in...")

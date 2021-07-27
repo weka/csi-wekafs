@@ -26,7 +26,7 @@ type DirVolume struct {
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
 
 func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
-	glog.Infof("Attempting to get max capacity available on filesystem", v.Filesystem)
+	glog.Infoln("Attempting to get max capacity available on filesystem", v.Filesystem)
 	var stat syscall.Statfs_t
 	err := syscall.Statfs(mountPath, &stat)
 	if err != nil {
@@ -60,10 +60,15 @@ func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
 }
 
 func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
-	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		return v.updateCapacityQuota(mountPath, enforceCapacity, capacityLimit)
+	if v.apiClient == nil {
+		glog.V(4).Infof("Volume has no API client bound, updating capacity in legacy mode")
+		return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit)
 	}
-	return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit)
+	if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
+		glog.V(4).Infoln("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
+		return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit)
+	}
+	return v.updateCapacityQuota(mountPath, enforceCapacity, capacityLimit)
 }
 
 func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
@@ -113,7 +118,7 @@ func (v DirVolume) updateCapacityXattr(mountPath string, enforceCapacity *bool, 
 }
 
 func (v DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
-	mountPath, err, unmount := mounter.Mount(v.Filesystem)
+	mountPath, err, unmount := v.Mount(mounter, false)
 	defer unmount()
 	if err != nil {
 		glog.Errorf("Error mounting %s for deletion %s", v.id, err)
