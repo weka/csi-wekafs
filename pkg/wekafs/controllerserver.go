@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -97,6 +98,12 @@ func createKeyValuePairs(m map[string]string) string {
 	return b.String()
 }
 
+func CreateVolumeError(errorCode codes.Code, errorMessage string) (*csi.CreateVolumeResponse, error) {
+	glog.Errorln("Error creating volume, code:", errorCode, ", error:", errorMessage)
+	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	return &csi.CreateVolumeResponse{}, err
+}
+
 func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	glog.V(3).Infof("Received a CreateVolume request: %s", createKeyValuePairs(req.GetParameters()))
 	defer glog.V(3).Infof("Completed processing request: %s", createKeyValuePairs(req.GetParameters()))
@@ -119,32 +126,32 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// Need to calculate volumeID first thing due to possible mapping to multiple FSes
 	volumeID, err := createVolumeIdFromRequest(req, cs.dynamicVolPath)
 	if err != nil {
-		return &csi.CreateVolumeResponse{}, status.Errorf(codes.InvalidArgument, "Failed to resolve VolumeType from CreateVolumeRequest")
+		return CreateVolumeError(codes.InvalidArgument, "Failed to resolve VolumeType from CreateVolumeRequest")
 	}
 
 	// Validate access type in request
 	for _, capability := range caps {
 		if capability.GetBlock() != nil {
-			return nil, status.Error(codes.InvalidArgument, "Block accessType is unsupported")
+			return CreateVolumeError(codes.InvalidArgument, "Block accessType is unsupported")
 		}
 	}
 
 	// obtain client for volume
 	client, err := cs.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return &csi.CreateVolumeResponse{}, status.Errorf(codes.Internal, "Failed to initialize Weka API client for the request")
+		return CreateVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
 	}
 
 	volume, err := NewVolume(volumeID, client)
 	if err != nil {
-		return &csi.CreateVolumeResponse{}, err
+		return CreateVolumeError(codes.Internal, err.Error())
 	}
 
 	// Perform mount in order to be able to access Xattrs and get a full volume root path
 	mountPoint, err, unmount := volume.Mount(cs.mounter, true)
 	defer unmount()
 	if err != nil {
-		return nil, err
+		return CreateVolumeError(codes.Internal, err.Error())
 	}
 	volPath := volume.getFullPath(mountPoint)
 
@@ -157,11 +164,13 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 		currentCapacity, err := volume.GetCapacity(mountPoint)
 		if err != nil {
-			return &csi.CreateVolumeResponse{}, err
+			return CreateVolumeError(codes.Internal, err.Error())
 		}
 		// TODO: Once we have everything working - review this, big potential of race of several CreateVolume requests
 		if currentCapacity != capacity && currentCapacity != 0 {
-			return nil, status.Errorf(codes.AlreadyExists, "Volume with same ID exists with different capacity volumeID %s: [current]%d!=%d[requested]", volumeID, currentCapacity, capacity)
+			return CreateVolumeError(codes.AlreadyExists,
+				fmt.Sprintf("Volume with same ID exists with different capacity volumeID %s: [current]%d!=%d[requested]",
+					volumeID, currentCapacity, capacity))
 		}
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
@@ -175,16 +184,16 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// validate minimum capacity before create new volume
 	maxStorageCapacity, err := volume.getMaxCapacity(mountPoint)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Cannot obtain free capacity for volume %s", volumeID)
+		return CreateVolumeError(codes.Internal, fmt.Sprintf("Cannot obtain free capacity for volume %s", volumeID))
 	}
 	if capacity > maxStorageCapacity {
-		return &csi.CreateVolumeResponse{}, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity)
+		return CreateVolumeError(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
 
 	// Actually try to create the volume here
 	enforceCapacity, err := getStrictCapacityFromParams(req.GetParameters())
 	if err != nil {
-		return &csi.CreateVolumeResponse{}, err
+		return CreateVolumeError(codes.Internal, err.Error())
 	}
 	if err := volume.Create(mountPoint, enforceCapacity, capacity); err != nil {
 		return &csi.CreateVolumeResponse{}, err
@@ -216,6 +225,12 @@ func getStrictCapacityFromParams(params map[string]string) (bool, error) {
 	return enforceCapacity, nil
 }
 
+func DeleteVolumeError(errorCode codes.Code, errorMessage string) (*csi.DeleteVolumeResponse, error) {
+	glog.Errorln("Error deleting volume, code:", errorCode, ", error:", errorMessage)
+	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	return &csi.DeleteVolumeResponse{}, err
+}
+
 func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -224,17 +239,18 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	client, err := cs.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return &csi.DeleteVolumeResponse{}, status.Errorf(codes.Internal, "Failed to initialize Weka API client for the request")
+		return DeleteVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
 	}
 
 	volume, err := NewVolume(volumeID, client)
 	if err != nil {
-		return &csi.DeleteVolumeResponse{}, nil // Should return invalid on incorrect ID
+		// Should return invalid on incorrect ID
+		return DeleteVolumeError(codes.Internal, err.Error())
 	}
 
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		glog.V(3).Infof("invalid delete volume req: %v", req)
-		return nil, err
+		return DeleteVolumeError(codes.Internal, err.Error())
 	}
 
 	err = volume.moveToTrash(cs.mounter, cs.gc)
@@ -242,7 +258,14 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		glog.V(4).Infof("Volume not found %s, but returning success for idempotence", volume.GetId())
 		return &csi.DeleteVolumeResponse{}, nil
 	}
-	return &csi.DeleteVolumeResponse{}, err
+	// cleanup
+	return DeleteVolumeError(codes.Internal, err.Error())
+}
+
+func ExpandVolumeError(errorCode codes.Code, errorMessage string) (*csi.ControllerExpandVolumeResponse, error) {
+	glog.Errorln("Error expanding volume, code:", errorCode, ", error:", errorMessage)
+	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	return &csi.ControllerExpandVolumeResponse{}, err
 }
 
 func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
@@ -252,59 +275,59 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}
 	client, err := cs.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return &csi.ControllerExpandVolumeResponse{}, status.Errorf(codes.Internal, "Failed to initialize Weka API client for the request")
+		return ExpandVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
 	}
 
 	volume, err := NewVolume(req.GetVolumeId(), client)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", req.GetVolumeId())
+		return ExpandVolumeError(codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
 	}
 
 	capRange := req.GetCapacityRange()
 	if capRange == nil {
-		return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
+		return ExpandVolumeError(codes.InvalidArgument, "Capacity range not provided")
 	}
 
 	// Perform mount in order to be able to access Xattrs and get a full volume root path
 	mountPoint, err, unmount := volume.Mount(cs.mounter, true)
 	defer unmount()
 	if err != nil {
-		return nil, err
+		return ExpandVolumeError(codes.Internal, err.Error())
 	}
 
 	capacity := int64(capRange.GetRequiredBytes())
 
 	maxStorageCapacity, err := volume.getMaxCapacity(mountPoint)
 	if err != nil {
-		return nil, status.Errorf(codes.Unknown, "Cannot obtain free capacity for volume %s", volume)
+		return ExpandVolumeError(codes.Unknown, fmt.Sprintf("Cannot obtain free capacity for volume %s", volume.GetId()))
 	}
 	if capacity > maxStorageCapacity {
-		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity)
+		return ExpandVolumeError(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
 
 	ok, err := volume.Exists(mountPoint)
 	if err != nil {
-		return &csi.ControllerExpandVolumeResponse{}, status.Error(codes.Internal, err.Error())
+		return ExpandVolumeError(codes.Internal, err.Error())
 	}
 	if !ok {
-		return &csi.ControllerExpandVolumeResponse{}, status.Error(codes.Internal, "Volume does not exist")
+		return ExpandVolumeError(codes.Internal, "Volume does not exist")
 	}
 
 	currentSize, err := volume.GetCapacity(mountPoint)
 	if err != nil {
-		return &csi.ControllerExpandVolumeResponse{}, status.Error(codes.Internal, "Could not get volume capacity")
+		return ExpandVolumeError(codes.Internal, "Could not get volume capacity")
 	}
 	glog.Infof("Volume %s: current capacity: %d, expanding to %d", volume.GetId(), currentSize, capacity)
 
 	if currentSize != capacity {
 		if err := volume.UpdateCapacity(mountPoint, nil, capacity); err != nil {
-			return nil, status.Errorf(codes.Internal, "Could not update volume %s: %v", volume, err)
+			return ExpandVolumeError(codes.Internal, fmt.Sprintf("Could not update volume %s: %v", volume, err))
 		}
 	}
 
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         capacity,
-		NodeExpansionRequired: true, // since this is filesystem, no need to resize on node
+		NodeExpansionRequired: false, // since this is filesystem, no need to resize on node
 	}, nil
 }
 
@@ -314,45 +337,49 @@ func (cs *controllerServer) ControllerGetCapabilities(ctx context.Context, req *
 	}, nil
 }
 
+func ValidateVolumeCapsError(errorCode codes.Code, errorMessage string) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+	glog.Errorln("Error getting volume capabilities, code:", errorCode, ", error:", errorMessage)
+	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	return &csi.ValidateVolumeCapabilitiesResponse{}, err
+}
+
 func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 
 	// Check arguments
 	if len(req.GetVolumeId()) == 0 {
-		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Error(codes.InvalidArgument, "Volume ID cannot be empty")
+		return ValidateVolumeCapsError(codes.InvalidArgument, "Volume ID cannot be empty")
 	}
 	if len(req.GetVolumeCapabilities()) == 0 {
-		return nil, status.Error(codes.InvalidArgument, req.VolumeId)
+		return nil, status.Error(codes.InvalidArgument, req.GetVolumeId())
 	}
 	// this part must be added to make sure we return NotExists rather than Invalid
 	if err := validateVolumeId(req.GetVolumeId()); err != nil {
-		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Errorf(codes.NotFound, "Volume ID %s not found", req.GetVolumeId())
+		return ValidateVolumeCapsError(codes.NotFound, fmt.Sprintf("Volume ID %s not found", req.GetVolumeId()))
 
 	}
 	client, err := cs.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Errorf(codes.Internal, "Failed to initialize Weka API client for the request")
+		return ValidateVolumeCapsError(codes.Internal, "Failed to initialize Weka API client for the request")
 	}
 
 	volume, err := NewVolume(req.GetVolumeId(), client)
 	if err != nil {
-		return &csi.ValidateVolumeCapabilitiesResponse{}, err
+		return ValidateVolumeCapsError(codes.Internal, err.Error())
 	}
 	// TODO: Mount/validate in xattr if there is anything to validate. Right now mounting just to see if folder exists
 	mountPoint, err, unmount := volume.Mount(cs.mounter, false)
 	defer unmount()
 	if err != nil {
-		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Errorf(codes.NotFound, "Could not find volume %s", req.VolumeId)
+		return ValidateVolumeCapsError(codes.Internal, fmt.Sprintf("Could not mount volume %s", req.GetVolumeId()))
 	}
 	if ok, err2 := volume.Exists(mountPoint); err2 != nil && ok {
-		return &csi.ValidateVolumeCapabilitiesResponse{}, status.Errorf(codes.NotFound, "Could not find volume %s", req.VolumeId)
+		return ValidateVolumeCapsError(codes.NotFound, fmt.Sprintf("Could not find volume %s", req.GetVolumeId()))
 	}
 
 	for _, capability := range req.GetVolumeCapabilities() {
 		if capability.GetMount() == nil && capability.GetBlock() == nil {
-			return nil, status.Error(codes.InvalidArgument, "cannot have both Mount and block access type be undefined")
+			return ValidateVolumeCapsError(codes.InvalidArgument, "cannot have both Mount and block access type be undefined")
 		}
-		// A real driver would check the capabilities of the given volume with
-		// the set of requested capabilities.
 	}
 
 	return &csi.ValidateVolumeCapabilitiesResponse{
