@@ -259,7 +259,10 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 	// cleanup
-	return DeleteVolumeError(codes.Internal, err.Error())
+	if err != nil {
+		return DeleteVolumeError(codes.Internal, err.Error())
+	}
+	return &csi.DeleteVolumeResponse{}, nil
 }
 
 func ExpandVolumeError(errorCode codes.Code, errorMessage string) (*csi.ControllerExpandVolumeResponse, error) {
