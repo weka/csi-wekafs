@@ -309,7 +309,6 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 			a.chooseRandomEndpoint()
 			return reqErr
 		}
-		a.Log(5, "Received a response", rawResponse)
 		s := rawResponse.HttpStatusCode
 		var responseCodes []string
 		if len(rawResponse.ErrorCodes) > 0 {
@@ -445,9 +444,7 @@ func (a *ApiClient) Hash() uint32 {
 
 // Init checks if API token refresh is required and transparently refreshes or fails back to (re)login
 func (a *ApiClient) Init() error {
-	f := a.Log(4, "Initializing API client")
-	defer f()
-	a.Log(5, "Validating authentication token is not expired")
+	a.Log(6, "Validating authentication token is not expired")
 	if a.apiTokenExpiryDate.After(time.Now()) {
 		return nil
 	}
@@ -456,7 +453,7 @@ func (a *ApiClient) Init() error {
 		return a.Login()
 	}
 
-	a.Log(4, "Performing Bearer token refresh")
+	a.Log(5, "Performing Bearer token refresh")
 	r := RefreshRequest{RefreshToken: a.refreshToken}
 	responseData := RefreshResponse{}
 	payload, _ := marshalRequest(r)
@@ -466,7 +463,7 @@ func (a *ApiClient) Init() error {
 	}
 	a.refreshToken = responseData.RefreshToken
 	a.apiTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
-	a.Log(3, "API token refreshed successfully")
+	a.Log(3, "API client is successfully initialized")
 	return nil
 }
 
