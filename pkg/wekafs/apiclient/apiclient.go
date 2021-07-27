@@ -103,30 +103,26 @@ var UnsupportedOperationError = errors.New("operation is not supported on object
 
 var RequestMissingParams = errors.New("request cannot be sent since some required params are missing")
 
-//New creates a new Weka Api client
-func (a *ApiClient) New(username, password, organization string, endpoints []string, scheme string) (*ApiClient, error) {
+func NewApiClient(username, password, organization string, endpoints []string, scheme string) (*ApiClient, error) {
+	a := &ApiClient{
+		Mutex: sync.Mutex{},
+		client: &http.Client{
+			Transport:     nil,
+			CheckRedirect: nil,
+			Jar:           nil,
+			Timeout:       0,
+		},
+		ClusterGuid:       uuid.UUID{},
+		Username:          username,
+		Password:          password,
+		Organization:      organization,
+		httpScheme:        scheme,
+		Endpoints:         endpoints,
+		CompatibilityMap:  &WekaCompatibilityMap{},
+		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
+		currentEndpointId: -1,
+	}
 	a.Log(3, "Creating new client for endpoints", endpoints)
-	if a.isLoggedIn() {
-		return a, nil
-	}
-
-	if a.client != nil {
-		return a, nil
-	}
-	a.client = &http.Client{
-		Transport:     nil,
-		CheckRedirect: nil,
-		Jar:           nil,
-		Timeout:       0,
-	}
-	a.Username = username
-	a.Password = password
-	a.Organization = organization
-	a.httpScheme = scheme
-	a.Endpoints = endpoints
-	a.Timeout = time.Duration(ApiHttpTimeOutSeconds) * time.Second
-	a.currentEndpointId = -1
-	a.CompatibilityMap = &WekaCompatibilityMap{}
 	a.clientHash = a.generateHash()
 	return a, nil
 }
@@ -308,6 +304,7 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 			a.chooseRandomEndpoint()
 			return reqErr
 		}
+		a.Log(5, "Received a response", rawResponse)
 		s := rawResponse.HttpStatusCode
 		var responseCodes []string
 		if len(rawResponse.ErrorCodes) > 0 {

@@ -90,7 +90,7 @@ func (api *apiStore) fromSecrets(secrets map[string]string) (*apiclient.ApiClien
 // If this is a new API, it will be created and put in hashmap
 func (api *apiStore) fromParams(Username, Password, Organization, Scheme string, Endpoints []string) (*apiclient.ApiClient, error) {
 	// doing this to fetch a client hash
-	newClient, err := (&apiclient.ApiClient{}).New(Username, Password, Organization, Endpoints, Scheme)
+	newClient, err := apiclient.NewApiClient(Username, Password, Organization, Endpoints, Scheme)
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
 	}
@@ -172,7 +172,7 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 func (driver *wekaFsDriver) Run() {
 	// Create GRPC servers
 	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath}
-	gc := initDirVolumeGc(mounter)
+	gc := initDirVolumeGc(mounter, driver.api)
 
 	// identity server runs always
 	glog.Info("Loading IdentityServer")
