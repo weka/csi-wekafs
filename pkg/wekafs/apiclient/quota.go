@@ -16,6 +16,7 @@ type QuotaStatus string
 
 const QuotaTypeHard QuotaType = "HARD"
 const QuotaTypeSoft QuotaType = "SOFT"
+const QuotaTypeDefault = QuotaTypeHard
 const QuotaStatusActive = "ACTIVE"
 const QuotaStatusPending = "PENDING"
 const QuotaStatusError = "ERROR"

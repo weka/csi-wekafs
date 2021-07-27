@@ -26,7 +26,7 @@ type DirVolume struct {
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
 
 func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
-	glog.Infoln("Attempting to get max capacity available on filesystem", v.Filesystem)
+	glog.V(5).Infoln("Attempting to get max capacity available on filesystem", v.Filesystem)
 	var stat syscall.Statfs_t
 	err := syscall.Statfs(mountPath, &stat)
 	if err != nil {
@@ -34,6 +34,7 @@ func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
 	}
 	// Available blocks * size per block = available space in bytes
 	maxCapacity := int64(stat.Bavail * uint64(stat.Bsize))
+	glog.V(4).Infoln("Max capacity available for a volume:", maxCapacity)
 	return maxCapacity, nil
 }
 
@@ -72,12 +73,15 @@ func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capac
 }
 
 func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
+	glog.V(5).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforce:", enforceCapacity)
 	inodeId, err := v.getInodeId(mountPath)
 	if err != nil {
+		glog.Errorln("Failed to fetch inode ID for volume", v.GetId())
 		return err
 	}
 	fs, err := v.getFilesystemObj()
 	if err != nil {
+		glog.Errorln("Failed to fetch filesystem for volume", v.GetId())
 		return err
 	}
 
@@ -87,9 +91,14 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 	}
 
 	q, err := v.apiClient.GetQuotaByFilter(query)
-	// check if the quota already exists, otherwise return error
+	// check if the quota already exists. If not - create it and exit
 	if err != nil {
-		return status.Error(codes.Internal, err.Error())
+		if err != apiclient.ApiObjectNotFoundError {
+			// any other error
+			return status.Error(codes.Internal, err.Error())
+		}
+		_, err := v.CreateQuotaFromVolumeName(mountPath, enforceCapacity, uint64(capacityLimit))
+		return err
 	}
 
 	var quotaType apiclient.QuotaType
@@ -100,7 +109,7 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 			quotaType = apiclient.QuotaTypeHard
 		}
 	} else {
-		quotaType = q.QuotaType
+		quotaType = apiclient.QuotaTypeDefault
 	}
 
 	if q.QuotaType != quotaType || q.CapacityLimit != uint64(capacityLimit) {
@@ -188,7 +197,18 @@ func (v DirVolume) getInodeId(mountPath string) (uint64, error) {
 func (v DirVolume) GetId() string {
 	return v.id
 }
-func (v DirVolume) CreateQuotaFromVolumeName(mountPath string, quotaType apiclient.QuotaType, capacityLimit uint64) (*apiclient.Quota, error) {
+func (v DirVolume) CreateQuotaFromVolumeName(mountPath string, enforceCapacity *bool, capacityLimit uint64) (*apiclient.Quota, error) {
+	var quotaType apiclient.QuotaType
+	if enforceCapacity != nil {
+		if !*enforceCapacity {
+			quotaType = apiclient.QuotaTypeSoft
+		} else {
+			quotaType = apiclient.QuotaTypeHard
+		}
+	} else {
+		quotaType = apiclient.QuotaTypeDefault
+	}
+
 	fs, err := v.getFilesystemObj()
 	if err != nil {
 		return nil, err
