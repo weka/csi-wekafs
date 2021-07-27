@@ -169,7 +169,15 @@ func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) 
 
 //getInodeId used for obtaining the mount Path inode ID (to set quota on it later)
 func (v DirVolume) getInodeId(mountPath string) (uint64, error) {
-	fileinfo, _ := os.Stat(v.getFullPath(mountPath))
+	glog.V(5).Infoln("Getting inode ID of volume", v.GetId(), "fullpath: ", v.getFullPath(mountPath))
+	fileinfo, err := os.Stat(v.getFullPath(mountPath))
+	if err != nil {
+		glog.Error(err)
+		return 0, err
+	}
+	if fileinfo != nil {
+		return 0, errors.New(fmt.Sprintf("failed to locate volume %s", v.GetId()))
+	}
 	stat, ok := fileinfo.Sys().(*syscall.Stat_t)
 	if !ok {
 		return 0, errors.New(fmt.Sprintf("failed to obtain inodeId from %s", mountPath))
@@ -189,7 +197,7 @@ func (v DirVolume) CreateQuotaFromVolumeName(mountPath string, quotaType apiclie
 	if err != nil {
 		return nil, err
 	}
-	inodeId, err := v.getInodeId(v.getFullPath(mountPath))
+	inodeId, err := v.getInodeId(mountPath)
 	if err != nil {
 		return nil, errors.New("cannot set quota, could not find inode ID of the volume")
 	}
