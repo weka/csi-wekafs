@@ -151,14 +151,14 @@ func (v DirVolume) getFullPath(mountPath string) string {
 
 func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) {
 	if err := validateVolumeId(volumeId); err != nil {
-		return DirVolume{}, err
+		return &DirVolume{}, err
 	}
 	if apiClient != nil {
 		glog.V(4).Infof("Successfully bound volume to backend API %s@%s", apiClient.Username, apiClient.ClusterName)
 	} else {
 		glog.V(4).Infof("Volume was not bound to any backend API client")
 	}
-	return DirVolume{
+	return &DirVolume{
 		id:         volumeId,
 		Filesystem: GetFSName(volumeId),
 		volumeType: GetVolumeType(volumeId),
@@ -183,10 +183,6 @@ func (v DirVolume) getInodeId(mountPath string) (uint64, error) {
 		return 0, errors.New(fmt.Sprintf("failed to obtain inodeId from %s", mountPath))
 	}
 	return stat.Ino, nil
-}
-
-func (v DirVolume) New(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) {
-	return NewVolume(volumeId, apiClient)
 }
 
 func (v DirVolume) GetId() string {
@@ -285,6 +281,7 @@ func (v DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64
 		glog.Errorf("Failed to create directory %s", volPath)
 		return err
 	}
+	glog.Infof("Created directory %s, updating its capacity to %v", v.getFullPath(mountPath), capacity)
 	// Update volume metadata on directory using xattrs
 	err := v.UpdateCapacity(mountPath, &enforceCapacity, capacity)
 	if err != nil {
