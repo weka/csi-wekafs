@@ -153,6 +153,11 @@ func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) 
 	if err := validateVolumeId(volumeId); err != nil {
 		return DirVolume{}, err
 	}
+	if apiClient != nil {
+		glog.V(4).Infof("Successfully bound volume to backend API %s@%s", apiClient.Username, apiClient.ClusterName)
+	} else {
+		glog.V(4).Infof("Volume was not bound to any backend API client")
+	}
 	return DirVolume{
 		id:         volumeId,
 		Filesystem: GetFSName(volumeId),
@@ -160,17 +165,6 @@ func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) 
 		dirName:    GetVolumeDirName(volumeId),
 		apiClient:  apiClient,
 	}, nil
-}
-
-func getMaxDirCapacity(mountPath string) (int64, error) {
-	var stat syscall.Statfs_t
-	err := syscall.Statfs(mountPath, &stat)
-	if err != nil {
-		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity on mount path %s", mountPath)
-	}
-	// Available blocks * size per block = available space in bytes
-	maxCapacity := int64(stat.Bavail * uint64(stat.Bsize))
-	return maxCapacity, nil
 }
 
 //getInodeId used for obtaining the mount Path inode ID (to set quota on it later)
@@ -185,13 +179,6 @@ func (v DirVolume) getInodeId(mountPath string) (uint64, error) {
 
 func (v DirVolume) New(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) {
 	return NewVolume(volumeId, apiClient)
-}
-
-func updateDirCapacity(volumePath string, capacity int64) error {
-	glog.V(4).Infof("updating wekafs volume: %s", volumePath)
-	m := make(map[string][]byte)
-	m[xattrCapacity] = []byte(strconv.FormatInt(capacity, 10))
-	return updateXattrs(volumePath, m)
 }
 
 func (v DirVolume) GetId() string {
