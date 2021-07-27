@@ -26,10 +26,11 @@ type DirVolume struct {
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
 
 func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
+	glog.Infof("Attempting to get max capacity available on filesystem", v.Filesystem)
 	var stat syscall.Statfs_t
-	err := syscall.Statfs(v.getFullPath(mountPath), &stat)
+	err := syscall.Statfs(mountPath, &stat)
 	if err != nil {
-		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity on mount path %s", mountPath)
+		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity on mount path %s", mountPath, err.Error())
 	}
 	// Available blocks * size per block = available space in bytes
 	maxCapacity := int64(stat.Bavail * uint64(stat.Bsize))
