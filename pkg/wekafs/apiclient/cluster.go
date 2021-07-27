@@ -20,6 +20,7 @@ func (a *ApiClient) updateRefreshTokenInterval() error {
 		return err
 	}
 	a.refreshTokenExpiryInterval = responseData.RefreshTokenExpiry
+	a.Log(3, "Updated refresh token validity period")
 	return nil
 }
 
@@ -34,6 +35,9 @@ func (a *ApiClient) fetchClusterInfo() error {
 	a.ClusterGuid = responseData.Guid
 	clusterVersion := fmt.Sprintf("v%s", responseData.Release)
 	a.CompatibilityMap.fillIn(clusterVersion)
+	a.Log(3, "Cluster compatibility for filesystem as CSI volume:", a.SupportsFilesystemAsVolume())
+	a.Log(3, "Cluster compatibility for quota directory as CSI volume:", a.SupportsQuotaDirectoryAsVolume())
+	a.Log(3, "Cluster compatibility for regular directory as CSI volume:", a.SupportsDirectoryAsVolume())
 	return nil
 }
 

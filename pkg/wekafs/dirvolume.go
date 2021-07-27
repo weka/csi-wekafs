@@ -23,17 +23,25 @@ type DirVolume struct {
 	apiClient  *apiclient.ApiClient
 }
 
-func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
-	return getMaxDirCapacity(mountPath)
-}
-
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
+
+func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
+	var stat syscall.Statfs_t
+	err := syscall.Statfs(v.getFullPath(mountPath), &stat)
+	if err != nil {
+		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity on mount path %s", mountPath)
+	}
+	// Available blocks * size per block = available space in bytes
+	maxCapacity := int64(stat.Bavail * uint64(stat.Bsize))
+	return maxCapacity, nil
+}
 
 func (v DirVolume) GetType() VolumeType {
 	return VolumeTypeDirV1
 }
 
 func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
+
 	if v.apiClient == nil || !v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		// this is legacy volume, must treat xattrs...
 		size, err := v.getSizeFromXattr(mountPath)
