@@ -159,7 +159,11 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	capacity := req.GetCapacityRange().GetRequiredBytes()
 
 	// If directory already exists, return the create response for idempotence if size matches, or error
-	if ok, err := volume.Exists(mountPoint); ok && err != nil {
+	volExists, err := volume.Exists(mountPoint)
+	if err != nil {
+		return CreateVolumeError(codes.Internal, fmt.Sprintln("Could not check if volume exists", volPath))
+	}
+	if volExists {
 		glog.V(3).Infof("Directory already exists: %v", volPath)
 
 		currentCapacity, err := volume.GetCapacity(mountPoint)
@@ -327,7 +331,6 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 			return ExpandVolumeError(codes.Internal, fmt.Sprintf("Could not update volume %s: %v", volume, err))
 		}
 	}
-
 	return &csi.ControllerExpandVolumeResponse{
 		CapacityBytes:         capacity,
 		NodeExpansionRequired: false, // since this is filesystem, no need to resize on node
