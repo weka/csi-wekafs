@@ -468,12 +468,27 @@ func (a *ApiClient) Init() error {
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
+	if !a.isLoggedIn() {
+		if err := a.Init(); err != nil {
+			return false
+		}
+	}
 	return a.CompatibilityMap.QuotaDirectoryAsVolume
 }
 func (a *ApiClient) SupportsFilesystemAsVolume() bool {
+	if !a.isLoggedIn() {
+		if err := a.Init(); err != nil {
+			return false
+		}
+	}
 	return a.CompatibilityMap.FilesystemAsVolume
 }
 func (a *ApiClient) SupportsDirectoryAsVolume() bool {
+	if !a.isLoggedIn() {
+		if err := a.Init(); err != nil {
+			return false
+		}
+	}
 	return a.CompatibilityMap.DirectoryAsVolume
 }
 
