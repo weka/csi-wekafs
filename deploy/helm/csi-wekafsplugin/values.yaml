@@ -11,7 +11,7 @@ csiDriverVersion : &csiDriverVersion  "0.6.6"
 # Image paths
 images:
   # "images.liveness-probe-sidecar" defines the container image used for the csi liveness probe sidecar
-  livenessprobesidecar: quay.io/k8scsi/livenessprobe:v1.1.0
+  livenessprobesidecar: quay.io/k8scsi/livenessprobe:v2.2.0
 
   # "images.attacher-sidercar" defines the container image used for the csi attacher sidecar
   attachersidecar: quay.io/k8scsi/csi-attacher:v3.0.0-rc1
