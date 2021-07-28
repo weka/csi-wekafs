@@ -73,14 +73,18 @@ func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capac
 		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
 	}
 	err := f()
-	if err != nil {
+	if err == nil {
 		glog.V(3).Infoln("Successfully updated capacity for volume", v.GetId())
 	}
 	return err
 }
 
 func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
-	glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforce:", enforceCapacity)
+	if enforceCapacity != nil {
+		glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforce:", *enforceCapacity)
+	} else {
+		glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforce:", "RETAIN")
+	}
 	inodeId, err := v.getInodeId(mountPath)
 	if err != nil {
 		glog.Errorln("Failed to fetch inode ID for volume", v.GetId())
@@ -193,15 +197,12 @@ func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) 
 //getInodeId used for obtaining the mount Path inode ID (to set quota on it later)
 func (v DirVolume) getInodeId(mountPath string) (uint64, error) {
 	glog.V(5).Infoln("Getting inode ID of volume", v.GetId(), "fullpath: ", v.getFullPath(mountPath))
-	fileinfo, err := os.Stat(v.getFullPath(mountPath))
+	fileInfo, err := os.Stat(v.getFullPath(mountPath))
 	if err != nil {
 		glog.Error(err)
 		return 0, err
 	}
-	if fileinfo != nil {
-		return 0, errors.New(fmt.Sprintf("failed to locate volume %s", v.GetId()))
-	}
-	stat, ok := fileinfo.Sys().(*syscall.Stat_t)
+	stat, ok := fileInfo.Sys().(*syscall.Stat_t)
 	if !ok {
 		return 0, errors.New(fmt.Sprintf("failed to obtain inodeId from %s", mountPath))
 	}
