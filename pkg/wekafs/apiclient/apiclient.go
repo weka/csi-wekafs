@@ -31,8 +31,8 @@ const (
 //ApiClient is a structure that defines Weka API client
 // client: http.Client ref
 // Username, Password - obvious
-// httpScheme: either 'HTTP', 'HTTPS'
-// Endpoints: slice of 'ip_address:port' strings
+// httpScheme: either 'http', 'https'
+// Endpoints: slice of 'ip_address_or_fqdn:port' strings
 // apiToken, refreshToken, apiTokenExpiryDate used for bearer auth
 // currentEndpointId: refers to the currently working API endpoint
 // Timeout sets max request timeout duration
@@ -591,11 +591,16 @@ func ObjectsAreEqual(q ApiObject, f ApiObject) bool {
 // ObjectRequestHasRequiredFields returns true if all mandatory fields of object in API request are filled in
 func ObjectRequestHasRequiredFields(f ApiObjectRequest) bool {
 	ref := reflect.ValueOf(f)
-
+	var missingFields []string
 	for _, field := range f.getRequiredFields() {
 		if reflect.Indirect(ref).FieldByName(field).IsZero() {
-			return false
+			missingFields = append(missingFields, field)
 		}
 	}
+	if len(missingFields) > 0 {
+		glog.Errorln("Object is missing the following fields:", missingFields)
+		return false
+	}
+
 	return true
 }
