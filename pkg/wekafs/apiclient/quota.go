@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/helm/pkg/urlutil"
-	"math"
 	"strconv"
 	"time"
 )
@@ -20,6 +19,7 @@ const QuotaTypeDefault = QuotaTypeHard
 const QuotaStatusActive = "ACTIVE"
 const QuotaStatusPending = "PENDING"
 const QuotaStatusError = "ERROR"
+const MaxQuotaSize uint64 = 18446744073709547520
 
 type Quota struct {
 	InodeId        uint64    `json:"inodeId,omitempty"`
@@ -42,7 +42,8 @@ func (q *Quota) GetType() string {
 }
 
 func (q *Quota) GetBasePath() string {
-	url, err := urlutil.URLJoin((&FileSystem{Uid: q.FilesystemUid}).GetApiUrl(), "quotas")
+	fsUrl := (&FileSystem{Uid: q.FilesystemUid}).GetApiUrl()
+	url, err := urlutil.URLJoin(fsUrl, q.GetType())
 	if err != nil {
 		return ""
 	}
@@ -52,9 +53,9 @@ func (q *Quota) GetBasePath() string {
 func (q *Quota) GetApiUrl() string {
 	url, err := urlutil.URLJoin(q.GetBasePath(), strconv.FormatUint(q.InodeId, 10))
 	if err != nil {
-		return url
+		return ""
 	}
-	return ""
+	return url
 }
 
 func (q *Quota) getImmutableFields() []string {
@@ -87,8 +88,8 @@ type QuotaCreateRequest struct {
 	InodeId        uint64    `json:"inodeId,omitempty"`
 	QuotaType      QuotaType `json:"-"`
 	CapacityLimit  uint64    `json:"-"`
-	HardLimitBytes uint64    `json:"hardLimitBytes,omitempty"`
-	SoftLimitBytes uint64    `json:"softLimitBytes,omitempty"`
+	HardLimitBytes uint64    `json:"hard_quota,omitempty"`
+	SoftLimitBytes uint64    `json:"soft_quota,omitempty"`
 }
 
 func (qc *QuotaCreateRequest) getApiUrl() string {
@@ -102,7 +103,9 @@ func (qc *QuotaCreateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qc)
 }
 func (qc *QuotaCreateRequest) getRelatedObject() ApiObject {
-	return &Quota{}
+	return &Quota{
+		FilesystemUid: qc.FilesystemUid,
+	}
 }
 
 type QuotaUpdateRequest struct {
@@ -133,13 +136,15 @@ func NewQuotaCreateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 	ret := &QuotaCreateRequest{
 		FilesystemUid: filesystemUid,
 		InodeId:       inodeId,
+		QuotaType:     quotaType,
+		CapacityLimit: capacityLimit,
 	}
 	if quotaType == QuotaTypeHard {
 		ret.HardLimitBytes = capacityLimit
-		ret.SoftLimitBytes = math.MaxInt64
+		ret.SoftLimitBytes = capacityLimit
 	} else if quotaType == QuotaTypeSoft {
 		ret.SoftLimitBytes = capacityLimit
-		ret.HardLimitBytes = math.MaxInt64
+		ret.HardLimitBytes = MaxQuotaSize
 	}
 	return ret
 }
@@ -149,13 +154,15 @@ func NewQuotaUpdateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 	ret := &QuotaUpdateRequest{
 		FilesystemUid: filesystemUid,
 		InodeId:       inodeId,
+		QuotaType:     quotaType,
+		CapacityLimit: capacityLimit,
 	}
 	if quotaType == QuotaTypeHard {
 		ret.HardLimitBytes = capacityLimit
-		ret.SoftLimitBytes = math.MaxInt64
+		ret.SoftLimitBytes = capacityLimit
 	} else if quotaType == QuotaTypeSoft {
 		ret.SoftLimitBytes = capacityLimit
-		ret.HardLimitBytes = math.MaxInt64
+		ret.HardLimitBytes = MaxQuotaSize
 	}
 	return ret
 }
@@ -187,7 +194,6 @@ func (qd *QuotaDeleteRequest) getRelatedObject() ApiObject {
 
 func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForCompletion bool) error {
 	f := a.Log(3, "Creating quota", qr, "wait for completion:", waitForCompletion)
-	defer f()
 	if !qr.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -203,6 +209,7 @@ func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForComplet
 	if waitForCompletion {
 		return a.WaitForQuotaActive(q)
 	}
+	f()
 	return nil
 }
 
@@ -219,17 +226,45 @@ func (a *ApiClient) WaitForQuotaActive(q *Quota) error {
 }
 
 func (a *ApiClient) FindQuotaByFilter(query *Quota, resultSet *[]Quota) error {
+	if query.FilesystemUid == uuid.Nil {
+		return RequestMissingParams
+	}
 	ret := &[]Quota{}
 	err := a.Get(query.GetBasePath(), nil, ret)
 	if err != nil {
 		return err
 	}
 	for _, r := range *ret {
+		r.FilesystemUid = query.FilesystemUid
 		if r.EQ(query) {
 			*resultSet = append(*resultSet, r)
 		}
 	}
 	return nil
+}
+
+func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64) (*Quota, error) {
+	if fs == nil || inodeId == 0 {
+		return nil, RequestMissingParams
+	}
+	ret := &Quota{
+		FilesystemUid: fs.Uid,
+		InodeId:       inodeId,
+	}
+	err := a.Get(ret.GetApiUrl(), nil, ret)
+	if err != nil {
+		return nil, err
+	}
+	ret.FilesystemUid = fs.Uid
+	ret.InodeId = inodeId
+	if ret.HardLimitBytes < MaxQuotaSize {
+		ret.CapacityLimit = ret.HardLimitBytes
+		ret.QuotaType = QuotaTypeHard
+	} else {
+		ret.CapacityLimit = ret.SoftLimitBytes
+		ret.QuotaType = QuotaTypeSoft
+	}
+	return ret, nil
 }
 
 func (a *ApiClient) GetQuotaByFilter(query *Quota) (*Quota, error) {
