@@ -67,8 +67,7 @@ func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capac
 	if v.apiClient == nil {
 		glog.V(4).Infof("Volume has no API client bound, updating capacity in legacy mode")
 		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
-	}
-	if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
+	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		glog.V(4).Infoln("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
 		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
 	}
