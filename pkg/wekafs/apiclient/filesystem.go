@@ -139,9 +139,9 @@ func (fs *FileSystem) GetBasePath() string {
 func (fs *FileSystem) GetApiUrl() string {
 	url, err := urlutil.URLJoin(fs.GetBasePath(), fs.Uid.String())
 	if err != nil {
-		return url
+		return ""
 	}
-	return ""
+	return url
 }
 
 func (fs *FileSystem) getImmutableFields() []string {
