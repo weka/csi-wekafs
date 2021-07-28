@@ -42,7 +42,7 @@ make build
 | images.attachersidecar | string | `"quay.io/k8scsi/csi-attacher:v3.0.0-rc1"` |  |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` |  |
 | images.csidriverTag | string | `"0.6.6"` |  |
-| images.livenessprobesidecar | string | `"quay.io/k8scsi/livenessprobe:v1.1.0"` |  |
+| images.livenessprobesidecar | string | `"quay.io/k8scsi/livenessprobe:v2.2.0"` |  |
 | images.provisionersidecar | string | `"quay.io/k8scsi/csi-provisioner:v1.6.0"` |  |
 | images.registrarsidecar | string | `"quay.io/k8scsi/csi-node-driver-registrar:v1.3.0"` |  |
 | images.resizersidecar | string | `"quay.io/k8scsi/csi-resizer:v0.5.0"` |  |
