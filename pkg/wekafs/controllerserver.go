@@ -248,8 +248,8 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	volume, err := NewVolume(volumeID, client)
 	if err != nil {
-		// Should return invalid on incorrect ID
-		return DeleteVolumeError(codes.Internal, err.Error())
+		// Should return ok on incorrect ID (by CSI spec)
+		return &csi.DeleteVolumeResponse{}, nil
 	}
 
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
