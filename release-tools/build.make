@@ -31,17 +31,22 @@ HELM_REPO_URL=https://weka.github.io/csi-wekafs/
 IMAGE_UNIQUE_TAG=$(shell uuid -v 4 | cut -d- -f1)
 # freeze revision from git tag so even if
 LATEST_TAG::=$(shell git describe --tags --abbrev=0)
-AFTER_LATEST::=$(shell git rev-list $(LATEST_TAG)..HEAD | wc -l)
+NEXT_TAG::=$(shell echo ${LATEST_TAG} | awk -F. -v OFS=. 'NF==1{print ++$$NF}; NF>1{if(length($$NF+1)>length($$NF))$$(NF-1)++; $$NF=sprintf("%0*d", length($$NF), ($$NF+1)%(10^length($$NF))); print}')
+COMMITS_AFTER_LATEST::=$(shell git rev-list $(LATEST_TAG)..HEAD | wc -l)
 
-ifeq "$(AFTER_LATEST)" "0"
-  AFTER_LATEST:=
+ifeq "$(COMMITS_AFTER_LATEST)" "0"
+  COMMITS_AFTER_LATEST:=
 else
-  AFTER_LATEST:=-$(AFTER_LATEST)
+  COMMITS_AFTER_LATEST:=-dev$(COMMITS_AFTER_LATEST)
 endif
 DIRTY::=$(shell git diff --quiet || echo '-dirty')
-$(info $$AFTER_LATEST is [${AFTER_LATEST}])
+$(info $$COMMITS_AFTER_LATEST is [${COMMITS_AFTER_LATEST}])
 
-REV::=$(LATEST_TAG)$(AFTER_LATEST)$(DIRTY)
+ifeq "$(COMMITS_AFTER_LATEST)$(DIRTY)" ""
+    REV::=$(LATEST_TAG)
+else
+    REV::=$(NEXT_TAG)$(COMMITS_AFTER_LATEST)$(DIRTY)
+endif
 $(eval VERSION := $$$(REV))
 $(eval HELM_CHART_VERSION := $$$(LATEST_TAG))
 $(info $$VERSION is [${VERSION}])
@@ -88,7 +93,7 @@ $(CMDS:%=helm-%): helm-%:
 	sed -i ./deploy/helm/csi-wekafsplugin/values.yaml -e 's|\(\&csiDriverVersion \).*|\1 "$(VERSION)"|1' ;\
 	helm package deploy/helm/csi-wekafsplugin ;\
 
-$(CMDS:%=hub-%): helm-%: hub-%:
+$(CMDS:%=hub-%): hub-%:
 	TEMP_DIR=`mktemp -d` ;\
 	git clone git@github.com:weka/csi-wekafs.git -q -b gh-pages $$TEMP_DIR ;\
     touch $$TEMP_DIR/index.yaml ;\
@@ -108,6 +113,23 @@ build: $(CMDS:%=build-%)
 container: $(CMDS:%=container-%)
 push: $(CMDS:%=push-%)
 helm: $(CMDS:%=helm-%)
+hub: $(CMDS:%=hub-%)
+
+#$(CMDS:%=test_release-%): test_release-%::
+#  ifeq "$(RELEASE_VERSION)" ""
+#    $(info )
+#    $(info RELEASE_VERSION NOT SPECIFIED!)
+#    $(error Must run make release RELEASE_VERSION=v1.2.3)
+#    $(info )
+#  else
+#    $(info Releasing version ${RELEASE_VERSION})
+#  endif
+#  ifeq "$(DIRTY)" "-dirty"
+#    $(error Cannot release dirty version!)
+#  else
+#    $(info Releasing version ${NEXT_VERSION})
+#  endif
+#  build
 
 clean:
 	-rm -rf bin
