@@ -145,7 +145,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 	volume, err := NewVolume(req.GetVolumeId(), client)
 	if err != nil {
-		return NodePublishVolumeError(codes.Internal, err.Error())
+		return NodePublishVolumeError(codes.InvalidArgument, err.Error())
 	}
 
 	// Check volume capabitily arguments
@@ -261,7 +261,8 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 	volume, err := NewVolume(req.GetVolumeId(), nil)
 	if err != nil {
-		return NodeUnpublishVolumeError(codes.Internal, err.Error())
+		return &csi.NodeUnpublishVolumeResponse{}, err
+		//return NodeUnpublishVolumeError(codes.Internal, err.Error())
 	}
 
 	if len(req.GetTargetPath()) == 0 {
