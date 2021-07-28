@@ -62,18 +62,21 @@ type WekaCompatibilityRequiredVersions struct {
 	FilesystemAsVolume     string
 	DirectoryAsVolume      string
 	QuotaDirectoryAsVolume string
+	QuotaOnNonEmptyDirs    string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	DirectoryAsVolume:      "v3.0",
 	FilesystemAsVolume:     "v3.13",
 	QuotaDirectoryAsVolume: "v3.13",
+	QuotaOnNonEmptyDirs:    "v3.99",
 }
 
 type WekaCompatibilityMap struct {
 	FilesystemAsVolume     bool
 	DirectoryAsVolume      bool
 	QuotaDirectoryAsVolume bool
+	QuotaOnNonEmptyDirs    bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -446,6 +449,7 @@ func (a *ApiClient) Hash() uint32 {
 func (a *ApiClient) Init() error {
 	a.Log(6, "Validating authentication token is not expired")
 	if a.apiTokenExpiryDate.After(time.Now()) {
+		a.Log(6, "Authentication token is valid for", a.apiTokenExpiryDate.Sub(time.Now()), "seconds")
 		return nil
 	}
 	if !a.isLoggedIn() {
@@ -475,6 +479,15 @@ func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
 	}
 	return a.CompatibilityMap.QuotaDirectoryAsVolume
 }
+func (a *ApiClient) SupportsQuotaOnNonEmptyDirs() bool {
+	if !a.isLoggedIn() {
+		if err := a.Init(); err != nil {
+			return false
+		}
+	}
+	return a.CompatibilityMap.QuotaDirectoryAsVolume
+}
+
 func (a *ApiClient) SupportsFilesystemAsVolume() bool {
 	if !a.isLoggedIn() {
 		if err := a.Init(); err != nil {
