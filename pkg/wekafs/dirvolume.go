@@ -43,7 +43,7 @@ func (v DirVolume) GetType() VolumeType {
 }
 
 func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
-
+	glog.V(3).Infoln("Attempting to get current capacity of volume", v.GetId())
 	if v.apiClient == nil || !v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		// this is legacy volume, must treat xattrs...
 		size, err := v.getSizeFromXattr(mountPath)
@@ -57,23 +57,30 @@ func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size)
 	return int64(size), nil
 }
 
 func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
+	glog.V(3).Infoln("Updating capacity of the volume", v.GetId(), "to", capacityLimit)
+	f := func() error { return v.updateCapacityQuota(mountPath, enforceCapacity, capacityLimit) }
 	if v.apiClient == nil {
 		glog.V(4).Infof("Volume has no API client bound, updating capacity in legacy mode")
-		return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit)
+		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
 	}
 	if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		glog.V(4).Infoln("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
-		return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit)
+		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
 	}
-	return v.updateCapacityQuota(mountPath, enforceCapacity, capacityLimit)
+	err := f()
+	if err != nil {
+		glog.V(3).Infoln("Successfully updated capacity for volume", v.GetId())
+	}
+	return err
 }
 
 func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
-	glog.V(5).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforce:", enforceCapacity)
+	glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforce:", enforceCapacity)
 	inodeId, err := v.getInodeId(mountPath)
 	if err != nil {
 		glog.Errorln("Failed to fetch inode ID for volume", v.GetId())
@@ -116,14 +123,20 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 		r := apiclient.NewQuotaUpdateRequest(*fs, inodeId, quotaType, uint64(capacityLimit))
 		return v.apiClient.UpdateQuota(r, q)
 	}
+	glog.V(4).Infoln("Successfully set quota on volume", v.GetId(), "to", q.QuotaType, q.CapacityLimit)
 	return nil
 }
 
 func (v DirVolume) updateCapacityXattr(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
+	glog.V(4).Infoln("Updating xattrs on volume", v.GetId(), "to", capacityLimit, "enforce:", enforceCapacity)
 	if enforceCapacity != nil && *enforceCapacity {
 		glog.V(3).Infof("Legacy volume does not support enforce capacity")
 	}
-	return setVolumeProperties(v.getFullPath(mountPath), capacityLimit, v.dirName)
+	err := setVolumeProperties(v.getFullPath(mountPath), capacityLimit, v.dirName)
+	if err != nil {
+		glog.Errorln("Failed to update xattrs on volume", v.GetId(), "capacity is not set")
+	}
+	return err
 }
 
 func (v DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
@@ -159,13 +172,14 @@ func (v DirVolume) getFullPath(mountPath string) string {
 }
 
 func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) {
+	glog.V(5).Infoln("Creating new volume representation object for volume ID", volumeId)
 	if err := validateVolumeId(volumeId); err != nil {
 		return &DirVolume{}, err
 	}
 	if apiClient != nil {
-		glog.V(4).Infof("Successfully bound volume to backend API %s@%s", apiClient.Username, apiClient.ClusterName)
+		glog.V(5).Infof("Successfully bound volume to backend API %s@%s", apiClient.Username, apiClient.ClusterName)
 	} else {
-		glog.V(4).Infof("Volume was not bound to any backend API client")
+		glog.V(5).Infof("Volume was not bound to any backend API client")
 	}
 	return &DirVolume{
 		id:         volumeId,
@@ -191,12 +205,14 @@ func (v DirVolume) getInodeId(mountPath string) (uint64, error) {
 	if !ok {
 		return 0, errors.New(fmt.Sprintf("failed to obtain inodeId from %s", mountPath))
 	}
+	glog.V(5).Infoln("Inode ID of the volume", v.GetId(), "is", stat.Ino)
 	return stat.Ino, nil
 }
 
 func (v DirVolume) GetId() string {
 	return v.id
 }
+
 func (v DirVolume) CreateQuotaFromVolumeName(mountPath string, enforceCapacity *bool, capacityLimit uint64) (*apiclient.Quota, error) {
 	var quotaType apiclient.QuotaType
 	if enforceCapacity != nil {
@@ -208,6 +224,7 @@ func (v DirVolume) CreateQuotaFromVolumeName(mountPath string, enforceCapacity *
 	} else {
 		quotaType = apiclient.QuotaTypeDefault
 	}
+	glog.V(4).Infoln("Creating a quota for volume", v.GetId(), "capacity limit:", capacityLimit, "quota type:", quotaType)
 
 	fs, err := v.getFilesystemObj()
 	if err != nil {
@@ -222,10 +239,12 @@ func (v DirVolume) CreateQuotaFromVolumeName(mountPath string, enforceCapacity *
 	if err := v.apiClient.CreateQuota(qr, q, false); err != nil {
 		return nil, err
 	}
+	glog.V(4).Infoln("Quota successfully set for volume", v.GetId())
 	return q, nil
 }
 
 func (v DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
+	glog.V(4).Infoln("Getting existing quota for volume", v.GetId())
 	fs, err := v.getFilesystemObj()
 	if err != nil {
 		return nil, err
@@ -238,7 +257,11 @@ func (v DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
 		InodeId:       inodeId,
 		FilesystemUid: fs.Uid,
 	}
-	return v.apiClient.GetQuotaByFilter(q)
+	ret, err := v.apiClient.GetQuotaByFilter(q)
+	if ret != nil {
+		glog.V(4).Infoln("Successfully acquired existing quota for volume", v.GetId(), ret.QuotaType, ret.CapacityLimit)
+	}
+	return ret, err
 }
 
 func (v DirVolume) getSizeFromQuota(mountPath string) (uint64, error) {

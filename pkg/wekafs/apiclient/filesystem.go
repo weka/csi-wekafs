@@ -62,7 +62,7 @@ func (a *ApiClient) FindFileSystemsByFilter(query *FileSystem, resultSet *[]File
 
 // GetFilesystemByFilter expected to return exactly one result of FindFileSystemsByFilter (error)
 func (a *ApiClient) GetFilesystemByFilter(query *FileSystem) (*FileSystem, error) {
-	a.Log(3, "Querying API for filesystem", query.Name, query.Uid.String())
+	a.Log(3, "Querying API for filesystem", query)
 	rs := &[]FileSystem{}
 	err := a.FindFileSystemsByFilter(query, rs)
 	if err != nil {
