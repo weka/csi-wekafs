@@ -107,8 +107,8 @@ type ApiError struct {
 }
 
 func (e *ApiError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %b, json: %s",
-		e.getType(), e.Text, e.StatusCode, e.Err.Error(), e.RawData, e.ApiResponse.Data)
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %b, json: %s",
+		e.getType(), e.Text, e.StatusCode, e.Err, e.RawData, e.ApiResponse.Data)
 }
 func (e *ApiError) getType() string {
 	return "ApiError"
@@ -120,8 +120,8 @@ func (e *ApiAuthorizationError) getType() string {
 	return "ApiAuthorizationError"
 }
 func (e *ApiAuthorizationError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %b, json: %s",
-		e.getType(), e.Text, e.StatusCode, e.Err.Error(), e.RawData, e.ApiResponse.Data)
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %b, json: %s",
+		e.getType(), e.Text, e.StatusCode, e.Err, e.RawData, e.ApiResponse.Data)
 }
 
 type ApiBadRequestError struct {
@@ -145,7 +145,7 @@ func (e *ApiConflictError) getType() string {
 }
 func (e *ApiConflictError) Error() string {
 	if e.ConflictingEntityId != nil {
-		return fmt.Sprintf("%s, conflicting entity ID: %s", e.ApiError.Error(), e.ConflictingEntityId.String())
+		return fmt.Sprintf("%e, conflicting entity ID: %s", e.ApiError, e.ConflictingEntityId.String())
 	}
 	return e.ApiError.Error()
 }
@@ -159,8 +159,8 @@ func (e *ApiInternalError) getType() string {
 type ApiNotFoundError ApiError
 
 func (e *ApiNotFoundError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %b, json: %s",
-		e.getType(), e.Text, e.StatusCode, e.Err.Error(), e.RawData, e.ApiResponse.Data)
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %b, json: %s",
+		e.getType(), e.Text, e.StatusCode, e.Err, e.RawData, e.ApiResponse.Data)
 }
 
 func (e *ApiNotFoundError) getType() string {
