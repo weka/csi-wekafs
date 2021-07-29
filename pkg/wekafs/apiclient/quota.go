@@ -278,7 +278,8 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 	}
 	err := a.Get(ret.GetApiUrl(), nil, ret)
 	if err != nil {
-		return nil, err
+		return nil, ObjectNotFoundError
+		//TODO: fix this to return notfound only when no other errors occur
 	}
 	ret.FilesystemUid = fs.Uid
 	ret.InodeId = inodeId

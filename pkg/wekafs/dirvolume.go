@@ -80,9 +80,9 @@ func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capac
 
 func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
 	if enforceCapacity != nil {
-		glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforce:", *enforceCapacity)
+		glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforceCapacity:", *enforceCapacity)
 	} else {
-		glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforce:", "RETAIN")
+		glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforceCapacity:", "RETAIN")
 	}
 	inodeId, err := v.getInodeId(mountPath)
 	if err != nil {

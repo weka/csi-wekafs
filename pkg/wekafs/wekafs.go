@@ -173,7 +173,7 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 func (driver *wekaFsDriver) Run() {
 	// Create GRPC servers
 	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath}
-	gc := initDirVolumeGc(mounter, driver.api)
+	gc := initDirVolumeGc(mounter)
 
 	// identity server runs always
 	glog.Info("Loading IdentityServer")
