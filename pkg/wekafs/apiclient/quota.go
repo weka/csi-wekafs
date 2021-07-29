@@ -2,6 +2,7 @@ package apiclient
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -23,17 +24,16 @@ const QuotaStatusDeleting = "DELETING"
 const MaxQuotaSize uint64 = 18446744073709547520
 
 type Quota struct {
+	FilesystemUid  uuid.UUID `json:"-"`
 	InodeId        uint64    `json:"inodeId,omitempty"`
 	TotalBytes     uint64    `json:"totalBytes,omitempty"`
-	Owner          string    `json:"owner,omitempty"`
-	DataBlocks     uint64    `json:"dataBlocks,omitempty"`
-	GraceSeconds   uint64    `json:"graceSeconds,omitempty"`
 	HardLimitBytes uint64    `json:"hardLimitBytes,omitempty"`
-	SnapViewId     uint64    `json:"snapViewId,omitempty"`
-	MetadataBlocks uint64    `json:"metadataBlocks,omitempty"`
 	SoftLimitBytes uint64    `json:"softLimitBytes,omitempty"`
 	Status         string    `json:"status,omitempty"`
-	FilesystemUid  uuid.UUID `json:"-"`
+}
+
+func (q *Quota) String() string {
+	return fmt.Sprintln("Quota(fsUid:", q.FilesystemUid, "inodeId:", q.InodeId, "type:", q.GetQuotaType(), "capacity:", q.GetCapacityLimit(), "status:", q.Status, ")")
 }
 
 func (q *Quota) GetType() string {
@@ -59,7 +59,7 @@ func (q *Quota) GetApiUrl() string {
 
 func (q *Quota) getImmutableFields() []string {
 	return []string{
-		"FilesystemUid",
+		"filesystemUid",
 		"InodeId",
 	}
 }
@@ -83,10 +83,10 @@ func (q *Quota) GetCapacityLimit() uint64 {
 }
 
 type QuotaCreateRequest struct {
-	FilesystemUid  uuid.UUID `json:"-,omitempty"`
-	InodeId        uint64    `json:"inodeId,omitempty"`
-	HardLimitBytes uint64    `json:"hard_quota,omitempty"`
-	SoftLimitBytes uint64    `json:"soft_quota,omitempty"`
+	filesystemUid  uuid.UUID
+	InodeId        uint64 `json:"inodeId,omitempty"`
+	HardLimitBytes uint64 `json:"hard_quota,omitempty"`
+	SoftLimitBytes uint64 `json:"soft_quota,omitempty"`
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
@@ -96,22 +96,25 @@ func (qc *QuotaCreateRequest) getApiUrl() string {
 }
 
 func (qc *QuotaCreateRequest) getRequiredFields() []string {
-	return []string{"InodeId", "FilesystemUid", "quotaType", "capacityLimit"}
+	return []string{"InodeId", "filesystemUid", "quotaType", "capacityLimit"}
 }
 func (qc *QuotaCreateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qc)
 }
 func (qc *QuotaCreateRequest) getRelatedObject() ApiObject {
 	return &Quota{
-		FilesystemUid: qc.FilesystemUid,
+		FilesystemUid: qc.filesystemUid,
 	}
+}
+func (qc *QuotaCreateRequest) String() string {
+	return fmt.Sprintln("QuotaCreateRequest(fsUid:", qc.filesystemUid, "inodeId:", qc.InodeId, "type:", qc.quotaType, "capacity:", qc.capacityLimit, ")")
 }
 
 type QuotaUpdateRequest struct {
-	FilesystemUid  uuid.UUID `json:"-,omitempty"`
-	InodeId        uint64    `json:"inodeId,omitempty"`
-	HardLimitBytes uint64    `json:"hardLimitBytes,omitempty"`
-	SoftLimitBytes uint64    `json:"softLimitBytes,omitempty"`
+	filesystemUid  uuid.UUID
+	InodeId        uint64 `json:"inodeId,omitempty"`
+	HardLimitBytes uint64 `json:"hardLimitBytes,omitempty"`
+	SoftLimitBytes uint64 `json:"softLimitBytes,omitempty"`
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
@@ -121,7 +124,7 @@ func (qu *QuotaUpdateRequest) getApiUrl() string {
 }
 
 func (qu *QuotaUpdateRequest) getRequiredFields() []string {
-	return []string{"InodeId", "FilesystemUid", "quotaType", "capacityLimit"}
+	return []string{"InodeId", "filesystemUid", "quotaType", "capacityLimit"}
 }
 func (qu *QuotaUpdateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qu)
@@ -129,11 +132,14 @@ func (qu *QuotaUpdateRequest) hasRequiredFields() bool {
 func (qu *QuotaUpdateRequest) getRelatedObject() ApiObject {
 	return &Quota{}
 }
+func (qu *QuotaUpdateRequest) String() string {
+	return fmt.Sprintln("QuotaUpdateRequest(fsUid:", qu.filesystemUid, "inodeId:", qu.InodeId, "type:", qu.quotaType, "capacity:", qu.capacityLimit, ")")
+}
 
 func NewQuotaCreateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, capacityLimit uint64) *QuotaCreateRequest {
 	filesystemUid := fs.Uid
 	ret := &QuotaCreateRequest{
-		FilesystemUid: filesystemUid,
+		filesystemUid: filesystemUid,
 		InodeId:       inodeId,
 		quotaType:     quotaType,
 		capacityLimit: capacityLimit,
@@ -151,7 +157,7 @@ func NewQuotaCreateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 func NewQuotaUpdateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, capacityLimit uint64) *QuotaUpdateRequest {
 	filesystemUid := fs.Uid
 	ret := &QuotaUpdateRequest{
-		FilesystemUid: filesystemUid,
+		filesystemUid: filesystemUid,
 		InodeId:       inodeId,
 		quotaType:     quotaType,
 		capacityLimit: capacityLimit,
@@ -167,12 +173,16 @@ func NewQuotaUpdateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 }
 
 type QuotaDeleteRequest struct {
-	FilesystemUid uuid.UUID `json:"-"`
-	InodeId       uint64    `json:"inodeId,omitempty"`
+	filesystemUid uuid.UUID
+	InodeId       uint64 `json:"inodeId,omitempty"`
+}
+
+func (qd *QuotaDeleteRequest) String() string {
+	return fmt.Sprintln("QuotaDeleteRequest(fsUid:", qd.filesystemUid, "inodeId:", qd.InodeId, ")")
 }
 
 func (qd *QuotaDeleteRequest) getApiUrl() string {
-	url, err := urlutil.URLJoin((&FileSystem{Uid: qd.FilesystemUid}).GetApiUrl(), "quotas", strconv.FormatUint(qd.InodeId, 10))
+	url, err := urlutil.URLJoin((&FileSystem{Uid: qd.filesystemUid}).GetApiUrl(), "quotas", strconv.FormatUint(qd.InodeId, 10))
 	if err != nil {
 		return ""
 	}
@@ -180,7 +190,7 @@ func (qd *QuotaDeleteRequest) getApiUrl() string {
 }
 
 func (qd *QuotaDeleteRequest) getRequiredFields() []string {
-	return []string{"FilesystemUid", "InodeId"}
+	return []string{"filesystemUid", "InodeId"}
 }
 
 func (qd *QuotaDeleteRequest) hasRequiredFields() bool {
@@ -192,7 +202,7 @@ func (qd *QuotaDeleteRequest) getRelatedObject() ApiObject {
 }
 
 func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForCompletion bool) error {
-	f := a.Log(3, "Creating quota", qr, "wait for completion:", waitForCompletion)
+	f := a.Log(3, "Creating quota", qr.String(), "wait for completion:", waitForCompletion)
 	if !qr.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -260,7 +270,7 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 }
 
 func (a *ApiClient) GetQuotaByFilter(query *Quota) (*Quota, error) {
-	f := a.Log(3, "Looking for quota", query)
+	f := a.Log(3, "Looking for quota", query.String())
 	defer f()
 	rs := &[]Quota{}
 	err := a.FindQuotaByFilter(query, rs)
