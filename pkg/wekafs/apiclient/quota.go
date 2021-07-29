@@ -87,7 +87,7 @@ type QuotaCreateRequest struct {
 	inodeId        uint64
 	HardLimitBytes uint64 `json:"hard_quota,omitempty"`
 	SoftLimitBytes uint64 `json:"soft_quota,omitempty"`
-	Path           string `json:"path,omitempty"`
+	Path           string `json:"path"`
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
@@ -187,7 +187,7 @@ func NewQuotaDeleteRequest(fs FileSystem, inodeId uint64) *QuotaDeleteRequest {
 type QuotaDeleteRequest struct {
 	filesystemUid uuid.UUID
 	InodeId       uint64 `json:"inodeId,omitempty"`
-	Path          string `json:"path,omitempty"`
+	Path          string `json:"path"`
 }
 
 func (qd *QuotaDeleteRequest) String() string {
@@ -304,7 +304,10 @@ func (a *ApiClient) GetQuotaByFilter(query *Quota) (*Quota, error) {
 }
 
 func (a *ApiClient) IsQuotaActive(query *Quota) (done bool, err error) {
-	q, err := a.GetQuotaByFilter(query)
+	fs := &FileSystem{
+		Uid: query.FilesystemUid,
+	}
+	q, err := a.GetQuotaByFileSystemAndInode(fs, query.InodeId)
 	if err != nil {
 		return false, err
 	}

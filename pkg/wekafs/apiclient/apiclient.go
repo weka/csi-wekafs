@@ -107,8 +107,14 @@ type ApiError struct {
 }
 
 func (e *ApiError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %b, json: %s",
-		e.getType(), e.Text, e.StatusCode, e.Err, e.RawData, e.ApiResponse.Data)
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+		e.getType(), e.Text, *e.StatusCode, e.Err, func() string {
+			if e.RawData != nil {
+				return string(*e.RawData)
+			}
+			return ""
+		}(),
+		e.ApiResponse.Data)
 }
 func (e *ApiError) getType() string {
 	return "ApiError"
@@ -120,8 +126,18 @@ func (e *ApiAuthorizationError) getType() string {
 	return "ApiAuthorizationError"
 }
 func (e *ApiAuthorizationError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %b, json: %s",
-		e.getType(), e.Text, e.StatusCode, e.Err, e.RawData, e.ApiResponse.Data)
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+		e.getType(),
+		e.Text,
+		*e.StatusCode,
+		e.Err,
+		func() string {
+			if e.RawData != nil {
+				return string(*e.RawData)
+			}
+			return ""
+		}(),
+		e.ApiResponse.Data)
 }
 
 type ApiBadRequestError struct {
@@ -159,8 +175,17 @@ func (e *ApiInternalError) getType() string {
 type ApiNotFoundError ApiError
 
 func (e *ApiNotFoundError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %b, json: %s",
-		e.getType(), e.Text, e.StatusCode, e.Err, e.RawData, e.ApiResponse.Data)
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+		e.getType(),
+		e.Text,
+		*e.StatusCode,
+		e.Err,
+		func() string {
+			if e.RawData != nil {
+				return string(*e.RawData)
+			}
+			return ""
+		}(), e.ApiResponse.Data)
 }
 
 func (e *ApiNotFoundError) getType() string {
