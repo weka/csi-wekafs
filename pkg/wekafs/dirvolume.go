@@ -346,11 +346,10 @@ func (v DirVolume) deleteQuota(mountPath string) error {
 	return v.apiClient.DeleteQuota(qd)
 }
 
+// Delete is a synchronous delete, used for cleanup on unsuccessful ControllerCreateVolume. GC flow is separate
 func (v DirVolume) Delete(mountPath string) error {
 	glog.V(4).Infof("Deleting volume %s, located in filesystem %s", v.id, v.Filesystem)
 	volPath := v.getFullPath(mountPath)
-	_ = os.RemoveAll(volPath)
-	_ = v.deleteQuota(mountPath)
 	_ = os.RemoveAll(volPath)
 	glog.V(2).Infof("Deleted volume %s in :%v", v.id, volPath)
 	return nil

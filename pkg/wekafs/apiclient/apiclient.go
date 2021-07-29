@@ -608,9 +608,8 @@ func (a *ApiClient) Hash() uint32 {
 
 // Init checks if API token refresh is required and transparently refreshes or fails back to (re)login
 func (a *ApiClient) Init() error {
-	a.Log(5, "Validating authentication token is not expired")
 	if a.apiTokenExpiryDate.After(time.Now()) {
-		a.Log(5, "Authentication token is valid for", a.apiTokenExpiryDate.Sub(time.Now()), "seconds")
+		a.Log(5, "Authentication token is valid for", a.apiTokenExpiryDate.Sub(time.Now()))
 		return nil
 	}
 	if !a.isLoggedIn() {
@@ -627,8 +626,8 @@ func (a *ApiClient) Init() error {
 		return a.Login()
 	}
 	a.refreshToken = responseData.RefreshToken
-	a.apiTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
-	a.Log(5, "Authentication token refreshed successfully, valid for", a.apiTokenExpiryDate.Sub(time.Now()), "seconds")
+	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
+	a.Log(5, "Authentication token refreshed successfully, valid for", a.apiTokenExpiryDate.Sub(time.Now()))
 	return nil
 }
 
