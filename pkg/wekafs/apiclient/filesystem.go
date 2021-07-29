@@ -63,8 +63,8 @@ func (a *ApiClient) FindFileSystemsByFilter(query *FileSystem, resultSet *[]File
 	return nil
 }
 
-// GetFilesystemByFilter expected to return exactly one result of FindFileSystemsByFilter (error)
-func (a *ApiClient) GetFilesystemByFilter(query *FileSystem) (*FileSystem, error) {
+// GetFileSystemByFilter expected to return exactly one result of FindFileSystemsByFilter (error)
+func (a *ApiClient) GetFileSystemByFilter(query *FileSystem) (*FileSystem, error) {
 	rs := &[]FileSystem{}
 	err := a.FindFileSystemsByFilter(query, rs)
 	if err != nil {
@@ -78,6 +78,11 @@ func (a *ApiClient) GetFilesystemByFilter(query *FileSystem) (*FileSystem, error
 	}
 	result := &(*rs)[0]
 	return result, nil
+}
+
+func (a *ApiClient) GetFileSystemByName(name string) (*FileSystem, error) {
+	query := &FileSystem{Name: name}
+	return a.GetFileSystemByFilter(query)
 }
 
 func (a *ApiClient) CreateFileSystem(r *FileSystemCreateRequest, fs *FileSystem) error {
