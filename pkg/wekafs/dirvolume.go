@@ -253,11 +253,7 @@ func (v DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
 	if err != nil {
 		return nil, err
 	}
-	q := &apiclient.Quota{
-		InodeId:       inodeId,
-		FilesystemUid: fs.Uid,
-	}
-	ret, err := v.apiClient.GetQuotaByFilter(q)
+	ret, err := v.apiClient.GetQuotaByFileSystemAndInode(fs, inodeId)
 	if ret != nil {
 		glog.V(4).Infoln("Successfully acquired existing quota for volume", v.GetId(), ret.GetQuotaType(), ret.GetCapacityLimit())
 	}
