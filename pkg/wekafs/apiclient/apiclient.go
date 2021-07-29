@@ -93,17 +93,95 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.QuotaDirectoryAsVolume = v.GreaterThan(q)
 }
 
-var ApiBadRequestError = errors.New("bad request 400")
-var ApiUnauthorizedError = errors.New("unauthorized 401")
-var ApiNotFoundError = errors.New("object not found 404")
-var ApiConflictError = errors.New("conflict 409")
-var ApiInternalError = errors.New("internal error 500")
-var ApiUnhandledError = errors.New("unhandled error")
-var ApiRetriesExceeded = errors.New("api retries exceeded")
-var ApiObjectNotFoundError = errors.New("object not found")
-var ApiMultipleObjectsFoundError = errors.New("ambiguous filter, multiple objects match")
-var UnsupportedOperationError = errors.New("operation is not supported on object of this type")
+type apiError interface {
+	Error() string
+	getType() string
+}
 
+type ApiError struct {
+	Err         error
+	Text        string
+	StatusCode  *int
+	RawData     *[]byte
+	ApiResponse *ApiResponse
+}
+
+func (e *ApiError) Error() string {
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %b, json: %s",
+		e.getType(), e.Text, e.StatusCode, e.Err.Error(), e.RawData, e.ApiResponse.Data)
+}
+func (e *ApiError) getType() string {
+	return "ApiError"
+}
+
+type ApiAuthorizationError ApiError
+
+func (e *ApiAuthorizationError) getType() string {
+	return "ApiAuthorizationError"
+}
+func (e *ApiAuthorizationError) Error() string {
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %b, json: %s",
+		e.getType(), e.Text, e.StatusCode, e.Err.Error(), e.RawData, e.ApiResponse.Data)
+}
+
+type ApiBadRequestError struct {
+	ApiError
+}
+
+func (e *ApiBadRequestError) getType() string {
+	return "ApiBadRequestError"
+}
+func (e *ApiBadRequestError) Error() string {
+	return e.ApiError.Error()
+}
+
+type ApiConflictError struct {
+	ApiError
+	ConflictingEntityId *uuid.UUID
+}
+
+func (e *ApiConflictError) getType() string {
+	return "ApiConflictError"
+}
+func (e *ApiConflictError) Error() string {
+	if e.ConflictingEntityId != nil {
+		return fmt.Sprintf("%s, conflicting entity ID: %s", e.ApiError.Error(), e.ConflictingEntityId.String())
+	}
+	return e.ApiError.Error()
+}
+
+type ApiInternalError ApiError
+
+func (e *ApiInternalError) getType() string {
+	return "ApiInternalError"
+}
+
+type ApiNotFoundError ApiError
+
+func (e *ApiNotFoundError) Error() string {
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %b, json: %s",
+		e.getType(), e.Text, e.StatusCode, e.Err.Error(), e.RawData, e.ApiResponse.Data)
+}
+
+func (e *ApiNotFoundError) getType() string {
+	return "ApiNotFoundError"
+}
+
+type ApiRetriesExceeded struct {
+	ApiError
+	Retries int
+}
+
+func (e *ApiRetriesExceeded) getType() string {
+	return "ApiRetriesExceeded"
+}
+func (e *ApiRetriesExceeded) Error() string {
+	return fmt.Sprintf("%s, retried %d times", e.ApiError.Error(), e.Retries)
+}
+
+var ObjectNotFoundError = errors.New("object not found")
+var MultipleObjectsFoundError = errors.New("ambiguous filter, multiple objects match")
+var UnsupportedOperationError = errors.New("operation is not supported on object of this type")
 var RequestMissingParams = errors.New("request cannot be sent since some required params are missing")
 
 func NewApiClient(username, password, organization string, endpoints []string, scheme string) (*ApiClient, error) {
@@ -199,7 +277,7 @@ func (a *ApiClient) getBaseUrl() string {
 }
 
 // do Makes a basic API call to the client, returns an *ApiResponse that includes raw data, error message etc.
-func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[string]string) (*ApiResponse, error) {
+func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[string]string) (*ApiResponse, apiError) {
 	//construct URL path
 	url := a.getUrl(Path)
 
@@ -212,7 +290,13 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 	}
 	r, err := http.NewRequest(Method, url, body)
 	if err != nil {
-		return nil, err
+		return nil, &ApiError{
+			Err:         err,
+			Text:        "Failed to construct API request",
+			StatusCode:  nil,
+			RawData:     nil,
+			ApiResponse: nil,
+		}
 	}
 	r.Header.Set("content-type", "application/json")
 	if a.isLoggedIn() {
@@ -237,12 +321,24 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 	)
 	response, err := a.client.Do(r)
 	if err != nil {
-		return nil, err
+		return nil, &ApiError{
+			Err:         err,
+			Text:        "Request failed",
+			StatusCode:  nil,
+			RawData:     nil,
+			ApiResponse: nil,
+		}
 	}
 	responseBody, err := ioutil.ReadAll(response.Body)
 	a.Log(5, string(responseBody))
 	if err != nil {
-		return nil, err
+		return nil, &ApiError{
+			Err:         err,
+			Text:        "Failed to perform request",
+			StatusCode:  &response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: nil,
+		}
 	}
 	defer func() {
 		_ = response.Body.Close()
@@ -250,27 +346,67 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 
 	Response := &ApiResponse{}
 	err = json.Unmarshal(responseBody, Response)
+	Response.HttpStatusCode = response.StatusCode
 	if err != nil {
 		a.Log(2, fmt.Sprintf("Could not response parse json, HTTP status code %d, %s", Response.HttpStatusCode, err.Error()))
-		return nil, err
+		return nil, &ApiError{
+			Err:         err,
+			Text:        "Failed to parse HTTP response body",
+			StatusCode:  &response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: Response,
+		}
 	}
-	Response.HttpStatusCode = response.StatusCode
-	if response.StatusCode == http.StatusOK {
-		return Response, err
+
+	switch response.StatusCode {
+	case http.StatusOK:
+		return Response, nil
+	case http.StatusBadRequest:
+		return Response, &ApiBadRequestError{
+			ApiError{
+				Err:         nil,
+				Text:        "Operation failed",
+				StatusCode:  &response.StatusCode,
+				RawData:     &responseBody,
+				ApiResponse: Response,
+			},
+		}
+	case http.StatusUnauthorized:
+		return Response, &ApiAuthorizationError{
+			Err:         nil,
+			Text:        "Operation failed",
+			StatusCode:  &response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: Response,
+		}
+	case http.StatusNotFound:
+		return Response, &ApiNotFoundError{
+			Err:         nil,
+			Text:        "Object not found",
+			StatusCode:  &response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: Response,
+		}
+	case http.StatusConflict:
+		return Response, &ApiConflictError{
+			ApiError: ApiError{
+				Err:         nil,
+				Text:        "Object conflict",
+				StatusCode:  &response.StatusCode,
+				RawData:     &responseBody,
+				ApiResponse: Response,
+			},
+			ConflictingEntityId: nil, //TODO: parse and provide entity ID
+		}
+	default:
+		return Response, &ApiError{
+			Err:         err,
+			Text:        "General failure during API command",
+			StatusCode:  &response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: Response,
+		}
 	}
-	if response.StatusCode == http.StatusBadRequest {
-		return Response, ApiBadRequestError
-	}
-	if response.StatusCode == http.StatusUnauthorized {
-		return Response, ApiUnauthorizedError
-	}
-	if response.StatusCode == http.StatusNotFound {
-		return Response, ApiNotFoundError
-	}
-	if response.StatusCode == http.StatusConflict {
-		return Response, ApiConflictError
-	}
-	return Response, err
 }
 
 // handleNetworkErrors checks if the error returned by endpoint is a network error (transient by definition)
@@ -302,10 +438,10 @@ func (a *ApiClient) handleNetworkErrors(err error) error {
 }
 
 // request wraps do with retries and some more error handling
-func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *map[string]string, v interface{}) error {
+func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *map[string]string, v interface{}) apiError {
 	f := a.Log(5, "Performing request:", Method, Path)
 	defer f()
-	return retryBackoff(ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() error {
+	err := retryBackoff(ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
 		rawResponse, reqErr := a.do(Method, Path, Payload, Query)
 		if a.handleNetworkErrors(reqErr) != nil { // transient network errors
 			a.Log(2, "Failed to perform request, error received:", reqErr.Error())
@@ -321,31 +457,31 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 					responseCodes = append(responseCodes, code)
 				}
 			}
-			return NoRetryError{ApiBadRequestError, errors.New(strings.ToLower(rawResponse.Message)),
-				rawResponse.Data, nil, &responseCodes}
+			return NoRetryError{
+				apiError: reqErr,
+			}
 		}
 		err := json.Unmarshal(rawResponse.Data, v)
 		if err != nil {
 			a.Log(2, "Could not parse JSON request", reflect.TypeOf(v), err)
 		}
-		switch {
-		case s == http.StatusOK:
+		switch s {
+		case http.StatusOK:
 			return nil
-		case s == http.StatusUnauthorized:
+		case http.StatusUnauthorized:
 			_ = a.Init()
 			return reqErr
-		case s == http.StatusConflict:
-			u := uuid.New()
-			return NoRetryError{ApiConflictError, reqErr, rawResponse.Data, &u, nil}
-		case s == http.StatusBadRequest:
-			return NoRetryError{ApiBadRequestError, reqErr, rawResponse.Data, nil, nil}
-		case s == http.StatusInternalServerError:
-			return NoRetryError{ApiInternalError, reqErr, rawResponse.Data, nil, nil}
+		case http.StatusConflict, http.StatusBadRequest, http.StatusInternalServerError:
+			return NoRetryError{reqErr}
 		default:
 			a.Log(2, "Failed to perform a request, got an unhandled error", reqErr, s)
-			return NoRetryError{ApiUnhandledError, reqErr, rawResponse.Data, nil, nil}
+			return NoRetryError{reqErr}
 		}
 	})
+	if err != nil {
+		return err.(apiError)
+	}
+	return nil
 }
 
 // Request makes sure that client is logged in and has a non-expired token
@@ -407,7 +543,7 @@ func (a *ApiClient) Login() error {
 	}
 	responseData := &LoginResponse{}
 	if err := a.request("POST", ApiPathLogin, jb, nil, responseData); err != nil {
-		if err == ApiUnauthorizedError {
+		if err.getType() == "ApiAuthorizationError" {
 			panic(fmt.Sprintf("Could not log in to endpoint %s", a.getEndpoint()))
 		}
 		return err
@@ -515,11 +651,12 @@ func marshalRequest(r interface{}) (*[]byte, error) {
 }
 
 // retryBackoff performs operation and retries on transient failures. Does not retry on NoRetryError
-func retryBackoff(attempts int, sleep time.Duration, f func() error) error {
+func retryBackoff(attempts int, sleep time.Duration, f func() apiError) error {
+	maxAttempts := attempts
 	if err := f(); err != nil {
 		if s, ok := err.(NoRetryError); ok {
 			// Return the original error for later checking
-			return s.error
+			return s
 		}
 		if attempts--; attempts > 0 {
 			glog.V(3).Infof("Failed to perform API call, %d attempts left", attempts)
@@ -529,18 +666,30 @@ func retryBackoff(attempts int, sleep time.Duration, f func() error) error {
 			time.Sleep(sleep)
 			return retryBackoff(attempts, RetryBackoffExponentialFactor*sleep, f)
 		}
-		return ApiRetriesExceeded
+		return &ApiRetriesExceeded{
+			ApiError: ApiError{
+				Err:         err,
+				Text:        fmt.Sprintf("Failed to perform operation after %d retries", maxAttempts),
+				StatusCode:  nil,
+				RawData:     nil,
+				ApiResponse: nil,
+			},
+			Retries: maxAttempts,
+		}
 	}
 	return nil
 }
 
 // NoRetryError is internally generated when non-transient error is found
 type NoRetryError struct {
-	error
-	RealError           error
-	ResponseData        json.RawMessage
-	ConflictingEntityId *uuid.UUID
-	ErrorCodes          *[]string
+	apiError
+}
+
+func (e NoRetryError) Error() string {
+	return e.apiError.Error()
+}
+func (e NoRetryError) getType() string {
+	return "NoRetryError"
 }
 
 // ApiResponse returned by Request method

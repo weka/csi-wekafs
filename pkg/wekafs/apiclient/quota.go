@@ -17,8 +17,9 @@ const QuotaTypeHard QuotaType = "HARD"
 const QuotaTypeSoft QuotaType = "SOFT"
 const QuotaTypeDefault = QuotaTypeHard
 const QuotaStatusActive = "ACTIVE"
-const QuotaStatusPending = "PENDING"
+const QuotaStatusPending = "ADDING"
 const QuotaStatusError = "ERROR"
+const QuotaStatusDeleting = "DELETING"
 const MaxQuotaSize uint64 = 18446744073709547520
 
 type Quota struct {
@@ -276,10 +277,10 @@ func (a *ApiClient) GetQuotaByFilter(query *Quota) (*Quota, error) {
 		return nil, err
 	}
 	if *rs == nil || len(*rs) == 0 {
-		return nil, ApiObjectNotFoundError
+		return nil, ObjectNotFoundError
 	}
 	if len(*rs) > 1 {
-		return nil, ApiMultipleObjectsFoundError
+		return nil, MultipleObjectsFoundError
 	}
 	result := &(*rs)[0]
 	return result, nil
