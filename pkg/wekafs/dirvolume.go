@@ -95,12 +95,7 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 		return err
 	}
 
-	query := &apiclient.Quota{
-		InodeId:       inodeId,
-		FilesystemUid: fs.Uid,
-	}
-
-	q, err := v.apiClient.GetQuotaByFilter(query)
+	q, err := v.apiClient.GetQuotaByFileSystemAndInode(fs, inodeId)
 	// check if the quota already exists. If not - create it and exit
 	if err != nil {
 		if err != apiclient.ObjectNotFoundError {
