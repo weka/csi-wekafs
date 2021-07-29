@@ -2,14 +2,13 @@ package apiclient
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
 	"k8s.io/helm/pkg/urlutil"
 )
 
 type FileSystem struct {
 	Id                   string    `json:"id"`
-	AutoMaxFiles         bool      `json:"auto_max_files"`
-	UsedSsdData          int64     `json:"used_ssd_data"`
 	Name                 string    `json:"name"`
 	Uid                  uuid.UUID `json:"uid"`
 	IsRemoving           bool      `json:"is_removing"`
@@ -38,6 +37,10 @@ type FileSystem struct {
 	ObjectStorages []interface{} `json:"object_storages"`
 }
 
+func (fs *FileSystem) String() string {
+	return fmt.Sprintln("FileSystem(fsUid:", fs.Uid, "name:", fs.Name, "capacity:", fs.TotalCapacity, ")")
+}
+
 func (a *ApiClient) GetFileSystemByUid(uid uuid.UUID, fs *FileSystem) error {
 	ret := &FileSystem{
 		Uid: uid,
@@ -62,7 +65,7 @@ func (a *ApiClient) FindFileSystemsByFilter(query *FileSystem, resultSet *[]File
 
 // GetFilesystemByFilter expected to return exactly one result of FindFileSystemsByFilter (error)
 func (a *ApiClient) GetFilesystemByFilter(query *FileSystem) (*FileSystem, error) {
-	a.Log(3, "Querying API for filesystem", query)
+	a.Log(3, "Querying API for filesystem", query.String())
 	rs := &[]FileSystem{}
 	err := a.FindFileSystemsByFilter(query, rs)
 	if err != nil {
@@ -181,6 +184,10 @@ func (fsc *FileSystemCreateRequest) getRelatedObject() ApiObject {
 	return &FileSystem{}
 }
 
+func (fsc *FileSystemCreateRequest) String() string {
+	return fmt.Sprintln("FileSystem(name:", fsc.Name, "capacity:", fsc.TotalCapacity, ")")
+}
+
 func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64) (*FileSystemCreateRequest, error) {
 	ret := &FileSystemCreateRequest{
 		Name:          name,
@@ -228,8 +235,16 @@ func (fsu *FileSystemResizeRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(fsu)
 }
 
+func (fsu *FileSystemResizeRequest) String() string {
+	return fmt.Sprintln("FileSystem(fsUid:", fsu.Uid, "capacity:", fsu.TotalCapacity, ")")
+}
+
 type FileSystemDeleteRequest struct {
 	Uid uuid.UUID `json:"-"`
+}
+
+func (fsd *FileSystemDeleteRequest) String() string {
+	return fmt.Sprintln("FileSystemDeleteRequest(fsUid:", fsd.Uid, ")")
 }
 
 func (fsd *FileSystemDeleteRequest) getApiUrl() string {
