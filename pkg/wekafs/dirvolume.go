@@ -351,10 +351,7 @@ func (v DirVolume) deleteQuota(mountPath string) error {
 	if err != nil {
 		return err
 	}
-	qd := &apiclient.QuotaDeleteRequest{
-		FilesystemUid: fs.Uid,
-		InodeId:       inodeId,
-	}
+	qd := apiclient.NewQuotaDeleteRequest(*fs, inodeId)
 	return v.apiClient.DeleteQuota(qd)
 }
 
