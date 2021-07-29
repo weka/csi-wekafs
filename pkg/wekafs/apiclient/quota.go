@@ -104,6 +104,7 @@ func (qc *QuotaCreateRequest) hasRequiredFields() bool {
 func (qc *QuotaCreateRequest) getRelatedObject() ApiObject {
 	return &Quota{
 		FilesystemUid: qc.filesystemUid,
+		InodeId:       qc.InodeId,
 	}
 }
 func (qc *QuotaCreateRequest) String() string {
@@ -130,7 +131,10 @@ func (qu *QuotaUpdateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qu)
 }
 func (qu *QuotaUpdateRequest) getRelatedObject() ApiObject {
-	return &Quota{}
+	return &Quota{
+		FilesystemUid: qu.filesystemUid,
+		InodeId:       qu.InodeId,
+	}
 }
 func (qu *QuotaUpdateRequest) String() string {
 	return fmt.Sprintln("QuotaUpdateRequest(fsUid:", qu.filesystemUid, "inodeId:", qu.InodeId, "type:", qu.quotaType, "capacity:", qu.capacityLimit, ")")
@@ -205,7 +209,10 @@ func (qd *QuotaDeleteRequest) hasRequiredFields() bool {
 }
 
 func (qd *QuotaDeleteRequest) getRelatedObject() ApiObject {
-	return &Quota{}
+	return &Quota{
+		FilesystemUid: qd.filesystemUid,
+		InodeId:       qd.InodeId,
+	}
 }
 
 func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForCompletion bool) error {
