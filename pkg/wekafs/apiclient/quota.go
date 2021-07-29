@@ -85,9 +85,10 @@ func (q *Quota) GetCapacityLimit() uint64 {
 type QuotaCreateRequest struct {
 	filesystemUid  uuid.UUID
 	inodeId        uint64
-	HardLimitBytes uint64 `json:"hard_quota,omitempty"`
-	SoftLimitBytes uint64 `json:"soft_quota,omitempty"`
+	HardLimitBytes uint64 `json:"hardLimitBytes,omitempty"`
+	SoftLimitBytes uint64 `json:"softLimitBytes,omitempty"`
 	Path           string `json:"path"`
+	GraceSeconds   uint64 `json:"grace_seconds"` //TODO: remove
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
@@ -117,6 +118,7 @@ type QuotaUpdateRequest struct {
 	InodeId        uint64 `json:"inodeId,omitempty"`
 	HardLimitBytes uint64 `json:"hardLimitBytes,omitempty"`
 	SoftLimitBytes uint64 `json:"softLimitBytes,omitempty"`
+	GraceSeconds   uint64 `json:"grace_seconds"` //TODO: remove
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
