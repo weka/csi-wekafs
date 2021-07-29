@@ -103,7 +103,7 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 	q, err := v.apiClient.GetQuotaByFilter(query)
 	// check if the quota already exists. If not - create it and exit
 	if err != nil {
-		if err != apiclient.ApiObjectNotFoundError {
+		if err != apiclient.ObjectNotFoundError {
 			// any other error
 			return status.Error(codes.Internal, err.Error())
 		}
