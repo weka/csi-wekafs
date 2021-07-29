@@ -122,11 +122,11 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 		quotaType = apiclient.QuotaTypeDefault
 	}
 
-	if q.QuotaType != quotaType || q.CapacityLimit != uint64(capacityLimit) {
+	if q.GetQuotaType() != quotaType || q.GetCapacityLimit() != uint64(capacityLimit) {
 		r := apiclient.NewQuotaUpdateRequest(*fs, inodeId, quotaType, uint64(capacityLimit))
 		return v.apiClient.UpdateQuota(r, q)
 	}
-	glog.V(4).Infoln("Successfully set quota on volume", v.GetId(), "to", q.QuotaType, q.CapacityLimit)
+	glog.V(4).Infoln("Successfully set quota on volume", v.GetId(), "to", q.GetQuotaType(), q.GetCapacityLimit())
 	return nil
 }
 
@@ -259,7 +259,7 @@ func (v DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
 	}
 	ret, err := v.apiClient.GetQuotaByFilter(q)
 	if ret != nil {
-		glog.V(4).Infoln("Successfully acquired existing quota for volume", v.GetId(), ret.QuotaType, ret.CapacityLimit)
+		glog.V(4).Infoln("Successfully acquired existing quota for volume", v.GetId(), ret.GetQuotaType(), ret.GetCapacityLimit())
 	}
 	return ret, err
 }
@@ -270,7 +270,7 @@ func (v DirVolume) getSizeFromQuota(mountPath string) (uint64, error) {
 		return 0, err
 	}
 	if q != nil {
-		return q.CapacityLimit, nil
+		return q.GetCapacityLimit(), nil
 	}
 	return 0, errors.New("could not fetch quota from API")
 }
