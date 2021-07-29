@@ -1,6 +1,7 @@
 package apiclient
 
 import (
+	"fmt"
 	"github.com/google/uuid"
 	"k8s.io/helm/pkg/urlutil"
 )
@@ -22,6 +23,10 @@ type WekaNode struct {
 	Slot        int       `json:"slot"`
 	Roles       []string  `json:"roles"`
 	Status      string    `json:"status"`
+}
+
+func (n *WekaNode) String() string {
+	return fmt.Sprintln("WekaNode Id:", n.Id, "roles:", n.Roles)
 }
 
 func (n *WekaNode) getImmutableFields() []string {
