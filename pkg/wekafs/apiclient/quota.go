@@ -92,7 +92,7 @@ type QuotaCreateRequest struct {
 }
 
 func (qc *QuotaCreateRequest) getApiUrl() string {
-	return qc.getRelatedObject().GetBasePath()
+	return qc.getRelatedObject().GetApiUrl()
 }
 
 func (qc *QuotaCreateRequest) getRequiredFields() []string {
@@ -170,6 +170,13 @@ func NewQuotaUpdateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 		ret.HardLimitBytes = MaxQuotaSize
 	}
 	return ret
+}
+
+func NewQuotaDeleteRequest(fs FileSystem, inodeId uint64) *QuotaDeleteRequest {
+	return &QuotaDeleteRequest{
+		filesystemUid: fs.Uid,
+		InodeId:       inodeId,
+	}
 }
 
 type QuotaDeleteRequest struct {
