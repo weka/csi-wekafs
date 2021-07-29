@@ -13,13 +13,14 @@ const ApiPathRefresh = "login/refresh"
 
 const ApiPathClusterInfo = "cluster"
 
-//updateRefreshTokenInterval fetches the refresh token expiry from API
-func (a *ApiClient) updateRefreshTokenInterval() error {
+//updateTokensExpiryInterval fetches the refresh token expiry from API
+func (a *ApiClient) updateTokensExpiryInterval() error {
 	responseData := &TokenExpiryResponse{}
 	if err := a.Get(ApiPathTokenExpiry, nil, responseData); err != nil {
 		return err
 	}
 	a.refreshTokenExpiryInterval = responseData.RefreshTokenExpiry
+	a.apiTokenExpiryInterval = responseData.AccessTokenExpiry
 	a.Log(3, "Updated refresh token validity period")
 	return nil
 }

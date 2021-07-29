@@ -51,6 +51,7 @@ type ApiClient struct {
 	apiToken                   string
 	apiTokenExpiryDate         time.Time
 	refreshToken               string
+	apiTokenExpiryInterval     int64
 	refreshTokenExpiryInterval int64
 	refreshTokenExpiryDate     time.Time
 	Timeout                    time.Duration
@@ -575,9 +576,9 @@ func (a *ApiClient) Login() error {
 	}
 	a.apiToken = responseData.AccessToken
 	a.refreshToken = responseData.RefreshToken
-	a.apiTokenExpiryDate = time.Now().Add(time.Duration(responseData.ExpiresIn) * time.Second)
+	a.apiTokenExpiryDate = time.Now().Add(time.Duration(responseData.ExpiresIn-30) * time.Second)
 	if a.refreshTokenExpiryInterval < 1 {
-		_ = a.updateRefreshTokenInterval()
+		_ = a.updateTokensExpiryInterval()
 	}
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
 	_ = a.fetchClusterInfo()
@@ -626,7 +627,7 @@ func (a *ApiClient) Init() error {
 		return a.Login()
 	}
 	a.refreshToken = responseData.RefreshToken
-	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
+	a.apiTokenExpiryDate = time.Now().Add(time.Duration(a.apiTokenExpiryInterval-30) * time.Second)
 	a.Log(5, "Authentication token refreshed successfully, valid for", a.apiTokenExpiryDate.Sub(time.Now()))
 	return nil
 }
