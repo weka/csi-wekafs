@@ -277,8 +277,7 @@ func (v DirVolume) getSizeFromXattr(mountPath string) (uint64, error) {
 }
 
 func (v DirVolume) getFilesystemObj() (*apiclient.FileSystem, error) {
-	query := &apiclient.FileSystem{Name: v.Filesystem}
-	fs, err := v.apiClient.GetFilesystemByFilter(query)
+	fs, err := v.apiClient.GetFileSystemByName(v.Filesystem)
 	if err != nil {
 		return nil, err
 	}
