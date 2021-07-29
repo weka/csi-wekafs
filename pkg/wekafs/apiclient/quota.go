@@ -34,8 +34,6 @@ type Quota struct {
 	SoftLimitBytes uint64    `json:"softLimitBytes,omitempty"`
 	Status         string    `json:"status,omitempty"`
 	FilesystemUid  uuid.UUID `json:"-"`
-	QuotaType      QuotaType `json:"-"`
-	CapacityLimit  uint64    `json:"-"`
 }
 
 func (q *Quota) GetType() string {
@@ -78,7 +76,7 @@ func (q *Quota) GetQuotaType() QuotaType {
 }
 
 func (q *Quota) GetCapacityLimit() uint64 {
-	if q.QuotaType == QuotaTypeHard {
+	if q.GetQuotaType() == QuotaTypeHard {
 		return q.HardLimitBytes
 	}
 	return q.SoftLimitBytes
@@ -87,10 +85,10 @@ func (q *Quota) GetCapacityLimit() uint64 {
 type QuotaCreateRequest struct {
 	FilesystemUid  uuid.UUID `json:"-,omitempty"`
 	InodeId        uint64    `json:"inodeId,omitempty"`
-	QuotaType      QuotaType `json:"-"`
-	CapacityLimit  uint64    `json:"-"`
 	HardLimitBytes uint64    `json:"hard_quota,omitempty"`
 	SoftLimitBytes uint64    `json:"soft_quota,omitempty"`
+	quotaType      QuotaType
+	capacityLimit  uint64
 }
 
 func (qc *QuotaCreateRequest) getApiUrl() string {
@@ -98,7 +96,7 @@ func (qc *QuotaCreateRequest) getApiUrl() string {
 }
 
 func (qc *QuotaCreateRequest) getRequiredFields() []string {
-	return []string{"InodeId", "FilesystemUid", "QuotaType", "CapacityLimit"}
+	return []string{"InodeId", "FilesystemUid", "quotaType", "capacityLimit"}
 }
 func (qc *QuotaCreateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qc)
@@ -112,10 +110,10 @@ func (qc *QuotaCreateRequest) getRelatedObject() ApiObject {
 type QuotaUpdateRequest struct {
 	FilesystemUid  uuid.UUID `json:"-,omitempty"`
 	InodeId        uint64    `json:"inodeId,omitempty"`
-	QuotaType      QuotaType `json:"-"`
-	CapacityLimit  uint64    `json:"-"`
 	HardLimitBytes uint64    `json:"hardLimitBytes,omitempty"`
 	SoftLimitBytes uint64    `json:"softLimitBytes,omitempty"`
+	quotaType      QuotaType
+	capacityLimit  uint64
 }
 
 func (qu *QuotaUpdateRequest) getApiUrl() string {
@@ -123,7 +121,7 @@ func (qu *QuotaUpdateRequest) getApiUrl() string {
 }
 
 func (qu *QuotaUpdateRequest) getRequiredFields() []string {
-	return []string{"InodeId", "FilesystemUid", "QuotaType", "CapacityLimit"}
+	return []string{"InodeId", "FilesystemUid", "quotaType", "capacityLimit"}
 }
 func (qu *QuotaUpdateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qu)
@@ -137,8 +135,8 @@ func NewQuotaCreateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 	ret := &QuotaCreateRequest{
 		FilesystemUid: filesystemUid,
 		InodeId:       inodeId,
-		QuotaType:     quotaType,
-		CapacityLimit: capacityLimit,
+		quotaType:     quotaType,
+		capacityLimit: capacityLimit,
 	}
 	if quotaType == QuotaTypeHard {
 		ret.HardLimitBytes = capacityLimit
@@ -155,8 +153,8 @@ func NewQuotaUpdateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 	ret := &QuotaUpdateRequest{
 		FilesystemUid: filesystemUid,
 		InodeId:       inodeId,
-		QuotaType:     quotaType,
-		CapacityLimit: capacityLimit,
+		quotaType:     quotaType,
+		capacityLimit: capacityLimit,
 	}
 	if quotaType == QuotaTypeHard {
 		ret.HardLimitBytes = capacityLimit
@@ -258,13 +256,6 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 	}
 	ret.FilesystemUid = fs.Uid
 	ret.InodeId = inodeId
-	if ret.HardLimitBytes < MaxQuotaSize {
-		ret.CapacityLimit = ret.HardLimitBytes
-		ret.QuotaType = QuotaTypeHard
-	} else {
-		ret.CapacityLimit = ret.SoftLimitBytes
-		ret.QuotaType = QuotaTypeSoft
-	}
 	return ret, nil
 }
 
