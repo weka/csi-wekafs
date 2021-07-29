@@ -60,7 +60,7 @@ func (q *Quota) GetApiUrl() string {
 func (q *Quota) getImmutableFields() []string {
 	return []string{
 		"filesystemUid",
-		"InodeId",
+		"inodeId",
 	}
 }
 
@@ -84,9 +84,10 @@ func (q *Quota) GetCapacityLimit() uint64 {
 
 type QuotaCreateRequest struct {
 	filesystemUid  uuid.UUID
-	InodeId        uint64 `json:"inodeId,omitempty"`
+	inodeId        uint64
 	HardLimitBytes uint64 `json:"hard_quota,omitempty"`
 	SoftLimitBytes uint64 `json:"soft_quota,omitempty"`
+	Path           string `json:"path,omitempty"`
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
@@ -96,7 +97,7 @@ func (qc *QuotaCreateRequest) getApiUrl() string {
 }
 
 func (qc *QuotaCreateRequest) getRequiredFields() []string {
-	return []string{"InodeId", "filesystemUid", "quotaType", "capacityLimit"}
+	return []string{"inodeId", "filesystemUid", "quotaType", "capacityLimit"}
 }
 func (qc *QuotaCreateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qc)
@@ -104,11 +105,11 @@ func (qc *QuotaCreateRequest) hasRequiredFields() bool {
 func (qc *QuotaCreateRequest) getRelatedObject() ApiObject {
 	return &Quota{
 		FilesystemUid: qc.filesystemUid,
-		InodeId:       qc.InodeId,
+		InodeId:       qc.inodeId,
 	}
 }
 func (qc *QuotaCreateRequest) String() string {
-	return fmt.Sprintln("QuotaCreateRequest(fsUid:", qc.filesystemUid, "inodeId:", qc.InodeId, "type:", qc.quotaType, "capacity:", qc.capacityLimit, ")")
+	return fmt.Sprintln("QuotaCreateRequest(fsUid:", qc.filesystemUid, "inodeId:", qc.inodeId, "type:", qc.quotaType, "capacity:", qc.capacityLimit, ")")
 }
 
 type QuotaUpdateRequest struct {
@@ -125,7 +126,7 @@ func (qu *QuotaUpdateRequest) getApiUrl() string {
 }
 
 func (qu *QuotaUpdateRequest) getRequiredFields() []string {
-	return []string{"InodeId", "filesystemUid", "quotaType", "capacityLimit"}
+	return []string{"inodeId", "filesystemUid", "quotaType", "capacityLimit"}
 }
 func (qu *QuotaUpdateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qu)
@@ -144,7 +145,7 @@ func NewQuotaCreateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 	filesystemUid := fs.Uid
 	ret := &QuotaCreateRequest{
 		filesystemUid: filesystemUid,
-		InodeId:       inodeId,
+		inodeId:       inodeId,
 		quotaType:     quotaType,
 		capacityLimit: capacityLimit,
 	}
@@ -186,6 +187,7 @@ func NewQuotaDeleteRequest(fs FileSystem, inodeId uint64) *QuotaDeleteRequest {
 type QuotaDeleteRequest struct {
 	filesystemUid uuid.UUID
 	InodeId       uint64 `json:"inodeId,omitempty"`
+	Path          string `json:"path,omitempty"`
 }
 
 func (qd *QuotaDeleteRequest) String() string {
@@ -201,7 +203,7 @@ func (qd *QuotaDeleteRequest) getApiUrl() string {
 }
 
 func (qd *QuotaDeleteRequest) getRequiredFields() []string {
-	return []string{"filesystemUid", "InodeId"}
+	return []string{"filesystemUid", "inodeId"}
 }
 
 func (qd *QuotaDeleteRequest) hasRequiredFields() bool {
