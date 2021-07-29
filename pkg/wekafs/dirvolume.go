@@ -231,7 +231,7 @@ func (v DirVolume) CreateQuotaFromVolumeName(mountPath string, enforceCapacity *
 	}
 	qr := apiclient.NewQuotaCreateRequest(*fs, inodeId, quotaType, capacityLimit)
 	q := &apiclient.Quota{}
-	if err := v.apiClient.CreateQuota(qr, q, false); err != nil {
+	if err := v.apiClient.CreateQuota(qr, q, true); err != nil {
 		return nil, err
 	}
 	glog.V(4).Infoln("Quota successfully set for volume", v.GetId())
