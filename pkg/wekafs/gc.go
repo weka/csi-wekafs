@@ -17,14 +17,12 @@ type dirVolumeGc struct {
 	isDeferred map[string]bool
 	sync.Mutex
 	mounter *wekaMounter
-	api     *apiStore
 }
 
-func initDirVolumeGc(mounter *wekaMounter, api *apiStore) *dirVolumeGc {
+func initDirVolumeGc(mounter *wekaMounter) *dirVolumeGc {
 	gc := dirVolumeGc{mounter: mounter}
 	gc.isRunning = make(map[string]bool)
 	gc.isDeferred = make(map[string]bool)
-	gc.api = api
 	return &gc
 }
 
