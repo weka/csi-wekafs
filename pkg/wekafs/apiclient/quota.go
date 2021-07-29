@@ -201,7 +201,7 @@ func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForComplet
 		return err
 	}
 
-	err = a.Post(qr.getApiUrl(), &payload, nil, q)
+	err = a.Put(qr.getApiUrl(), &payload, nil, q)
 	if err != nil {
 		return err
 	}
