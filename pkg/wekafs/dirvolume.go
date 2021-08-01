@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/xattr"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
@@ -24,6 +25,7 @@ type DirVolume struct {
 }
 
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
+var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
 
 func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
 	glog.V(5).Infoln("Attempting to get max capacity available on filesystem", v.Filesystem)
@@ -44,21 +46,26 @@ func (v DirVolume) GetType() VolumeType {
 
 func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
 	glog.V(3).Infoln("Attempting to get current capacity of volume", v.GetId())
-	if v.apiClient == nil || !v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		// this is legacy volume, must treat xattrs...
+	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() {
+		size, err := v.getSizeFromQuota(mountPath)
+		if err == nil {
+			glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via API")
+			return int64(size), nil
+		}
+	} else {
 		size, err := v.getSizeFromXattr(mountPath)
 		if err != nil {
 			return 0, err
 		}
+		glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via Xattr")
 		return int64(size), nil
-
 	}
-	size, err := v.getSizeFromQuota(mountPath)
-	if err != nil {
-		return 0, err
+	size, err := v.getSizeFromDf(mountPath)
+	if err == nil {
+		glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via fs stat")
+		return int64(size), nil
 	}
-	glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size)
-	return int64(size), nil
+	return 0, errors.New("could not fetch volume capacity")
 }
 
 func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
@@ -271,9 +278,27 @@ func (v DirVolume) getSizeFromXattr(mountPath string) (uint64, error) {
 		if capacity, err := strconv.ParseInt(string(capacityString), 10, 64); err == nil {
 			return uint64(capacity), nil
 		}
-		return 0, nil
+		return 0, ErrBadXattrOnVolume
 	}
 	return 0, ErrNoXattrOnVolume
+}
+
+//getSizeFromDf used for GetCapacity, since we don't have secrets to check API
+func (v DirVolume) getSizeFromDf(mountPath string) (uint64, error) {
+	var volStat, parentStat unix.Statfs_t
+	err := unix.Statfs(v.getFullPath(mountPath), &volStat)
+	if err != nil {
+		return 0, err
+	}
+
+	errParent := unix.Statfs(filepath.Dir(v.getFullPath(mountPath)), &parentStat)
+	if errParent != nil {
+		return 0, errParent
+	}
+	volSize := volStat.Blocks * uint64(volStat.Bsize)
+	// Available blocks * size per block = available space in bytes
+	glog.V(3).Infoln("Volume", v.GetId(), "size is", volSize, "bytes")
+	return volSize, nil
 }
 
 func (v DirVolume) getFilesystemObj() (*apiclient.FileSystem, error) {
