@@ -142,9 +142,7 @@ docker_push_image() {
 
 build() {
   log_message INFO "Building binaries"
-  [[ $REPO_IS_DIRTY ]] && MAKE_TYPE="all_allow_dirty" && log_message WARNING "Skipping tests due to DIRTY REPO"
-
-  make VERSION="${VERSION_STRING}" DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME}" ${MAKE_TYPE} || \
+  make VERSION="${VERSION_STRING}" DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME}" all_allow_dirty || \
     log_fatal "Failed to build image"
 }
 
