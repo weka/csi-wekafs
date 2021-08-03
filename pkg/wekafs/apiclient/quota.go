@@ -241,7 +241,7 @@ func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForComplet
 }
 
 func (a *ApiClient) WaitForQuotaActive(q *Quota) error {
-	glog.V(4).Infof("Waiting for quota %s@%s to become active", q.InodeId, q.FilesystemUid.String())
+	glog.V(4).Infof("Waiting for quota %d@%s to become active", q.InodeId, q.FilesystemUid.String())
 	f := wait.ConditionFunc(func() (bool, error) {
 		return a.IsQuotaActive(q)
 	})

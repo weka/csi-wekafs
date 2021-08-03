@@ -162,7 +162,7 @@ func (e *ApiConflictError) getType() string {
 }
 func (e *ApiConflictError) Error() string {
 	if e.ConflictingEntityId != nil {
-		return fmt.Sprintf("%e, conflicting entity ID: %s", e.ApiError, e.ConflictingEntityId.String())
+		return fmt.Sprintf("%v, conflicting entity ID: %s", e.ApiError, e.ConflictingEntityId.String())
 	}
 	return e.ApiError.Error()
 }
