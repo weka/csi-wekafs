@@ -16,7 +16,7 @@
 .PHONY: build-% build clean test
 
 # understand what is the version tag
-VERSION=$(shell cat deploy/helm/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}')
+VERSION=$(shell cat deploy/helm/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
 DOCKER_IMAGE_NAME=csi-wekafs
 $(info Docker image name: $(DOCKER_IMAGE_NAME))
 
