@@ -40,6 +40,13 @@ clean:
 
 test: check-go-version-go
 
+.PHONY: test-csi-sanity
+test: test-csi-sanity
+test-csi-sanity:
+	@ echo; echo "### $@:"
+	cd tests/csi-sanity; \
+	bash test.sh
+
 .PHONY: test-go
 test: test-go
 test-go:
@@ -80,7 +87,7 @@ test-shellcheck:
 	if ! command -v docker; then \
 		echo "skipped, no Docker"; \
 		exit 0; \
-        fi; \
+		fi; \
 	for dir in $(abspath $(TEST_SHELLCHECK_DIRS)); do \
 		echo; \
 		echo "$$dir:"; \
