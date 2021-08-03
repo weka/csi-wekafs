@@ -54,8 +54,7 @@ git_get_latest_tag() {
 }
 
 git_check_repo_clean() {
-  ! git diff --quiet && REPO_IS_DIRTY=1 && return 1
-
+  return "$(git status --porcelain | wc -l)"
 }
 
 git_get_commits_after_latest_tag() {
@@ -74,8 +73,8 @@ _helm_update_charts() {
   log_message NOTICE "Updating Helm charts with correct version strings"
   local HELM_CHART_VERSION="${VERSION_STRING/-*/}"
   sed -i ./deploy/helm/csi-wekafsplugin/Chart.yaml \
-      -e "s|^version: .*$|version: ${HELM_CHART_VERSION}|1" \
-      -e "s|^appVersion: .*$|appVersion: ${VERSION_STRING}|1" \
+      -e "s|^version: .*$|version: \"${HELM_CHART_VERSION}\"|1" \
+      -e "s|^appVersion: .*$|appVersion: \"${VERSION_STRING}\"|1" \
       -e "s|\(https://github.com/weka/csi-wekafs/tree/\).*\(/deploy/helm/csi-wekafsplugin\)|\1${VERSION_STRING}\2|1" || \
         log_fatal "Could not update Helm Chart"
 
@@ -143,10 +142,41 @@ docker_push_image() {
 
 build() {
   log_message INFO "Building binaries"
-  ! git_check_repo_clean && MAKE_TYPE="all_allow_dirty" && log_message WARNING "Skipping tests due to DIRTY REPO"
+  [[ $REPO_IS_DIRTY ]] && MAKE_TYPE="all_allow_dirty" && log_message WARNING "Skipping tests due to DIRTY REPO"
 
-  make VERSION="${VERSION_STRING}" DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME}" "${MAKE_TYPE}" || \
+  make VERSION="${VERSION_STRING}" DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME}" ${MAKE_TYPE} || \
     log_fatal "Failed to build image"
+}
+
+_git_commit_deploy_versions() {
+  set -e
+  git add deploy || log_fatal "Failed to add changes to Git"
+  git commit -m "Release Update application version $VERSION" || log_fatal "Failed to commit changes"
+  if ! git_check_repo_clean; then
+    log_message ERROR "Repository not clean after committing the changes!"
+    git log HEAD~1 | cat
+    git status
+    log_message ERROR "Resetting latest commit"
+    git reset --soft HEAD~1
+  fi
+  set +e
+}
+
+_git_add_tag() {
+  git tag "v${VERSION_STRING}"
+}
+
+_git_push() {
+  git push --set-upstream origin "$(git_get_current_branch)" || log_fatal "Failed to push changes, please check!"
+  git push --tags
+}
+
+git_create_release() {
+  # this was tested prior to changing files, so we should expect not dirty
+  [[ $REPO_IS_DIRTY ]] && log_fatal "Create release not allowed on dirty repository"
+  _git_commit_deploy_versions
+  _git_add_tag
+  _git_push
 }
 
 check_settings() {
@@ -169,6 +199,37 @@ check_settings() {
   VERSION_STRING="${VERSION_STRING/#v/}"
 }
 
+usage() {
+  cat <<-DELIM
+
+echo "$0 [--version <VERSION_STRING>] [--dev-build] [--allow-dirty] "
+
+Optional parameters:
+--------------------
+--version VERSION_STRING  Package a specific release, which must be specified in X.Y.Z format
+                          If not specified, the latest git tag will be incremented by 1:
+                          e.g. if previous version was 0.6.6, automatically 0.6.7 will be created
+
+--dev-build:              To be used for local development and further testing on local or remote Kubernetes.
+                          In this mode:
+                          - Version will be added a suffix in format of '-dev<NUM_OF_COMMITS_AFTER_LATEST_VERSION>'
+                            e.g., If latest released version was 1.0.0, and 4 commits were done after this version,
+                            the version will become 1.0.1-dev4
+                          - Docker image will be pushed to repository, so it could be installed on remote server
+                          - HOWEVER, Helm charts and deployment scripts will be modified only locally,
+                            and not published on official csi-wekafs registry
+
+--allow-dirty             Allow build when git repository is not clean and has uncommitted changes.
+                          In this case, ersion will be added an additional suffix '-dirty' on top of dev version suffix
+
+Notes and limitations:
+----------------------
+--allow-dirty can be used only in conjunction with --dev-build
+--pushing dev builds on master branch is forbidden
+--building with dirty repo forbidden on master branch
+DELIM
+}
+
 main() {
   echo CSI Deployment script, copyright Weka 2021
   while [[ $# -gt 0 ]]; do
@@ -186,7 +247,12 @@ main() {
         VERSION_STRING="$2"
         shift 2
         ;;
+      --help)
+        usage
+        exit
+        ;;
       *)
+        usage
         log_fatal "Invalid argument '$1'"
         ;;
     esac
@@ -200,7 +266,6 @@ main() {
   docker_push_image
   helm_publish
   git_create_release
-
 }
 
 main "$@"
