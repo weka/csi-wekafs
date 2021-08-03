@@ -34,4 +34,5 @@ jobs:
       - name: Make release
         run: |
           pushd $GITHUB_WORKSPACE
-          ./make_release --dev-build $CMD_EXTRA_ARGUMENTS
+          [[ ${{ inputs.version }} ]] && VERSION_STRING="--version ${{ inputs.version }}"
+          ./make_release --dev-build $CMD_EXTRA_ARGUMENTS $VERSION_STRING
