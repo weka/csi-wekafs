@@ -21,7 +21,7 @@ func TestAsciiFilter(t *testing.T) {
 func TestVolumeType(t *testing.T) {
 	testPattern := func(s string) {
 		str := GetVolumeType(s)
-		if str != VolumeTypeDirV1 {
+		if str != string(VolumeTypeDirV1) {
 			t.Errorf("VolumeID: %s, FAILED: %s", s, str)
 			return
 		}
@@ -51,5 +51,8 @@ func TestVolumeId(t *testing.T) {
 		t.Logf("PASS: VolumeId:%s, did not validate, err: %s", s, err)
 	}
 	testPattern("dir/v1/filesystem/4e1243bd22c66e76c2ba9eddc1f91394e57f9f83-some_dirName")
-	testBadPattern("dir/v1/filesystem/4e1243bd22c66e76c2ba9eddc1f91394e57f9f83/some_dirName")
+	testBadPattern("dir/v1/filesystem")
+	testBadPattern("dir/v1")
+	testBadPattern("dir")
+	testBadPattern("/var/log/messages")
 }
