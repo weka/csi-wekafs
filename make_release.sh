@@ -222,6 +222,8 @@ Optional parameters:
 --allow-dirty             Allow build when git repository is not clean and has uncommitted changes.
                           In this case, ersion will be added an additional suffix '-dirty' on top of dev version suffix
 
+--no-publish              Do not publish release and do not make git release tag
+
 Notes and limitations:
 ----------------------
 --allow-dirty can be used only in conjunction with --dev-build
@@ -251,6 +253,10 @@ main() {
         usage
         exit
         ;;
+      --no-publish)
+        NO_PUBLISH=1
+        shift
+        ;;
       *)
         usage
         log_fatal "Invalid argument '$1'"
@@ -264,6 +270,12 @@ main() {
   log_message INFO "Deploying version ${VERSION_STRING}"
   build
   docker_push_image
+
+  if [[ $NO_PUBLISH ]]; then
+    log_message INFO "Not publishing Helm and not making a git release"
+    exit
+  fi
+
   helm_publish
   git_create_release
 }
