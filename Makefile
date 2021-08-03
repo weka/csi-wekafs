@@ -13,6 +13,6 @@
 # limitations under the License.
 
 CMDS=wekafsplugin
-all: build container push helm
-
+all: build test
+all_allow_dirty: build test-go test-vet test-fmt test-shellcheck
 include release-tools/build.make
