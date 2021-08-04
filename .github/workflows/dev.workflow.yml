@@ -1,0 +1,21 @@
+name: Deploy CSI-wekafs Dev
+on:
+  push:
+    branches:
+      - '!master'
+      - '!gh-pages'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: build
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_REGISTRY_NAME: ${{ secrets.DOCKER_REGISTRY_NAME }}
+        run: |
+          pushd $GITHUB_WORKSPACE
+          ./make_release.sh --dev-build --no-publish
