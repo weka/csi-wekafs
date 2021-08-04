@@ -30,7 +30,7 @@ $(CMDS:%=build-%): build-%: check-go-version-go
 			exit 1; \
 		fi; \
 	done
-	docker build -t $(DOCKER_IMAGE_NAME):$(VERSION) -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
+	docker build -t $(DOCKER_IMAGE_NAME):v$(VERSION) -f $(shell if [ -e ./cmd/$*/Dockerfile ]; then echo ./cmd/$*/Dockerfile; else echo Dockerfile; fi) --label revision=$(REV) .
 
 
 build: $(CMDS:%=build-%)
