@@ -127,16 +127,16 @@ _docker_login() {
 }
 
 _docker_tag_image() {
-  log_message NOTICE "Tagging Docker image ${DOCKER_IMAGE_NAME}:${VERSION_STRING} -> ${DOCKER_REGISTRY_NAME}/${DOCKER_IMAGE_NAME}:${VERSION_STRING}"
-  docker tag "${DOCKER_IMAGE_NAME}:${VERSION_STRING}" "${DOCKER_REGISTRY_NAME}/${DOCKER_IMAGE_NAME}:${VERSION_STRING}" || \
+  log_message NOTICE "Tagging Docker image ${DOCKER_IMAGE_NAME}:v${VERSION_STRING} -> ${DOCKER_REGISTRY_NAME}/${DOCKER_IMAGE_NAME}:v${VERSION_STRING}"
+  docker tag "${DOCKER_IMAGE_NAME}:v${VERSION_STRING}" "${DOCKER_REGISTRY_NAME}/${DOCKER_IMAGE_NAME}:v${VERSION_STRING}" || \
     log_fatal "Could not tag Docker image"
 }
 
 docker_push_image() {
   _docker_tag_image
   _docker_login
-  log_message NOTICE "Pushing Docker image ${DOCKER_REGISTRY_NAME}/${DOCKER_IMAGE_NAME}:${VERSION_STRING}"
-  docker push "${DOCKER_REGISTRY_NAME}/${DOCKER_IMAGE_NAME}:${VERSION_STRING}" || \
+  log_message NOTICE "Pushing Docker image ${DOCKER_REGISTRY_NAME}/${DOCKER_IMAGE_NAME}:v${VERSION_STRING}"
+  docker push "${DOCKER_REGISTRY_NAME}/${DOCKER_IMAGE_NAME}:v${VERSION_STRING}" || \
     log_fatal "Could not push Docker image to registry"
 }
 
@@ -170,8 +170,6 @@ _git_push() {
 }
 
 git_create_release() {
-  # this was tested prior to changing files, so we should expect not dirty
-  [[ $REPO_IS_DIRTY ]] && log_fatal "Create release not allowed on dirty repository"
   _git_commit_deploy_versions
   _git_add_tag
   _git_push
@@ -264,7 +262,7 @@ main() {
   VERSION_STRING="${VERSION_STRING:-$(git_calc_next_tag)}"
   [[ $DEV_BUILD == 1 ]] && VERSION_STRING+="-dev$(git_get_commits_after_latest_tag)"
   check_settings
-  [[ $REPO_IS_DIRTY ]] && VERSION_STRING+="-dirty"
+  git_check_repo_clean || VERSION_STRING+="-dirty"
   log_message INFO "Deploying version ${VERSION_STRING}"
   build
   docker_push_image
