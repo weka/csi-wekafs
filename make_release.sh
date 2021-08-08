@@ -142,7 +142,8 @@ docker_push_image() {
 
 build() {
   log_message INFO "Building binaries"
-  make VERSION="${VERSION_STRING}" DOCKER_IMAGE_NAME="${DOCKER_IMAGE_NAME}" all_allow_dirty || \
+  docker build --build-arg VERSION="v${VERSION_STRING}" --no-cache -t "${DOCKER_IMAGE_NAME}:v${VERSION_STRING}" \
+  -f Dockerfile --label revision="v${VERSION_STRING}" . || \
     log_fatal "Failed to build image"
 }
 
@@ -166,12 +167,17 @@ _git_add_tag() {
 
 _git_push() {
   git push --set-upstream origin "$(git_get_current_branch)" || log_fatal "Failed to push changes, please check!"
-  git push --tags
+  git push --tags || log_fatal "Failed to push Git tag, please check!"
 }
 
 git_create_release() {
   _git_commit_deploy_versions
-  _git_add_tag
+  if [[ -z $NO_PUBLISH ]]; then
+    _git_add_tag
+  else
+    log_message INFO "Not adding GIT tag for DEV release Helm and not making a git release tag"
+    return
+  fi
   _git_push
 }
 
@@ -193,6 +199,12 @@ check_settings() {
   fi
 
   VERSION_STRING="${VERSION_STRING/#v/}"
+}
+
+test() {
+  pushd tests/csi-sanity || log_fatal Could not enter tests directory
+  bash test.sh || log_fatal Failed tests, cannot proceed!
+  popd
 }
 
 usage() {
@@ -219,6 +231,7 @@ Optional parameters:
                           In this case, ersion will be added an additional suffix '-dirty' on top of dev version suffix
 
 --no-publish              Do not publish release and do not make git release tag
+--skip-tests              Do not peform CSI sanity tests on build
 
 Notes and limitations:
 ----------------------
@@ -253,6 +266,10 @@ main() {
         NO_PUBLISH=1
         shift
         ;;
+      --skip-tests)
+        NO_TESTS=1
+        shift
+        ;;
       *)
         usage
         log_fatal "Invalid argument '$1'"
@@ -264,15 +281,11 @@ main() {
   check_settings
   git_check_repo_clean || VERSION_STRING+="-dirty"
   log_message INFO "Deploying version ${VERSION_STRING}"
+  export VERSION_STRING
+  [[ -z $NO_TESTS ]] && test
   build
   docker_push_image
-
-  if [[ $NO_PUBLISH ]]; then
-    log_message INFO "Not publishing Helm and not making a git release"
-    exit
-  fi
-
-  helm_publish
+  helm_publish # always executed to make sure that latest version tag is updated in local chats
   git_create_release
 }
 
