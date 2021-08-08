@@ -13,6 +13,19 @@
 # limitations under the License.
 
 CMDS=wekafsplugin
-all: build test
-all_allow_dirty: build test-go test-vet test-fmt test-shellcheck
-include release-tools/build.make
+all: build
+
+.PHONY: build-% build clean
+
+# understand what is the version tag
+VERSION=$(shell cat deploy/helm/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
+DOCKER_IMAGE_NAME=csi-wekafs
+
+$(CMDS:%=build-%): build-%:
+	docker build --build-arg VERSION=v$(VERSION) --no-cache -t $(DOCKER_IMAGE_NAME):v$(VERSION) -f Dockerfile --label revision=v$(VERSION) .
+
+build: $(CMDS:%=build-%)
+
+clean:
+	-rm -rf bin
+
