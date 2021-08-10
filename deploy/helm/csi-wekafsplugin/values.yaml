@@ -6,7 +6,7 @@ dynamicProvisionPath: "csi-volumes"
 # name of the driver
 #  note same name will be used for provisioner name
 csiDriverName : "csi.weka.io"
-csiDriverVersion : &csiDriverVersion "0.6.7-dev93"
+csiDriverVersion : &csiDriverVersion "0.6.7-dev94"
 
 # Image paths
 images:
