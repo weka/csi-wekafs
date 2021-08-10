@@ -150,6 +150,8 @@ build() {
 _git_commit_deploy_versions() {
   set -e
   git add deploy || log_fatal "Failed to add changes to Git"
+  git config --global user.email "do-not-reply@weka.io"
+  git config --global user.name "CSI Deployment Bot"
   git commit -m "Release Update application version $VERSION" || log_fatal "Failed to commit changes"
   if ! git_check_repo_clean; then
     log_message ERROR "Repository not clean after committing the changes!"
