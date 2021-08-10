@@ -165,7 +165,6 @@ _git_add_tag() {
 
 _git_push() {
   log_message NOTICE "Pushing updated deployment charts to Git repository on branch $GIT_BRANCH_NAME"
-  git push || log_fatal "Failed to push committed changes"
   git push origin HEAD:"$GIT_BRANCH_NAME" || log_fatal "Failed to push changes to branch $GIT_BRANCH_NAME, please check!"
   git push --tags || log_fatal "Failed to push Git tag, please check!"
 }
