@@ -61,10 +61,6 @@ git_get_commits_after_latest_tag() {
   git rev-list "$(git_get_latest_tag)..HEAD" | wc -l
 }
 
-git_get_current_branch() {
-  git rev-parse --abbrev-ref HEAD
-}
-
 git_calc_next_tag() {
   git_get_latest_tag | awk -F. -v OFS=. 'NF==1{print ++$NF}; NF>1{if(length($NF+1)>length($NF))$(NF-1)++; $NF=sprintf("%0*d", length($NF), ($NF+1)%(10^length($NF))); print}'
 }
@@ -168,9 +164,9 @@ _git_add_tag() {
 }
 
 _git_push() {
-  log_message NOTICE "Pushing updated deployment charts to Git repository on branch $(git branch)"
+  log_message NOTICE "Pushing updated deployment charts to Git repository on branch $GIT_BRANCH_NAME"
   git push || log_fatal "Failed to push committed changes"
-  git push --set-upstream origin "$(git_get_current_branch)" || log_fatal "Failed to push changes, please check!"
+  git push origin HEAD:"$GIT_BRANCH_NAME" || log_fatal "Failed to push changes to branch $GIT_BRANCH_NAME, please check!"
   git push --tags || log_fatal "Failed to push Git tag, please check!"
 }
 
@@ -193,7 +189,7 @@ check_settings() {
   [[ -z ${DOCKER_PASSWORD}  ]] && log_fatal "Missing DOCKER_PASSWORD envvar"
 
   if ! git_check_repo_clean ; then
-    if [[ $(git_get_current_branch) == master ]]; then
+    if [[ $GIT_BRANCH_NAME == master ]]; then
       log_fatal "Performing release on master with dirty repo is not allowed!"
     fi
     [[ -z ${ALLOW_DIRTY} ]] && log_fatal "Cannot proceed, repository is dirty!"
@@ -280,6 +276,8 @@ main() {
     esac
   done
   VERSION_STRING="${VERSION_STRING:-$(git_calc_next_tag)}"
+  GIT_BRANCH_NAME=${BUILDKITE_BRANCH:-$(git branch --show-current)}
+
   [[ $DEV_BUILD == 1 ]] && VERSION_STRING+="-dev$(git_get_commits_after_latest_tag)"
   check_settings
   git_check_repo_clean || VERSION_STRING+="-dirty"
