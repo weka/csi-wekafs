@@ -168,6 +168,8 @@ _git_add_tag() {
 }
 
 _git_push() {
+  log_message NOTICE "Pushing updated deployment charts to Git repository on branch $(git branch)"
+  git push || log_fatal "Failed to push committed changes"
   git push --set-upstream origin "$(git_get_current_branch)" || log_fatal "Failed to push changes, please check!"
   git push --tags || log_fatal "Failed to push Git tag, please check!"
 }
@@ -178,7 +180,6 @@ git_create_release() {
     _git_add_tag
   else
     log_message INFO "Not adding GIT tag for DEV release Helm and not making a git release tag"
-    return
   fi
   _git_push
 }
@@ -289,6 +290,7 @@ main() {
   docker_push_image
   helm_publish # always executed to make sure that latest version tag is updated in local chats
   git_create_release
+  log_message NOTICE "All done!"
 }
 
 main "$@"
