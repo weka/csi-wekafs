@@ -2,7 +2,7 @@ apiVersion: v2
 name: csi-wekafsplugin
 description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 sources:
-  - https://github.com/weka/csi-wekafs/tree/0.6.7-dev91/deploy/helm/csi-wekafsplugin
+  - https://github.com/weka/csi-wekafs/tree/0.6.7-dev92/deploy/helm/csi-wekafsplugin
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 
@@ -22,4 +22,4 @@ version: "0.6.7"
 
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application.
-appVersion: "0.6.7-dev91"
+appVersion: "0.6.7-dev92"
