@@ -88,7 +88,7 @@ type QuotaCreateRequest struct {
 	HardLimitBytes uint64 `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64 `json:"soft_limit_bytes,omitempty"`
 	Path           string `json:"path"`
-	GraceSeconds   uint64 `json:"grace_seconds"` //TODO: remove
+	GraceSeconds   uint64 `json:"grace_seconds,omitempty"`
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
@@ -118,7 +118,7 @@ type QuotaUpdateRequest struct {
 	InodeId        uint64 `json:"inode_id,omitempty"`
 	HardLimitBytes uint64 `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64 `json:"soft_limit_bytes,omitempty"`
-	GraceSeconds   uint64 `json:"grace_seconds"` //TODO: remove
+	GraceSeconds   uint64 `json:"grace_seconds,omitempty"`
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
