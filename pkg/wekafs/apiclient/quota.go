@@ -69,7 +69,7 @@ func (q *Quota) EQ(r ApiObject) bool {
 }
 
 func (q *Quota) GetQuotaType() QuotaType {
-	if q.HardLimitBytes < q.SoftLimitBytes {
+	if q.HardLimitBytes <= q.SoftLimitBytes {
 		return QuotaTypeHard
 	}
 	return QuotaTypeSoft
@@ -87,7 +87,7 @@ type QuotaCreateRequest struct {
 	inodeId        uint64
 	HardLimitBytes uint64 `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64 `json:"soft_limit_bytes,omitempty"`
-	Path           string `json:"path"`
+	Path           string `json:"path,omitempty"`
 	GraceSeconds   uint64 `json:"grace_seconds,omitempty"`
 	quotaType      QuotaType
 	capacityLimit  uint64
@@ -115,20 +115,20 @@ func (qc *QuotaCreateRequest) String() string {
 
 type QuotaUpdateRequest struct {
 	filesystemUid  uuid.UUID
-	InodeId        uint64 `json:"inode_id,omitempty"`
+	inodeId        uint64
 	HardLimitBytes uint64 `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64 `json:"soft_limit_bytes,omitempty"`
-	GraceSeconds   uint64 `json:"grace_seconds,omitempty"`
+	GraceSeconds   uint64 `json:"grace_seconds"`
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
 
 func (qu *QuotaUpdateRequest) getApiUrl() string {
-	return qu.getRelatedObject().GetBasePath()
+	return qu.getRelatedObject().GetApiUrl()
 }
 
 func (qu *QuotaUpdateRequest) getRequiredFields() []string {
-	return []string{"inodeId", "filesystemUid", "quotaType", "capacityLimit"}
+	return []string{"inodeId", "filesystemUid"}
 }
 func (qu *QuotaUpdateRequest) hasRequiredFields() bool {
 	return ObjectRequestHasRequiredFields(qu)
@@ -136,11 +136,11 @@ func (qu *QuotaUpdateRequest) hasRequiredFields() bool {
 func (qu *QuotaUpdateRequest) getRelatedObject() ApiObject {
 	return &Quota{
 		FilesystemUid: qu.filesystemUid,
-		InodeId:       qu.InodeId,
+		InodeId:       qu.inodeId,
 	}
 }
 func (qu *QuotaUpdateRequest) String() string {
-	return fmt.Sprintln("QuotaUpdateRequest(fsUid:", qu.filesystemUid, "inodeId:", qu.InodeId, "type:", qu.quotaType, "capacity:", qu.capacityLimit, ")")
+	return fmt.Sprintln("QuotaUpdateRequest(fsUid:", qu.filesystemUid, "inodeId:", qu.inodeId, "type:", qu.quotaType, "capacity:", qu.capacityLimit, ")")
 }
 
 func NewQuotaCreateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, capacityLimit uint64) *QuotaCreateRequest {
@@ -165,7 +165,7 @@ func NewQuotaUpdateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 	filesystemUid := fs.Uid
 	ret := &QuotaUpdateRequest{
 		filesystemUid: filesystemUid,
-		InodeId:       inodeId,
+		inodeId:       inodeId,
 		quotaType:     quotaType,
 		capacityLimit: capacityLimit,
 	}
@@ -323,9 +323,9 @@ func (a *ApiClient) IsQuotaActive(query *Quota) (done bool, err error) {
 func (a *ApiClient) UpdateQuota(r *QuotaUpdateRequest, q *Quota) error {
 	f := a.Log(3, "Updating quota", r)
 	defer f()
-	if !r.hasRequiredFields() {
-		return RequestMissingParams
-	}
+	//if !r.hasRequiredFields() {
+	//	return RequestMissingParams
+	//}
 	var payload []byte
 	payload, err := json.Marshal(r)
 	if err != nil {

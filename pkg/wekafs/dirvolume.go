@@ -124,11 +124,19 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 		quotaType = apiclient.QuotaTypeDefault
 	}
 
-	if q.GetQuotaType() != quotaType || q.GetCapacityLimit() != uint64(capacityLimit) {
-		r := apiclient.NewQuotaUpdateRequest(*fs, inodeId, quotaType, uint64(capacityLimit))
-		return v.apiClient.UpdateQuota(r, q)
+	if q.GetQuotaType() == quotaType && q.GetCapacityLimit() == uint64(capacityLimit) {
+		glog.V(4).Infoln("No need to update quota as it matches current")
+		return nil
 	}
-	glog.V(4).Infoln("Successfully set quota on volume", v.GetId(), "to", q.GetQuotaType(), q.GetCapacityLimit())
+	updatedQuota := &apiclient.Quota{}
+	r := apiclient.NewQuotaUpdateRequest(*fs, inodeId, quotaType, uint64(capacityLimit))
+	glog.V(5).Infoln("Constructed update request", r.String())
+	err = v.apiClient.UpdateQuota(r, updatedQuota)
+	if err != nil {
+		glog.V(4).Infoln("Failed to set quota on volume", v.GetId(), "to", updatedQuota.GetQuotaType(), updatedQuota.GetCapacityLimit(), err)
+		return err
+	}
+	glog.V(4).Infoln("Successfully set quota on volume", v.GetId(), "to", updatedQuota.GetQuotaType(), updatedQuota.GetCapacityLimit())
 	return nil
 }
 
