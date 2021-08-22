@@ -13,7 +13,7 @@ RUN echo Executing tests
 RUN go test /src/*/*.go
 RUN go vet /src/*/*.go
 RUN files=$(find . -name '*.go' | grep -v './vendor'); \
-    if [ $(gofmt -d $files | wc -l) -ne 0 ]; then echo "formatting errors:"; gofmt -d $$files; false; fi
+    if [ $(gofmt -d $files | wc -l) -ne 0 ]; then echo "formatting errors:"; gofmt -d $files; false; fi
 RUN echo Building package
 RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o "/bin/wekafsplugin" /src/cmd/*
 
