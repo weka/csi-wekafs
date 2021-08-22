@@ -14,7 +14,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -103,16 +102,6 @@ func TruncateString(s string, i int) string {
 	return s
 }
 
-func getVolumeSize(path string) int64 {
-	if capacityString, err := xattr.Get(path, xattrCapacity); err == nil {
-		if capacity, err := strconv.ParseInt(string(capacityString), 10, 64); err == nil {
-			return capacity
-		}
-		return 0
-	}
-	return 0 //TODO: Reconsider, it should return error, as we always supposed to set it
-}
-
 func PathExists(p string) bool {
 	file, err := os.Open(p)
 	if err != nil {
@@ -138,26 +127,6 @@ func PathIsWekaMount(path string) bool {
 	mountcmd := "mount -t wekafs | grep " + path
 	res, _ := exec.Command("sh", "-c", mountcmd).Output()
 	return strings.Contains(string(res), path)
-}
-
-func validatedVolume(mountPath string, mountErr error, volume DirVolume) (string, error) {
-	glog.Infof("Validating if volume %s exists in %s", volume.id, mountPath)
-	if mountErr != nil {
-		return "", status.Error(codes.Internal, mountErr.Error())
-	}
-	volumePath := volume.getFullPath(mountPath)
-	if _, err := os.Stat(volumePath); err != nil {
-		if os.IsNotExist(err) {
-			return "", status.Error(codes.NotFound, err.Error())
-		} else {
-			return "", status.Error(codes.Internal, err.Error())
-		}
-	}
-	if err := pathIsDirectory(mountPath); err != nil {
-		return "", status.Error(codes.Internal, err.Error())
-	}
-	glog.Infof("Volume %s exists and accessible via %s", volume.id, volumePath)
-	return volumePath, nil
 }
 
 func validateVolumeId(volumeId string) error {
