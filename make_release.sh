@@ -286,7 +286,7 @@ main() {
   build
   docker_push_image
   helm_publish # always executed to make sure that latest version tag is updated in local chats
-  git_create_release
+  [[ $DEV_BUILD == 1 ]] || git_create_release
   log_message NOTICE "All done!"
 }
 
