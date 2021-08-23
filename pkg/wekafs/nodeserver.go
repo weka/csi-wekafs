@@ -53,57 +53,6 @@ func (ns *nodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeG
 	panic("implement me")
 }
 
-//func (ns *nodeServer) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-//
-//	if len(req.GetVolumeId()) == 0 {
-//		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
-//	}
-//	req.S
-//	volume, err := NewVolume(req.GetVolumeId(), nil)
-//	if err != nil {
-//		return nil, status.Errorf(codes.NotFound, "Volume with id %s does not exist", req.GetVolumeId())
-//	}
-//
-//	capRange := req.GetCapacityRange()
-//	if capRange == nil {
-//		return nil, status.Error(codes.InvalidArgument, "Capacity range not provided")
-//	}
-//
-//	// Perform mount in order to be able to access Xattrs and get a full volume root path
-//	mountPoint, err, unmount := ns.mounter.MountXattr(volume.Filesystem)
-//	defer unmount()
-//	if err != nil {
-//		return nil, err
-//	}
-//	volPath := volume.getFullPath(mountPoint)
-//
-//	capacity := int64(capRange.GetRequiredBytes())
-//
-//	maxStorageCapacity, err := getMaxDirCapacity(mountPoint)
-//	if err != nil {
-//		return nil, status.Errorf(codes.Unknown, "Cannot obtain free capacity for volume %s", volume)
-//	}
-//	if capacity > maxStorageCapacity {
-//		return nil, status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity)
-//	}
-//
-//	if volPath, err = validatedVolume(mountPoint, err, volume); err != nil {
-//		return nil, err
-//	}
-//
-//	currentSize := getVolumeSize(volPath)
-//	glog.Infof("Volume %s: current capacity: %d, expanding to %d", volume.id, currentSize, capacity)
-//	if currentSize < capacity {
-//		if err := updateDirCapacity(volPath, capacity); err != nil {
-//			return nil, status.Errorf(codes.Internal, "Could not update volume %s: %v", volume, err)
-//		}
-//	}
-//
-//	return &csi.NodeExpandVolumeResponse{
-//		CapacityBytes: capacity,
-//	}, nil
-//}
-
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *apiStore, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
 	if mounter.debugPath == "" && !isWekaInstalled() && crashOnNoWeka {
 		exitMsg := "weka OS driver module not installed, exiting"
