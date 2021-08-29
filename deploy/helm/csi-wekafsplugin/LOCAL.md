@@ -5,13 +5,9 @@ Helm Chart for Weka wekafs CSI driver deployment
 ## Install driver
  
  - Optionally modify values.yaml 
- - Create a name space for CSI driver deployment by issuing
-   ```
-   kubectl create namespace csi-wekafsplugin
-   ```
  - Install the driver:
    ```
-   helm install csi-wekafsplugin --namespace csi-wekafsplugin -n=csi-wekafsplugin ./
+   helm install csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace .
    ```
 
 ## Uninstall driver
