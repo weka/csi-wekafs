@@ -1,0 +1,33 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: csi-vdbench-on-dir-api
+  labels:
+    app: "vdbench"
+spec:
+  template:
+    metadata:
+      labels:
+        app: "vdbench"
+    spec:
+      containers:
+        - name: vdbench
+          image: wilkins/vdbench
+          env:
+            - name: DIR
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+          - mountPath: "/data"
+            name: my-csi-volume
+          command:
+            - "/vdbench.sh"
+          args: ["-p", "/data/$(DIR)", "-d", "5", "-f", "2", "-s", "512K", "-i", "1", "-e", "3600", "-t", "32", "-x", "16k"]
+      volumes:
+        - name: my-csi-volume
+          persistentVolumeClaim:
+            claimName: pvc-wekafs-dir-api # defined in pvc-wekafs-dir.yaml
+  selector:
+    matchLabels:
+      app: "vdbench"
