@@ -4,3 +4,4 @@
 .vendor
 main
 .build_tools
+*.tgz

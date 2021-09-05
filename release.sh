@@ -277,6 +277,7 @@ handle_envvars() {
   VERSION_STRING="${VERSION_STRING:-$(git_calc_next_tag)}"
   if [[ -z $EXPLICIT_VERSION ]]; then
     [[ $BUILD_MODE == dev ]] && VERSION_STRING+="-dev"
+    [[ $BUILD_MODE == beta ]] && VERSION_STRING+="-beta"
     git_check_repo_clean || VERSION_STRING+="-dirty"
   fi
 
