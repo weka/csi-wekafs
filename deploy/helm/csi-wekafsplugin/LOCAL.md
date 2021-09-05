@@ -2,6 +2,15 @@
 Helm Chart for Weka wekafs CSI driver deployment
 
 # Usage
+
+## Build charts
+> **NOTE**: To simplify source control and packaging process, software versions and git tags are not stored in repository. 
+> For this reason, make is necessary.
+
+```shell
+make
+```
+
 ## Install driver
  
  - Optionally modify values.yaml 

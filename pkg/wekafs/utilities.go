@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/xattr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,10 +40,7 @@ func createVolumeIdFromRequest(req *csi.CreateVolumeRequest, dynamicVolPath stri
 		return volId, nil
 
 	default:
-		exitMsg := "Unsupported volumeType in CreateVolumeRequest"
-		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
-
-		panic(exitMsg)
+		return "", status.Errorf(codes.InvalidArgument, "Unsupported VolumeType in CreateVolumeRequest")
 	}
 }
 
@@ -82,24 +78,12 @@ func GetVolumeDirName(volumeID string) string {
 	return strings.Join(slices[3:], "/") // may be either directory name or innerPath
 }
 
-func GetVolumeFullPath(mountPoint, volumeID string) string {
-	return filepath.Join(mountPoint, GetVolumeDirName(volumeID))
-}
-
 func GetVolumeType(volumeID string) string {
 	slices := strings.Split(volumeID, "/")
 	if len(slices) >= 2 {
 		return strings.Join(slices[0:2], "/")
 	}
 	return ""
-}
-
-func TruncateString(s string, i int) string {
-	runes := []rune(s)
-	if len(runes) > i {
-		return string(runes[:i])
-	}
-	return s
 }
 
 func PathExists(p string) bool {
@@ -115,9 +99,7 @@ func PathExists(p string) bool {
 	}
 
 	if !fi.IsDir() {
-		exitMsg := "A file was found instead of directory in mount point"
-		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
-		panic(exitMsg)
+		Die("A file was found instead of directory in mount point. Please contact support")
 	}
 	return true
 }

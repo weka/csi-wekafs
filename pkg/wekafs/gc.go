@@ -1,6 +1,5 @@
 package wekafs
 
-// TODO: fix emplementation of VolumeGC
 import (
 	"github.com/golang/glog"
 	"io"
@@ -104,7 +103,7 @@ func (gc *dirVolumeGc) purgeLeftovers(fs string) {
 		return
 	}
 
-	glog.Warningf("TODO: GC filesystem in %s", path) //TODO: To implement deletion of whole garbage folder
+	glog.Warningf("TODO: GC filesystem in %s", path)
 }
 
 func (gc *dirVolumeGc) finishGcCycle(fs string) {

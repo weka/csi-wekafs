@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,19 +44,20 @@ type nodeServer struct {
 	api               *apiStore
 }
 
+//goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodeExpandVolume(c context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	panic("implement me")
 }
 
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *apiStore, mounter *wekaMounter, gc *dirVolumeGc) *nodeServer {
+	//goland:noinspection GoBoolExpressions
 	if mounter.debugPath == "" && !isWekaInstalled() && crashOnNoWeka {
-		exitMsg := "weka OS driver module not installed, exiting"
-		_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
-		panic(exitMsg)
+		Die("Weka OS driver module not installed, exiting")
 	}
 	return &nodeServer{
 		caps: getNodeServiceCapabilities(
@@ -86,6 +86,7 @@ func NodePublishVolumeError(errorCode codes.Code, errorMessage string) (*csi.Nod
 	return &csi.NodePublishVolumeResponse{}, err
 }
 
+//goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	glog.Infof("Received a NodePublishVolumeRequest %s", req)
 	client, err := ns.api.GetClientFromSecrets(req.Secrets)
@@ -151,7 +152,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	fullPath := volume.getFullPath(mountPoint)
 
 	glog.Infof("Ensuring target mount root directory exists: %s", filepath.Dir(targetPath))
-	if err = os.MkdirAll(filepath.Dir(targetPath), 0750); err != nil {
+	if err = os.MkdirAll(filepath.Dir(targetPath), DefaultVolumePermissions); err != nil {
 		return NodePublishVolumeError(codes.Internal, err.Error())
 	}
 
@@ -204,6 +205,7 @@ func NodeUnpublishVolumeError(errorCode codes.Code, errorMessage string) (*csi.N
 	return &csi.NodeUnpublishVolumeResponse{}, err
 }
 
+//goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	glog.Infof("Received NodeUnpublishVolume request %s", req)
 	// Check arguments
@@ -274,6 +276,7 @@ func NodeStageVolumeError(errorCode codes.Code, errorMessage string) (*csi.NodeS
 	return &csi.NodeStageVolumeResponse{}, err
 }
 
+//goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	client, err := ns.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
@@ -306,6 +309,7 @@ func NodeUnstageVolumeError(errorCode codes.Code, errorMessage string) (*csi.Nod
 	return &csi.NodeUnstageVolumeResponse{}, err
 }
 
+//goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 
 	// Check arguments
@@ -321,6 +325,7 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
+//goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	topology := &csi.Topology{
 		Segments: map[string]string{TopologyKeyNode: ns.nodeID},
@@ -333,6 +338,7 @@ func (ns *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	}, nil
 }
 
+//goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	return &csi.NodeGetCapabilitiesResponse{
 		Capabilities: ns.caps,

@@ -10,10 +10,10 @@ RUN echo Downloading required Go modules
 RUN go mod download
 ADD . /src
 RUN echo Executing tests
-RUN go test /src/*/*.go
-RUN go vet /src/*/*.go
 RUN files=$(find . -name '*.go' | grep -v './vendor'); \
     if [ $(gofmt -d $files | wc -l) -ne 0 ]; then echo "formatting errors:"; gofmt -d $files; false; fi
+RUN go vet /src/*/*.go
+RUN go test /src/*/*.go
 RUN echo Building package
 RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o "/bin/wekafsplugin" /src/cmd/*
 

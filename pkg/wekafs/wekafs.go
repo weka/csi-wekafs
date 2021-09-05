@@ -21,9 +21,13 @@ import (
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"io/fs"
+	"io/ioutil"
 	"strings"
 	"sync"
 )
+
+var DefaultVolumePermissions fs.FileMode = 0750 // TODO: propagate it via StorageClass or at least as global flag
 
 type wekaFsDriver struct {
 	name              string
@@ -55,6 +59,12 @@ var (
 type apiStore struct {
 	sync.Mutex
 	apis map[uint32]*apiclient.ApiClient
+}
+
+// Die used to intentionally panic and exit, while updating termination log
+func Die(exitMsg string) {
+	_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+	panic(exitMsg)
 }
 
 // getByHash returns pointer to existing API if found by hash, or nil

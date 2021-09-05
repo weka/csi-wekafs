@@ -58,7 +58,7 @@ func main() {
 		return
 	}
 	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode {
-		panic("Invalid mode specified for CSI driver")
+		wekafs.Die("Invalid mode specified for CSI driver")
 	}
 	glog.Infof("Running in mode: %s", csiMode)
 
