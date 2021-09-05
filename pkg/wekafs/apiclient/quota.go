@@ -88,7 +88,7 @@ type QuotaCreateRequest struct {
 	HardLimitBytes uint64 `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64 `json:"soft_limit_bytes,omitempty"`
 	Path           string `json:"path,omitempty"`
-	GraceSeconds   uint64 `json:"grace_seconds,omitempty"`
+	GraceSeconds   uint64 `json:"grace_seconds"`
 	quotaType      QuotaType
 	capacityLimit  uint64
 }
@@ -150,6 +150,7 @@ func NewQuotaCreateRequest(fs FileSystem, inodeId uint64, quotaType QuotaType, c
 		inodeId:       inodeId,
 		quotaType:     quotaType,
 		capacityLimit: capacityLimit,
+		GraceSeconds:  0,
 	}
 	if quotaType == QuotaTypeHard {
 		ret.HardLimitBytes = capacityLimit
@@ -234,6 +235,7 @@ func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForComplet
 		return err
 	}
 	if waitForCompletion {
+		q.FilesystemUid = qr.filesystemUid
 		return a.WaitForQuotaActive(q)
 	}
 	f()
@@ -280,8 +282,17 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 	}
 	err := a.Get(ret.GetApiUrl(), nil, ret)
 	if err != nil {
-		return nil, ObjectNotFoundError
-		//TODO: fix this to return notfound only when no other errors occur
+		switch t := err.(type) {
+		case ApiNotFoundError:
+			return nil, ObjectNotFoundError
+		case ApiInternalError:
+			if t.ApiResponse.Message == "Directory has no quota" {
+				return nil, ObjectNotFoundError
+			}
+			return nil, err
+		default:
+			return nil, err
+		}
 	}
 	ret.FilesystemUid = fs.Uid
 	ret.InodeId = inodeId

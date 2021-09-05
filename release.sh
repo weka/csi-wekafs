@@ -175,7 +175,7 @@ docker_push_image() {
 
 build() {
   log_message INFO "Building binaries"
-  docker build --build-arg VERSION="v${VERSION_STRING}" --no-cache -t "${DOCKER_IMAGE_NAME}:v${VERSION_STRING}" \
+  docker build --pull --build-arg VERSION="v${VERSION_STRING}" -t "${DOCKER_IMAGE_NAME}:v${VERSION_STRING}" \
   -f Dockerfile --label revision="v${VERSION_STRING}" . || \
     log_fatal "Failed to build image"
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/xattr"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
@@ -52,35 +51,48 @@ func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
 			glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via API")
 			return int64(size), nil
 		}
-	} else {
-		size, err := v.getSizeFromXattr(mountPath)
-		if err != nil {
-			return 0, err
+		if err == apiclient.ObjectNotFoundError {
+			glog.V(3).Infoln("Volume has no quota, returning capacity 0")
+			return 0, nil //
 		}
-		glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via Xattr")
-		return int64(size), nil
 	}
-	size, err := v.getSizeFromDf(mountPath)
-	if err == nil {
-		glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via fs stat")
-		return int64(size), nil
+	glog.V(4).Infoln("Volume", v.GetId(), "appears to be a legacy volume. Trying to fetch capacity from Xattr")
+	size, err := v.getSizeFromXattr(mountPath)
+	if err != nil {
+		return 0, err
 	}
-	return 0, errors.New("could not fetch volume capacity")
+	glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via Xattr")
+	return int64(size), nil
 }
 
 func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
 	glog.V(3).Infoln("Updating capacity of the volume", v.GetId(), "to", capacityLimit)
+	var fallback = true
 	f := func() error { return v.updateCapacityQuota(mountPath, enforceCapacity, capacityLimit) }
 	if v.apiClient == nil {
 		glog.V(4).Infof("Volume has no API client bound, updating capacity in legacy mode")
 		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
+		fallback = false
 	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		glog.V(4).Infoln("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
 		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
+		fallback = false
 	}
 	err := f()
 	if err == nil {
 		glog.V(3).Infoln("Successfully updated capacity for volume", v.GetId())
+		return err
+	}
+	if fallback {
+		glog.V(4).Infoln("Failed to set quota for a volume, maybe it is not empty? Falling back to xattr")
+		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
+		err := f()
+		if err == nil {
+			glog.V(3).Infoln("Successfully updated capacity for volume in FALLBACK mode", v.GetId())
+		} else {
+			glog.Errorln("Failed to set capacity for quota volume", v.GetId(), "even in fallback")
+		}
+		return err
 	}
 	return err
 }
@@ -102,14 +114,15 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 		return err
 	}
 
-	q, err := v.apiClient.GetQuotaByFileSystemAndInode(fs, inodeId)
 	// check if the quota already exists. If not - create it and exit
+	q, err := v.apiClient.GetQuotaByFileSystemAndInode(fs, inodeId)
 	if err != nil {
 		if err != apiclient.ObjectNotFoundError {
 			// any other error
+			glog.Errorln("Failed to get quota:", err)
 			return status.Error(codes.Internal, err.Error())
 		}
-		_, err := v.CreateQuotaFromVolumeName(mountPath, enforceCapacity, uint64(capacityLimit))
+		_, err := v.CreateQuotaFromMountPath(mountPath, enforceCapacity, uint64(capacityLimit))
 		return err
 	}
 
@@ -161,7 +174,7 @@ func (v DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
 	}
 	garbageFullPath := filepath.Join(mountPath, garbagePath)
 	glog.Infof("Ensuring that garbagePath %s exists", garbageFullPath)
-	err = os.MkdirAll(garbageFullPath, 0750)
+	err = os.MkdirAll(garbageFullPath, DefaultVolumePermissions)
 	if err != nil {
 		glog.Errorf("Failed to create garbagePath %s", garbageFullPath)
 		return err
@@ -223,7 +236,7 @@ func (v DirVolume) GetId() string {
 	return v.id
 }
 
-func (v DirVolume) CreateQuotaFromVolumeName(mountPath string, enforceCapacity *bool, capacityLimit uint64) (*apiclient.Quota, error) {
+func (v DirVolume) CreateQuotaFromMountPath(mountPath string, enforceCapacity *bool, capacityLimit uint64) (*apiclient.Quota, error) {
 	var quotaType apiclient.QuotaType
 	if enforceCapacity != nil {
 		if !*enforceCapacity {
@@ -291,24 +304,6 @@ func (v DirVolume) getSizeFromXattr(mountPath string) (uint64, error) {
 	return 0, ErrNoXattrOnVolume
 }
 
-//getSizeFromDf used for GetCapacity, since we don't have secrets to check API
-func (v DirVolume) getSizeFromDf(mountPath string) (uint64, error) {
-	var volStat, parentStat unix.Statfs_t
-	err := unix.Statfs(v.getFullPath(mountPath), &volStat)
-	if err != nil {
-		return 0, err
-	}
-
-	errParent := unix.Statfs(filepath.Dir(v.getFullPath(mountPath)), &parentStat)
-	if errParent != nil {
-		return 0, errParent
-	}
-	volSize := volStat.Blocks * uint64(volStat.Bsize)
-	// Available blocks * size per block = available space in bytes
-	glog.V(3).Infoln("Volume", v.GetId(), "size is", volSize, "bytes")
-	return volSize, nil
-}
-
 func (v DirVolume) getFilesystemObj() (*apiclient.FileSystem, error) {
 	fs, err := v.apiClient.GetFileSystemByName(v.Filesystem)
 	if err != nil {
@@ -343,14 +338,14 @@ func (v DirVolume) Exists(mountPoint string) (bool, error) {
 
 func (v DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64) error {
 	volPath := v.getFullPath(mountPath)
-	if err := os.MkdirAll(volPath, 0750); err != nil {
+	if err := os.MkdirAll(volPath, DefaultVolumePermissions); err != nil {
 		glog.Errorf("Failed to create directory %s", volPath)
 		return err
 	}
+
 	glog.Infof("Created directory %s, updating its capacity to %v", v.getFullPath(mountPath), capacity)
 	// Update volume metadata on directory using xattrs
-	err := v.UpdateCapacity(mountPath, &enforceCapacity, capacity)
-	if err != nil {
+	if err := v.UpdateCapacity(mountPath, &enforceCapacity, capacity); err != nil {
 		glog.Warningf("Failed to update capacity on newly created volume %s in: %s, deleting", v.id, volPath)
 		err2 := v.Delete(mountPath)
 		if err2 != nil {
@@ -360,22 +355,6 @@ func (v DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64
 	}
 	glog.V(3).Infof("Created volume %s in: %v", v.id, volPath)
 	return nil
-}
-
-func (v DirVolume) deleteQuota(mountPath string) error {
-	if v.apiClient == nil || !v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		return apiclient.UnsupportedOperationError
-	}
-	fs, err := v.getFilesystemObj()
-	if err != nil {
-		return err
-	}
-	inodeId, err := v.getInodeId(mountPath)
-	if err != nil {
-		return err
-	}
-	qd := apiclient.NewQuotaDeleteRequest(*fs, inodeId)
-	return v.apiClient.DeleteQuota(qd)
 }
 
 // Delete is a synchronous delete, used for cleanup on unsuccessful ControllerCreateVolume. GC flow is separate

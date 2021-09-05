@@ -3,11 +3,12 @@ package apiclient
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/hashicorp/go-version"
 )
 
 const ApiPathLogin = "login"
 
-const ApiPathTokenExpiry = "security/tokensExpiry"
+const ApiPathTokenExpiry = "security/defaultTokensExpiry"
 
 const ApiPathRefresh = "login/refresh"
 
@@ -35,7 +36,9 @@ func (a *ApiClient) fetchClusterInfo() error {
 	a.ClusterName = responseData.Name
 	a.ClusterGuid = responseData.Guid
 	clusterVersion := fmt.Sprintf("v%s", responseData.Release)
+	v, _ := version.NewVersion(clusterVersion)
 	a.CompatibilityMap.fillIn(clusterVersion)
+	a.Log(2, "Connected to cluster:", a.ClusterName, "GUID:", a.ClusterGuid, "version:", clusterVersion, v)
 	a.Log(3, "Cluster compatibility for filesystem as CSI volume:", a.SupportsFilesystemAsVolume())
 	a.Log(3, "Cluster compatibility for quota directory as CSI volume:", a.SupportsQuotaDirectoryAsVolume())
 	a.Log(3, "Cluster compatibility for quota on non-empty CSI volume:", a.SupportsQuotaOnNonEmptyDirs())

@@ -47,30 +47,37 @@ type controllerServer struct {
 	api            *apiStore
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ControllerPublishVolume(c context.Context, request *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ControllerUnpublishVolume(c context.Context, request *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ListVolumes(c context.Context, request *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) GetCapacity(c context.Context, request *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) CreateSnapshot(c context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) DeleteSnapshot(c context.Context, request *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ListSnapshots(c context.Context, request *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	panic("implement me")
 }
@@ -93,7 +100,7 @@ func NewControllerServer(nodeID string, api *apiStore, mounter *wekaMounter, gc 
 func createKeyValuePairs(m map[string]string) string {
 	b := new(bytes.Buffer)
 	for key, value := range m {
-		fmt.Fprintf(b, "%s=\"%s\"\n", key, value)
+		_, _ = fmt.Fprintf(b, "%s=\"%s\"\n", key, value)
 	}
 	return b.String()
 }
@@ -104,6 +111,7 @@ func CreateVolumeError(errorCode codes.Code, errorMessage string) (*csi.CreateVo
 	return &csi.CreateVolumeResponse{}, err
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	glog.V(3).Infof("Received a CreateVolume request: %s", createKeyValuePairs(req.GetParameters()))
 	defer glog.V(3).Infof("Completed processing request: %s", createKeyValuePairs(req.GetParameters()))
@@ -235,6 +243,7 @@ func DeleteVolumeError(errorCode codes.Code, errorMessage string) (*csi.DeleteVo
 	return &csi.DeleteVolumeResponse{}, err
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
@@ -275,6 +284,7 @@ func ExpandVolumeError(errorCode codes.Code, errorMessage string) (*csi.Controll
 	return &csi.ControllerExpandVolumeResponse{}, err
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 
 	if len(req.GetVolumeId()) == 0 {
@@ -302,7 +312,7 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		return ExpandVolumeError(codes.Internal, err.Error())
 	}
 
-	capacity := int64(capRange.GetRequiredBytes())
+	capacity := capRange.GetRequiredBytes()
 
 	maxStorageCapacity, err := volume.getMaxCapacity(mountPoint)
 	if err != nil {
@@ -337,6 +347,7 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}, nil
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	return &csi.ControllerGetCapabilitiesResponse{
 		Capabilities: cs.caps,
@@ -349,6 +360,7 @@ func ValidateVolumeCapsError(errorCode codes.Code, errorMessage string) (*csi.Va
 	return &csi.ValidateVolumeCapabilitiesResponse{}, err
 }
 
+//goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 
 	// Check arguments

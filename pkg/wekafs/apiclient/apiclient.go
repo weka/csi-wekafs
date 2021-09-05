@@ -67,10 +67,10 @@ type WekaCompatibilityRequiredVersions struct {
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
-	DirectoryAsVolume:      "v3.0",
-	FilesystemAsVolume:     "v3.13",
-	QuotaDirectoryAsVolume: "v3.13",
-	QuotaOnNonEmptyDirs:    "v3.99",
+	DirectoryAsVolume:      "v3.0",  // can create CSI volume from directory, without quota support
+	FilesystemAsVolume:     "v3.13", // can create CSI volume from filesystem
+	QuotaDirectoryAsVolume: "v3.13", // can create CSI volume from directory with quota support
+	QuotaOnNonEmptyDirs:    "v3.99", // can enable quota on legacy CSI volume (directory) without quota support
 }
 
 type WekaCompatibilityMap struct {
@@ -83,132 +83,23 @@ type WekaCompatibilityMap struct {
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	v, err := version.NewVersion(versionStr)
 	if err != nil {
-		panic("Could not fetch a valid Weka cluster version!")
+		glog.Errorln("Could not parse cluster version", versionStr, "assuming new features are unsupported!")
+		cm.DirectoryAsVolume = true
+		cm.FilesystemAsVolume = false
+		cm.QuotaDirectoryAsVolume = false
+		cm.QuotaOnNonEmptyDirs = false
+		return
 	}
 	d, err := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsVolume)
 	f, err := version.NewVersion(MinimumSupportedWekaVersions.FilesystemAsVolume)
 	q, err := version.NewVersion(MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
+	n, err := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnNonEmptyDirs)
 
-	cm.DirectoryAsVolume = v.GreaterThan(d)
-	cm.FilesystemAsVolume = v.GreaterThan(f)
-	cm.QuotaDirectoryAsVolume = v.GreaterThan(q)
+	cm.DirectoryAsVolume = v.GreaterThanOrEqual(d)
+	cm.FilesystemAsVolume = v.GreaterThanOrEqual(f)
+	cm.QuotaDirectoryAsVolume = v.GreaterThanOrEqual(q)
+	cm.QuotaOnNonEmptyDirs = v.GreaterThanOrEqual(n)
 }
-
-type apiError interface {
-	Error() string
-	getType() string
-}
-
-type ApiError struct {
-	Err         error
-	Text        string
-	StatusCode  *int
-	RawData     *[]byte
-	ApiResponse *ApiResponse
-}
-
-func (e *ApiError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
-		e.getType(), e.Text, *e.StatusCode, e.Err, func() string {
-			if e.RawData != nil {
-				return string(*e.RawData)
-			}
-			return ""
-		}(),
-		e.ApiResponse.Data)
-}
-func (e *ApiError) getType() string {
-	return "ApiError"
-}
-
-type ApiAuthorizationError ApiError
-
-func (e *ApiAuthorizationError) getType() string {
-	return "ApiAuthorizationError"
-}
-func (e *ApiAuthorizationError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
-		e.getType(),
-		e.Text,
-		*e.StatusCode,
-		e.Err,
-		func() string {
-			if e.RawData != nil {
-				return string(*e.RawData)
-			}
-			return ""
-		}(),
-		e.ApiResponse.Data)
-}
-
-type ApiBadRequestError struct {
-	ApiError
-}
-
-func (e *ApiBadRequestError) getType() string {
-	return "ApiBadRequestError"
-}
-func (e *ApiBadRequestError) Error() string {
-	return e.ApiError.Error()
-}
-
-type ApiConflictError struct {
-	ApiError
-	ConflictingEntityId *uuid.UUID
-}
-
-func (e *ApiConflictError) getType() string {
-	return "ApiConflictError"
-}
-func (e *ApiConflictError) Error() string {
-	if e.ConflictingEntityId != nil {
-		return fmt.Sprintf("%v, conflicting entity ID: %s", e.ApiError, e.ConflictingEntityId.String())
-	}
-	return e.ApiError.Error()
-}
-
-type ApiInternalError ApiError
-
-func (e *ApiInternalError) getType() string {
-	return "ApiInternalError"
-}
-
-type ApiNotFoundError ApiError
-
-func (e *ApiNotFoundError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
-		e.getType(),
-		e.Text,
-		*e.StatusCode,
-		e.Err,
-		func() string {
-			if e.RawData != nil {
-				return string(*e.RawData)
-			}
-			return ""
-		}(), e.ApiResponse.Data)
-}
-
-func (e *ApiNotFoundError) getType() string {
-	return "ApiNotFoundError"
-}
-
-type ApiRetriesExceeded struct {
-	ApiError
-	Retries int
-}
-
-func (e *ApiRetriesExceeded) getType() string {
-	return "ApiRetriesExceeded"
-}
-func (e *ApiRetriesExceeded) Error() string {
-	return fmt.Sprintf("%s, retried %d times", e.ApiError.Error(), e.Retries)
-}
-
-var ObjectNotFoundError = errors.New("object not found")
-var MultipleObjectsFoundError = errors.New("ambiguous filter, multiple objects match")
-var UnsupportedOperationError = errors.New("operation is not supported on object of this type")
-var RequestMissingParams = errors.New("request cannot be sent since some required params are missing")
 
 func NewApiClient(username, password, organization string, endpoints []string, scheme string) (*ApiClient, error) {
 	a := &ApiClient{
@@ -273,7 +164,9 @@ func (a *ApiClient) isLoggedIn() bool {
 //chooseRandomEndpoint returns a random endpoint of the configured ones
 func (a *ApiClient) chooseRandomEndpoint() {
 	if a.Endpoints == nil || len(a.Endpoints) == 0 {
-		panic("cannot initialize API client without at least 1 endpoint")
+		a.currentEndpointId = -1
+		a.Log(3, "Failed to choose random endpoint, no endpoints exist")
+		return
 	}
 	a.currentEndpointId = rand.Intn(len(a.Endpoints))
 	a.Log(4, "Choosing random endpoint", a.getEndpoint())
@@ -305,6 +198,11 @@ func (a *ApiClient) getBaseUrl() string {
 // do Makes a basic API call to the client, returns an *ApiResponse that includes raw data, error message etc.
 func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[string]string) (*ApiResponse, apiError) {
 	//construct URL path
+	if len(a.Endpoints) < 1 {
+		return &ApiResponse{}, &ApiNoEndpointsError{
+			Err: errors.New("no endpoints could be found for API client"),
+		}
+	}
 	url := a.getUrl(Path)
 
 	//construct base request and add auth if exists
@@ -360,7 +258,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 	if err != nil {
 		return nil, &ApiError{
 			Err:         err,
-			Text:        "Failed to perform request",
+			Text:        "Failed to read from request",
 			StatusCode:  &response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: nil,
@@ -385,19 +283,23 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 	}
 
 	switch response.StatusCode {
-	case http.StatusOK:
+	case http.StatusOK: //200
 		return Response, nil
-	case http.StatusBadRequest:
+	case http.StatusCreated: //201
+		return Response, nil
+	case http.StatusAccepted: //202
+		return Response, nil
+	case http.StatusNoContent: //203
+		return Response, nil
+	case http.StatusBadRequest: //400
 		return Response, &ApiBadRequestError{
-			ApiError{
-				Err:         nil,
-				Text:        "Operation failed",
-				StatusCode:  &response.StatusCode,
-				RawData:     &responseBody,
-				ApiResponse: Response,
-			},
+			Err:         nil,
+			Text:        "Operation failed",
+			StatusCode:  &response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: Response,
 		}
-	case http.StatusUnauthorized:
+	case http.StatusUnauthorized: //401
 		return Response, &ApiAuthorizationError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -405,7 +307,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
-	case http.StatusNotFound:
+	case http.StatusNotFound: //404
 		return Response, &ApiNotFoundError{
 			Err:         nil,
 			Text:        "Object not found",
@@ -413,7 +315,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
-	case http.StatusConflict:
+	case http.StatusConflict: //409
 		return Response, &ApiConflictError{
 			ApiError: ApiError{
 				Err:         nil,
@@ -422,8 +324,18 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 				RawData:     &responseBody,
 				ApiResponse: Response,
 			},
-			ConflictingEntityId: nil, //TODO: parse and provide entity ID
+			ConflictingEntityId: nil, //TODO: parse and provide entity ID when supplied by API
 		}
+
+	case http.StatusInternalServerError: //500
+		return Response, ApiInternalError{
+			Err:         nil,
+			Text:        Response.Message,
+			StatusCode:  &response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: Response,
+		}
+
 	default:
 		return Response, &ApiError{
 			Err:         err,
@@ -441,25 +353,23 @@ func (a *ApiClient) handleNetworkErrors(err error) error {
 		return nil
 	}
 	if netError, ok := err.(net.Error); ok && netError.Timeout() {
-		println("Timeout")
-		return err
+		return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection timed out to ", a.getEndpoint()))}
 	} else {
 		switch t := err.(type) {
 		case *net.OpError:
 			if t.Op == "dial" {
-				println("Unknown host")
+				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Unknown host", a.getEndpoint()))}
 			} else if t.Op == "read" {
-				println("Connection refused")
+				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection refused:", a.getEndpoint()))}
 			}
 
 		case syscall.Errno:
 			if t == syscall.ECONNREFUSED {
-				println("Connection refused")
+				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection refused:", a.getEndpoint()))}
 			}
-		default:
-			return nil
 		}
 	}
+	// In this case this is not a network error, will be treated separately
 	return nil
 }
 
@@ -483,7 +393,7 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 					responseCodes = append(responseCodes, code)
 				}
 			}
-			return NoRetryError{
+			return ApiNonrecoverableError{
 				apiError: reqErr,
 			}
 		}
@@ -495,13 +405,14 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 		case http.StatusOK:
 			return nil
 		case http.StatusUnauthorized:
+			a.Log(4, "Got Authorization failure on request, trying to re-login")
 			_ = a.Init()
 			return reqErr
-		case http.StatusConflict, http.StatusBadRequest, http.StatusInternalServerError:
-			return NoRetryError{reqErr}
+		case http.StatusNotFound, http.StatusConflict, http.StatusBadRequest, http.StatusInternalServerError:
+			return ApiNonrecoverableError{reqErr}
 		default:
 			a.Log(2, "Failed to perform a request, got an unhandled error", reqErr, s)
-			return NoRetryError{reqErr}
+			return ApiNonrecoverableError{reqErr}
 		}
 	})
 	if err != nil {
@@ -570,7 +481,7 @@ func (a *ApiClient) Login() error {
 	responseData := &LoginResponse{}
 	if err := a.request("POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
-			panic(fmt.Sprintf("Could not log in to endpoint %s", a.getEndpoint()))
+			glog.Errorf("Could not log in to endpoint %s", a.getEndpoint())
 		}
 		return err
 	}
@@ -627,42 +538,23 @@ func (a *ApiClient) Init() error {
 		return a.Login()
 	}
 	a.refreshToken = responseData.RefreshToken
+	a.apiToken = responseData.AccessToken
 	a.apiTokenExpiryDate = time.Now().Add(time.Duration(a.apiTokenExpiryInterval-30) * time.Second)
 	a.Log(5, "Authentication token refreshed successfully, valid for", a.apiTokenExpiryDate.Sub(time.Now()))
 	return nil
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
-	if !a.isLoggedIn() {
-		if err := a.Init(); err != nil {
-			return false
-		}
-	}
 	return a.CompatibilityMap.QuotaDirectoryAsVolume
 }
 func (a *ApiClient) SupportsQuotaOnNonEmptyDirs() bool {
-	if !a.isLoggedIn() {
-		if err := a.Init(); err != nil {
-			return false
-		}
-	}
-	return a.CompatibilityMap.QuotaDirectoryAsVolume
+	return a.CompatibilityMap.QuotaOnNonEmptyDirs
 }
 
 func (a *ApiClient) SupportsFilesystemAsVolume() bool {
-	if !a.isLoggedIn() {
-		if err := a.Init(); err != nil {
-			return false
-		}
-	}
 	return a.CompatibilityMap.FilesystemAsVolume
 }
 func (a *ApiClient) SupportsDirectoryAsVolume() bool {
-	if !a.isLoggedIn() {
-		if err := a.Init(); err != nil {
-			return false
-		}
-	}
 	return a.CompatibilityMap.DirectoryAsVolume
 }
 
@@ -675,13 +567,15 @@ func marshalRequest(r interface{}) (*[]byte, error) {
 	return &j, nil
 }
 
-// retryBackoff performs operation and retries on transient failures. Does not retry on NoRetryError
+// retryBackoff performs operation and retries on transient failures. Does not retry on ApiNonrecoverableError
 func retryBackoff(attempts int, sleep time.Duration, f func() apiError) error {
 	maxAttempts := attempts
 	if err := f(); err != nil {
-		if s, ok := err.(NoRetryError); ok {
+		switch s := err.(type) {
+		case ApiNonrecoverableError:
+			glog.V(6).Infoln("Non-recoverable error occurred, stopping further attempts")
 			// Return the original error for later checking
-			return s
+			return s.apiError
 		}
 		if attempts--; attempts > 0 {
 			glog.V(3).Infof("Failed to perform API call, %d attempts left", attempts)
@@ -705,16 +599,16 @@ func retryBackoff(attempts int, sleep time.Duration, f func() apiError) error {
 	return nil
 }
 
-// NoRetryError is internally generated when non-transient error is found
-type NoRetryError struct {
+// ApiNonrecoverableError is internally generated when non-transient error is found
+type ApiNonrecoverableError struct {
 	apiError
 }
 
-func (e NoRetryError) Error() string {
+func (e ApiNonrecoverableError) Error() string {
 	return e.apiError.Error()
 }
-func (e NoRetryError) getType() string {
-	return "NoRetryError"
+func (e ApiNonrecoverableError) getType() string {
+	return "ApiNonrecoverableError"
 }
 
 // ApiResponse returned by Request method

@@ -1,9 +1,9 @@
 package wekafs
 
 import (
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
-	"io/ioutil"
 	"k8s.io/utils/mount"
 	"os"
 	"path/filepath"
@@ -81,7 +81,7 @@ func (m *wekaMount) doUnmount() error {
 
 func (m *wekaMount) doMount() error {
 	glog.Infof("Creating mount for filesystem %s on mount point %s", m.fsRequest.fs, m.mountPoint)
-	if err := os.MkdirAll(m.mountPoint, 0750); err != nil {
+	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
 		return err
 	}
 	if m.debugPath == "" {
@@ -89,10 +89,8 @@ func (m *wekaMount) doMount() error {
 		return m.kMounter.Mount(m.fsRequest.fs, m.mountPoint, "wekafs", getMountOptions(m.fsRequest))
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fs)
-		if err := os.MkdirAll(fakePath, 0750); err != nil {
-			exitMsg := "Failed to create directory"
-			_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
-			panic(exitMsg)
+		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
+			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
 		}
 		glog.V(3).Infof("Calling debugPath k8s mounter for fs: %s (xattr %t) @ %s on fakePath %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, fakePath)
 
@@ -118,10 +116,7 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 		m.kMounter = mount.New("")
 	}
 	if _, ok := m.mountMap[fs]; !ok {
-		mountPointUuid, err := uuid.NewUUID()
-		if err != nil {
-			panic(err)
-		}
+		mountPointUuid, _ := uuid.NewUUID()
 		wMount := &wekaMount{
 			kMounter:   m.kMounter,
 			fsRequest:  &fs,
