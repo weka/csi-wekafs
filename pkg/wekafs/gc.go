@@ -84,9 +84,7 @@ func purgeDirectory(path string) error {
 				if err := purgeDirectory(fp); err != nil {
 					return err
 				}
-
-			}
-			if err := os.Remove(fp); err != nil {
+			} else if err := os.Remove(fp); err != nil {
 				glog.Infof("Failed to remove entry %s", fp)
 			}
 		}
