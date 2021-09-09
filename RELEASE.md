@@ -26,9 +26,11 @@ Please remember to utilize PVC annotations to ensure the PVC is bound to correct
 - Logging improvements were introduced with refined log levels
 - New examples provided for using Weka REST API
 
-## Bug fixes
+## Bug Fixes
 - `Failed to remove entry...` error messages appeared in logs for every inner directory during PV deletion
 
+## Known Issues
+- Authenticated mounts are not supported in current version of CSI plugin
 
 # Release 0.6.6
 ## Bug fixes
