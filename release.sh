@@ -284,6 +284,25 @@ handle_envvars() {
   export VERSION_STRING
 }
 
+git_push_tag() {
+  local tag="$1"
+  if git rev-parse "$tag" &> /dev/null; then
+    log_fatal "Could not add release tag, as tag $tag already exists"
+  fi
+  git tag "$tag" || log_fatal "Could not create tag $tag"
+  git push --tags || log_fatal "Could not create push tag $tag"
+}
+
+git_commit_manifests() {
+  git add "deploy/helm/csi-wekafsplugin/Chart.yaml" "deploy/kubernetes-*/wekafs/csi-wekafs-plugin.yaml"
+  git commit -m "Release $VERSION_STRING"
+  if ! git_check_repo_clean; then
+    git reset --soft HEAD~1
+    log_fatal "Could not create release commit, unexpected changes occurred in repository"
+  fi
+  log_message NOTICE "New commit was created for version $VERSION_STRING"
+}
+
 main() {
   echo CSI Deployment script, copyright Weka 2021
   while [[ $# -gt 0 ]]; do
@@ -338,11 +357,12 @@ main() {
   docker_push_image
   [[ $BUILD_MODE == dev ]] && log_message NOTICE "Done building dev build $VERSION_STRING" && exit 0
   helm_upload_package_to_s3
-  [[ $BUILD_MODE == beta ]] && log_message NOTICE "Done building Beta build $VERSION_STRING" && exit 0
   update_deployment_manifest
   helm_update_charts
+  git_commit_manifests
+  git_push_tag "$VERSION_STRING"
+  [[ $BUILD_MODE == beta ]] && log_message NOTICE "Done building Beta build $VERSION_STRING" && exit 0
   helm_update_registry
-  #TODO: HAndle Git release + push tags
   log_message NOTICE "All done!"
 }
 
