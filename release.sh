@@ -33,7 +33,7 @@ LOG_FILE=${LOG_FILE:-/dev/null}
 log_message() {
   # just add timestamp and redirect logs to stderr
   local LEVEL COLOR
-  [[ ${1^^} =~ TRACE|DEBUG|INFO|NOTICE|WARN|WARNING|ERROR|CRITICAL|FATAL ]] && LEVEL="${1^^}" && shift || LEVEL="INFO"
+  [[ ${1} =~ TRACE|DEBUG|INFO|NOTICE|WARN|WARNING|ERROR|CRITICAL|FATAL ]] && LEVEL="${1}" && shift || LEVEL="INFO"
 
   case $LEVEL in
   DEBUG) COLOR="$LIGHT_GRAY" ;;
@@ -43,7 +43,7 @@ log_message() {
   ERROR | CRITICAL) COLOR="$LIGHT_RED" ;;
   esac
 
-  ts "$(echo -e "$NO_COLOUR")[%Y-%m-%d %H:%M:%S] $(echo -e "${COLOR}${LEVEL^^}$NO_COLOUR")"$'\t' <<<"$*" | tee -a "$LOG_FILE" >&2
+  ts "$(echo -e "$NO_COLOUR")[%Y-%m-%d %H:%M:%S] $(echo -e "${COLOR}${LEVEL}$NO_COLOUR")"$'\t' <<<"$*" | tee -a "$LOG_FILE" >&2
 }
 
 log_fatal() {
