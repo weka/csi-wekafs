@@ -27,7 +27,14 @@ func (e ApiError) Error() string {
 			}
 			return ""
 		}(),
-		e.ApiResponse.Data)
+		func() string {
+			if e.ApiResponse != nil {
+				return string(e.ApiResponse.Data)
+			}else{
+				return ""
+			}
+		}(),
+	)
 }
 
 func (e ApiError) getType() string {
