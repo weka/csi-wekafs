@@ -384,6 +384,10 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 			a.chooseRandomEndpoint()
 			return reqErr
 		}
+		if reqErr != nil {
+			a.Log(2, "requestError: %s", reqErr.Error())
+			return ApiNonrecoverableError{reqErr}
+		}
 		if rawResponse == nil {
 			a.Log(2, "rawResponse is nil")
 		}
