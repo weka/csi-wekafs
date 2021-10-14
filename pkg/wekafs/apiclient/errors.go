@@ -14,14 +14,14 @@ type apiError interface {
 type ApiError struct {
 	Err         error
 	Text        string
-	StatusCode  *int
+	StatusCode  int
 	RawData     *[]byte
 	ApiResponse *ApiResponse
 }
 
 func (e ApiError) Error() string {
 	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
-		e.getType(), e.Text, *e.StatusCode, e.Err, func() string {
+		e.getType(), e.Text, e.StatusCode, e.Err, func() string {
 			if e.RawData != nil {
 				return string(*e.RawData)
 			}
@@ -63,7 +63,7 @@ func (e ApiAuthorizationError) Error() string {
 	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
-		*e.StatusCode,
+		e.StatusCode,
 		e.Err,
 		func() string {
 			if e.RawData != nil {
@@ -83,7 +83,7 @@ func (e ApiBadRequestError) Error() string {
 	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
-		*e.StatusCode,
+		e.StatusCode,
 		e.Err,
 		func() string {
 			if e.RawData != nil {
@@ -115,7 +115,7 @@ func (e ApiInternalError) Error() string {
 	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
-		*e.StatusCode,
+		e.StatusCode,
 		e.Err,
 		func() string {
 			if e.RawData != nil {
@@ -135,7 +135,7 @@ func (e ApiNotFoundError) Error() string {
 	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
-		*e.StatusCode,
+		e.StatusCode,
 		e.Err,
 		func() string {
 			if e.RawData != nil {
