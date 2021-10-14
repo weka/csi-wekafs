@@ -63,7 +63,7 @@ git_check_repo_clean() {
 
 # number of commits after latest tag
 git_get_commits_after_latest_tag() {
-  git rev-list "$(git_get_latest_tag)..HEAD" | wc -l
+  git rev-list "$(git_get_latest_tag)..HEAD" | wc -l | xargs
 }
 
 # calculates next version by adding 1 to the rightmost version part

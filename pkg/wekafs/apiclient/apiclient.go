@@ -384,6 +384,9 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 			a.chooseRandomEndpoint()
 			return reqErr
 		}
+		if rawResponse == nil {
+			a.Log(2, "rawResponse is nil")
+		}
 		s := rawResponse.HttpStatusCode
 		var responseCodes []string
 		if len(rawResponse.ErrorCodes) > 0 {
