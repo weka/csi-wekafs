@@ -217,7 +217,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return nil, &ApiError{
 			Err:         err,
 			Text:        "Failed to construct API request",
-			StatusCode:  nil,
+			StatusCode:  0,
 			RawData:     nil,
 			ApiResponse: nil,
 		}
@@ -248,7 +248,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return nil, &ApiError{
 			Err:         err,
 			Text:        "Request failed",
-			StatusCode:  nil,
+			StatusCode:  0,
 			RawData:     nil,
 			ApiResponse: nil,
 		}
@@ -259,7 +259,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return nil, &ApiError{
 			Err:         err,
 			Text:        "Failed to read from request",
-			StatusCode:  &response.StatusCode,
+			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: nil,
 		}
@@ -276,7 +276,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return nil, &ApiError{
 			Err:         err,
 			Text:        "Failed to parse HTTP response body",
-			StatusCode:  &response.StatusCode,
+			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
@@ -295,7 +295,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return Response, &ApiBadRequestError{
 			Err:         nil,
 			Text:        "Operation failed",
-			StatusCode:  &response.StatusCode,
+			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
@@ -303,7 +303,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return Response, &ApiAuthorizationError{
 			Err:         nil,
 			Text:        "Operation failed",
-			StatusCode:  &response.StatusCode,
+			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
@@ -311,7 +311,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return Response, &ApiNotFoundError{
 			Err:         nil,
 			Text:        "Object not found",
-			StatusCode:  &response.StatusCode,
+			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
@@ -320,7 +320,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 			ApiError: ApiError{
 				Err:         nil,
 				Text:        "Object conflict",
-				StatusCode:  &response.StatusCode,
+				StatusCode:  response.StatusCode,
 				RawData:     &responseBody,
 				ApiResponse: Response,
 			},
@@ -331,7 +331,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return Response, ApiInternalError{
 			Err:         nil,
 			Text:        Response.Message,
-			StatusCode:  &response.StatusCode,
+			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
@@ -340,7 +340,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		return Response, &ApiError{
 			Err:         err,
 			Text:        "General failure during API command",
-			StatusCode:  &response.StatusCode,
+			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
@@ -596,7 +596,7 @@ func retryBackoff(attempts int, sleep time.Duration, f func() apiError) error {
 			ApiError: ApiError{
 				Err:         err,
 				Text:        fmt.Sprintf("Failed to perform operation after %d retries", maxAttempts),
-				StatusCode:  nil,
+				StatusCode:  0,
 				RawData:     nil,
 				ApiResponse: nil,
 			},
