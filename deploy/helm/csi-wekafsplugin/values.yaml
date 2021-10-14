@@ -38,3 +38,4 @@ controllerPluginTolerations: *globalPluginTolerations
 
 nodePluginTolerations: *globalPluginTolerations
 
+nodeSelector: {}

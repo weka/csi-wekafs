@@ -5,3 +5,4 @@
 main
 .build_tools
 *.tgz
+.DS_Store
