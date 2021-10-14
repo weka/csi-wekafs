@@ -204,6 +204,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		}
 	}
 	url := a.getUrl(Path)
+	a.Log(2, "Target URL: %s", url)
 
 	//construct base request and add auth if exists
 	var body *bytes.Reader
