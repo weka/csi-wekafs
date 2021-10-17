@@ -204,7 +204,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		}
 	}
 	url := a.getUrl(Path)
-	a.Log(2, "Target URL: %s", url)
+	a.Log(2, "Target URL:", url)
 
 	//construct base request and add auth if exists
 	var body *bytes.Reader
@@ -237,13 +237,16 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		r.URL.RawQuery = q.Encode()
 	}
 
-	a.Log(5, Method, r.URL.RequestURI(), func() string {
+	//LOG EVERY REQUEST
+	//WARNING: If logLevel >= 6, might expose sensitive data in cleartext
+	a.Log(6, Method, r.URL.RequestURI(), func() string {
 		if Payload != nil {
 			return string(*Payload)
 		}
 		return "<no-payload>"
 	}(),
 	)
+
 	response, err := a.client.Do(r)
 	if err != nil {
 		return nil, &ApiError{
@@ -255,7 +258,11 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		}
 	}
 	responseBody, err := ioutil.ReadAll(response.Body)
-	a.Log(5, string(responseBody))
+
+	// LOG EVERY RESPONSE
+	// WARNING: If logLevel >= 6, might expose sensitive data in cleartext
+	a.Log(6, string(responseBody))
+
 	if err != nil {
 		return nil, &ApiError{
 			Err:         err,

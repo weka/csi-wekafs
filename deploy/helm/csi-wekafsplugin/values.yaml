@@ -39,3 +39,5 @@ controllerPluginTolerations: *globalPluginTolerations
 nodePluginTolerations: *globalPluginTolerations
 
 nodeSelector: {}
+
+logLevel: 5

@@ -77,7 +77,7 @@ spec:
           image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
           imagePullPolicy: Always
           args:
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
             - "--drivername=$(CSI_DRIVER_NAME)"
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodeid=$(KUBE_NODE_NAME)"
@@ -128,7 +128,7 @@ spec:
               name: socket-dir
           image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
           args:
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--health-port=$(HEALTH_PORT)"
           env:
@@ -140,7 +140,7 @@ spec:
         - name: csi-registrar
           image: {{ required "Provide the csi node registrar sidecar container image." .Values.images.registrarsidecar }}
           args:
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=/var/lib/kubelet/plugins/csi-wekafs/csi.sock"
           securityContext:
