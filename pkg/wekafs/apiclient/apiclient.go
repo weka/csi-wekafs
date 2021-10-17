@@ -120,7 +120,7 @@ func NewApiClient(username, password, organization string, endpoints []string, s
 		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
 		currentEndpointId: -1,
 	}
-	a.Log(3, "Creating new API client for endpoints", endpoints)
+	a.Log(3, "Creating new API client for endpoints", endpoints, "scheme:", scheme)
 	a.clientHash = a.generateHash()
 	return a, nil
 }
