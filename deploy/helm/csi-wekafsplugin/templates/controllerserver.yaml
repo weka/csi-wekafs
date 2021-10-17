@@ -115,7 +115,7 @@ spec:
             privileged: true
           args:
             - "--csi-address=$(ADDRESS)"
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -125,7 +125,7 @@ spec:
         - name: csi-provisioner
           image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
           args:
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
           env:
@@ -137,7 +137,7 @@ spec:
         - name: csi-resizer
           image: {{ required "csi attacher sidercar image." .Values.images.resizersidecar }}
           args:
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
@@ -153,7 +153,7 @@ spec:
           imagePullPolicy: Always
           args:
             - "--drivername=$(CSI_DRIVER_NAME)"
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
             - "--endpoint=$(CSI_ENDPOINT)"
             - "--nodeid=$(KUBE_NODE_NAME)"
             - "--dynamic-path=$(CSI_DYNAMIC_PATH)"
@@ -207,7 +207,7 @@ spec:
               name: socket-dir
           image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
           args:
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--health-port=$(HEALTH_PORT)"
           env:

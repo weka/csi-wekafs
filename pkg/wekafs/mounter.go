@@ -74,7 +74,7 @@ func (m *wekaMount) doUnmount() error {
 	if err != nil {
 		glog.V(3).Infof("Failed unmounting %s at %s: %s", m.fsRequest.fs, m.mountPoint, err)
 	} else {
-		glog.V(3).Infof("Successfully unmounted %s (xattr %t) at %s, error: %v", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, err)
+		glog.V(3).Infof("Successfully unmounted %s (xattr %t) at %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint)
 	}
 	return err
 }
