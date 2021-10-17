@@ -87,12 +87,12 @@ func (api *apiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 
 // fromSecrets returns a pointer to API by secret contents
 func (api *apiStore) fromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
-	username := secrets["username"]
+	username := strings.TrimSpace(secrets["username"])
 	password := secrets["password"]
-	organization := secrets["organization"]
-	endpointsRaw := secrets["endpoints"]
+	organization := strings.TrimSpace(secrets["organization"])
+	endpointsRaw := strings.TrimSpace(secrets["endpoints"])
 	endpoints := strings.Split(string(endpointsRaw), ",")
-	scheme := secrets["scheme"]
+	scheme := strings.TrimSpace(secrets["scheme"])
 	return api.fromParams(username, password, organization, scheme, endpoints)
 }
 
