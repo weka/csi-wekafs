@@ -245,6 +245,8 @@ func DeleteVolumeError(errorCode codes.Code, errorMessage string) (*csi.DeleteVo
 
 //goland:noinspection GoUnusedParameter
 func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
+	glog.V(3).Infof("Received a DeleteVolume request for volume ID %s", req.GetVolumeId())
+	defer glog.V(3).Infof("Completed processing DeleteVolume request for volume ID %s", req.GetVolumeId())
 	volumeID := req.GetVolumeId()
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
@@ -286,6 +288,8 @@ func ExpandVolumeError(errorCode codes.Code, errorMessage string) (*csi.Controll
 
 //goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	glog.V(3).Infof("Received a ControllerExpandVolume request for volume ID %s", req.GetVolumeId())
+	defer glog.V(3).Infof("Completed processing ControllerExpandVolume request for volume ID %s", req.GetVolumeId())
 
 	if len(req.GetVolumeId()) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
@@ -362,6 +366,8 @@ func ValidateVolumeCapsError(errorCode codes.Code, errorMessage string) (*csi.Va
 
 //goland:noinspection GoUnusedParameter
 func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
+	glog.V(3).Infof("Received a ValidateVolumeCapabilities request for volume ID %s", req.GetVolumeId())
+	defer glog.V(3).Infof("Completed processing ValidateVolumeCapabilities request for volume ID %s", req.GetVolumeId())
 
 	// Check arguments
 	if len(req.GetVolumeId()) == 0 {
