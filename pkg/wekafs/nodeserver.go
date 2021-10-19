@@ -88,7 +88,8 @@ func NodePublishVolumeError(errorCode codes.Code, errorMessage string) (*csi.Nod
 
 //goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	glog.Infof("Received a NodePublishVolumeRequest %s", req)
+	glog.V(3).Infof("Received a NodePublishVolume request for volume ID %s", req.GetVolumeId())
+	defer glog.V(3).Infof("Completed processing NodePublishVolume request for volume ID %s", req.GetVolumeId())
 	client, err := ns.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
 		return NodePublishVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
@@ -278,6 +279,8 @@ func NodeStageVolumeError(errorCode codes.Code, errorMessage string) (*csi.NodeS
 
 //goland:noinspection GoUnusedParameter
 func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
+	glog.V(3).Infof("Received a NodeStageVolume request for volume ID %s", req.GetVolumeId())
+	defer glog.V(3).Infof("Completed processing NodeStageVolume request for volume ID %s", req.GetVolumeId())
 	client, err := ns.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
 		return NodeStageVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
