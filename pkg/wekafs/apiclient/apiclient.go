@@ -496,7 +496,7 @@ func (a *ApiClient) Login() error {
 	responseData := &LoginResponse{}
 	if err := a.request("POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
-			glog.Errorf("Could not log in to endpoint %s", a.getEndpoint())
+			glog.Errorf("Could not log in to endpoint %s, invalid credentials supplied", a.getEndpoint())
 		}
 		return err
 	}
