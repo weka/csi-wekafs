@@ -132,7 +132,7 @@ func (api *apiStore) GetClientFromSecrets(secrets map[string]string) (*apiclient
 		return nil, nil
 	}
 	if err := client.Init(); err != nil {
-		glog.Errorln("Failed to initialize API client", client.Username, "@", client.Endpoints)
+		glog.Errorln("Failed to initialize API client", client.Username, "@", client.Endpoints, err)
 		return nil, err
 	}
 	glog.V(4).Infof("Successfully initialized API backend for request")

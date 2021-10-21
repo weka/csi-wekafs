@@ -147,7 +147,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// obtain client for volume
 	client, err := cs.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return CreateVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
+		return CreateVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
 	volume, err := NewVolume(volumeID, client)
@@ -254,7 +254,7 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	client, err := cs.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return DeleteVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
+		return DeleteVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
 	volume, err := NewVolume(volumeID, client)
@@ -296,7 +296,7 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}
 	client, err := cs.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return ExpandVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
+		return ExpandVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
 	volume, err := NewVolume(req.GetVolumeId(), client)
@@ -383,7 +383,7 @@ func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	}
 	client, err := cs.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return ValidateVolumeCapsError(codes.Internal, "Failed to initialize Weka API client for the request")
+		return ValidateVolumeCapsError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
 	volume, err := NewVolume(req.GetVolumeId(), client)

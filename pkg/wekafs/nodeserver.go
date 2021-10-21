@@ -93,7 +93,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	defer glog.V(3).Infof("Completed processing NodePublishVolume request for volume ID %s", req.GetVolumeId())
 	client, err := ns.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return NodePublishVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
+		return NodePublishVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 	volume, err := NewVolume(req.GetVolumeId(), client)
 	if err != nil {
@@ -284,7 +284,7 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	defer glog.V(3).Infof("Completed processing NodeStageVolume request for volume ID %s", req.GetVolumeId())
 	client, err := ns.api.GetClientFromSecrets(req.Secrets)
 	if err != nil {
-		return NodeStageVolumeError(codes.Internal, "Failed to initialize Weka API client for the request")
+		return NodeStageVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 	volume, err := NewVolume(req.GetVolumeId(), client)
 	if err != nil {
@@ -333,7 +333,7 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 func (ns *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	topology := &csi.Topology{
 		Segments: map[string]string{
-			TopologyKeyNode: ns.nodeID,
+			TopologyKeyNode:   ns.nodeID,
 			TopologyKeyGlobal: "true",
 		},
 	}
