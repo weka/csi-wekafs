@@ -11,6 +11,9 @@ spec:
       labels:
         kubernetes.io/os: linux
     spec:
+      # make sure that pod is scheduled only on node having weka CSI node running
+      nodeSelector:
+        topology.csi.weka.io/global: "true"
       containers:
         - name: my-frontend
           image: busybox
