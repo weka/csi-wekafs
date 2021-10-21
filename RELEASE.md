@@ -25,6 +25,8 @@ Please remember to utilize PVC annotations to ensure the PVC is bound to correct
 - Release process was streamlined
 - Logging improvements were introduced with refined log levels
 - New examples provided for using Weka REST API
+- New topology label that allows scheduling of pods only on Kubernetes nodes having CSI node component.  
+In order to schedule pods on supporting nodes, add this NodeSelector: ```topology.csi.weka.io/global: "true"```
 
 ## Bug Fixes
 - `Failed to remove entry...` error messages appeared in logs for every inner directory during PV deletion
