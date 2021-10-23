@@ -31,8 +31,9 @@ import (
 	"k8s.io/utils/mount"
 )
 
-const TopologyKeyNode = "topology.csi.weka.io/node"
-const TopologyKeyGlobal = "topology.csi.weka.io/global"
+const TopologyKeyNode = "topology.wekafs.csi/node"
+const TopologyLabelNode = "topology.csi.weka.io/node"
+const TopologyLabelWeka = "topology.csi.weka.io/global"
 const WekaModule = "wekafsgw"
 const crashOnNoWeka = false
 
@@ -333,8 +334,9 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 func (ns *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	topology := &csi.Topology{
 		Segments: map[string]string{
-			TopologyKeyNode:   ns.nodeID,
-			TopologyKeyGlobal: "true",
+			TopologyKeyNode:   ns.nodeID, // required exactly same way as this is how node is accessed by K8s
+			TopologyLabelNode: ns.nodeID,
+			TopologyLabelWeka: "true",
 		},
 	}
 
