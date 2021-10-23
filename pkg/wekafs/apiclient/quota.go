@@ -288,8 +288,7 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 			glog.V(5).Infoln("Could not find existing quota object for filesystem", fs.Uid, "inodeId", inodeId, "got error 404:", t.ApiResponse.Message)
 			return nil, ObjectNotFoundError
 		case ApiInternalError:
-			if strings.Contains(t.ApiResponse.Message, "Directory has no quota") ||
-				strings.Contains(t.ApiResponse.Message, "getDirQuotaParameters returned ENOENT") {
+			if strings.Contains(t.ApiResponse.Message, "Directory has no quota") {
 				glog.V(5).Infoln("Could not find existing quota object for filesystem", fs.Uid, "inodeId", inodeId, "got error 500:", t.ApiResponse.Message)
 				return nil, ObjectNotFoundError
 			}
