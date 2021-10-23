@@ -289,6 +289,9 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 			if t.ApiResponse.Message == "Directory has no quota" {
 				return nil, ObjectNotFoundError
 			}
+			if t.ApiResponse.Message == "getDirQuotaParameters returned ENOENT" {
+				return nil, ObjectNotFoundError
+			}
 			return nil, err
 		default:
 			return nil, err
