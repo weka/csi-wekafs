@@ -51,10 +51,10 @@ func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
 			glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via API")
 			return int64(size), nil
 		}
-		if err == apiclient.ObjectNotFoundError {
-			glog.V(3).Infoln("Volume has no quota, returning capacity 0")
-			return 0, nil //
-		}
+		//if err == apiclient.ObjectNotFoundError {
+		//	glog.V(3).Infoln("Volume has no quota, returning capacity 0")
+		//	return 0, nil //
+		//}
 	}
 	glog.V(4).Infoln("Volume", v.GetId(), "appears to be a legacy volume. Trying to fetch capacity from Xattr")
 	size, err := v.getSizeFromXattr(mountPath)
