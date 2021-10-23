@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -284,16 +285,17 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 	if err != nil {
 		switch t := err.(type) {
 		case ApiNotFoundError:
+			glog.V(5).Infoln("Could not find existing quota object for filesystem", fs.Uid, "inodeId", inodeId, "got error 404:", t.ApiResponse.Message)
 			return nil, ObjectNotFoundError
 		case ApiInternalError:
-			if t.ApiResponse.Message == "Directory has no quota" {
-				return nil, ObjectNotFoundError
-			}
-			if t.ApiResponse.Message == "getDirQuotaParameters returned ENOENT" {
+			if strings.Contains(t.ApiResponse.Message, "Directory has no quota") ||
+				strings.Contains(t.ApiResponse.Message, "getDirQuotaParameters returned ENOENT") {
+				glog.V(5).Infoln("Could not find existing quota object for filesystem", fs.Uid, "inodeId", inodeId, "got error 500:", t.ApiResponse.Message)
 				return nil, ObjectNotFoundError
 			}
 			return nil, err
 		default:
+			glog.Errorln("Invalid condition on getting quota", err)
 			return nil, err
 		}
 	}
