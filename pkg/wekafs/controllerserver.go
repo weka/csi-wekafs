@@ -82,6 +82,11 @@ func (cs *controllerServer) ListSnapshots(c context.Context, request *csi.ListSn
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
+func (cs *controllerServer) ControllerGetVolume(context.Context, *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+	panic("implement me")
+}
+
 func NewControllerServer(nodeID string, api *apiStore, mounter *wekaMounter, gc *dirVolumeGc, dynamicVolPath string) *controllerServer {
 	return &controllerServer{
 		caps: getControllerServiceCapabilities(
