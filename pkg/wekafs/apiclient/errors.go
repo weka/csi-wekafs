@@ -30,7 +30,7 @@ func (e ApiError) Error() string {
 		func() string {
 			if e.ApiResponse != nil {
 				return string(e.ApiResponse.Data)
-			}else{
+			} else {
 				return ""
 			}
 		}(),
