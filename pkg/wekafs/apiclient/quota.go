@@ -22,7 +22,7 @@ const QuotaStatusActive = "ACTIVE"
 const QuotaStatusPending = "ADDING"
 const QuotaStatusError = "ERROR"
 const QuotaStatusDeleting = "DELETING"
-const MaxQuotaSize uint64 = 18446744073709547520
+const MaxQuotaSize uint64 = 9223372036854775807
 
 type Quota struct {
 	FilesystemUid  uuid.UUID `json:"-"`

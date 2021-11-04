@@ -121,7 +121,11 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
-
+{{- if .Values.legacyVolumeSecretName }}
+            - mountPath: /legacy-volume-access
+              name: legacy-volume-access
+              readOnly: true
+{{- end }}
         - name: liveness-probe
           volumeMounts:
             - mountPath: /csi
@@ -186,3 +190,8 @@ spec:
             path: /dev
             type: Directory
           name: dev-dir
+{{- if .Values.legacyVolumeSecretName }}
+        - name: legacy-volume-access
+          secret:
+            secretName: {{ .Values.legacyVolumeSecretName }}
+{{- end }}
