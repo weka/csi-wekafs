@@ -18,11 +18,13 @@ package wekafs
 
 import (
 	"errors"
+	"fmt"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
 	"io/ioutil"
+	"os"
 	"strings"
 	"sync"
 )
@@ -59,6 +61,7 @@ var (
 type apiStore struct {
 	sync.Mutex
 	apis map[uint32]*apiclient.ApiClient
+	legacySecrets *map[string]string
 }
 
 // Die used to intentionally panic and exit, while updating termination log
@@ -120,10 +123,36 @@ func (api *apiStore) fromParams(Username, Password, Organization, Scheme string,
 	return newClient, nil
 }
 
+func (api *apiStore) GetDefaultSecrets() (*map[string]string, error) {
+	err := pathIsDirectory(LegacySecretPath)
+	if err != nil {
+		return nil, errors.New("no legacy secret exists")
+	}
+	KEYS := []string{"scheme", "endpoints", "organization", "username", "password"}
+	ret := make(map[string]string)
+	for _, k := range KEYS {
+		filePath := fmt.Sprintf("%s/%s", LegacySecretPath, k)
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return nil, errors.New(fmt.Sprintf("Missing key %s in legacy secret configuration", k))
+		}
+		contents, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("Could not read key %s from legacy secret configuration", k))
+		}
+		ret[k] = string(contents)
+	}
+	return &ret, nil
+}
+
 func (api *apiStore) GetClientFromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
 	if len(secrets) == 0 {
-		glog.V(4).Infof("No API service for request, switching to legacy mode")
-		return nil, nil
+		if api.legacySecrets != nil {
+			glog.V(4).Infof("No explicit API service for request, using legacySecrets")
+			secrets = *api.legacySecrets
+		} else {
+			glog.V(4).Infof("No API service for request, switching to legacy mode")
+			return nil, nil
+		}
 	}
 
 	client, err := api.fromSecrets(secrets)
@@ -140,10 +169,18 @@ func (api *apiStore) GetClientFromSecrets(secrets map[string]string) (*apiclient
 }
 
 func NewApiStore() *apiStore {
-	return &apiStore{
+	s := &apiStore{
 		Mutex: sync.Mutex{},
 		apis:  make(map[uint32]*apiclient.ApiClient),
 	}
+	secrets, err := s.GetDefaultSecrets()
+	if err != nil {
+		glog.V(2).Infoln("No legacy API secrets could be found:", err)
+	} else {
+		glog.V(2).Infoln("Initialized legacy API secrets")
+		s.legacySecrets = secrets
+	}
+	return s
 }
 
 func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode CsiPluginMode) (*wekaFsDriver, error) {
@@ -213,6 +250,7 @@ func (driver *wekaFsDriver) Run() {
 
 const (
 	VolumeTypeDirV1 VolumeType = "dir/v1"
+	LegacySecretPath = "/legacy-volume-access"
 )
 
 type CsiPluginMode string
