@@ -15,6 +15,17 @@ helm repo add csi-wekafs https://weka.github.io/csi-wekafs
 helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace
 ```
 
+> **NOTE:** Since version 0.7.0, Weka CSI plugin transitions to API-based deployment model which requires API
+> connectivity and credentials parameters to be set in Storage Class.
+> 
+> Kubernetes does not allow storage class modification for existing volumes, hence the 
+> recommended upgrade process is re-deploying new persistent volumes based on new storage class format.
+>  
+> However, for sake of more convenient migration, a `legacySecretName` parameter can be set that will
+> bind existing legacy volumes to a Weka cluster API and allow volume expansion.
+> 
+> For further information, refer [Official Weka CSI Plugin documentation](https://docs.weka.io/appendix/weka-csi-plugin) 
+
 ## Usage
 - [Deploy an Example application](https://github.com/weka/csi-wekafs/blob/master/docs/usage.md)
 

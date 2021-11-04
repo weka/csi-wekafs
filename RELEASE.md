@@ -6,7 +6,8 @@
 - Supported for dynamic volumes only in this version
 - Requires a modification of storage class (or creation of new storage class)
 - Requires a Secret creation that contains API connection information
-- Current limitation: only new volumes will be set with quota. For setting quota on existing volumes, please contact Weka Customer Success team
+- Current limitation: only new volumes will be set with quota. For setting quota on existing volumes, use migration script in `migration` directory
+- Old volumes can be still expanded using a Legacy API secret (see values.yaml), but user is highly encouraged to migrate workloads to new storage class
 - Requires Weka software of v3.13 and above. If cluster version is below v3.13, quotas will not be applied.
 
 ### Multiple Weka Clusters on same Kubernetes Control Plane

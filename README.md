@@ -49,3 +49,4 @@ make build
 | nodePluginTolerations[0].effect | string | `"NoSchedule"` |  |
 | nodePluginTolerations[0].key | string | `"node-role.kubernetes.io/master"` |  |
 | nodePluginTolerations[0].operator | string | `"Exists"` |  |
+| 
