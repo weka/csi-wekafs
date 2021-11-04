@@ -79,7 +79,7 @@ In order to upgrade an existing deployment from version below 0.6.0,
 the previous version has to be uninstalled first: 
  
 ```
-./deploy/kubernetes-latest/cleanup.sh
+./deploy/util/cleanup.sh
 ```
 
 Then, a new version can be deployed, by following either one of the procedures below:

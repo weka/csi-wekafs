@@ -128,12 +128,6 @@ helm_upload_package_to_s3() {
   echo "'helm install csi-wekafs -n csi-wekafs --create-namespace $HELM_S3_URL/csi-wekafsplugin-${chart_version}.tgz'"
 }
 
-# updates all required parameters in Kubernetes manitest (not helm chart)
-update_deployment_manifest() {
-  yq w -i -d9 ./deploy/kubernetes-1.18/wekafs/csi-wekafs-plugin.yaml spec.template.spec.containers[0].image
-  yq w -i -d10 ./deploy/kubernetes-1.18/wekafs/csi-wekafs-plugin.yaml spec.template.spec.containers[0].image
-}
-
 helm_update_registry() {
   set -e
 	TEMP_DIR="$(mktemp -d)"
@@ -294,7 +288,7 @@ git_push_tag() {
 }
 
 git_commit_manifests() {
-  git add "deploy/helm/csi-wekafsplugin/Chart.yaml" "deploy/kubernetes-*/wekafs/csi-wekafs-plugin.yaml"
+  git add "deploy/helm/csi-wekafsplugin/Chart.yaml" "deploy/helm/csi-wekafsplugin/values.yaml"
   git commit -m "Release $VERSION_STRING"
   if ! git_check_repo_clean; then
     git reset --soft HEAD~1
@@ -357,7 +351,6 @@ main() {
   docker_push_image
   [[ $BUILD_MODE == dev ]] && log_message NOTICE "Done building dev build $VERSION_STRING" && exit 0
   helm_upload_package_to_s3
-  update_deployment_manifest
   helm_update_charts
   git_commit_manifests
   git_push_tag "$VERSION_STRING"
