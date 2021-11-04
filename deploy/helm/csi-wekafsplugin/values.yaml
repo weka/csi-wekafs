@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # name of the driver
 #  note same name will be used for provisioner name
 csiDriverName: "csi.weka.io"
-csiDriverVersion: &csiDriverVersion "0.6.7-dev108-dirty"
+csiDriverVersion: &csiDriverVersion 0.7.0
 # Image paths
 images:
   # "images.liveness-probe-sidecar" defines the container image used for the csi liveness probe sidecar
