@@ -234,7 +234,7 @@ func getStrictCapacityFromParams(params map[string]string) (bool, error) {
 	case apiclient.QuotaTypeHard:
 		enforceCapacity = true
 	case "":
-		enforceCapacity = false
+		enforceCapacity = true
 	default:
 		glog.Warningf("Could not recognize capacity enforcement in params: %s", qt)
 		return false, errors.New("unsupported capacityEnforcement in volume params")
