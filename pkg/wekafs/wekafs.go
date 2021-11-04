@@ -60,7 +60,7 @@ var (
 // apiStore hashmap of all APIs defined by credentials + endpoints
 type apiStore struct {
 	sync.Mutex
-	apis map[uint32]*apiclient.ApiClient
+	apis          map[uint32]*apiclient.ApiClient
 	legacySecrets *map[string]string
 }
 
@@ -249,8 +249,8 @@ func (driver *wekaFsDriver) Run() {
 }
 
 const (
-	VolumeTypeDirV1 VolumeType = "dir/v1"
-	LegacySecretPath = "/legacy-volume-access"
+	VolumeTypeDirV1  VolumeType = "dir/v1"
+	LegacySecretPath            = "/legacy-volume-access"
 )
 
 type CsiPluginMode string
