@@ -1,3 +1,7 @@
+# Release 0.7.1
+## Improvements
+- Upgrade sidecar components to latest versions
+
 # Release 0.7.0
 ## New Features
 ### Directory Quota support via Weka REST API
