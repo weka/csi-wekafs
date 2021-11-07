@@ -1,3 +1,7 @@
+# Release 0.7.2
+## Improvements
+- Upgrade sidecar components to latest versions on gcr.io
+
 # Release 0.7.1
 ## Improvements
 - Upgrade sidecar components to latest versions
