@@ -353,7 +353,7 @@ main() {
   helm_upload_package_to_s3
   helm_update_charts
   git_commit_manifests
-  git_push_tag "$VERSION_STRING"
+  git_push_tag v"$VERSION_STRING"
   [[ $BUILD_MODE == beta ]] && log_message NOTICE "Done building Beta build $VERSION_STRING" && exit 0
   helm_update_registry
   log_message NOTICE "All done!"
