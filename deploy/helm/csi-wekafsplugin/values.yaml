@@ -9,15 +9,15 @@ csiDriverVersion: &csiDriverVersion 0.7.1
 # Image paths
 images:
   # "images.liveness-probe-sidecar" defines the container image used for the csi liveness probe sidecar
-  livenessprobesidecar: quay.io/k8scsi/livenessprobe:v2.2.0
+  livenessprobesidecar: k8s.gcr.io/sig-storage/livenessprobe:v2.5.0
   # "images.attacher-sidercar" defines the container image used for the csi attacher sidecar
-  attachersidecar: quay.io/k8scsi/csi-attacher:v3.1.0
+  attachersidecar: k8s.gcr.io/sig-storage/csi-attacher:v3.3.0
   # "images.provisioner-sidercar" defines the container image used for the csi provisioner sidecar
-  provisionersidecar: quay.io/k8scsi/csi-provisioner:v2.1.2
+  provisionersidecar: k8s.gcr.io/sig-storage/csi-provisioner:v3.0.0
   # "images.registrar-sidercar" defines the container images used for the csi registrar sidercar
-  registrarsidecar: quay.io/k8scsi/csi-node-driver-registrar:v2.1.0
+  registrarsidecar: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0
   # "images.resizer-sidercar" defines the container image used for the csi provisioner sidecar
-  resizersidecar: quay.io/k8scsi/csi-resizer:v1.1.0
+  resizersidecar: k8s.gcr.io/sig-storage/csi-resizer:v1.3.0
   # images.csidriver defines csidriver image used for external provisioning
   csidriver: quay.io/weka.io/csi-wekafs
   csidriverTag: *csiDriverVersion
