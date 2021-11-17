@@ -22,13 +22,14 @@ The following OS packages or utilities are required:
 - jq (jq package)
 - Weka client software
 
-Usage: $0 <filesystem_name> [--csi-volumes-dir <CSI_VOLUMES_DIR>]
+Usage: $0 <filesystem_name> [--csi-volumes-dir <CSI_VOLUMES_DIR>] [--endpoint-address IP_ADDRESS:PORT]
        $0 --help
 
 Optional parameters:
 --------------------
---debug           Execute with debug level logging
---csi-volumes-dir Assume CSI volumes are stored in different directory on the filesystem. Default is "csi-volumes"
+--debug             Execute with debug level logging
+--csi-volumes-dir   Assume CSI volumes are stored in different directory on the filesystem. Default is "csi-volumes"
+--endpoint-address  API_ADDRESS:PORT of a Weka backend server, should be used for stateless clients.
 
 DELIM
 }
@@ -98,7 +99,7 @@ cleanup () {
 mount_fs() {
   local FS="$1"
   log_message NOTICE "Mounting filesystem $FILESYSTEM and accessing CSI volumes directory $CSI_VOLUMES_DIR..."
-  if mount -t wekafs -o acl "$FS" "$TMPDIR" &>> "$LOG_FILE"; then
+  if mount -t wekafs -o acl "${ENDPOINT_ADDRESS}${FS}" "$TMPDIR" 2>&1 | tee -a "$LOG_FILE"; then
     log_message NOTICE "Successfully mounted filesystem $FILESYSTEM"
   else
     log_fatal "Failed to mount filesystem $FILESYSTEM"
@@ -176,6 +177,10 @@ main() {
         usage
         exit 0
         ;;
+      --endpoint-address)
+        ENDPOINT_ADDRESS="$2"
+        shift 2
+        ;;
       --debug)
         LOG_LEVEL=5
         shift
@@ -195,10 +200,13 @@ main() {
         ;;
     esac
   done
+  [[ $ENDPOINT_ADDRESS ]] && ENDPOINT_ADDRESS="$ENDPOINT_ADDRESS/"
+
   if [[ -z $FILESYSTEM ]]; then
     usage
     log_fatal "Filesystem name not specified"
   fi
+  check_settings
   log_message NOTICE "Initializing volume migration for filesystem $FILESYSTEM"
   TMPDIR="$(mktemp -d)" && log_message DEBUG "Created a temporary directory $TMPDIR"
   mount_fs "$FILESYSTEM"
