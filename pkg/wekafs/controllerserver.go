@@ -212,6 +212,11 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	if err != nil {
 		return CreateVolumeError(codes.Internal, err.Error())
 	}
+
+	if err := volume.SetParams(req.GetParameters()); err != nil {
+		return CreateVolumeError(codes.Internal, err.Error())
+	}
+
 	if err := volume.Create(mountPoint, enforceCapacity, capacity); err != nil {
 		return &csi.CreateVolumeResponse{}, err
 	}

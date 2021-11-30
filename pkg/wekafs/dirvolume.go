@@ -9,6 +9,7 @@ import (
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,6 +22,7 @@ type DirVolume struct {
 	volumeType string
 	dirName    string
 	apiClient  *apiclient.ApiClient
+	permissions fs.FileMode
 }
 
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
@@ -108,14 +110,14 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 		glog.Errorln("Failed to fetch inode ID for volume", v.GetId())
 		return err
 	}
-	fs, err := v.getFilesystemObj()
+	fsObj, err := v.getFilesystemObj()
 	if err != nil {
 		glog.Errorln("Failed to fetch filesystem for volume", v.GetId())
 		return err
 	}
 
 	// check if the quota already exists. If not - create it and exit
-	q, err := v.apiClient.GetQuotaByFileSystemAndInode(fs, inodeId)
+	q, err := v.apiClient.GetQuotaByFileSystemAndInode(fsObj, inodeId)
 	if err != nil {
 		if err != apiclient.ObjectNotFoundError {
 			// any other error
@@ -142,7 +144,7 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 		return nil
 	}
 	updatedQuota := &apiclient.Quota{}
-	r := apiclient.NewQuotaUpdateRequest(*fs, inodeId, quotaType, uint64(capacityLimit))
+	r := apiclient.NewQuotaUpdateRequest(*fsObj, inodeId, quotaType, uint64(capacityLimit))
 	glog.V(5).Infoln("Constructed update request", r.String())
 	err = v.apiClient.UpdateQuota(r, updatedQuota)
 	if err != nil {
@@ -213,6 +215,7 @@ func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) 
 		volumeType: GetVolumeType(volumeId),
 		dirName:    GetVolumeDirName(volumeId),
 		apiClient:  apiClient,
+		permissions: DefaultVolumePermissions,
 	}, nil
 }
 
@@ -249,7 +252,7 @@ func (v DirVolume) CreateQuotaFromMountPath(mountPath string, enforceCapacity *b
 	}
 	glog.V(4).Infoln("Creating a quota for volume", v.GetId(), "capacity limit:", capacityLimit, "quota type:", quotaType)
 
-	fs, err := v.getFilesystemObj()
+	fsObj, err := v.getFilesystemObj()
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +260,7 @@ func (v DirVolume) CreateQuotaFromMountPath(mountPath string, enforceCapacity *b
 	if err != nil {
 		return nil, errors.New("cannot set quota, could not find inode ID of the volume")
 	}
-	qr := apiclient.NewQuotaCreateRequest(*fs, inodeId, quotaType, capacityLimit)
+	qr := apiclient.NewQuotaCreateRequest(*fsObj, inodeId, quotaType, capacityLimit)
 	q := &apiclient.Quota{}
 	if err := v.apiClient.CreateQuota(qr, q, true); err != nil {
 		return nil, err
@@ -268,7 +271,7 @@ func (v DirVolume) CreateQuotaFromMountPath(mountPath string, enforceCapacity *b
 
 func (v DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
 	glog.V(4).Infoln("Getting existing quota for volume", v.GetId())
-	fs, err := v.getFilesystemObj()
+	fsObj, err := v.getFilesystemObj()
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +279,7 @@ func (v DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
 	if err != nil {
 		return nil, err
 	}
-	ret, err := v.apiClient.GetQuotaByFileSystemAndInode(fs, inodeId)
+	ret, err := v.apiClient.GetQuotaByFileSystemAndInode(fsObj, inodeId)
 	if ret != nil {
 		glog.V(4).Infoln("Successfully acquired existing quota for volume", v.GetId(), ret.GetQuotaType(), ret.GetCapacityLimit())
 	}
@@ -305,11 +308,11 @@ func (v DirVolume) getSizeFromXattr(mountPath string) (uint64, error) {
 }
 
 func (v DirVolume) getFilesystemObj() (*apiclient.FileSystem, error) {
-	fs, err := v.apiClient.GetFileSystemByName(v.Filesystem)
+	fsObj, err := v.apiClient.GetFileSystemByName(v.Filesystem)
 	if err != nil {
 		return nil, err
 	}
-	return fs, nil
+	return fsObj, nil
 }
 
 func (v DirVolume) Mount(mounter *wekaMounter, xattr bool) (string, error, UnmountFunc) {
@@ -338,7 +341,7 @@ func (v DirVolume) Exists(mountPoint string) (bool, error) {
 
 func (v DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64) error {
 	volPath := v.getFullPath(mountPath)
-	if err := os.MkdirAll(volPath, DefaultVolumePermissions); err != nil {
+	if err := os.MkdirAll(volPath, v.permissions); err != nil {
 		glog.Errorf("Failed to create directory %s", volPath)
 		return err
 	}
@@ -363,5 +366,16 @@ func (v DirVolume) Delete(mountPath string) error {
 	volPath := v.getFullPath(mountPath)
 	_ = os.RemoveAll(volPath)
 	glog.V(2).Infof("Deleted volume %s in :%v", v.id, volPath)
+	return nil
+}
+
+func (v DirVolume) SetParams(params map[string]string) error {
+	if val, ok := params["permissions"]; ok {
+		raw, err := strconv.ParseInt(val, 10, 32)
+		if err != nil {
+			return err
+		}
+		v.permissions = fs.FileMode(int32(raw))
+	}
 	return nil
 }

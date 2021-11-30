@@ -1,2 +1,3 @@
 filesystemName: default
 volumeType: dir/v1
+permissions: "0775"
