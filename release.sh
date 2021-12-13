@@ -102,11 +102,12 @@ calc_helm_chart_version() {
 # updates all required helm parameters in a specified folder (or in default folder)
 helm_update_charts() {
   local CHART_DIR="${1:-"./deploy/helm"}/csi-wekafsplugin"
-  log_message NOTICE "Updating Helm charts with correct version strings"
+  log_message NOTICE "Updating Helm charts with correct version strings and generating documentation"
   yq w -i "$CHART_DIR/Chart.yaml" version "$(calc_helm_chart_version)"
   yq w -i "$CHART_DIR/Chart.yaml" appVersion "v${VERSION_STRING}"
-  yq w -i "$CHART_DIR/Chart.yaml" "sources[0]" "https://github.com/weka/csi-wekafs/tree/${VERSION_STRING}/deploy/helm/csi-wekafsplugin"
+  yq w -i "$CHART_DIR/Chart.yaml" "sources[0]" "https://github.com/weka/csi-wekafs/tree/v${VERSION_STRING}/deploy/helm/csi-wekafsplugin"
   yq w -i "$CHART_DIR/values.yaml" csiDriverVersion --anchorName csiDriverVersion "${VERSION_STRING}"
+  helm-docs -s file
 }
 
 helm_prepare_package() {
@@ -178,6 +179,7 @@ check_settings() {
   log_message NOTICE Checking for settings and dependencies
   ! which helm >/dev/null && log_fatal "Helm not installed!"
   ! which yq >/dev/null && log_fatal "yq not installed!"
+  ! which helm-docs >/dev/null && log_fatal "helm-docs not installed!"
   [[ -z ${VERSION_STRING} ]] && log_fatal "Missing VERSION_STRING envvar or --version flag"
   [[ -z ${DOCKER_REGISTRY_NAME} ]] && log_fatal "Missing DOCKER_REGISTRY_NAME envvar"
   [[ -z ${DOCKER_USERNAME}  ]] && log_fatal "Missing DOCKER_USERNAME envvar"
@@ -288,7 +290,8 @@ git_push_tag() {
 }
 
 git_commit_manifests() {
-  git add "deploy/helm/csi-wekafsplugin/Chart.yaml" "deploy/helm/csi-wekafsplugin/values.yaml"
+  git add "deploy/helm/csi-wekafsplugin/Chart.yaml" "deploy/helm/csi-wekafsplugin/values.yaml" \
+    "deploy/helm/csi-wekafsplugin/README.md" "README.md"
   git commit -m "Release $VERSION_STRING"
   if ! git_check_repo_clean; then
     git reset --soft HEAD~1
@@ -352,6 +355,7 @@ main() {
   [[ $BUILD_MODE == dev ]] && log_message NOTICE "Done building dev build $VERSION_STRING" && exit 0
   helm_upload_package_to_s3
   helm_update_charts
+  helm-docs -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl -s file
   git_commit_manifests
   git_push_tag v"$VERSION_STRING"
   [[ $BUILD_MODE == beta ]] && log_message NOTICE "Done building Beta build $VERSION_STRING" && exit 0

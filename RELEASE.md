@@ -1,3 +1,8 @@
+# Release 0.7.3
+## Improvements
+- Volume ownership and permissions configuration can be set via [storageClass parameters](examples/dynamic_api/storageclass-wekafs-dir-api.yaml)
+- Automated doc generation via helm-doc
+
 # Release 0.7.2
 ## Improvements
 - Upgrade sidecar components to latest versions on gcr.io
