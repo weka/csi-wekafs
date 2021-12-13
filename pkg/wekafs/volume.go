@@ -13,4 +13,5 @@ type Volume interface {
 	getMaxCapacity(mountPath string) (int64, error)
 	Create(mountPath string, enforceCapacity bool, capacity int64) error
 	Delete(mountPath string) error
+	SetParams(params map[string]string) error
 }

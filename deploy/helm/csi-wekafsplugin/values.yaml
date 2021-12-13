@@ -1,34 +1,39 @@
 # Default values for csi-wekafsplugin.
 
-# directory in root of file system where dynamic volumes are provisioned
+# -- Directory in root of file system where dynamic volumes are provisioned
 dynamicProvisionPath: "csi-volumes"
-# name of the driver
-#  note same name will be used for provisioner name
+# -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
-csiDriverVersion: &csiDriverVersion 0.7.2
-# Image paths
+# -- CSI driver version
+csiDriverVersion: &csiDriverVersion 0.7.3
 images:
-  # "images.liveness-probe-sidecar" defines the container image used for the csi liveness probe sidecar
+  # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: k8s.gcr.io/sig-storage/livenessprobe:v2.5.0
-  # "images.attacher-sidercar" defines the container image used for the csi attacher sidecar
+  # -- CSI attacher sidecar image URL
   attachersidecar: k8s.gcr.io/sig-storage/csi-attacher:v3.3.0
-  # "images.provisioner-sidercar" defines the container image used for the csi provisioner sidecar
+  # -- CSI provisioner sidecar image URL
   provisionersidecar: k8s.gcr.io/sig-storage/csi-provisioner:v3.0.0
-  # "images.registrar-sidercar" defines the container images used for the csi registrar sidercar
+  # -- CSI registrar sidercar
   registrarsidecar: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0
-  # "images.resizer-sidercar" defines the container image used for the csi provisioner sidecar
+  # -- CSI provisioner sidecar image URL
   resizersidecar: k8s.gcr.io/sig-storage/csi-resizer:v1.3.0
-  # images.csidriver defines csidriver image used for external provisioning
+  # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
+  # -- CSI driver tag
   csidriverTag: *csiDriverVersion
+# -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master
     operator: Exists
     effect: NoSchedule
+# -- Tolerations for CSI controller component only (by default same as global)
 controllerPluginTolerations: *globalPluginTolerations
+# -- Tolerations for CSI node component only (by default same as global)
 nodePluginTolerations: *globalPluginTolerations
+# -- Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only
 nodeSelector: {}
+# -- Log level of CSI plugin
 logLevel: 5
 
-# for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin
+# -- for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin
 # legacyVolumeSecretName: csi-wekafs-api-secret
