@@ -5,8 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 0.7.2
-
+csiDriverVersion: &csiDriverVersion 0.7.3
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: k8s.gcr.io/sig-storage/livenessprobe:v2.5.0
@@ -22,22 +21,17 @@ images:
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
   csidriverTag: *csiDriverVersion
-
 # -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master
     operator: Exists
     effect: NoSchedule
-
 # -- Tolerations for CSI controller component only (by default same as global)
 controllerPluginTolerations: *globalPluginTolerations
-
 # -- Tolerations for CSI node component only (by default same as global)
 nodePluginTolerations: *globalPluginTolerations
-
 # -- Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only
 nodeSelector: {}
-
 # -- Log level of CSI plugin
 logLevel: 5
 
