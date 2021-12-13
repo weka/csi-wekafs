@@ -9,11 +9,14 @@ allowVolumeExpansion: true
 parameters:
   volumeType: dir/v1
   filesystemName: default
+
   # optional parameters setting UID, GID and permissions on volume
   # UID of the volume owner, default 0 (root)
-  ownerUid: "1000"
+  #ownerUid: "1000"
+
   # GID of the volume owner, default 0 (root)
   ownerGid: "1000"
+
   # permsissions in Unix octal format, default "0750"
   permissions: "0775"
 

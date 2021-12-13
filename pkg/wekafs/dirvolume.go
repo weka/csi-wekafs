@@ -17,18 +17,20 @@ import (
 )
 
 type DirVolume struct {
-	id         string
-	Filesystem string
-	volumeType string
-	dirName    string
-	apiClient  *apiclient.ApiClient
+	id          string
+	Filesystem  string
+	volumeType  string
+	dirName     string
+	apiClient   *apiclient.ApiClient
 	permissions fs.FileMode
+	ownerUid    int
+	ownerGid    int
 }
 
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
 var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
 
-func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
+func (v *DirVolume) getMaxCapacity(mountPath string) (int64, error) {
 	glog.V(5).Infoln("Attempting to get max capacity available on filesystem", v.Filesystem)
 	var stat syscall.Statfs_t
 	err := syscall.Statfs(mountPath, &stat)
@@ -41,11 +43,11 @@ func (v DirVolume) getMaxCapacity(mountPath string) (int64, error) {
 	return maxCapacity, nil
 }
 
-func (v DirVolume) GetType() VolumeType {
+func (v *DirVolume) GetType() VolumeType {
 	return VolumeTypeDirV1
 }
 
-func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
+func (v *DirVolume) GetCapacity(mountPath string) (int64, error) {
 	glog.V(3).Infoln("Attempting to get current capacity of volume", v.GetId())
 	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		size, err := v.getSizeFromQuota(mountPath)
@@ -67,7 +69,7 @@ func (v DirVolume) GetCapacity(mountPath string) (int64, error) {
 	return int64(size), nil
 }
 
-func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
+func (v *DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
 	glog.V(3).Infoln("Updating capacity of the volume", v.GetId(), "to", capacityLimit)
 	var fallback = true
 	f := func() error { return v.updateCapacityQuota(mountPath, enforceCapacity, capacityLimit) }
@@ -99,7 +101,7 @@ func (v DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capac
 	return err
 }
 
-func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
+func (v *DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
 	if enforceCapacity != nil {
 		glog.V(4).Infoln("Updating quota on volume", v.GetId(), "to", capacityLimit, "enforceCapacity:", *enforceCapacity)
 	} else {
@@ -155,7 +157,7 @@ func (v DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool, 
 	return nil
 }
 
-func (v DirVolume) updateCapacityXattr(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
+func (v *DirVolume) updateCapacityXattr(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
 	glog.V(4).Infoln("Updating xattrs on volume", v.GetId(), "to", capacityLimit, "enforce:", enforceCapacity)
 	if enforceCapacity != nil && *enforceCapacity {
 		glog.V(3).Infof("Legacy volume does not support enforce capacity")
@@ -167,7 +169,7 @@ func (v DirVolume) updateCapacityXattr(mountPath string, enforceCapacity *bool, 
 	return err
 }
 
-func (v DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
+func (v *DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
 	mountPath, err, unmount := v.Mount(mounter, false)
 	defer unmount()
 	if err != nil {
@@ -186,7 +188,7 @@ func (v DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
 	glog.Infof("Attempting to move volume %s %s -> %s", v.id, v.getFullPath(mountPath), volumeTrashLoc)
 	if err = os.Rename(v.getFullPath(mountPath), volumeTrashLoc); err == nil {
 		v.dirName = u.String()
-		gc.triggerGcVolume(v) // TODO: Better to preserve immutability some way , needed due to recreation of volumes with same name
+		gc.triggerGcVolume(*v) // TODO: Better to preserve immutability some way , needed due to recreation of volumes with same name
 		glog.V(4).Infof("Moved %s to trash", v.id)
 		return err
 	} else {
@@ -195,7 +197,7 @@ func (v DirVolume) moveToTrash(mounter *wekaMounter, gc *dirVolumeGc) error {
 	}
 }
 
-func (v DirVolume) getFullPath(mountPath string) string {
+func (v *DirVolume) getFullPath(mountPath string) string {
 	return filepath.Join(mountPath, v.dirName)
 }
 
@@ -210,17 +212,17 @@ func NewVolume(volumeId string, apiClient *apiclient.ApiClient) (Volume, error) 
 		glog.V(5).Infof("Volume was not bound to any backend API client")
 	}
 	return &DirVolume{
-		id:         volumeId,
-		Filesystem: GetFSName(volumeId),
-		volumeType: GetVolumeType(volumeId),
-		dirName:    GetVolumeDirName(volumeId),
-		apiClient:  apiClient,
+		id:          volumeId,
+		Filesystem:  GetFSName(volumeId),
+		volumeType:  GetVolumeType(volumeId),
+		dirName:     GetVolumeDirName(volumeId),
+		apiClient:   apiClient,
 		permissions: DefaultVolumePermissions,
 	}, nil
 }
 
 //getInodeId used for obtaining the mount Path inode ID (to set quota on it later)
-func (v DirVolume) getInodeId(mountPath string) (uint64, error) {
+func (v *DirVolume) getInodeId(mountPath string) (uint64, error) {
 	glog.V(5).Infoln("Getting inode ID of volume", v.GetId(), "fullpath: ", v.getFullPath(mountPath))
 	fileInfo, err := os.Stat(v.getFullPath(mountPath))
 	if err != nil {
@@ -235,11 +237,11 @@ func (v DirVolume) getInodeId(mountPath string) (uint64, error) {
 	return stat.Ino, nil
 }
 
-func (v DirVolume) GetId() string {
+func (v *DirVolume) GetId() string {
 	return v.id
 }
 
-func (v DirVolume) CreateQuotaFromMountPath(mountPath string, enforceCapacity *bool, capacityLimit uint64) (*apiclient.Quota, error) {
+func (v *DirVolume) CreateQuotaFromMountPath(mountPath string, enforceCapacity *bool, capacityLimit uint64) (*apiclient.Quota, error) {
 	var quotaType apiclient.QuotaType
 	if enforceCapacity != nil {
 		if !*enforceCapacity {
@@ -269,7 +271,7 @@ func (v DirVolume) CreateQuotaFromMountPath(mountPath string, enforceCapacity *b
 	return q, nil
 }
 
-func (v DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
+func (v *DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
 	glog.V(4).Infoln("Getting existing quota for volume", v.GetId())
 	fsObj, err := v.getFilesystemObj()
 	if err != nil {
@@ -286,7 +288,7 @@ func (v DirVolume) getQuota(mountPath string) (*apiclient.Quota, error) {
 	return ret, err
 }
 
-func (v DirVolume) getSizeFromQuota(mountPath string) (uint64, error) {
+func (v *DirVolume) getSizeFromQuota(mountPath string) (uint64, error) {
 	q, err := v.getQuota(mountPath)
 	if err != nil {
 		return 0, err
@@ -297,7 +299,7 @@ func (v DirVolume) getSizeFromQuota(mountPath string) (uint64, error) {
 	return 0, errors.New("could not fetch quota from API")
 }
 
-func (v DirVolume) getSizeFromXattr(mountPath string) (uint64, error) {
+func (v *DirVolume) getSizeFromXattr(mountPath string) (uint64, error) {
 	if capacityString, err := xattr.Get(v.getFullPath(mountPath), xattrCapacity); err == nil {
 		if capacity, err := strconv.ParseInt(string(capacityString), 10, 64); err == nil {
 			return uint64(capacity), nil
@@ -307,7 +309,7 @@ func (v DirVolume) getSizeFromXattr(mountPath string) (uint64, error) {
 	return 0, ErrNoXattrOnVolume
 }
 
-func (v DirVolume) getFilesystemObj() (*apiclient.FileSystem, error) {
+func (v *DirVolume) getFilesystemObj() (*apiclient.FileSystem, error) {
 	fsObj, err := v.apiClient.GetFileSystemByName(v.Filesystem)
 	if err != nil {
 		return nil, err
@@ -315,18 +317,18 @@ func (v DirVolume) getFilesystemObj() (*apiclient.FileSystem, error) {
 	return fsObj, nil
 }
 
-func (v DirVolume) Mount(mounter *wekaMounter, xattr bool) (string, error, UnmountFunc) {
+func (v *DirVolume) Mount(mounter *wekaMounter, xattr bool) (string, error, UnmountFunc) {
 	if xattr {
 		return mounter.MountXattr(v.Filesystem)
 	}
 	return mounter.Mount(v.Filesystem)
 }
 
-func (v DirVolume) Unmount(mounter *wekaMounter) error {
+func (v *DirVolume) Unmount(mounter *wekaMounter) error {
 	return mounter.Unmount(v.Filesystem)
 }
 
-func (v DirVolume) Exists(mountPoint string) (bool, error) {
+func (v *DirVolume) Exists(mountPoint string) (bool, error) {
 	if !PathExists(v.getFullPath(mountPoint)) {
 		glog.Infof("Volume %s not found on filesystem %s", v.GetId(), v.Filesystem)
 		return false, nil
@@ -339,7 +341,7 @@ func (v DirVolume) Exists(mountPoint string) (bool, error) {
 	return true, nil
 }
 
-func (v DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64) error {
+func (v *DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64) error {
 	volPath := v.getFullPath(mountPath)
 	if err := os.MkdirAll(volPath, v.permissions); err != nil {
 		glog.Errorf("Failed to create directory %s", volPath)
@@ -347,7 +349,7 @@ func (v DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64
 	}
 
 	glog.Infof("Created directory %s, updating its capacity to %v", v.getFullPath(mountPath), capacity)
-	// Update volume metadata on directory using xattrs
+	// Update volume capacity
 	if err := v.UpdateCapacity(mountPath, &enforceCapacity, capacity); err != nil {
 		glog.Warningf("Failed to update capacity on newly created volume %s in: %s, deleting", v.id, volPath)
 		err2 := v.Delete(mountPath)
@@ -356,12 +358,21 @@ func (v DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64
 		}
 		return err
 	}
+
+	// Update volume UID/GID if set in storage class
+	if v.ownerUid+v.ownerGid != 0 {
+		glog.Infof("Setting volume ownership to %d:%d", v.ownerUid, v.ownerGid)
+		err := os.Chown(volPath, v.ownerUid, v.ownerGid)
+		if err != nil {
+			return err
+		}
+	}
 	glog.V(3).Infof("Created volume %s in: %v", v.id, volPath)
 	return nil
 }
 
 // Delete is a synchronous delete, used for cleanup on unsuccessful ControllerCreateVolume. GC flow is separate
-func (v DirVolume) Delete(mountPath string) error {
+func (v *DirVolume) Delete(mountPath string) error {
 	glog.V(4).Infof("Deleting volume %s, located in filesystem %s", v.id, v.Filesystem)
 	volPath := v.getFullPath(mountPath)
 	_ = os.RemoveAll(volPath)
@@ -369,13 +380,30 @@ func (v DirVolume) Delete(mountPath string) error {
 	return nil
 }
 
-func (v DirVolume) SetParams(params map[string]string) error {
+// SetParams takes additional optional params from storage class params
+func (v *DirVolume) SetParams(params map[string]string) error {
+	glog.Infoln("Params:", params)
 	if val, ok := params["permissions"]; ok {
-		raw, err := strconv.ParseInt(val, 10, 32)
+		raw, err := strconv.ParseInt(val, 0, 32)
 		if err != nil {
 			return err
 		}
-		v.permissions = fs.FileMode(int32(raw))
+		v.permissions = fs.FileMode(uint32(raw))
 	}
+	if val, ok := params["ownerUid"]; ok {
+		raw, err := strconv.Atoi(val)
+		if err != nil {
+			return err
+		}
+		v.ownerUid = raw
+	}
+	if val, ok := params["ownerGid"]; ok {
+		raw, err := strconv.Atoi(val)
+		if err != nil {
+			return err
+		}
+		v.ownerGid = raw
+	}
+	glog.Infoln("Setting ownership of volume", v.id, "to ", v.ownerUid, v.ownerGid)
 	return nil
 }
