@@ -15,10 +15,10 @@ parameters:
   #ownerUid: "1000"
 
   # GID of the volume owner, default 0 (root)
-  ownerGid: "1000"
+  #ownerGid: "1000"
 
-  # permsissions in Unix octal format, default "0750"
-  permissions: "0775"
+  # permissions in Unix octal format, default "0750"
+  #permissions: "0775"
 
   # if the values below are not set, quota will not be enforced for this storage class
   # capacity enforcement mode (either SOFT or HARD, base64-encoded)
