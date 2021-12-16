@@ -343,7 +343,20 @@ func (v *DirVolume) Exists(mountPoint string) (bool, error) {
 
 func (v *DirVolume) Create(mountPath string, enforceCapacity bool, capacity int64) error {
 	volPath := v.getFullPath(mountPath)
-	if err := os.MkdirAll(volPath, v.permissions); err != nil {
+	glog.Infof("Creating directory %s with permissions %s", volPath, v.permissions)
+	dirPath := filepath.Dir(volPath)
+
+	// make sure that root directory is created with Default Permissions no matter what the requested permissions are
+	if err := os.MkdirAll(dirPath, DefaultVolumePermissions); err != nil {
+		glog.Errorf("Failed to create CSI volumes directory %s", dirPath)
+		return err
+	}
+
+	// make sure we don't hit umask upon creating directory
+	oldMask := syscall.Umask(0)
+	defer syscall.Umask(oldMask)
+
+	if err := os.Mkdir(volPath, v.permissions); err != nil {
 		glog.Errorf("Failed to create directory %s", volPath)
 		return err
 	}
