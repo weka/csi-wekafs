@@ -2,6 +2,7 @@ package wekafs
 
 import (
 	"github.com/golang/glog"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io"
 	"io/ioutil"
 	"os"
@@ -25,7 +26,7 @@ func initDirVolumeGc(mounter *wekaMounter) *dirVolumeGc {
 	return &gc
 }
 
-func (gc *dirVolumeGc) triggerGc(fs string) {
+func (gc *dirVolumeGc) triggerGc(fs string, apiClient *apiclient.ApiClient) {
 	gc.Lock()
 	defer gc.Unlock()
 	if gc.isRunning[fs] {
@@ -33,7 +34,7 @@ func (gc *dirVolumeGc) triggerGc(fs string) {
 		return
 	}
 	gc.isRunning[fs] = true
-	go gc.purgeLeftovers(fs)
+	go gc.purgeLeftovers(fs, apiClient)
 	gc.mounter.LogActiveMounts()
 }
 
@@ -53,8 +54,8 @@ func (gc *dirVolumeGc) triggerGcVolume(volume DirVolume) {
 func (gc *dirVolumeGc) purgeVolume(volume DirVolume) {
 	fs := volume.Filesystem
 	innerPath := volume.dirName
-	defer gc.finishGcCycle(fs)
-	path, err, unmount := gc.mounter.Mount(fs)
+	defer gc.finishGcCycle(fs, volume.apiClient)
+	path, err, unmount := gc.mounter.Mount(fs, volume.apiClient)
 	defer unmount()
 	fullPath := filepath.Join(path, garbagePath, innerPath)
 	glog.Infof("Purging deleted volume data in %s", fullPath)
@@ -92,9 +93,9 @@ func purgeDirectory(path string) error {
 	return os.Remove(path)
 }
 
-func (gc *dirVolumeGc) purgeLeftovers(fs string) {
-	defer gc.finishGcCycle(fs)
-	path, err, unmount := gc.mounter.Mount(fs)
+func (gc *dirVolumeGc) purgeLeftovers(fs string, apiClient *apiclient.ApiClient) {
+	defer gc.finishGcCycle(fs, apiClient)
+	path, err, unmount := gc.mounter.Mount(fs, nil)
 	defer unmount()
 	if err != nil {
 		glog.Errorf("Failed mounting FS %s for GC", fs)
@@ -104,12 +105,12 @@ func (gc *dirVolumeGc) purgeLeftovers(fs string) {
 	glog.Warningf("TODO: GC filesystem in %s", path)
 }
 
-func (gc *dirVolumeGc) finishGcCycle(fs string) {
+func (gc *dirVolumeGc) finishGcCycle(fs string, apiClient *apiclient.ApiClient) {
 	gc.Lock()
 	gc.isRunning[fs] = false
 	if gc.isDeferred[fs] {
 		gc.isDeferred[fs] = false
-		go gc.triggerGc(fs)
+		go gc.triggerGc(fs, apiClient)
 	}
 	gc.Unlock()
 }

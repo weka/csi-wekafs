@@ -319,9 +319,9 @@ func (v *DirVolume) getFilesystemObj() (*apiclient.FileSystem, error) {
 
 func (v *DirVolume) Mount(mounter *wekaMounter, xattr bool) (string, error, UnmountFunc) {
 	if xattr {
-		return mounter.MountXattr(v.Filesystem)
+		return mounter.MountXattr(v.Filesystem, v.apiClient)
 	}
-	return mounter.Mount(v.Filesystem)
+	return mounter.Mount(v.Filesystem, v.apiClient)
 }
 
 func (v *DirVolume) Unmount(mounter *wekaMounter) error {

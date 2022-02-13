@@ -1,22 +1,25 @@
 package wekafs
 
 import (
+	"errors"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/utils/mount"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 )
 
-type fsRequest struct {
+type fsMountRequest struct {
 	fs    string
 	xattr bool
 }
 
 type wekaMount struct {
-	fsRequest    *fsRequest
+	fsRequest    *fsMountRequest
 	mountPoint   string
 	refCount     int
 	lock         sync.Mutex
@@ -25,7 +28,7 @@ type wekaMount struct {
 	mountOptions []string
 }
 
-type mountsMap map[fsRequest]*wekaMount
+type mountsMap map[fsMountRequest]*wekaMount
 
 type wekaMounter struct {
 	mountMap  mountsMap
@@ -34,7 +37,7 @@ type wekaMounter struct {
 	debugPath string
 }
 
-func (m *wekaMount) incRef() error {
+func (m *wekaMount) incRef(apiClient *apiclient.ApiClient) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.refCount < 0 {
@@ -42,7 +45,7 @@ func (m *wekaMount) incRef() error {
 		m.refCount = 0 // to make sure that we don't have negative refcount later
 	}
 	if m.refCount == 0 {
-		if err := m.doMount(); err != nil {
+		if err := m.doMount(apiClient); err != nil {
 			return err
 		}
 	}
@@ -79,14 +82,55 @@ func (m *wekaMount) doUnmount() error {
 	return err
 }
 
-func (m *wekaMount) doMount() error {
+func (m *wekaMount) doMount(apiClient *apiclient.ApiClient) error {
 	glog.Infof("Creating mount for filesystem %s on mount point %s", m.fsRequest.fs, m.mountPoint)
+	mountToken := ""
 	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
 		return err
 	}
 	if m.debugPath == "" {
-		glog.V(3).Infof("Calling k8s mounter for fs: %s (xattr %t) @ %s", m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint)
-		return m.kMounter.Mount(m.fsRequest.fs, m.mountPoint, "wekafs", getMountOptions(m.fsRequest))
+		if apiClient == nil {
+			glog.V(3).Infof("No API client for mount, not requesting mount token")
+		} else {
+			if !apiClient.SupportsAuthenticatedMounts() {
+				glog.V(3).Infof("API client not supports authenticated mounts, skipping")
+			} else {
+				glog.V(3).Infof("Requesting mount token for filesystem %s via API", m.fsRequest.fs)
+				filesystem, err := apiClient.GetFileSystemByName(m.fsRequest.fs)
+				if err != nil {
+					return err
+				}
+				if filesystem != nil {
+					req := &apiclient.FileSystemMountTokenRequest{Uid: filesystem.Uid}
+					token := &apiclient.FileSystemMountToken{}
+					err = apiClient.GetFileSystemMountToken(req, token)
+					if err != nil {
+						return err
+					}
+					if token.FilesystemName != m.fsRequest.fs {
+						glog.Errorln("Failed to fetch mount token, reported token is for different filesystem name",
+							m.fsRequest.fs, token.FilesystemName)
+						return errors.New(fmt.Sprintf("failed to fetch mount token, got token for different filesystem name, "+
+							"%s, %s", m.fsRequest.fs, token.FilesystemName))
+					}
+					mountToken = token.Token
+				}
+			}
+
+		}
+
+		mountOptions := getMountOptions(m.fsRequest)
+		if mountToken != "" {
+			mountOptions = append(mountOptions, fmt.Sprintf("mount_token=%s", mountToken))
+		}
+
+		glog.V(3).Infof("Calling k8s mounter for fs: %s (xattr %t) @ %s, authenticated: %s",
+			m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, func() string {
+				return strconv.FormatBool(mountToken != "")
+			}(),
+		)
+
+		return m.kMounter.Mount(m.fsRequest.fs, m.mountPoint, "wekafs", mountOptions)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fs)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
@@ -102,7 +146,7 @@ func getDefaultMountOptions() []string {
 	return []string{"writecache"}
 }
 
-func getMountOptions(fs *fsRequest) []string {
+func getMountOptions(fs *fsMountRequest) []string {
 	var mountOptions = getDefaultMountOptions()
 	if fs.xattr {
 		mountOptions = append(mountOptions, "acl")
@@ -110,7 +154,7 @@ func getMountOptions(fs *fsRequest) []string {
 	return mountOptions
 }
 
-func (m *wekaMounter) initFsMountObject(fs fsRequest) {
+func (m *wekaMounter) initFsMountObject(fs fsMountRequest) {
 	m.lock.Lock()
 	if m.kMounter == nil {
 		m.kMounter = mount.New("")
@@ -139,11 +183,11 @@ func (m *wekaMounter) initFsMountObject(fs fsRequest) {
 
 type UnmountFunc func()
 
-func (m *wekaMounter) mountParams(fs string, xattr bool) (string, error, UnmountFunc) {
-	request := fsRequest{fs, xattr}
+func (m *wekaMounter) mountParams(fs string, xattr bool, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
+	request := fsMountRequest{fs, xattr}
 	m.initFsMountObject(request)
 	mounter := m.mountMap[request]
-	mountErr := mounter.incRef()
+	mountErr := mounter.incRef(apiClient)
 
 	if mountErr != nil {
 		glog.Errorf("Failed mounting %s at %s: %e", fs, mounter.mountPoint, mountErr)
@@ -156,14 +200,14 @@ func (m *wekaMounter) mountParams(fs string, xattr bool) (string, error, Unmount
 	}
 }
 
-func (m *wekaMounter) Mount(fs string) (string, error, UnmountFunc) {
+func (m *wekaMounter) Mount(fs string, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	m.LogActiveMounts()
-	return m.mountParams(fs, false)
+	return m.mountParams(fs, false, apiClient)
 }
 
-func (m *wekaMounter) MountXattr(fs string) (string, error, UnmountFunc) {
+func (m *wekaMounter) MountXattr(fs string, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	m.LogActiveMounts()
-	return m.mountParams(fs, true)
+	return m.mountParams(fs, true, apiClient)
 }
 
 func (m *wekaMounter) Unmount(fs string) error {
@@ -176,7 +220,7 @@ func (m *wekaMounter) UnmountXattr(fs string) error {
 
 func (m *wekaMounter) unmount(fs string, xattr bool) error {
 	m.LogActiveMounts()
-	fsReq := fsRequest{fs, xattr}
+	fsReq := fsMountRequest{fs, xattr}
 	if mnt, ok := m.mountMap[fsReq]; ok {
 		return mnt.decRef()
 	} else {
