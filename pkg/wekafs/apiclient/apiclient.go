@@ -71,7 +71,7 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	DirectoryAsCSIVolume:           "v3.0",  // can create CSI volume from directory, without quota support
 	FilesystemAsVolume:             "v3.13", // can create CSI volume from filesystem
 	QuotaDirectoryAsVolume:         "v3.13", // can create CSI volume from directory with quota support
-	QuotaOnNonEmptyDirs:            "v3.99", // can enable quota on legacy CSI volume (directory) without quota support
+	QuotaOnNonEmptyDirs:            "v9.99", // can enable quota on legacy CSI volume (directory) without quota support
 	MountFilesystemsUsingAuthToken: "v3.14", // can mount filesystems that require authentication (and non-root orgID)
 }
 
