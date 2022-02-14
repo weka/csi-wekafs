@@ -142,7 +142,7 @@ func (a *ApiClient) DeleteFileSystem(r *FileSystemDeleteRequest) error {
 }
 
 func (a *ApiClient) GetFileSystemMountToken(r *FileSystemMountTokenRequest, token *FileSystemMountToken) error {
-	f := a.Log(3, "Getting a mount token for filesystem", r)
+	f := a.Log(5, "Getting a mount token for filesystem", r.Uid)
 	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
@@ -239,6 +239,7 @@ func NewFileSystemResizeRequest(fsUid uuid.UUID, totalCapacity, ssdCapacity *int
 	}
 	return ret
 }
+
 func (fsu *FileSystemResizeRequest) getApiUrl() string {
 	url, err := urlutil.URLJoin(fsu.getRelatedObject().GetBasePath(), fsu.Uid.String())
 	if err != nil {
