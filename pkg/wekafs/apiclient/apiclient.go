@@ -60,50 +60,50 @@ type ApiClient struct {
 }
 
 type WekaCompatibilityRequiredVersions struct {
-	FilesystemAsVolume     string
-	DirectoryAsVolume      string
-	QuotaDirectoryAsVolume string
-	QuotaOnNonEmptyDirs    string
-	AuthenticatedMount     string
+	FilesystemAsVolume             string
+	DirectoryAsCSIVolume           string
+	QuotaDirectoryAsVolume         string
+	QuotaOnNonEmptyDirs            string
+	MountFilesystemsUsingAuthToken string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
-	DirectoryAsVolume:      "v3.0",  // can create CSI volume from directory, without quota support
-	FilesystemAsVolume:     "v3.13", // can create CSI volume from filesystem
-	QuotaDirectoryAsVolume: "v3.13", // can create CSI volume from directory with quota support
-	QuotaOnNonEmptyDirs:    "v3.99", // can enable quota on legacy CSI volume (directory) without quota support
-	AuthenticatedMount:     "v3.14", // can mount filesystems that require authentication (and non-root orgID)
+	DirectoryAsCSIVolume:           "v3.0",  // can create CSI volume from directory, without quota support
+	FilesystemAsVolume:             "v3.13", // can create CSI volume from filesystem
+	QuotaDirectoryAsVolume:         "v3.13", // can create CSI volume from directory with quota support
+	QuotaOnNonEmptyDirs:            "v3.99", // can enable quota on legacy CSI volume (directory) without quota support
+	MountFilesystemsUsingAuthToken: "v3.14", // can mount filesystems that require authentication (and non-root orgID)
 }
 
 type WekaCompatibilityMap struct {
-	FilesystemAsVolume     bool
-	DirectoryAsVolume      bool
-	QuotaDirectoryAsVolume bool
-	QuotaOnNonEmptyDirs    bool
-	AuthenticatedMount     bool
+	FilesystemAsCSIVolume          bool
+	DirectoryAsCSIVolume           bool
+	QuotaOnDirectoryVolume         bool
+	QuotaSetOnNonEmptyVolume       bool
+	MountFilesystemsUsingAuthToken bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	v, err := version.NewVersion(versionStr)
 	if err != nil {
 		glog.Errorln("Could not parse cluster version", versionStr, "assuming new features are unsupported!")
-		cm.DirectoryAsVolume = true
-		cm.FilesystemAsVolume = false
-		cm.QuotaDirectoryAsVolume = false
-		cm.QuotaOnNonEmptyDirs = false
+		cm.DirectoryAsCSIVolume = true
+		cm.FilesystemAsCSIVolume = false
+		cm.QuotaOnDirectoryVolume = false
+		cm.QuotaSetOnNonEmptyVolume = false
 		return
 	}
-	d, err := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsVolume)
+	d, err := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
 	f, err := version.NewVersion(MinimumSupportedWekaVersions.FilesystemAsVolume)
 	q, err := version.NewVersion(MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
 	n, err := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnNonEmptyDirs)
-	a, err := version.NewVersion(MinimumSupportedWekaVersions.AuthenticatedMount)
+	a, err := version.NewVersion(MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken)
 
-	cm.DirectoryAsVolume = v.GreaterThanOrEqual(d)
-	cm.FilesystemAsVolume = v.GreaterThanOrEqual(f)
-	cm.QuotaDirectoryAsVolume = v.GreaterThanOrEqual(q)
-	cm.QuotaOnNonEmptyDirs = v.GreaterThanOrEqual(n)
-	cm.AuthenticatedMount = v.GreaterThanOrEqual(a)
+	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
+	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
+	cm.QuotaOnDirectoryVolume = v.GreaterThanOrEqual(q)
+	cm.QuotaSetOnNonEmptyVolume = v.GreaterThanOrEqual(n)
+	cm.MountFilesystemsUsingAuthToken = v.GreaterThanOrEqual(a)
 }
 
 func NewApiClient(username, password, organization string, endpoints []string, scheme string) (*ApiClient, error) {
@@ -565,23 +565,23 @@ func (a *ApiClient) Init() error {
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
-	return a.CompatibilityMap.QuotaDirectoryAsVolume
+	return a.CompatibilityMap.QuotaOnDirectoryVolume
 }
 
 func (a *ApiClient) SupportsQuotaOnNonEmptyDirs() bool {
-	return a.CompatibilityMap.QuotaOnNonEmptyDirs
+	return a.CompatibilityMap.QuotaSetOnNonEmptyVolume
 }
 
 func (a *ApiClient) SupportsFilesystemAsVolume() bool {
-	return a.CompatibilityMap.FilesystemAsVolume
+	return a.CompatibilityMap.FilesystemAsCSIVolume
 }
 
 func (a *ApiClient) SupportsDirectoryAsVolume() bool {
-	return a.CompatibilityMap.DirectoryAsVolume
+	return a.CompatibilityMap.DirectoryAsCSIVolume
 }
 
 func (a *ApiClient) SupportsAuthenticatedMounts() bool {
-	return a.CompatibilityMap.AuthenticatedMount
+	return a.CompatibilityMap.MountFilesystemsUsingAuthToken
 }
 
 // marshalRequest converts interface to bytes

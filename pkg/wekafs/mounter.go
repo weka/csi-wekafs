@@ -121,7 +121,7 @@ func (m *wekaMount) doMount(apiClient *apiclient.ApiClient) error {
 
 		mountOptions := getMountOptions(m.fsRequest)
 		if mountToken != "" {
-			mountOptions = append(mountOptions, fmt.Sprintf("mount_token=%s", mountToken))
+			mountOptions = append(mountOptions, fmt.Sprintf("token=%s", mountToken))
 		}
 
 		glog.V(3).Infof("Calling k8s mounter for fs: %s (xattr %t) @ %s, authenticated: %s",
