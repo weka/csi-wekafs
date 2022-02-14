@@ -35,7 +35,6 @@ func (gc *dirVolumeGc) triggerGc(fs string, apiClient *apiclient.ApiClient) {
 	}
 	gc.isRunning[fs] = true
 	go gc.purgeLeftovers(fs, apiClient)
-	gc.mounter.LogActiveMounts()
 }
 
 func (gc *dirVolumeGc) triggerGcVolume(volume DirVolume) {
@@ -95,7 +94,7 @@ func purgeDirectory(path string) error {
 
 func (gc *dirVolumeGc) purgeLeftovers(fs string, apiClient *apiclient.ApiClient) {
 	defer gc.finishGcCycle(fs, apiClient)
-	path, err, unmount := gc.mounter.Mount(fs, nil)
+	path, err, unmount := gc.mounter.Mount(fs, apiClient)
 	defer unmount()
 	if err != nil {
 		glog.Errorf("Failed mounting FS %s for GC", fs)

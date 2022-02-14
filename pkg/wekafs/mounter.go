@@ -241,7 +241,10 @@ func (m *wekaMounter) LogActiveMounts() {
 			} else if mapEntry.refCount > 0 {
 				glog.Infof("Active mount: %s -> %s, xattr: %t, refcount: %d", mnt.fs, mapEntry.mountPoint, mnt.xattr, mapEntry.refCount)
 				count++
+			} else {
+				glog.Infof("Inactive mount: %s", mnt.fs)
 			}
+
 		}
 		glog.Infof("Total %v of active mounts", count)
 	} else {
