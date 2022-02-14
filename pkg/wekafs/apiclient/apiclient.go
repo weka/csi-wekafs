@@ -518,9 +518,11 @@ func (a *ApiClient) Login() error {
 }
 
 func (a *ApiClient) Log(level glog.Level, message ...interface{}) func() {
-	glog.V(level).Infoln(fmt.Sprintf("API client: %s (%s)", a.ClusterName, a.ClusterGuid.String()), message)
+	glog.V(level).Infoln(fmt.Sprintf("API client: %s:%s@%s (%s)",
+		a.Username, a.Organization, a.ClusterName, a.ClusterGuid.String()), message)
 	return func() {
-		glog.V(level).Infoln(fmt.Sprintf("API client: %s (%s)", a.ClusterName, a.ClusterGuid.String()), message, "completed")
+		glog.V(level).Infoln(fmt.Sprintf("API client: %s:%s@%s (%s)",
+			a.Username, a.Organization, a.ClusterName, a.ClusterGuid.String()), message, "completed")
 	}
 }
 
