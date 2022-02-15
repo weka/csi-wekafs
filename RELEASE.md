@@ -1,3 +1,10 @@
+# Release 0.7.4
+## New features
+### Support for authenticated FileSystems and additional organizations
+This functionality is supported for Weka clusters of version 3.14 and up
+- Filesystems set with auth-required=true can be used for CSI volumes
+- Filesystems in non-root organization can be used for CSI volumes
+
 # Release 0.7.3
 ## Improvements
 - Volume ownership and permissions configuration can be set via [storageClass parameters](examples/dynamic_api/storageclass-wekafs-dir-api.yaml)
