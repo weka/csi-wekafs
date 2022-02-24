@@ -174,7 +174,7 @@ func (m *wekaMounter) initFsMountObject(fs fsMountRequest) {
 			//		 In general..this might need more thinking, but getting to working version ASAP is a priority
 			//       Even without version/Mount options change - plugin restart will lead to dangling mounts
 			//       We also might use VolumeContext to save it's parent FS Mount path instead of calculating
-			mountOptions: getMountOptions(&fs),
+			mountOptions: getDefaultMountOptions(),
 		}
 		m.mountMap[fs] = wMount
 	}

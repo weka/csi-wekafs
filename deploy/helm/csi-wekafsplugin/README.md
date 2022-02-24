@@ -5,7 +5,7 @@
 This repository hosts the CSI WekaFS driver and all of its build and dependent configuration files to deploy the driver.
 
 ## Pre-requisite
-- Kubernetes cluster of version 1.18 and up, 1.19 and up recommended, 1.13 and up should work but were not tested.
+- Kubernetes cluster of version 1.18 and up, 1.19 and up recommended
 - Helm v3 must be installed and configured properly
 - Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
 
@@ -39,11 +39,11 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
 | csiDriverVersion | string | `"0.7.3"` | CSI driver version |
-| images.livenessprobesidecar | string | `"k8s.gcr.io/sig-storage/livenessprobe:v2.5.0"` | CSI liveness probe sidecar image URL |
-| images.attachersidecar | string | `"k8s.gcr.io/sig-storage/csi-attacher:v3.3.0"` | CSI attacher sidecar image URL |
-| images.provisionersidecar | string | `"k8s.gcr.io/sig-storage/csi-provisioner:v3.0.0"` | CSI provisioner sidecar image URL |
-| images.registrarsidecar | string | `"k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0"` | CSI registrar sidercar |
-| images.resizersidecar | string | `"k8s.gcr.io/sig-storage/csi-resizer:v1.3.0"` | CSI provisioner sidecar image URL |
+| images.livenessprobesidecar | string | `"k8s.gcr.io/sig-storage/livenessprobe:v2.6.0"` | CSI liveness probe sidecar image URL |
+| images.attachersidecar | string | `"k8s.gcr.io/sig-storage/csi-attacher:v3.4.0"` | CSI attacher sidecar image URL |
+| images.provisionersidecar | string | `"k8s.gcr.io/sig-storage/csi-provisioner:v3.1.0"` | CSI provisioner sidecar image URL |
+| images.registrarsidecar | string | `"k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0"` | CSI registrar sidercar |
+| images.resizersidecar | string | `"k8s.gcr.io/sig-storage/csi-resizer:v1.4.0"` | CSI provisioner sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
 | images.csidriverTag | string | `"0.7.3"` | CSI driver tag |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
