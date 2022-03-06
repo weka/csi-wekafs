@@ -86,18 +86,19 @@ type WekaCompatibilityMap struct {
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	v, err := version.NewVersion(versionStr)
 	if err != nil {
-		glog.Errorln("Could not parse cluster version", versionStr, "assuming new features are unsupported!")
+		glog.Errorln("Could not parse cluster version", versionStr, "assuming legacy mode, new features are unsupported!")
 		cm.DirectoryAsCSIVolume = true
 		cm.FilesystemAsCSIVolume = false
 		cm.QuotaOnDirectoryVolume = false
 		cm.QuotaSetOnNonEmptyVolume = false
+		cm.MountFilesystemsUsingAuthToken = false
 		return
 	}
-	d, err := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
-	f, err := version.NewVersion(MinimumSupportedWekaVersions.FilesystemAsVolume)
-	q, err := version.NewVersion(MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
-	n, err := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnNonEmptyDirs)
-	a, err := version.NewVersion(MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken)
+	d, _ := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
+	f, _ := version.NewVersion(MinimumSupportedWekaVersions.FilesystemAsVolume)
+	q, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
+	n, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnNonEmptyDirs)
+	a, _ := version.NewVersion(MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)

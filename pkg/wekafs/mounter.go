@@ -1,7 +1,6 @@
 package wekafs
 
 import (
-	"errors"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
@@ -89,38 +88,15 @@ func (m *wekaMount) doMount(apiClient *apiclient.ApiClient) error {
 		return err
 	}
 	if m.debugPath == "" {
+		mountOptions := getMountOptions(m.fsRequest)
 		if apiClient == nil {
 			glog.V(3).Infof("No API client for mount, not requesting mount token")
 		} else {
-			if !apiClient.SupportsAuthenticatedMounts() {
-				glog.V(3).Infof("API client not supports authenticated mounts, skipping")
-			} else {
-				glog.V(3).Infof("Requesting mount token for filesystem %s via API", m.fsRequest.fs)
-				filesystem, err := apiClient.GetFileSystemByName(m.fsRequest.fs)
-				if err != nil {
-					return err
-				}
-				if filesystem != nil {
-					req := &apiclient.FileSystemMountTokenRequest{Uid: filesystem.Uid}
-					token := &apiclient.FileSystemMountToken{}
-					err = apiClient.GetFileSystemMountToken(req, token)
-					if err != nil {
-						return err
-					}
-					if token.FilesystemName != m.fsRequest.fs {
-						glog.Errorln("Failed to fetch mount token, reported token is for different filesystem name",
-							m.fsRequest.fs, token.FilesystemName)
-						return errors.New(fmt.Sprintf("failed to fetch mount token, got token for different filesystem name, "+
-							"%s, %s", m.fsRequest.fs, token.FilesystemName))
-					}
-					mountToken = token.Token
-				}
+			var err error
+			glog.V(3).Infof("Requesting mount token for filesystem %s via API", m.fsRequest.fs)
+			if mountToken, err = apiClient.GetMountTokenForFilesystemName(m.fsRequest.fs); err != nil {
+				return err
 			}
-
-		}
-
-		mountOptions := getMountOptions(m.fsRequest)
-		if mountToken != "" {
 			mountOptions = append(mountOptions, fmt.Sprintf("token=%s", mountToken))
 		}
 

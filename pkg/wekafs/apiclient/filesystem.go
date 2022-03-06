@@ -2,6 +2,7 @@ package apiclient
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/golang/glog"
 	"github.com/google/uuid"
@@ -153,6 +154,32 @@ func (a *ApiClient) GetFileSystemMountToken(r *FileSystemMountTokenRequest, toke
 	}
 	glog.V(6).Infoln("Fetched token for filesystem UID", r.Uid, "name", token.FilesystemName, "token", token.Token)
 	return nil
+}
+
+func (a *ApiClient) GetMountTokenForFilesystemName(fsName string) (string, error) {
+	if !a.SupportsAuthenticatedMounts() {
+		glog.V(3).Infof("API client not supports authenticated mounts")
+		return "", nil
+	}
+	filesystem, err := a.GetFileSystemByName(fsName)
+	if err != nil {
+		return "", err
+	}
+	req := &FileSystemMountTokenRequest{Uid: filesystem.Uid}
+	token := &FileSystemMountToken{}
+	err = a.GetFileSystemMountToken(req, token)
+	if err != nil {
+		return "", err
+	}
+	if token.FilesystemName != fsName {
+		glog.Errorln("Failed to fetch mount token, reported token is for different filesystem name",
+			fsName, token.FilesystemName)
+		return "", errors.New(fmt.Sprintf(
+			"failed to fetch mount token, got token for different filesystem name, %s, %s",
+			fsName, token.FilesystemName),
+		)
+	}
+	return token.Token, nil
 }
 
 func (fs *FileSystem) GetType() string {
