@@ -43,6 +43,7 @@ func (a *ApiClient) fetchClusterInfo() error {
 	a.Log(3, "Cluster compatibility for quota directory as CSI volume:", a.SupportsQuotaDirectoryAsVolume())
 	a.Log(3, "Cluster compatibility for quota on non-empty CSI volume:", a.SupportsQuotaOnNonEmptyDirs())
 	a.Log(3, "Cluster compatibility for regular directory as CSI volume:", a.SupportsDirectoryAsVolume())
+	a.Log(3, "Cluster compatibility for authenticated filesystem mounts", a.SupportsAuthenticatedMounts())
 	return nil
 }
 

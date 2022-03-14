@@ -29,7 +29,7 @@ import (
 	"sync"
 )
 
-var DefaultVolumePermissions fs.FileMode = 0750 // TODO: propagate it via StorageClass or at least as global flag
+var DefaultVolumePermissions fs.FileMode = 0750
 
 type wekaFsDriver struct {
 	name              string

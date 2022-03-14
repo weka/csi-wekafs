@@ -2,7 +2,9 @@ package apiclient
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"k8s.io/helm/pkg/urlutil"
 )
@@ -35,6 +37,11 @@ type FileSystem struct {
 	MaxFiles       int64         `json:"max_files"`
 	ObsBuckets     []interface{} `json:"obs_buckets"`
 	ObjectStorages []interface{} `json:"object_storages"`
+}
+
+type FileSystemMountToken struct {
+	Token          string `json:"mount_token,omitempty"`
+	FilesystemName string `json:"filesystem_name,omitempty"`
 }
 
 func (fs *FileSystem) String() string {
@@ -135,6 +142,46 @@ func (a *ApiClient) DeleteFileSystem(r *FileSystemDeleteRequest) error {
 	return nil
 }
 
+func (a *ApiClient) GetFileSystemMountToken(r *FileSystemMountTokenRequest, token *FileSystemMountToken) error {
+	f := a.Log(5, "Getting a mount token for filesystem", r.Uid)
+	defer f()
+	if !r.hasRequiredFields() {
+		return RequestMissingParams
+	}
+	err := a.Get(r.getApiUrl(), nil, token)
+	if err != nil {
+		return err
+	}
+	glog.V(6).Infoln("Fetched token for filesystem UID", r.Uid, "name", token.FilesystemName, "token", token.Token)
+	return nil
+}
+
+func (a *ApiClient) GetMountTokenForFilesystemName(fsName string) (string, error) {
+	if !a.SupportsAuthenticatedMounts() {
+		glog.V(3).Infof("API client not supports authenticated mounts")
+		return "", nil
+	}
+	filesystem, err := a.GetFileSystemByName(fsName)
+	if err != nil {
+		return "", err
+	}
+	req := &FileSystemMountTokenRequest{Uid: filesystem.Uid}
+	token := &FileSystemMountToken{}
+	err = a.GetFileSystemMountToken(req, token)
+	if err != nil {
+		return "", err
+	}
+	if token.FilesystemName != fsName {
+		glog.Errorln("Failed to fetch mount token, reported token is for different filesystem name",
+			fsName, token.FilesystemName)
+		return "", errors.New(fmt.Sprintf(
+			"failed to fetch mount token, got token for different filesystem name, %s, %s",
+			fsName, token.FilesystemName),
+		)
+	}
+	return token.Token, nil
+}
+
 func (fs *FileSystem) GetType() string {
 	return "filesystem"
 }
@@ -219,6 +266,7 @@ func NewFileSystemResizeRequest(fsUid uuid.UUID, totalCapacity, ssdCapacity *int
 	}
 	return ret
 }
+
 func (fsu *FileSystemResizeRequest) getApiUrl() string {
 	url, err := urlutil.URLJoin(fsu.getRelatedObject().GetBasePath(), fsu.Uid.String())
 	if err != nil {
@@ -268,5 +316,33 @@ func (fsd *FileSystemDeleteRequest) hasRequiredFields() bool {
 }
 
 func (fsd *FileSystemDeleteRequest) getRelatedObject() ApiObject {
+	return &FileSystem{}
+}
+
+type FileSystemMountTokenRequest struct {
+	Uid uuid.UUID `json:"-"`
+}
+
+func (fsm *FileSystemMountTokenRequest) String() string {
+	return fmt.Sprintln("FilesystemMountTokenRequest(fsUid:", fsm.Uid, ")")
+}
+
+func (fsm *FileSystemMountTokenRequest) getApiUrl() string {
+	url, err := urlutil.URLJoin(fsm.getRelatedObject().GetBasePath(), fsm.Uid.String(), "mountToken")
+	if err != nil {
+		return ""
+	}
+	return url
+}
+
+func (fsm *FileSystemMountTokenRequest) getRequiredFields() []string {
+	return []string{"Uid"}
+}
+
+func (fsm *FileSystemMountTokenRequest) hasRequiredFields() bool {
+	return ObjectRequestHasRequiredFields(fsm)
+}
+
+func (fsm *FileSystemMountTokenRequest) getRelatedObject() ApiObject {
 	return &FileSystem{}
 }

@@ -8,15 +8,15 @@ csiDriverName: "csi.weka.io"
 csiDriverVersion: &csiDriverVersion 0.7.3
 images:
   # -- CSI liveness probe sidecar image URL
-  livenessprobesidecar: k8s.gcr.io/sig-storage/livenessprobe:v2.5.0
+  livenessprobesidecar: k8s.gcr.io/sig-storage/livenessprobe:v2.6.0
   # -- CSI attacher sidecar image URL
-  attachersidecar: k8s.gcr.io/sig-storage/csi-attacher:v3.3.0
+  attachersidecar: k8s.gcr.io/sig-storage/csi-attacher:v3.4.0
   # -- CSI provisioner sidecar image URL
-  provisionersidecar: k8s.gcr.io/sig-storage/csi-provisioner:v3.0.0
+  provisionersidecar: k8s.gcr.io/sig-storage/csi-provisioner:v3.1.0
   # -- CSI registrar sidercar
-  registrarsidecar: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.3.0
+  registrarsidecar: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
   # -- CSI provisioner sidecar image URL
-  resizersidecar: k8s.gcr.io/sig-storage/csi-resizer:v1.3.0
+  resizersidecar: k8s.gcr.io/sig-storage/csi-resizer:v1.4.0
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag

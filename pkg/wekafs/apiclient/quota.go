@@ -237,6 +237,10 @@ func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForComplet
 	}
 	if waitForCompletion {
 		q.FilesystemUid = qr.filesystemUid
+		if q.InodeId != qr.inodeId { // WEKAPP-240948
+			a.Log(4, "Workaround for WEKAPP-240948, replacing quota inodeID")
+			q.InodeId = qr.inodeId
+		}
 		return a.WaitForQuotaActive(q)
 	}
 	f()
