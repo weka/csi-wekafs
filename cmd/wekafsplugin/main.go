@@ -44,7 +44,8 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csimodetext = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
+	csimodetext    = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
+	selinuxSupport = flag.Bool("selinux-support", false, "Enable support for SELinux")
 	// Set by the build process
 	version = ""
 )
@@ -67,7 +68,7 @@ func main() {
 }
 
 func handle() {
-	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, *dynamicSubPath, csiMode)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, *dynamicSubPath, csiMode, *selinuxSupport)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

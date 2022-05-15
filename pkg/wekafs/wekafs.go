@@ -47,7 +47,8 @@ type wekaFsDriver struct {
 	debugPath      string
 	dynamicVolPath string
 
-	csiMode CsiPluginMode
+	csiMode        CsiPluginMode
+	selinuxSupport bool
 }
 
 type VolumeType string
@@ -189,7 +190,9 @@ func NewApiStore() *apiStore {
 	return s
 }
 
-func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode CsiPluginMode) (*wekaFsDriver, error) {
+func NewWekaFsDriver(
+	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string,
+	dynmamicVolPath string, csiMode CsiPluginMode, selinuxSupport bool) (*wekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -220,12 +223,13 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 		dynamicVolPath:    dynmamicVolPath,
 		csiMode:           csiMode, // either "controller", "node", "all"
 		api:               NewApiStore(),
+		selinuxSupport:    selinuxSupport,
 	}, nil
 }
 
 func (driver *wekaFsDriver) Run() {
 	// Create GRPC servers
-	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath}
+	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
 	gc := initDirVolumeGc(mounter)
 
 	// identity server runs always
