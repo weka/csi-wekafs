@@ -144,6 +144,10 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		targetPath, fsType, deviceId, readOnly, volume.GetId(), attrib, mountFlags)
 
 	mountPoint, err, unmount := volume.Mount(ns.mounter, false)
+	if err != nil {
+		unmount()
+		return NodePublishVolumeError(codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
+	}
 	ok, err := volume.Exists(mountPoint)
 	if err != nil {
 		return NodePublishVolumeError(codes.Internal, err.Error())
@@ -197,7 +201,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return NodePublishVolumeError(codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
 	}
 
-	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind succesffully
+	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
 	glog.Infof("Successfully published volume %s", volume.GetId())
 	return &csi.NodePublishVolumeResponse{}, nil
 }
