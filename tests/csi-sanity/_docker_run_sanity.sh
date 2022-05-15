@@ -3,6 +3,7 @@ set -e
 
 rm -rf /tmp/weka-csi-test/sanity-workspace/
 rm -rf /tmp/weka-csi-test/filesystems
+rm -rf /tmp/csi-test-staging
 
 csi-sanity -csi.stagingdir /tmp/csi-test-staging \
   --csi.controllerendpoint /tmp/weka-csi-test/controller.sock \
