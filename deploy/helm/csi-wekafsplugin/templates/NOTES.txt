@@ -8,3 +8,6 @@ To learn more about the release, try:
   $ helm get all {{ .Release.Name }}
 
 Official Weka CSI Plugin documentation can be found here: https://docs.weka.io/appendix/weka-csi-plugin
+
+Examples on how to configure a storage class and start using the driver are here:
+https://github.com/weka/csi-wekafs/tree/master/examples
