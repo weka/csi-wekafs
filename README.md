@@ -10,6 +10,9 @@ This repository hosts the CSI WekaFS driver and all of its build and dependent c
 - Access to terminal with `kubectl` installed
 - Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
 
+## SELinux Notes
+- [CSI WekaFS SELinux Support](selinux/README.md)
+
 ## Deployment
 - [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
 - [Helm-based local deployment](deploy/helm/csi-wekafsplugin/LOCAL.md)
