@@ -119,7 +119,7 @@ func CreateVolumeError(errorCode codes.Code, errorMessage string) (*csi.CreateVo
 //goland:noinspection GoUnusedParameter
 func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	glog.V(3).Infof("Received a CreateVolume request: %s", createKeyValuePairs(req.GetParameters()))
-	defer glog.V(3).Infof("Completed processing request: %s", createKeyValuePairs(req.GetParameters()))
+	defer glog.V(3).Infof("Completed processing CreateVolume request: %s", createKeyValuePairs(req.GetParameters()))
 	cs.creatLock.Lock()
 	defer cs.creatLock.Unlock()
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {

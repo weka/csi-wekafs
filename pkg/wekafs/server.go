@@ -96,15 +96,18 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 	s.server = server
 
 	if ids != nil {
+		glog.V(5).Infoln("Registering GRPC IdentityServer")
 		csi.RegisterIdentityServer(server, ids)
 	}
 	if s.csiMmode == CsiModeController || s.csiMmode == CsiModeAll {
 		if cs != nil {
+			glog.V(5).Infoln("Registering GRPC ControllerServer")
 			csi.RegisterControllerServer(server, cs)
 		}
 	}
 	if s.csiMmode == CsiModeNode || s.csiMmode == CsiModeAll {
 		if ns != nil {
+			glog.V(5).Infoln("Registering GRPC NodeServer")
 			csi.RegisterNodeServer(server, ns)
 		}
 	}

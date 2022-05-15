@@ -190,10 +190,12 @@ func (m *wekaMounter) MountXattr(fs string, apiClient *apiclient.ApiClient) (str
 }
 
 func (m *wekaMounter) Unmount(fs string) error {
+	defer m.LogActiveMounts()
 	return m.unmount(fs, false)
 }
 
 func (m *wekaMounter) UnmountXattr(fs string) error {
+	defer m.LogActiveMounts()
 	return m.unmount(fs, true)
 }
 
