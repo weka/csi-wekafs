@@ -120,6 +120,12 @@ func (api *apiStore) fromParams(Username, Password, Organization, Scheme string,
 		return api.getByHash(hash), nil
 	}
 	api.apis[hash] = newClient
+	if !newClient.SupportsAuthenticatedMounts() && Organization != apiclient.RootOrganizationName {
+		return nil, errors.New(fmt.Sprintf(
+			"Using Organization %s is not supported on Weka cluster \"%s\".\n"+
+				"To support organization other than Root please upgrade to version %s or higher",
+			Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
+	}
 	return newClient, nil
 }
 
