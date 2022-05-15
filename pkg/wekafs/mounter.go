@@ -85,6 +85,7 @@ func (m *wekaMount) doUnmount() error {
 func (m *wekaMount) doMount(apiClient *apiclient.ApiClient, selinuxSupport bool) error {
 	glog.Infof("Creating mount for filesystem %s on mount point %s", m.fsRequest.fs, m.mountPoint)
 	mountToken := ""
+	var mountOptionsSensitive []string
 	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
 		return err
 	}
@@ -98,16 +99,14 @@ func (m *wekaMount) doMount(apiClient *apiclient.ApiClient, selinuxSupport bool)
 			if mountToken, err = apiClient.GetMountTokenForFilesystemName(m.fsRequest.fs); err != nil {
 				return err
 			}
-			mountOptions = append(mountOptions, fmt.Sprintf("token=%s", mountToken))
+			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
 		}
-
-		glog.V(3).Infof("Calling k8s mounter for fs: %s (xattr %t) @ %s, authenticated: %s",
-			m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, func() string {
+		glog.V(3).Infof("Calling k8s mounter for fs: %s (xattr %t) @ %s, options: %s, authenticated: %s",
+			m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, mountOptions, func() string {
 				return strconv.FormatBool(mountToken != "")
 			}(),
 		)
-
-		return m.kMounter.Mount(m.fsRequest.fs, m.mountPoint, "wekafs", mountOptions)
+		return m.kMounter.MountSensitive(m.fsRequest.fs, m.mountPoint, "wekafs", mountOptions, mountOptionsSensitive)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fs)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
