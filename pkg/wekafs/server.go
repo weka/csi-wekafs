@@ -79,14 +79,14 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 
 	if proto == "unix" {
 		addr = "/" + addr
-		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) { //nolint: vetshadow
-			glog.Fatalf("Failed to remove %s, error: %s", addr, err.Error())
+		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
+			Die(fmt.Sprintf("Failed to remove %s, error: %s", addr, err.Error()))
 		}
 	}
 
 	listener, err := net.Listen(proto, addr)
 	if err != nil {
-		glog.Fatalf("Failed to listen: %v", err)
+		Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
 	}
 
 	opts := []grpc.ServerOption{
@@ -114,7 +114,9 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 
 	glog.Infof("Listening for connections on address: %#v", listener.Addr())
 
-	server.Serve(listener)
+	if err := server.Serve(listener); err != nil {
+		Die(err.Error())
+	}
 
 }
 
