@@ -3,15 +3,13 @@
 When installing Weka CSI plugin on SELinux-enabled Kubernetes cluster, pods might be denied access
 to the persistent volumes provisioned on top of Weka filesystem.
 
-The reason behind this is a mismatch between container service label and filesystem object labels.
-The situation is especially correct for pods without `SecurityContext` configuration.
+The reason behind this is a lack of permissions for containers to access objects stored on Weka cluster.
 
-In order to resolve this situation, a custom SELinux policy must be applied on each Kubernetes node intended to host 
-pods which intend to utilize Weka CSI persistent volumes.
+In this directory you can find a custom policy that provides all the necessary security configuration to optionally 
+enable pod access to WekaFS-based Persistent Volumes, and it should be applied 
+on each Kubernetes worker node that is intended to service WekaFS-based persistent volumes.
 
-The policy comes both as a source file and as a precompiled policy package.
-The policy may be applied directly on a supporting OS (depends on Linux distribution and Kernel version)
-
+The policy comes both as a Type Enforcement file, and as a precompiled policy package.
 In order to use Weka CSI Plugin with SELinux enforcement, the following steps must be performed:
 
 1. Distribute the SELinux policy package to all Kubernetes nodes, by using either one of those options:
@@ -24,11 +22,33 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    ```shell
    semodule -i csi-wekafs.pp
    ```
-3. If from some reason policy installation fails (e.g. due to different Kernel version):
+3. In certain circumstances (e.g. different Kernel version or Linux distribution), 
+   the pre-compiled policy installation could fail. In this case, the policy must be built
+   and installed from source by following the procedure below.
    ```shell
    checkmodule -M -m -o csi-wekafs.mod csi-wekafs.te
    semodule_package -o csi-wekafs.pp -m csi-wekafs.mod
    make -f /usr/share/selinux/devel/Makefile csi-wekafs.pp
    semodule -i csi-wekafs.pp
    ```
-   > Note: for this purpose, `policycoreutils-devel` package is required 
+   > **NOTE**: for this purpose, `policycoreutils-devel` package 
+   > (or its alternative in case of Linux distribution different from RedHat family) is required 
+4. The policy provides a boolean setting which allows on-demand enablement of relevant permissions.
+   To enable WekaFS CSI volumes access from pods, perform the command
+   ```shell
+   setsebool container_use_wekafs=on
+   ```
+   To disable access, perform the command
+   ```shell
+   setsebool container_use_wekafs=off
+   ```
+   The configuration changes are applied immediately.
+5. To enable support for SELinux on Weka CSI Plugin, install the plugin with `selinuxMount` option enabled, e.g.
+   ```shell
+   helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxMount="true"]
+   ```
+
+> **NOTE:** SELinux configuration is global per Helm release installation. 
+> 
+> Once SELinux support is enabled on Weka CSI Plugin, mounting of volumes on
+> nodes with SELinux disabled, or in case the SELinux policy is not applied, will fail. 

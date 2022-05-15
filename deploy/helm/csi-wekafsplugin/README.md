@@ -12,8 +12,11 @@ This repository hosts the CSI WekaFS driver and all of its build and dependent c
 ## Deployment
 ```shell
 helm repo add csi-wekafs https://weka.github.io/csi-wekafs
-helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace
+helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxMount="true"]
 ```
+
+> **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
+> Refer to [SELinux Support & Installation Notes](selinux/README.md) for additional information
 
 > **NOTE:** Since version 0.7.0, Weka CSI plugin transitions to API-based deployment model which requires API
 > connectivity and credentials parameters to be set in Storage Class.
@@ -28,6 +31,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 
 ## Usage
 - [Deploy an Example application](https://github.com/weka/csi-wekafs/blob/master/docs/usage.md)
+- [SELinux Support & Installation Notes](selinux/README.md)
 
 ## Additional Documentation
 - [Official Weka CSI Plugin documentation](https://docs.weka.io/appendix/weka-csi-plugin)
@@ -38,18 +42,18 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"0.7.4"` | CSI driver version |
+| csiDriverVersion | string | `"0.8.0-beta"` | CSI driver version |
 | images.livenessprobesidecar | string | `"k8s.gcr.io/sig-storage/livenessprobe:v2.6.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"k8s.gcr.io/sig-storage/csi-attacher:v3.4.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"k8s.gcr.io/sig-storage/csi-provisioner:v3.1.0"` | CSI provisioner sidecar image URL |
 | images.registrarsidecar | string | `"k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0"` | CSI registrar sidercar |
 | images.resizersidecar | string | `"k8s.gcr.io/sig-storage/csi-resizer:v1.4.0"` | CSI provisioner sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"0.7.4"` | CSI driver tag |
+| images.csidriverTag | string | `"0.8.0-beta"` | CSI driver tag |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
-| nodeSelector | object | `""` | Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only |
+| nodeSelector | object | `{}` | Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only |
 | logLevel | int | `5` | Log level of CSI plugin |
 | legacyVolumeSecretName | string | `""` | for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin |
 | priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |

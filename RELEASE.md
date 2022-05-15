@@ -1,3 +1,15 @@
+# Release 0.8.0
+## New features
+### SELinux support
+Weka CSI Plugin can now work with SELinux-enabled Kubernetes clusters.  
+Refer to [SELinux Support Readme](selinux/README.md) for additional information
+## Improvements
+- Helm Charts were separated on per-object basis for better supportability
+
+## Bug Fixes
+- Part of new settings in `values.yaml` were not documented
+- Improved logging on failure to mount a filesystem due to authorization error
+
 # Release 0.7.4
 ## New features
 ### Support for authenticated FileSystems and additional organizations
