@@ -187,18 +187,18 @@ check_settings() {
 
   if ! git_check_repo_clean ; then
     [[ $GIT_BRANCH_NAME == master ]] && log_fatal "Performing release on master with dirty repo is not allowed!"
-    [[ $BUILD_MODE == beta ]] || [[ $BUILD_MODE == release ]] && log_fatal "Cannot perform release with dirty repository"
+    [[ $BUILD_MODE =~ beta ]] || [[ $BUILD_MODE == release ]] && log_fatal "Cannot perform release with dirty repository"
     [[ -z ${ALLOW_DIRTY} ]] && log_fatal "Cannot proceed, repository is dirty!"
     log_message WARNING "Allowing Dirty repository"
   fi
 
   if [[ $NO_TESTS ]]; then
-    [[ $BUILD_MODE == beta ]] || [[ $BUILD_MODE == release ]] && log_fatal "Release without tests is not allowed"
+    [[ $BUILD_MODE =~ beta ]] || [[ $BUILD_MODE == release ]] && log_fatal "Release without tests is not allowed"
   fi
 
   [[ $BUILD_MODE == local ]] && log_message WARNING "Deploying a LOCAL build only"
   [[ $BUILD_MODE == dev ]] && log_message WARNING "Deploying a DEV build, which will not be officially published"
-  [[ $BUILD_MODE == beta ]] && log_message NOTICE "Deploying a BETA build, which will not be officially published"
+  [[ $BUILD_MODE =~ beta ]] && log_message NOTICE "Deploying a BETA build, which will not be officially published"
   [[ $BUILD_MODE == release ]] && log_message NOTICE "Performing an official release!"
 
   VERSION_STRING="${VERSION_STRING/#v/}"
@@ -234,8 +234,8 @@ dev                       Also triggered automatically if BUILDKITE_BRANCH='dev'
                           To be used for further testing on Kubernetes. In this mode, on top of local
                           - Docker image will be pushed to repository, so it could be installed on remote server
 
-beta                      To be used for releasing a Beta version for a customer. In this mode, on top of dev:
-                          - A '-beta' suffix will be added to version string
+beta*                     To be used for releasing a Beta version for a customer. In this mode, on top of dev:
+                          - A '-beta*' suffix will be added to version string
                           - A Helm chart will is pushed S3 repository
 
 release                   Also triggered automatically if BUILDKITE_BRANCH='ga'
@@ -273,7 +273,7 @@ handle_envvars() {
   VERSION_STRING="${VERSION_STRING:-$(git_calc_next_tag)}"
   if [[ -z $EXPLICIT_VERSION ]]; then
     [[ $BUILD_MODE == dev ]] && VERSION_STRING+="-dev"
-    [[ $BUILD_MODE == beta ]] && VERSION_STRING+="-beta"
+    [[ $BUILD_MODE =~ beta ]] && VERSION_STRING+="-$BUILD_MODE"
     git_check_repo_clean || VERSION_STRING+="-dirty"
   fi
 
@@ -312,8 +312,8 @@ main() {
         BUILD_MODE=dev
         shift
         ;;
-      beta)
-        BUILD_MODE=beta
+      beta*)
+        BUILD_MODE="$1"
         shift
         ;;
       release)
@@ -358,7 +358,7 @@ main() {
   helm-docs -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl -s file
   git_commit_manifests
   git_push_tag v"$VERSION_STRING"
-  [[ $BUILD_MODE == beta ]] && log_message NOTICE "Done building Beta build $VERSION_STRING" && exit 0
+  [[ $BUILD_MODE =~ beta ]] && log_message NOTICE "Done building Beta build $VERSION_STRING" && exit 0
   helm_update_registry
   log_message NOTICE "All done!"
 }
