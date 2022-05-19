@@ -1,7 +1,8 @@
+{{- if .Values.selinuxMount }}
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
-  name: {{ .Release.Name }}-node
+  name: {{ .Release.Name }}-node-selinux
   namespace: {{ .Release.Namespace }}
 spec:
   selector:
@@ -11,7 +12,7 @@ spec:
     metadata:
       labels:
         app: {{ .Release.Name }}-node
-        component: {{ .Release.Name }}-node
+        component: {{ .Release.Name }}-node-selinux
         release: {{ .Release.Name }}
     spec:
       affinity:
@@ -20,11 +21,12 @@ spec:
             nodeSelectorTerms:
               - matchExpressions:
                   - key: {{ .Values.selinuxNodeLabel }}
-                    operator: NotIn
+                    operator: In
                     values:
                       - "true"
       {{- if .Values.nodeSelector }}
-      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8}}
+      nodeSelector:
+      {{- toYaml .Values.nodeSelector | nindent 8}}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-node
       {{- if .Values.priorityClassName }}
@@ -44,6 +46,7 @@ spec:
             - "--nodeid=$(KUBE_NODE_NAME)"
             - "--dynamic-path=$(CSI_DYNAMIC_PATH)"
             - "--csimode=$(X_CSI_MODE)"
+            - "--selinux-support"
           ports:
             - containerPort: 9898
               name: healthz
@@ -155,4 +158,5 @@ spec:
         - name: legacy-volume-access
           secret:
             secretName: {{ .Values.legacyVolumeSecretName }}
+{{- end }}
 {{- end }}

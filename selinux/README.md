@@ -9,6 +9,8 @@ In this directory you can find a custom policy that provides all the necessary s
 enable pod access to WekaFS-based Persistent Volumes, and it should be applied 
 on each Kubernetes worker node that is intended to service WekaFS-based persistent volumes.
 
+The provided policy allows processes with `container_t` seclabel to access objects having `wekafs_t` label (which is set for all files and directories of mounted CSI volumes).
+
 The policy comes both as a Type Enforcement file, and as a precompiled policy package.
 In order to use Weka CSI Plugin with SELinux enforcement, the following steps must be performed:
 
@@ -43,12 +45,17 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    setsebool container_use_wekafs=off
    ```
    The configuration changes are applied immediately.
-5. To enable support for SELinux on Weka CSI Plugin, install the plugin with `selinuxMount` option enabled, e.g.
+5. Weka CSI Plugin must be installed in a SELinux-compatible mode to correctly label volumes.  
+   This can be done by setting the `selinuxMount` value to `"true"`, either via editing values.yaml or by passing the parameter directly in Helm installation command, e.g.
    ```shell
-   helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxMount="true"]
+   helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxMount=true
    ```
-
-> **NOTE:** SELinux configuration is global per Helm release installation. 
-> 
-> Once SELinux support is enabled on Weka CSI Plugin, mounting of volumes on
-> nodes with SELinux disabled, or in case the SELinux policy is not applied, will fail. 
+6. In SELinux-compatible mode, 2 different `DaemonSet`s are created, while node affinity by label mechanism is used to bind a particular node to one set or another.  
+   Hence, the following label must be set on each SELinux-enabled Kubernetes node to ensure the plugin start in compatibility mode:
+   ```
+   ```
+   > **NOTE:** If another label stating SELinux support is already maintained on nodes, the expected label name may be changed by editing the `selinuxNodeLabel` parameter 
+   > by either modifying it in `values.yaml` or by setting it directly during plugin installation, e.g.
+   > ```shell
+   > helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxMount=true --set selinuxNodeLabel="selinux_enabled"
+   > ```

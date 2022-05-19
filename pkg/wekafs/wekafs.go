@@ -231,7 +231,6 @@ func (driver *wekaFsDriver) Run() {
 	// Create GRPC servers
 	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
 	gc := initDirVolumeGc(mounter)
-
 	// identity server runs always
 	glog.Info("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver.name, driver.version)

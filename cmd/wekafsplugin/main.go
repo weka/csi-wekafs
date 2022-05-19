@@ -61,7 +61,12 @@ func main() {
 	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode {
 		wekafs.Die("Invalid mode specified for CSI driver")
 	}
-	glog.Infof("Running in mode: %s", csiMode)
+	glog.Infof("Running in mode: %s, SELinux support: %s", csiMode, func() string {
+		if *selinuxSupport {
+			return "ON"
+		}
+		return "OFF"
+	}())
 
 	handle()
 	os.Exit(0)

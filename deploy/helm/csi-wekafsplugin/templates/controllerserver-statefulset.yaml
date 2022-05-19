@@ -74,9 +74,6 @@ spec:
             - "--nodeid=$(KUBE_NODE_NAME)"
             - "--dynamic-path=$(CSI_DYNAMIC_PATH)"
             - "--csimode=$(X_CSI_MODE)"
-  {{- if .Values.selinuxMount | default false }}
-            - "--selinux-support"
-  {{- end }}
           ports:
             - containerPort: 9898
               name: healthz

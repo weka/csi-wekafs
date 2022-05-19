@@ -41,3 +41,7 @@ priorityClassName: ""
 # -- Support SELinux labeling for Persistent Volumes.
 #    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!
 selinuxMount: false
+# -- This label must be set to "true" on SELinux-enabled Kubernetes nodes,
+#    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label
+#    csi.weka.io/selinux_enabled="true"
+selinuxNodeLabel: "csi.weka.io/selinux_enabled"
