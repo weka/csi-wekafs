@@ -45,3 +45,5 @@ selinuxMount: false
 #    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label
 #    csi.weka.io/selinux_enabled="true"
 selinuxNodeLabel: "csi.weka.io/selinux_enabled"
+# -- kubelet path, in cases Kubernetes is installed not in default folder
+kubeletPath: "/var/lib/kubelet"
