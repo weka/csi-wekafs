@@ -127,19 +127,19 @@ spec:
       {{- end }}
       volumes:
         - hostPath:
-            path: {{ .Values.kubeletPath }}}/plugins/csi-wekafs
+            path: {{ .Values.kubeletPath }}/plugins/csi-wekafs
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:
-            path: {{ .Values.kubeletPath }}}/pods
+            path: {{ .Values.kubeletPath }}/pods
             type: DirectoryOrCreate
           name: mountpoint-dir
         - hostPath:
-            path: {{ .Values.kubeletPath }}}/plugins_registry
+            path: {{ .Values.kubeletPath }}/plugins_registry
             type: Directory
           name: registration-dir
         - hostPath:
-            path: {{ .Values.kubeletPath }}}/plugins
+            path: {{ .Values.kubeletPath }}/plugins
             type: Directory
           name: plugins-dir
         - hostPath:
