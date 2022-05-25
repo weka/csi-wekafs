@@ -38,9 +38,12 @@ logLevel: 5
 legacyVolumeSecretName: ""
 # -- Optional CSI Plugin priorityClassName
 priorityClassName: ""
-# -- Support SELinux labeling for Persistent Volumes.
+# -- Support SELinux labeling for Persistent Volumes, may be either `off`, `mixed`, `enforced` (default off)
+#    In `enforced` mode, CSI node components will only start on nodes having a label `selinuxNodeLabel` below
+#    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts
+#    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.
 #    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!
-selinuxMount: false
+selinuxSupport: off
 # -- This label must be set to "true" on SELinux-enabled Kubernetes nodes,
 #    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label
 #    csi.weka.io/selinux_enabled="true"

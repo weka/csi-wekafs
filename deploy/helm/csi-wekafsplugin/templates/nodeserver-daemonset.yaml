@@ -1,3 +1,4 @@
+{{- if or (eq (.Values.selinuxSupport | default "off") "off") (eq .Values.selinuxSupport "mixed") }}
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
@@ -155,4 +156,5 @@ spec:
         - name: legacy-volume-access
           secret:
             secretName: {{ .Values.legacyVolumeSecretName }}
+{{- end }}
 {{- end }}

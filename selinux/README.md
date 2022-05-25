@@ -63,11 +63,18 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
 
 ## CSI Plugin Installation and Configuration
 1. Weka CSI Plugin must be installed in a SELinux-compatible mode to correctly label volumes.  
-   This can be done by setting the `selinuxMount` value to `"true"`, either via editing values.yaml or by passing the parameter directly in Helm installation command, e.g.
+   This can be done by setting the `selinuxSupport` value to either `"enforced"` or `"mixed"`, either via editing values.yaml or by passing the parameter directly in Helm installation command, e.g.
    ```shell
-   $ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxMount=true
+   $ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxSupport=enforced
    ```
-2. In SELinux-compatible mode, 2 different `DaemonSet`s are created, while node affinity by label mechanism is used to bind a particular node to one set or another.  
+   > **NOTE:** `enforced` and `mixed` modes are supported for CSI SELinux support.
+   > * When `selinuxSupport` is set to `enforced`, only SELinux-enabled CSI plugin node components will be installed
+   > * When `selinuxSupport` is set to `mixed`, both non-SELinux and SELinux-enabled components will be installed
+   > * When `selinuxSupport` is set to `off`, only non-SELinux CSI plugin node components will be installed.
+   > 
+   > **NOTE:** Since SELinux status cannot be known from within CSI plugin pod, 
+   > a certain way of distinguishing between SELinux-enabled and non-SELinux nodes needs to be established.
+   > Binding of relevant CSI node component to node is mutually exclusive and relies on node affinity mechanism by matching host labels.  
    Hence, the following label must be set on each SELinux-enabled Kubernetes node to ensure the plugin start in compatibility mode:
    ```shell
    csi.weka.io/selinux_enabled="true"
@@ -75,8 +82,12 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    > **NOTE:** If another label stating SELinux support is already maintained on nodes, the expected label name may be changed by editing the `selinuxNodeLabel` parameter 
    > by either modifying it in `values.yaml` or by setting it directly during plugin installation, e.g.
    > ```shell
-   > $ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxMount=true --set selinuxNodeLabel="selinux_enabled"
+   > $ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxSupport=mixed --set selinuxNodeLabel="selinux_enabled"
    > ```
+
+   > **NOTE:** If node label was modified after Weka CSI Plugin node component has already 
+   > deployed on that node, terminate the csi-wekafs-node-XXXX component on the affected node,
+   > a replacement pod will be scheduled on the node automatically, but with correct SELinux configuration.
    
 ## Checking Plugin Operation & Troubleshooting
  

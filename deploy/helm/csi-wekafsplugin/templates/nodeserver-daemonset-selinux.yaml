@@ -1,4 +1,4 @@
-{{- if .Values.selinuxMount }}
+{{- if or (eq (.Values.selinuxSupport | default "off") "enforced") (eq .Values.selinuxSupport "mixed") }}
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
