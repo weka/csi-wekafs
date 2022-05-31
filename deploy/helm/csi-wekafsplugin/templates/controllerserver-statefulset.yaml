@@ -106,10 +106,10 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-            - mountPath: /var/lib/kubelet/pods
+            - mountPath:  {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
-            - mountPath: /var/lib/kubelet/plugins
+            - mountPath:  {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins
               mountPropagation: Bidirectional
               name: plugins-dir
             - mountPath: /var/lib/csi-wekafs-data
@@ -141,19 +141,19 @@ spec:
       {{- end }}
       volumes:
         - hostPath:
-            path: {{ .Values.kubeletPath }}/plugins/csi-wekafs
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/csi-wekafs
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:
-            path: {{ .Values.kubeletPath }}/pods
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/pods
             type: DirectoryOrCreate
           name: mountpoint-dir
         - hostPath:
-            path: {{ .Values.kubeletPath }}/plugins_registry
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins_registry
             type: Directory
           name: registration-dir
         - hostPath:
-            path: {{ .Values.kubeletPath }}/plugins
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins
             type: Directory
           name: plugins-dir
         - hostPath:
