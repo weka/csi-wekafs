@@ -97,7 +97,7 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
 3. Provision a [`DaemonSet`](../examples/dynamic_api/csi-daemonset.app-on-dir-api.yaml), in order to be able access of all pods on all nodes
 4. Monitor the pod logs using a command below, nothing should be printed in log files:
    ```shell
-   $ kubectl logs -f daemonset/csi-wekafs-test-api
+   $ kubectl logs -f -lapp=csi-daemonset-app-on-dir-api
    ```
    IF the command returns a repeating message like the one below, it seems that the node on which the relevant pod is running is misconfigured:
    ```shell

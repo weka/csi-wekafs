@@ -2,6 +2,8 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: csi-wekafs-test-api
+  labels:
+    app: "csi-daemonset-app-on-dir-api"
 spec:
   selector:
     matchLabels:
@@ -10,7 +12,9 @@ spec:
     metadata:
       labels:
         kubernetes.io/os: linux
+        app: "csi-daemonset-app-on-dir-api"
     spec:
+      terminationGracePeriodSeconds: 1
       # make sure that pod is scheduled only on node having weka CSI node running
       nodeSelector:
         topology.csi.weka.io/global: "true"
