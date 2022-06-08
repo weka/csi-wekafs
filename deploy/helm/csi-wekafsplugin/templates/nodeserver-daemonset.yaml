@@ -1,4 +1,4 @@
-{{- if or (eq (.Values.selinuxSupport | default "off") "off") (eq .Values.selinuxSupport "mixed") }}
+{{- if or (eq (.Values.selinuxSupport | default "off") "off") (eq (.Values.selinuxSupport | toString) "mixed") }}
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
