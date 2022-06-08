@@ -26,6 +26,7 @@ const (
 	ApiRetryIntervalSeconds       = 1
 	ApiRetryMaxCount              = 5
 	RetryBackoffExponentialFactor = 1
+	RootOrganizationName          = "Root"
 )
 
 //ApiClient is a structure that defines Weka API client

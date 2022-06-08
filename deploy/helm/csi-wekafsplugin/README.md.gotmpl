@@ -12,8 +12,11 @@ This repository hosts the CSI WekaFS driver and all of its build and dependent c
 ## Deployment
 ```shell
 helm repo add csi-wekafs https://weka.github.io/csi-wekafs
-helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace
+helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
 ```
+
+> **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
+> Refer to [SELinux Support & Installation Notes](selinux/README.md) for additional information
 
 > **NOTE:** Since version 0.7.0, Weka CSI plugin transitions to API-based deployment model which requires API
 > connectivity and credentials parameters to be set in Storage Class.
@@ -28,6 +31,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 
 ## Usage
 - [Deploy an Example application](https://github.com/weka/csi-wekafs/blob/master/docs/usage.md)
+- [SELinux Support & Installation Notes](selinux/README.md)
 
 ## Additional Documentation
 - [Official Weka CSI Plugin documentation](https://docs.weka.io/appendix/weka-csi-plugin)

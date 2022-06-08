@@ -30,13 +30,14 @@ type wekaMount struct {
 type mountsMap map[fsMountRequest]*wekaMount
 
 type wekaMounter struct {
-	mountMap  mountsMap
-	lock      sync.Mutex
-	kMounter  mount.Interface
-	debugPath string
+	mountMap       mountsMap
+	lock           sync.Mutex
+	kMounter       mount.Interface
+	debugPath      string
+	selinuxSupport bool
 }
 
-func (m *wekaMount) incRef(apiClient *apiclient.ApiClient) error {
+func (m *wekaMount) incRef(apiClient *apiclient.ApiClient, selinuxSupport bool) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.refCount < 0 {
@@ -44,7 +45,7 @@ func (m *wekaMount) incRef(apiClient *apiclient.ApiClient) error {
 		m.refCount = 0 // to make sure that we don't have negative refcount later
 	}
 	if m.refCount == 0 {
-		if err := m.doMount(apiClient); err != nil {
+		if err := m.doMount(apiClient, selinuxSupport); err != nil {
 			return err
 		}
 	}
@@ -81,14 +82,15 @@ func (m *wekaMount) doUnmount() error {
 	return err
 }
 
-func (m *wekaMount) doMount(apiClient *apiclient.ApiClient) error {
+func (m *wekaMount) doMount(apiClient *apiclient.ApiClient, selinuxSupport bool) error {
 	glog.Infof("Creating mount for filesystem %s on mount point %s", m.fsRequest.fs, m.mountPoint)
 	mountToken := ""
+	var mountOptionsSensitive []string
 	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
 		return err
 	}
 	if m.debugPath == "" {
-		mountOptions := getMountOptions(m.fsRequest)
+		mountOptions := getMountOptions(m.fsRequest, selinuxSupport)
 		if apiClient == nil {
 			glog.V(3).Infof("No API client for mount, not requesting mount token")
 		} else {
@@ -97,16 +99,14 @@ func (m *wekaMount) doMount(apiClient *apiclient.ApiClient) error {
 			if mountToken, err = apiClient.GetMountTokenForFilesystemName(m.fsRequest.fs); err != nil {
 				return err
 			}
-			mountOptions = append(mountOptions, fmt.Sprintf("token=%s", mountToken))
+			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
 		}
-
-		glog.V(3).Infof("Calling k8s mounter for fs: %s (xattr %t) @ %s, authenticated: %s",
-			m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, func() string {
+		glog.V(3).Infof("Calling k8s mounter for fs: %s (xattr %t) @ %s, options: %s, authenticated: %s",
+			m.fsRequest.fs, m.fsRequest.xattr, m.mountPoint, mountOptions, func() string {
 				return strconv.FormatBool(mountToken != "")
 			}(),
 		)
-
-		return m.kMounter.Mount(m.fsRequest.fs, m.mountPoint, "wekafs", mountOptions)
+		return m.kMounter.MountSensitive(m.fsRequest.fs, m.mountPoint, "wekafs", mountOptions, mountOptionsSensitive)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fs)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
@@ -122,10 +122,13 @@ func getDefaultMountOptions() []string {
 	return []string{"writecache"}
 }
 
-func getMountOptions(fs *fsMountRequest) []string {
+func getMountOptions(fs *fsMountRequest, selinuxSupport bool) []string {
 	var mountOptions = getDefaultMountOptions()
 	if fs.xattr {
 		mountOptions = append(mountOptions, "acl")
+	}
+	if selinuxSupport {
+		mountOptions = append(mountOptions, "fscontext=\"system_u:object_r:wekafs_csi_volume_t:s0\"")
 	}
 	return mountOptions
 }
@@ -163,7 +166,7 @@ func (m *wekaMounter) mountParams(fs string, xattr bool, apiClient *apiclient.Ap
 	request := fsMountRequest{fs, xattr}
 	m.initFsMountObject(request)
 	mounter := m.mountMap[request]
-	mountErr := mounter.incRef(apiClient)
+	mountErr := mounter.incRef(apiClient, m.selinuxSupport)
 
 	if mountErr != nil {
 		glog.Errorf("Failed mounting %s at %s: %e", fs, mounter.mountPoint, mountErr)
@@ -187,10 +190,12 @@ func (m *wekaMounter) MountXattr(fs string, apiClient *apiclient.ApiClient) (str
 }
 
 func (m *wekaMounter) Unmount(fs string) error {
+	defer m.LogActiveMounts()
 	return m.unmount(fs, false)
 }
 
 func (m *wekaMounter) UnmountXattr(fs string) error {
+	defer m.LogActiveMounts()
 	return m.unmount(fs, true)
 }
 

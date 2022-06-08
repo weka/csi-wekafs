@@ -34,7 +34,7 @@ import (
 const TopologyKeyNode = "topology.wekafs.csi/node"
 const TopologyLabelNode = "topology.csi.weka.io/node"
 const TopologyLabelWeka = "topology.csi.weka.io/global"
-const WekaModule = "wekafsgw"
+const WekaKernelModuleName = "wekafsgw"
 const crashOnNoWeka = false
 
 type nodeServer struct {
@@ -77,9 +77,9 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *apiStore, mounte
 
 func isWekaInstalled() bool {
 	glog.Info("Checking if wekafs is installed on host")
-	cmd := fmt.Sprintf("lsmod | grep -w %s", WekaModule)
+	cmd := fmt.Sprintf("lsmod | grep -w %s", WekaKernelModuleName)
 	res, _ := exec.Command("sh", "-c", cmd).Output()
-	return strings.Contains(string(res), WekaModule)
+	return strings.Contains(string(res), WekaKernelModuleName)
 }
 
 func NodePublishVolumeError(errorCode codes.Code, errorMessage string) (*csi.NodePublishVolumeResponse, error) {
@@ -144,6 +144,10 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		targetPath, fsType, deviceId, readOnly, volume.GetId(), attrib, mountFlags)
 
 	mountPoint, err, unmount := volume.Mount(ns.mounter, false)
+	if err != nil {
+		unmount()
+		return NodePublishVolumeError(codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
+	}
 	ok, err := volume.Exists(mountPoint)
 	if err != nil {
 		return NodePublishVolumeError(codes.Internal, err.Error())
@@ -197,7 +201,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return NodePublishVolumeError(codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
 	}
 
-	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind succesffully
+	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
 	glog.Infof("Successfully published volume %s", volume.GetId())
 	return &csi.NodePublishVolumeResponse{}, nil
 }

@@ -79,14 +79,14 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 
 	if proto == "unix" {
 		addr = "/" + addr
-		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) { //nolint: vetshadow
-			glog.Fatalf("Failed to remove %s, error: %s", addr, err.Error())
+		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
+			Die(fmt.Sprintf("Failed to remove %s, error: %s", addr, err.Error()))
 		}
 	}
 
 	listener, err := net.Listen(proto, addr)
 	if err != nil {
-		glog.Fatalf("Failed to listen: %v", err)
+		Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
 	}
 
 	opts := []grpc.ServerOption{
@@ -96,22 +96,27 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 	s.server = server
 
 	if ids != nil {
+		glog.V(5).Infoln("Registering GRPC IdentityServer")
 		csi.RegisterIdentityServer(server, ids)
 	}
 	if s.csiMmode == CsiModeController || s.csiMmode == CsiModeAll {
 		if cs != nil {
+			glog.V(5).Infoln("Registering GRPC ControllerServer")
 			csi.RegisterControllerServer(server, cs)
 		}
 	}
 	if s.csiMmode == CsiModeNode || s.csiMmode == CsiModeAll {
 		if ns != nil {
+			glog.V(5).Infoln("Registering GRPC NodeServer")
 			csi.RegisterNodeServer(server, ns)
 		}
 	}
 
 	glog.Infof("Listening for connections on address: %#v", listener.Addr())
 
-	server.Serve(listener)
+	if err := server.Serve(listener); err != nil {
+		Die(err.Error())
+	}
 
 }
 

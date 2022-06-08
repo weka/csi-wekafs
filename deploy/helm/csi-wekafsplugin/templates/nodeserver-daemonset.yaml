@@ -1,56 +1,4 @@
-apiVersion: v1
-kind: ServiceAccount
-imagePullSecrets:
-- name: {{ .Release.Name }}-creds
-metadata:
-  name: {{ .Release.Name }}-node
-  namespace: {{ .Release.Namespace }}
-
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: {{ .Release.Name }}-node
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["persistentvolumes"]
-    verbs: ["create", "delete", "get", "list", "watch", "update"]
-  - apiGroups: [""]
-    resources: ["persistentvolumesclaims"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "watch", "update", "patch"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["volumeattachments"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["volumeattachments"]
-    verbs: ["get", "list", "watch", "update"]
-
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: {{ .Release.Name }}-node
-subjects:
-  - kind: ServiceAccount
-    name: {{ .Release.Name }}-node
-    namespace: {{ .Release.Namespace }}
-roleRef:
-  kind: ClusterRole
-  name: {{ .Release.Name }}-node
-  apiGroup: rbac.authorization.k8s.io
----
+{{- if or (eq (.Values.selinuxSupport | default "off") "off") (eq (.Values.selinuxSupport | toString) "mixed") }}
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
@@ -64,11 +12,25 @@ spec:
     metadata:
       labels:
         app: {{ .Release.Name }}-node
+        component: {{ .Release.Name }}-node
+        release: {{ .Release.Name }}
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: {{ .Values.selinuxNodeLabel }}
+                    operator: NotIn
+                    values:
+                      - "true"
       {{- if .Values.nodeSelector }}
       nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8}}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-node
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       hostNetwork: true
       containers:
         - name: wekafs
@@ -111,10 +73,10 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-            - mountPath: /var/lib/kubelet/pods
+            - mountPath:  {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
-            - mountPath: /var/lib/kubelet/plugins
+            - mountPath:  {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins
               mountPropagation: Bidirectional
               name: plugins-dir
             - mountPath: /var/lib/csi-wekafs-data
@@ -146,12 +108,14 @@ spec:
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
-            - "--kubelet-registration-path=/var/lib/kubelet/plugins/csi-wekafs/csi.sock"
+            - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
           securityContext:
             privileged: true
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
+            - name: KUBELET_REGISTRATION_PATH
+              value: "{{ (.Values.kubeletPath | default "/var/lib/kubelet") | toString }}/plugins/csi-wekafs/csi.sock"
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
@@ -165,21 +129,21 @@ spec:
       {{- end }}
       volumes:
         - hostPath:
-            path: /var/lib/kubelet/plugins/csi-wekafs
-            type: DirectoryOrCreate
-          name: socket-dir
-        - hostPath:
-            path: /var/lib/kubelet/pods
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/pods
             type: DirectoryOrCreate
           name: mountpoint-dir
         - hostPath:
-            path: /var/lib/kubelet/plugins_registry
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins_registry
             type: Directory
           name: registration-dir
         - hostPath:
-            path: /var/lib/kubelet/plugins
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins
             type: Directory
           name: plugins-dir
+        - hostPath:
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/csi-wekafs
+            type: DirectoryOrCreate
+          name: socket-dir
         - hostPath:
             # 'path' is where PV data is persisted on host.
             # using /tmp is also possible while the PVs will not available after plugin container recreation or host reboot
@@ -194,4 +158,5 @@ spec:
         - name: legacy-volume-access
           secret:
             secretName: {{ .Values.legacyVolumeSecretName }}
+{{- end }}
 {{- end }}

@@ -23,7 +23,7 @@ FROM alpine:3.15
 LABEL maintainers="Weka"
 LABEL description="Weka CSI Driver"
 # Add util-linux to get a new version of losetup.
-RUN apk add util-linux
+RUN apk add util-linux libselinux libselinux-utils util-linux pciutils usbutils coreutils binutils findutils grep bash
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 ARG binary=/bin/wekafsplugin
 ENTRYPOINT ["/wekafsplugin"]

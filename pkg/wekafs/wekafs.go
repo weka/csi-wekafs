@@ -47,7 +47,8 @@ type wekaFsDriver struct {
 	debugPath      string
 	dynamicVolPath string
 
-	csiMode CsiPluginMode
+	csiMode        CsiPluginMode
+	selinuxSupport bool
 }
 
 type VolumeType string
@@ -120,6 +121,12 @@ func (api *apiStore) fromParams(Username, Password, Organization, Scheme string,
 		return api.getByHash(hash), nil
 	}
 	api.apis[hash] = newClient
+	if !newClient.SupportsAuthenticatedMounts() && Organization != apiclient.RootOrganizationName {
+		return nil, errors.New(fmt.Sprintf(
+			"Using Organization %s is not supported on Weka cluster \"%s\".\n"+
+				"To support organization other than Root please upgrade to version %s or higher",
+			Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
+	}
 	return newClient, nil
 }
 
@@ -183,7 +190,9 @@ func NewApiStore() *apiStore {
 	return s
 }
 
-func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string, dynmamicVolPath string, csiMode CsiPluginMode) (*wekaFsDriver, error) {
+func NewWekaFsDriver(
+	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string,
+	dynmamicVolPath string, csiMode CsiPluginMode, selinuxSupport bool) (*wekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -214,14 +223,14 @@ func NewWekaFsDriver(driverName, nodeID, endpoint string, maxVolumesPerNode int6
 		dynamicVolPath:    dynmamicVolPath,
 		csiMode:           csiMode, // either "controller", "node", "all"
 		api:               NewApiStore(),
+		selinuxSupport:    selinuxSupport,
 	}, nil
 }
 
 func (driver *wekaFsDriver) Run() {
 	// Create GRPC servers
-	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath}
+	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
 	gc := initDirVolumeGc(mounter)
-
 	// identity server runs always
 	glog.Info("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver.name, driver.version)
