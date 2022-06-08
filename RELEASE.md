@@ -1,3 +1,8 @@
+# Release 0.8.1
+## Bug Fixes
+- Fix invalid link to CSI SELinux documentation on ArtifactHub page
+- Fix version strings are not updated inside Helm chart README.md
+
 # Release 0.8.0
 ## New features
 ### SELinux support

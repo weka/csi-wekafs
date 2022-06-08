@@ -107,7 +107,7 @@ helm_update_charts() {
   yq w -i "$CHART_DIR/Chart.yaml" appVersion "v${VERSION_STRING}"
   yq w -i "$CHART_DIR/Chart.yaml" "sources[0]" "https://github.com/weka/csi-wekafs/tree/v${VERSION_STRING}/deploy/helm/csi-wekafsplugin"
   yq w -i "$CHART_DIR/values.yaml" csiDriverVersion --anchorName csiDriverVersion "${VERSION_STRING}"
-  helm-docs -s file
+  helm-docs -s file -c $CHART_DIR
 }
 
 helm_prepare_package() {
@@ -349,14 +349,15 @@ main() {
   handle_testing
   build
   docker_tag_image
-  helm_prepare_package
+  log_message INFO "Updating Helm package to version ${VERSION_STRING}"
+  helm_prepare_package  # create a Helm package in termporary dir, update versions and package
   [[ $BUILD_MODE == local ]] && log_message NOTICE "Done building locally $VERSION_STRING" && exit 0
   docker_push_image
   [[ $BUILD_MODE == dev ]] && log_message NOTICE "Done building dev build $VERSION_STRING" && exit 0
-  helm_upload_package_to_s3
-  helm_update_charts
+  helm_update_charts  # to update the Helm chart inside repo
   helm-docs -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl -s file
   git_commit_manifests
+  helm_upload_package_to_s3
   git_push_tag v"$VERSION_STRING"
   [[ $BUILD_MODE =~ beta ]] && log_message NOTICE "Done building Beta build $VERSION_STRING" && exit 0
   helm_update_registry

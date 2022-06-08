@@ -16,7 +16,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 ```
 
 > **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
-> Refer to [SELinux Support & Installation Notes](selinux/README.md) for additional information
+> Refer to [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/v0.8.0/selinux/README.md) for additional information
 
 > **NOTE:** Since version 0.7.0, Weka CSI plugin transitions to API-based deployment model which requires API
 > connectivity and credentials parameters to be set in Storage Class.
