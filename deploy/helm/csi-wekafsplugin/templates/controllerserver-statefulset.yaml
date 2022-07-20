@@ -141,10 +141,6 @@ spec:
       {{- end }}
       volumes:
         - hostPath:
-            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/csi-wekafs
-            type: DirectoryOrCreate
-          name: socket-dir
-        - hostPath:
             path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/pods
             type: DirectoryOrCreate
           name: mountpoint-dir
@@ -156,6 +152,10 @@ spec:
             path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins
             type: Directory
           name: plugins-dir
+        - hostPath:
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/csi-wekafs-node
+            type: DirectoryOrCreate
+          name: socket-dir
         - hostPath:
             # 'path' is where PV data is persisted on host.
             # using /tmp is also possible while the PVs will not available after plugin container recreation or host reboot
