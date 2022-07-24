@@ -144,7 +144,7 @@ spec:
             type: Directory
           name: plugins-dir
         - hostPath:
-            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/csi-wekafs
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/csi-wekafs-node
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:
