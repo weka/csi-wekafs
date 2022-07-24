@@ -1,3 +1,12 @@
+# Release 0.8.3
+## Bug Fixes
+- Fixed a race condition due to which CSI Node component running on same node with 
+  CSI Controller component could fail to start
+
+# Release 0.8.2
+## Bug Fixes
+- Fixed README.md to correct SELinux README.md URL
+
 # Release 0.8.1
 ## Bug Fixes
 - Fix invalid link to CSI SELinux documentation on ArtifactHub page
