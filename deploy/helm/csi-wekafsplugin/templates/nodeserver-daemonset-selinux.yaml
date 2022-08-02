@@ -117,7 +117,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: KUBELET_REGISTRATION_PATH
-              value: "{{ (.Values.kubeletPath | default "/var/lib/kubelet") | toString }}/plugins/csi-wekafs/csi.sock"
+              value: "{{ (.Values.kubeletPath | default "/var/lib/kubelet") | toString }}/plugins/csi-wekafs-node/csi.sock"
 
           volumeMounts:
             - mountPath: /csi

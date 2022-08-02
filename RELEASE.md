@@ -1,3 +1,8 @@
+# Release 0.8.4
+## Bug Fixes
+- Fixed an error which caused the CSI Node component to fail starting on Selinux-enabled hosts
+- Fixed installation notes to correctly show the helm commands required for seeing the release
+
 # Release 0.8.3
 ## Bug Fixes
 - Fixed a race condition due to which CSI Node component running on same node with 
