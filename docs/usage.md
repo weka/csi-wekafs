@@ -24,7 +24,7 @@ under one of its subfolders, and can be accessed, for example, by other applicat
      ./examples/dynamic/storageclass-wekafs-dir.yaml \
      ./examples/dynamic/pvc-wekafs-dir.yaml \
      ./examples/dynamic/csi-app-on-dir.yaml \
-     kubectl apply -f $i; 
+     ; do kubectl apply -f $i; 
     done
     
     storageclass.storage.k8s.io/storageclass-wekafs-dir created      
