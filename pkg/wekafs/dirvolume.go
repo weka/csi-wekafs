@@ -71,7 +71,7 @@ func (v *DirVolume) GetCapacity(mountPath string) (int64, error) {
 
 func (v *DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capacityLimit int64) error {
 	glog.V(3).Infoln("Updating capacity of the volume", v.GetId(), "to", capacityLimit)
-	var fallback = true
+	var fallback = true // whether we should try to use xAttr fallback or not
 	f := func() error { return v.updateCapacityQuota(mountPath, enforceCapacity, capacityLimit) }
 	if v.apiClient == nil {
 		glog.V(4).Infof("Volume has no API client bound, updating capacity in legacy mode")
@@ -88,7 +88,7 @@ func (v *DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capa
 		return err
 	}
 	if fallback {
-		glog.V(4).Infoln("Failed to set quota for a volume, maybe it is not empty? Falling back to xattr")
+		glog.V(4).Infof("Failed to set quota for a volume (%s), falling back to xattr", err.Error())
 		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
 		err := f()
 		if err == nil {
@@ -114,7 +114,7 @@ func (v *DirVolume) updateCapacityQuota(mountPath string, enforceCapacity *bool,
 	}
 	fsObj, err := v.getFilesystemObj()
 	if err != nil {
-		glog.Errorln("Failed to fetch filesystem for volume", v.GetId())
+		glog.Errorln("Failed to fetch filesystem for volume", v.GetId(), err)
 		return err
 	}
 
