@@ -55,10 +55,6 @@ func (v *DirVolume) GetCapacity(mountPath string) (int64, error) {
 			glog.V(3).Infoln("Current capacity of volume", v.GetId(), "is", size, "obtained via API")
 			return int64(size), nil
 		}
-		//if err == apiclient.ObjectNotFoundError {
-		//	glog.V(3).Infoln("Volume has no quota, returning capacity 0")
-		//	return 0, nil //
-		//}
 	}
 	glog.V(4).Infoln("Volume", v.GetId(), "appears to be a legacy volume. Trying to fetch capacity from Xattr")
 	size, err := v.getSizeFromXattr(mountPath)
@@ -79,6 +75,10 @@ func (v *DirVolume) UpdateCapacity(mountPath string, enforceCapacity *bool, capa
 		fallback = false
 	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		glog.V(4).Infoln("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
+		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
+		fallback = false
+	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Organization != "Root" {
+		glog.V(4).Infoln("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode")
 		f = func() error { return v.updateCapacityXattr(mountPath, enforceCapacity, capacityLimit) }
 		fallback = false
 	}
