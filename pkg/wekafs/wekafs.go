@@ -17,6 +17,7 @@ limitations under the License.
 package wekafs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/golang/glog"
@@ -31,7 +32,7 @@ import (
 
 var DefaultVolumePermissions fs.FileMode = 0750
 
-type wekaFsDriver struct {
+type WekaFsDriver struct {
 	name              string
 	nodeID            string
 	version           string
@@ -41,25 +42,32 @@ type wekaFsDriver struct {
 	mockMount         bool
 
 	ids            *identityServer
-	ns             *nodeServer
-	cs             *controllerServer
-	api            *apiStore
+	ns             *NodeServer
+	cs             *ControllerServer
+	api            *ApiStore
 	debugPath      string
 	dynamicVolPath string
 
 	csiMode        CsiPluginMode
 	selinuxSupport bool
+
+	newVolumePrefix              string
+	newSnapshotPrefix            string
+	allowAutoFsCreation          bool
+	allowAutoFsExpansion         bool
+	supportSnapshotCapability    bool
+	supportVolumeCloneCapability bool
 }
 
 type VolumeType string
 
 var (
-	vendorVersion    = "dev"
-	ApiNotFoundError = errors.New("could not get API client by cluster guid")
+	vendorVersion           = "dev"
+	ClusterApiNotFoundError = errors.New("could not get API client by cluster guid")
 )
 
-// apiStore hashmap of all APIs defined by credentials + endpoints
-type apiStore struct {
+// ApiStore hashmap of all APIs defined by credentials + endpoints
+type ApiStore struct {
 	sync.Mutex
 	apis          map[uint32]*apiclient.ApiClient
 	legacySecrets *map[string]string
@@ -72,65 +80,74 @@ func Die(exitMsg string) {
 }
 
 // getByHash returns pointer to existing API if found by hash, or nil
-func (api *apiStore) getByHash(key uint32) *apiclient.ApiClient {
+func (api *ApiStore) getByHash(key uint32) *apiclient.ApiClient {
 	if val, ok := api.apis[key]; ok {
 		return val
 	}
 	return nil
 }
 
-func (api *apiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, error) {
+func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, error) {
 	for _, val := range api.apis {
 		if val.ClusterGuid == guid {
 			return val, nil
 		}
 	}
 	glog.Errorln("Could not fetch API client for cluster GUID", guid.String())
-	return nil, ApiNotFoundError
+	return nil, ClusterApiNotFoundError
 }
 
 // fromSecrets returns a pointer to API by secret contents
-func (api *apiStore) fromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
-	username := strings.TrimSpace(secrets["username"])
-	password := secrets["password"]
-	organization := strings.TrimSpace(secrets["organization"])
+func (api *ApiStore) fromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
 	endpointsRaw := strings.TrimSpace(secrets["endpoints"])
-	endpoints := strings.Split(string(endpointsRaw), ",")
-	scheme := strings.TrimSpace(secrets["scheme"])
-	return api.fromParams(username, password, organization, scheme, endpoints)
+	endpoints := func() []string {
+		var ret []string
+		for _, s := range strings.Split(string(endpointsRaw), ",") {
+			ret = append(ret, strings.TrimSpace(strings.TrimSuffix(s, "\n")))
+		}
+		return ret
+	}()
+	credentials := apiclient.Credentials{
+		Username:     strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
+		Password:     strings.TrimSuffix(secrets["password"], "\n"),
+		Organization: strings.TrimSpace(strings.TrimSuffix(secrets["organization"], "\n")),
+		Endpoints:    endpoints,
+		HttpScheme:   strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
+	}
+	return api.fromCredentials(credentials)
 }
 
-// fromParams returns a pointer to API by credentials and endpoints
+// fromCredentials returns a pointer to API by credentials and endpoints
 // If this is a new API, it will be created and put in hashmap
-func (api *apiStore) fromParams(Username, Password, Organization, Scheme string, Endpoints []string) (*apiclient.ApiClient, error) {
+func (api *ApiStore) fromCredentials(credentials apiclient.Credentials) (*apiclient.ApiClient, error) {
 	// doing this to fetch a client hash
-	newClient, err := apiclient.NewApiClient(Username, Password, Organization, Endpoints, Scheme)
+	newClient, err := apiclient.NewApiClient(credentials)
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
 	}
 	hash := newClient.Hash()
 
 	if existingApi := api.getByHash(hash); existingApi != nil {
-		glog.V(4).Infoln("Found an existing Weka API client", newClient.Username, "@", strings.Join(newClient.Endpoints, ","))
+		glog.V(4).Infoln("Found an existing Weka API client", credentials.String())
 		return existingApi, nil
 	}
 	api.Lock()
 	defer api.Unlock()
-	glog.V(4).Infoln("Creating new Weka API client", newClient.Username, "@", strings.Join(newClient.Endpoints, ","))
+	glog.V(4).Infoln("Creating new Weka API client", credentials.String())
 	if api.getByHash(hash) != nil {
 		return api.getByHash(hash), nil
 	}
 	api.apis[hash] = newClient
-	if !newClient.SupportsAuthenticatedMounts() && Organization != apiclient.RootOrganizationName {
+	if !newClient.SupportsAuthenticatedMounts() && credentials.Organization != apiclient.RootOrganizationName {
 		return nil, errors.New(fmt.Sprintf(
 			"Using Organization %s is not supported on Weka cluster \"%s\".\n"+
 				"To support organization other than Root please upgrade to version %s or higher",
-			Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
+			credentials.Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
 	}
 	return newClient, nil
 }
 
-func (api *apiStore) GetDefaultSecrets() (*map[string]string, error) {
+func (api *ApiStore) GetDefaultSecrets() (*map[string]string, error) {
 	err := pathIsDirectory(LegacySecretPath)
 	if err != nil {
 		return nil, errors.New("no legacy secret exists")
@@ -151,7 +168,7 @@ func (api *apiStore) GetDefaultSecrets() (*map[string]string, error) {
 	return &ret, nil
 }
 
-func (api *apiStore) GetClientFromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
+func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
 	if len(secrets) == 0 {
 		if api.legacySecrets != nil {
 			glog.V(4).Infof("No explicit API service for request, using legacySecrets")
@@ -161,22 +178,21 @@ func (api *apiStore) GetClientFromSecrets(secrets map[string]string) (*apiclient
 			return nil, nil
 		}
 	}
-
 	client, err := api.fromSecrets(secrets)
 	if err != nil || client == nil {
 		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
 		return nil, nil
 	}
-	if err := client.Init(); err != nil {
-		glog.Errorln("Failed to initialize API client", client.Username, "@", client.Endpoints, err)
+	if err := client.Init(ctx); err != nil {
+		glog.Errorln("Failed to initialize API client", client.Credentials.String(), err)
 		return nil, err
 	}
 	glog.V(4).Infof("Successfully initialized API backend for request")
 	return client, nil
 }
 
-func NewApiStore() *apiStore {
-	s := &apiStore{
+func NewApiStore() *ApiStore {
+	s := &ApiStore{
 		Mutex: sync.Mutex{},
 		apis:  make(map[uint32]*apiclient.ApiClient),
 	}
@@ -191,8 +207,10 @@ func NewApiStore() *apiStore {
 }
 
 func NewWekaFsDriver(
-	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string, debugPath string,
-	dynmamicVolPath string, csiMode CsiPluginMode, selinuxSupport bool) (*wekaFsDriver, error) {
+	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version, debugPath string,
+	dynmamicVolPath string, csiMode CsiPluginMode, selinuxSupport bool,
+	newVolumePrefix, newSnapshotPrefix string,
+	allowAutoFsCreation, allowAutoFsExpansion, removeSnapshotCapability, removeVolumeCloneCapability bool) (*WekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -213,24 +231,30 @@ func NewWekaFsDriver(
 
 	glog.Infof("csiMode: %s", csiMode)
 
-	return &wekaFsDriver{
-		name:              driverName,
-		version:           vendorVersion,
-		nodeID:            nodeID,
-		endpoint:          endpoint,
-		maxVolumesPerNode: maxVolumesPerNode,
-		debugPath:         debugPath,
-		dynamicVolPath:    dynmamicVolPath,
-		csiMode:           csiMode, // either "controller", "node", "all"
-		api:               NewApiStore(),
-		selinuxSupport:    selinuxSupport,
+	return &WekaFsDriver{
+		name:                         driverName,
+		version:                      vendorVersion,
+		nodeID:                       nodeID,
+		endpoint:                     endpoint,
+		maxVolumesPerNode:            maxVolumesPerNode,
+		debugPath:                    debugPath,
+		dynamicVolPath:               dynmamicVolPath,
+		csiMode:                      csiMode, // either "controller", "node", "all"
+		api:                          NewApiStore(),
+		selinuxSupport:               selinuxSupport,
+		newVolumePrefix:              newVolumePrefix,
+		newSnapshotPrefix:            newSnapshotPrefix,
+		allowAutoFsCreation:          allowAutoFsCreation,
+		allowAutoFsExpansion:         allowAutoFsExpansion,
+		supportSnapshotCapability:    !removeSnapshotCapability,
+		supportVolumeCloneCapability: !removeVolumeCloneCapability,
 	}, nil
 }
 
-func (driver *wekaFsDriver) Run() {
+func (driver *WekaFsDriver) Run() {
 	// Create GRPC servers
 	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
-	gc := initDirVolumeGc(mounter)
+	mounter.gc = initInnerPathVolumeGc(mounter)
 	// identity server runs always
 	glog.Info("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver.name, driver.version)
@@ -238,18 +262,20 @@ func (driver *wekaFsDriver) Run() {
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		glog.Infof("Loading ControllerServer")
 		// bring up controller part
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, gc, driver.dynamicVolPath)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.dynamicVolPath,
+			driver.newVolumePrefix, driver.newSnapshotPrefix, driver.allowAutoFsCreation, driver.allowAutoFsExpansion,
+			driver.supportSnapshotCapability, driver.supportVolumeCloneCapability)
 	} else {
-		driver.cs = &controllerServer{}
+		driver.cs = &ControllerServer{}
 	}
 
 	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
 
 		// bring up node part
 		glog.Infof("Loading NodeServer")
-		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, gc)
+		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter)
 	} else {
-		driver.ns = &nodeServer{}
+		driver.ns = &NodeServer{}
 	}
 
 	s := NewNonBlockingGRPCServer(driver.csiMode)
@@ -257,16 +283,25 @@ func (driver *wekaFsDriver) Run() {
 	s.Wait()
 }
 
-const (
-	VolumeTypeDirV1  VolumeType = "dir/v1"
-	LegacySecretPath            = "/legacy-volume-access"
-)
-
 type CsiPluginMode string
 
-const CsiModeNode CsiPluginMode = "node"
-const CsiModeController CsiPluginMode = "controller"
-const CsiModeAll CsiPluginMode = "all"
+const (
+	VolumeTypeDirV1       VolumeType = "dir/v1"      // if specified in storage class, create directory quotas (as in legacy CSI volumes). FS name must be set in SC as well
+	VolumeTypeFsV1        VolumeType = "fs/v1"       // if specified in storage class, or volumeType is not specified at all - we will create filesystems
+	VolumeTypeFsSnapV1    VolumeType = "snap/v1"     // if specified in storage class, create snapshots of a filesystem, name of the FS must be set in SC as well
+	VolumeTypeUnified     VolumeType = "weka/v1"     // no need to specify this
+	VolumeTypeUnifiedSnap VolumeType = "wekasnap/v1" // no need to specify this
+	VolumeTypeNone        VolumeType = ""
+	VolumeTypeUNKNOWN     VolumeType = "AMBIGUOUS_VOLUME_TYPE"
+
+	LegacySecretPath = "/legacy-volume-access"
+
+	CsiModeNode       CsiPluginMode = "node"
+	CsiModeController CsiPluginMode = "controller"
+	CsiModeAll        CsiPluginMode = "all"
+)
+
+var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeFsV1, VolumeTypeFsSnapV1, VolumeTypeUnified}
 
 func GetCsiPluginMode(mode *string) CsiPluginMode {
 	ret := CsiPluginMode(*mode)

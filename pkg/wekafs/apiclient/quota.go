@@ -1,6 +1,7 @@
 package apiclient
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/golang/glog"
@@ -221,7 +222,7 @@ func (qd *QuotaDeleteRequest) getRelatedObject() ApiObject {
 	}
 }
 
-func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForCompletion bool) error {
+func (a *ApiClient) CreateQuota(ctx context.Context, qr *QuotaCreateRequest, q *Quota, waitForCompletion bool) error {
 	f := a.Log(3, "Creating quota", qr.String(), "wait for completion:", waitForCompletion)
 	if !qr.hasRequiredFields() {
 		return RequestMissingParams
@@ -231,7 +232,7 @@ func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForComplet
 		return err
 	}
 
-	err = a.Put(qr.getApiUrl(), &payload, nil, q)
+	err = a.Put(ctx, qr.getApiUrl(), &payload, nil, q)
 	if err != nil {
 		return err
 	}
@@ -241,16 +242,16 @@ func (a *ApiClient) CreateQuota(qr *QuotaCreateRequest, q *Quota, waitForComplet
 			a.Log(4, "Workaround for WEKAPP-240948, replacing quota inodeID")
 			q.InodeId = qr.inodeId
 		}
-		return a.WaitForQuotaActive(q)
+		return a.WaitForQuotaActive(ctx, q)
 	}
 	f()
 	return nil
 }
 
-func (a *ApiClient) WaitForQuotaActive(q *Quota) error {
+func (a *ApiClient) WaitForQuotaActive(ctx context.Context, q *Quota) error {
 	glog.V(4).Infof("Waiting for quota %d@%s to become active", q.InodeId, q.FilesystemUid.String())
 	f := wait.ConditionFunc(func() (bool, error) {
-		return a.IsQuotaActive(q)
+		return a.IsQuotaActive(ctx, q)
 	})
 	err := wait.Poll(5*time.Second, time.Hour*24, f)
 	if err != nil {
@@ -259,12 +260,12 @@ func (a *ApiClient) WaitForQuotaActive(q *Quota) error {
 	return nil
 }
 
-func (a *ApiClient) FindQuotaByFilter(query *Quota, resultSet *[]Quota) error {
+func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultSet *[]Quota) error {
 	if query.FilesystemUid == uuid.Nil {
 		return RequestMissingParams
 	}
 	ret := &[]Quota{}
-	err := a.Get(query.GetBasePath(), nil, ret)
+	err := a.Get(ctx, query.GetBasePath(), nil, ret)
 	if err != nil {
 		return err
 	}
@@ -277,7 +278,7 @@ func (a *ApiClient) FindQuotaByFilter(query *Quota, resultSet *[]Quota) error {
 	return nil
 }
 
-func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64) (*Quota, error) {
+func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSystem, inodeId uint64) (*Quota, error) {
 	if fs == nil || inodeId == 0 {
 		return nil, RequestMissingParams
 	}
@@ -285,7 +286,7 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 		FilesystemUid: fs.Uid,
 		InodeId:       inodeId,
 	}
-	err := a.Get(ret.GetApiUrl(), nil, ret)
+	err := a.Get(ctx, ret.GetApiUrl(), nil, ret)
 	if err != nil {
 		switch t := err.(type) {
 		case ApiNotFoundError:
@@ -307,11 +308,11 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(fs *FileSystem, inodeId uint64)
 	return ret, nil
 }
 
-func (a *ApiClient) GetQuotaByFilter(query *Quota) (*Quota, error) {
+func (a *ApiClient) GetQuotaByFilter(ctx context.Context, query *Quota) (*Quota, error) {
 	f := a.Log(3, "Looking for quota", query.String())
 	defer f()
 	rs := &[]Quota{}
-	err := a.FindQuotaByFilter(query, rs)
+	err := a.FindQuotaByFilter(ctx, query, rs)
 	if err != nil {
 		return nil, err
 	}
@@ -325,21 +326,22 @@ func (a *ApiClient) GetQuotaByFilter(query *Quota) (*Quota, error) {
 	return result, nil
 }
 
-func (a *ApiClient) IsQuotaActive(query *Quota) (done bool, err error) {
+func (a *ApiClient) IsQuotaActive(ctx context.Context, query *Quota) (done bool, err error) {
 	fs := &FileSystem{
 		Uid: query.FilesystemUid,
 	}
-	q, err := a.GetQuotaByFileSystemAndInode(fs, query.InodeId)
+	q, err := a.GetQuotaByFileSystemAndInode(ctx, fs, query.InodeId)
 	if err != nil {
 		return false, err
 	}
 	if q != nil {
+		// TODO: add quotaStatusError, quotaStatusDeleting, quotaStatusPending handling
 		return q.Status == QuotaStatusActive, nil
 	}
 	return false, nil
 }
 
-func (a *ApiClient) UpdateQuota(r *QuotaUpdateRequest, q *Quota) error {
+func (a *ApiClient) UpdateQuota(ctx context.Context, r *QuotaUpdateRequest, q *Quota) error {
 	f := a.Log(3, "Updating quota", r)
 	defer f()
 	//if !r.hasRequiredFields() {
@@ -350,21 +352,21 @@ func (a *ApiClient) UpdateQuota(r *QuotaUpdateRequest, q *Quota) error {
 	if err != nil {
 		return err
 	}
-	err = a.Put(r.getApiUrl(), &payload, nil, q)
+	err = a.Put(ctx, r.getApiUrl(), &payload, nil, q)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (a *ApiClient) DeleteQuota(r *QuotaDeleteRequest) error {
+func (a *ApiClient) DeleteQuota(ctx context.Context, r *QuotaDeleteRequest) error {
 	f := a.Log(3, "Deleting quota", r)
 	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
 	apiResponse := &ApiResponse{}
-	err := a.Delete(r.getApiUrl(), nil, nil, apiResponse)
+	err := a.Delete(ctx, r.getApiUrl(), nil, nil, apiResponse)
 	if err != nil {
 		return err
 	}

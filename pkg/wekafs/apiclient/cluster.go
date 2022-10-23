@@ -1,6 +1,7 @@
 package apiclient
 
 import (
+	"context"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-version"
@@ -15,9 +16,9 @@ const ApiPathRefresh = "login/refresh"
 const ApiPathClusterInfo = "cluster"
 
 //updateTokensExpiryInterval fetches the refresh token expiry from API
-func (a *ApiClient) updateTokensExpiryInterval() error {
+func (a *ApiClient) updateTokensExpiryInterval(ctx context.Context) error {
 	responseData := &TokenExpiryResponse{}
-	if err := a.Get(ApiPathTokenExpiry, nil, responseData); err != nil {
+	if err := a.Get(ctx, ApiPathTokenExpiry, nil, responseData); err != nil {
 		return err
 	}
 	a.refreshTokenExpiryInterval = responseData.RefreshTokenExpiry
@@ -27,10 +28,10 @@ func (a *ApiClient) updateTokensExpiryInterval() error {
 }
 
 // fetchClusterInfo performed each login and checks for version
-func (a *ApiClient) fetchClusterInfo() error {
+func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	a.Log(4, "Checking for Weka cluster version...")
 	responseData := &ClusterInfoResponse{}
-	if err := a.Get(ApiPathClusterInfo, nil, responseData); err != nil {
+	if err := a.Get(ctx, ApiPathClusterInfo, nil, responseData); err != nil {
 		return err
 	}
 	a.ClusterName = responseData.Name
@@ -44,7 +45,19 @@ func (a *ApiClient) fetchClusterInfo() error {
 	a.Log(3, "Cluster compatibility for quota on non-empty CSI volume:", a.SupportsQuotaOnNonEmptyDirs())
 	a.Log(3, "Cluster compatibility for regular directory as CSI volume:", a.SupportsDirectoryAsVolume())
 	a.Log(3, "Cluster compatibility for authenticated filesystem mounts", a.SupportsAuthenticatedMounts())
+	a.Log(3, "Cluster compatibility for new filesystem from snapshot", a.SupportsNewFileSystemFromSnapshot())
+	a.Log(3, "Cluster compatibility for cloning filesystems", a.SupportsFilesystemCloning())
 	return nil
+}
+
+func (a *ApiClient) GetFreeCapacity(ctx context.Context) (uint64, error) {
+	responseData := &ClusterInfoResponse{}
+	if err := a.Get(ctx, ApiPathClusterInfo, nil, responseData); err != nil {
+		return 0, err
+	}
+	capacity := responseData.Capacity.UnprovisionedBytes
+	a.Log(5, "Free capacity on cluster is", capacity)
+	return capacity, nil
 }
 
 type LoginRequest struct {
@@ -75,6 +88,11 @@ type TokenExpiryResponse struct {
 	AccessTokenExpiry  int64 `json:"access_token_expiry"`
 	RefreshTokenExpiry int64 `json:"refresh_token_expiry"`
 }
+type Capacity struct {
+	TotalBytes         uint64 `json:"total_bytes"`
+	HotSpareBytes      uint64 `json:"hot_spare_bytes"`
+	UnprovisionedBytes uint64 `json:"unprovisioned_bytes"`
+}
 
 type ClusterInfoResponse struct {
 	Name        string    `json:"name"`
@@ -82,4 +100,5 @@ type ClusterInfoResponse struct {
 	InitStage   string    `json:"init_stage"`
 	Release     string    `json:"release"`
 	Guid        uuid.UUID `json:"guid"`
+	Capacity    Capacity  `json:"capacity,omitempty"`
 }

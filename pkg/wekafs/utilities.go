@@ -2,46 +2,44 @@ package wekafs
 
 import (
 	"crypto/sha1"
+	"encoding/base32"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
+	"github.com/google/uuid"
 	"github.com/pkg/xattr"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"golang.org/x/exp/constraints"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	timestamp "google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"regexp"
 	"strings"
+	"time"
 )
 
-func createVolumeIdFromRequest(req *csi.CreateVolumeRequest, dynamicVolPath string) (string, error) {
-	name := req.GetName()
+func calculateSnapshotParamsHash(name string, sourceVolumeId string) string {
+	return getStringSha1(name)[:MaxHashLengthForObjectNames] + getStringSha1(sourceVolumeId)[:MaxHashLengthForObjectNames]
+}
 
-	var volId string
-	volType := req.GetParameters()["volumeType"]
+func calculateFsBaseNameForUnifiedVolume(name string) string {
+	truncatedName := getAsciiPart(name, MaxHashLengthForObjectNames)
+	return truncatedName + "-" + getStringSha1AsB64(name)[:MaxHashLengthForObjectNames]
+}
 
-	switch volType {
-	case "":
-		return "", status.Errorf(codes.InvalidArgument, "missing VolumeType in CreateVolumeRequest")
-
-	case string(VolumeTypeDirV1):
-		// we have a dir in request or no info
-		filesystemName := GetFSNameFromRequest(req)
-		asciiPart := getAsciiPart(name, 64)
-		hash := getStringSha1(name)
-		folderName := asciiPart + "-" + hash
-		if dynamicVolPath != "" {
-			volId = filepath.Join(volType, filesystemName, dynamicVolPath, folderName)
-		} else {
-			volId = filepath.Join(volType, filesystemName, folderName)
-		}
-		return volId, nil
-
-	default:
-		return "", status.Errorf(codes.InvalidArgument, "Unsupported VolumeType in CreateVolumeRequest")
-	}
+func calculateSnapNameForSnapVolume(name string, fsName string) string {
+	truncatedVolName := getAsciiPart(name, 12)
+	paramsHash := getStringSha1AsB64(fsName + ":" + name)[:MaxHashLengthForObjectNames]
+	return truncatedVolName + "-" + paramsHash
+}
+func calculateSnapBaseNameForSnapshot(name string, sourceVolumeId string) string {
+	paramsHash := getStringSha1AsB64(name)[:MaxHashLengthForObjectNames] + getStringSha1AsB64(sourceVolumeId)[:MaxHashLengthForObjectNames]
+	return paramsHash
 }
 
 func getStringSha1(name string) string {
@@ -51,23 +49,33 @@ func getStringSha1(name string) string {
 	return hash
 }
 
+func getStringSha1AsB64(name string) string {
+	h := sha1.New()
+	h.Write([]byte(name))
+	hash := base32.StdEncoding.EncodeToString(h.Sum(nil))
+	return hash
+}
+
 func GetFSNameFromRequest(req *csi.CreateVolumeRequest) string {
 	var filesystemName string
-	filesystemName = req.GetParameters()["filesystemName"]
-	if filesystemName == "" {
-		filesystemName = defaultFilesystemName
+	if val, ok := req.GetParameters()["filesystemName"]; ok {
+		// explicitly specified FS name in request
+		filesystemName = val
+		if filesystemName != "" {
+			return filesystemName
+		}
 	}
-	return filesystemName
+	return ""
 }
 
 func GetFSName(volumeID string) string {
 	// VolID format:
-	// "dir/v1/<WEKA_FS_NAME>/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
+	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
 	slices := strings.Split(volumeID, "/")
 	if len(slices) < 3 {
 		return ""
 	}
-	return slices[2]
+	return strings.Split(slices[2], ":")[0]
 }
 
 func GetVolumeDirName(volumeID string) string {
@@ -78,12 +86,70 @@ func GetVolumeDirName(volumeID string) string {
 	return strings.Join(slices[3:], "/") // may be either directory name or innerPath
 }
 
-func GetVolumeType(volumeID string) string {
+func GetSnapshotUuid(snapshotId string) *uuid.UUID {
+	// VolID format:
+	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
+	slices := strings.Split(snapshotId, "/")
+	if len(slices) < 3 {
+		return nil
+	}
+	spl := strings.Split(slices[2], ":")
+	if len(spl) == 2 {
+		if id, err := uuid.Parse(spl[len(spl)-1]); err != nil {
+			return &id
+		}
+	}
+	return nil
+}
+
+func GetSnapshotParamsHash(snapshotId string) string {
+	spl := strings.Split(snapshotId, ":")
+	if len(spl) < 3 {
+		return ""
+	}
+	return spl[len(spl)-1]
+}
+
+func GetSnapshotInternalPath(snapshotId string) string {
+	// getting snapshot Id of one of the following formats:
+	// "aaaa:{SnapshotUuid}:HASH"   	# FS name, snap name (root of volume) + hash
+	// "aaaa:{SnapshotUuid}/snapaaaa/ass/s-aifsda0fyd:HASH"   	# FS name, snap name and internal path + hash
+
+	spl := strings.Split(snapshotId, ":")
+	if len(spl) < 3 {
+		// it is invalid string in our case
+		return ""
+	}
+	pathParts := strings.Split(snapshotId, "/")
+
+	if len(pathParts) < 2 {
+		// for a case where inner path is a root of the FS
+		// {SnapshotUuid}
+		return ""
+	} else {
+		// inner path is between snapshot Uid and HASH
+		return path.Join(pathParts[1 : len(pathParts)-1]...)
+	}
+
+}
+
+func GetVolumeType(volumeID string) VolumeType {
 	slices := strings.Split(volumeID, "/")
 	if len(slices) >= 2 {
-		return strings.Join(slices[0:2], "/")
+		volTypeCandidate := strings.Join(slices[0:2], "/")
+		for _, volType := range KnownVolTypes {
+			if VolumeType(volTypeCandidate) == volType {
+				return volType
+			}
+		}
 	}
-	return ""
+	if slices[0] == "" {
+		return VolumeTypeUNKNOWN // probably in format of Unix root path '/var/log/messages'
+	}
+	if len(slices) > 1 && !strings.HasPrefix(slices[1], "v") {
+		return VolumeTypeUNKNOWN // probably not in format of 'type/version'
+	}
+	return VolumeTypeUnified
 }
 
 func PathExists(p string) bool {
@@ -121,25 +187,73 @@ func validateVolumeId(volumeId string) error {
 
 	volumeType := GetVolumeType(volumeId)
 	switch volumeType {
-	case string(VolumeTypeDirV1):
+	case VolumeTypeDirV1:
 		// VolID format is as following:
-		// "<VolType>/<WEKA_FS_NAME>/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
+		// "<VolType>/<WEKA_FS_NAME>/<FOLDER_NAME_ASCII>-<FOLDER_NAME_SHA1_HASH>"
 		// e.g.
-		// "dir/v1/default/63008f52b44ca664dfac8a64f0c17a28e1754213-my-awesome-folder"
+		// "dir/v1/default/my-awesome-folder-HASH"
 		// length limited to maxVolumeIdLength
 		r := VolumeTypeDirV1 + "/[^/]*/.+"
 		re := regexp.MustCompile(string(r))
 		if re.MatchString(volumeId) {
 			return nil
 		}
+	case VolumeTypeUnified:
+		// VolID format is as following:
+		// "[<WEKA_FS_NAME>][:<WEKA_SNAP_UID>][/<INNER_PATH_ASCII>-<INNER_PATH_ASCII_SHA1_HASH>][:NAME_HASH]"
+		// e.g.
+		// "aaaa:{SnapshotUuid}/snapaaaa-aifsda0fyd:xxxx # FS name, snap, inner path, name hash. Required for volumes that were created from snapshot or other volume
+		// "aaaa:{SnapshotUuid}/snapaaaa-aifsda0fyd"   	# FS name, snap and directory (e.g. volume created from snapshot of directory)
+		// "aaaa/snapaaaa-aifsda0fyd"          	# FS name, directory (as in legacy model)
+		// "aaaa:snap01"	       			 	# FS name, snap (e.g. volume created from snapshot of fs)
+		// "aaaa"								# FS name only (e.g. new volume provisioned on top of filesystem)
+
+		// length limited to maxVolumeIdLength
+		r := "[^:/]+(:[^/]+)*(/[^:]+)*(:[.+])*"
+		if strings.HasPrefix(volumeId, string(VolumeTypeUnified)) {
+			r = string(VolumeTypeUnified) + "/" + r
+		}
+		re := regexp.MustCompile(r)
+		if re.MatchString(volumeId) {
+			return nil
+		} else {
+			return errors.New(fmt.Sprintln("Volume ID does not match regex:", r, volumeId))
+		}
 	}
-	return status.Errorf(codes.InvalidArgument, "unsupported volumeID")
+	return status.Errorf(codes.InvalidArgument, fmt.Sprintf("unsupported volumeID %s for type %s", volumeId, volumeType))
+}
+
+func validateSnapshotId(snapshotId string) error {
+	if len(snapshotId) == 0 {
+		return status.Errorf(codes.InvalidArgument, "snapshot ID may not be empty")
+	}
+	if len(snapshotId) > maxVolumeIdLength {
+		return status.Errorf(codes.InvalidArgument, "snapshot ID exceeds max length")
+	}
+
+	// SnapshotId format can be one of the following:
+	// "<WEKA_FS_NAME>:<WEKA_SNAP_UID>[/<FOLDER_NAME_ASCII>-<FOLDER_NAME_SHA1_HASH>]:<SNAP_NAME+SRC_VOL_ID_HASH>"
+	// e.g.
+	// "aaaa:{SnapshotUuid}/snapaaaa-aifsda0fyd:HASH"   	# FS name, snap name and internal path + hash
+	// "aaaa:{SnapshotUuid}:HASH"   	# FS name, snap name (root of volume) + hash
+
+	// length limited to maxVolumeIdLength
+	r := "[^:]+:[a-z0-9-]{36}(/[^:]+)*:[A-Za-z0-9]+"
+	if strings.HasPrefix(snapshotId, string(VolumeTypeUnifiedSnap)) {
+		r = string(VolumeTypeUnifiedSnap) + r
+	}
+	re := regexp.MustCompile(r)
+	if re.MatchString(snapshotId) {
+		return nil
+	} else {
+		return errors.New(fmt.Sprintln("Snapshot ID does not match regex:", r, snapshotId))
+	}
 }
 
 func updateXattrs(volPath string, attrs map[string][]byte) error {
 	for key, val := range attrs {
 		if err := xattr.Set(volPath, key, val); err != nil {
-			return status.Errorf(codes.Internal, "failed to update volume attribute %s: %s", key, val)
+			return status.Errorf(codes.Internal, "failed to update volume attribute %s: %s, %s", key, val, err.Error())
 		}
 	}
 	glog.V(3).Infof("Xattrs updated on volume: %v", volPath)
@@ -167,4 +281,38 @@ func pathIsDirectory(filename string) error {
 		return status.Errorf(codes.Internal, "volume path %s is not a valid directory", filename)
 	}
 	return nil
+}
+
+func time2Timestamp(t time.Time) *timestamp.Timestamp {
+	return &timestamp.Timestamp{
+		Seconds: t.Unix(),
+		Nanos:   int32(t.Nanosecond()),
+	}
+}
+
+func Min[T constraints.Ordered](a, b T) T {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func getCapacityEnforcementParam(params map[string]string) (bool, error) {
+	qt := ""
+	if val, ok := params["capacityEnforcement"]; ok {
+		qt = val
+	}
+	enforceCapacity := true
+	switch apiclient.QuotaType(qt) {
+	case apiclient.QuotaTypeSoft:
+		enforceCapacity = false
+	case apiclient.QuotaTypeHard:
+		enforceCapacity = true
+	case "":
+		enforceCapacity = true
+	default:
+		glog.Warningf("Could not recognize capacity enforcement in params: %s", qt)
+		return false, errors.New("unsupported capacityEnforcement in volume params")
+	}
+	return enforceCapacity, nil
 }
