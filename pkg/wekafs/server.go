@@ -24,8 +24,8 @@ import (
 	"strings"
 	"sync"
 
+	"context"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"

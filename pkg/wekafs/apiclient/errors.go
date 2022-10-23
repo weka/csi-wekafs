@@ -171,3 +171,15 @@ func (e ApiRetriesExceeded) Error() string {
 var ObjectNotFoundError = errors.New("object not found")
 var MultipleObjectsFoundError = errors.New("ambiguous filter, multiple objects match")
 var RequestMissingParams = errors.New("request cannot be sent since some required params are missing")
+
+// ApiNonrecoverableError is internally generated when non-transient error is found
+type ApiNonrecoverableError struct {
+	apiError
+}
+
+func (e ApiNonrecoverableError) Error() string {
+	return e.apiError.Error()
+}
+func (e ApiNonrecoverableError) getType() string {
+	return "ApiNonrecoverableError"
+}

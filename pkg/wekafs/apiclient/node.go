@@ -1,6 +1,7 @@
 package apiclient
 
 import (
+	"context"
 	"fmt"
 	"github.com/google/uuid"
 	"k8s.io/helm/pkg/urlutil"
@@ -75,19 +76,19 @@ func (n *WekaNode) isDrive() bool {
 	return n.hasRole(NodeRoleDrive)
 }
 
-func (a *ApiClient) GetNodes(nodes *[]WekaNode) error {
+func (a *ApiClient) GetNodes(ctx context.Context, nodes *[]WekaNode) error {
 	node := &WekaNode{}
 
-	err := a.Get(node.GetBasePath(), nil, nodes)
+	err := a.Get(ctx, node.GetBasePath(), nil, nodes)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (a *ApiClient) GetNodesByRole(role string, nodes *[]WekaNode) error {
+func (a *ApiClient) GetNodesByRole(ctx context.Context, role string, nodes *[]WekaNode) error {
 	res := &[]WekaNode{}
-	err := a.GetNodes(res)
+	err := a.GetNodes(ctx, res)
 	if err != nil {
 		return nil
 	}
@@ -99,11 +100,11 @@ func (a *ApiClient) GetNodesByRole(role string, nodes *[]WekaNode) error {
 	return nil
 }
 
-func (a *ApiClient) GetNodeByUid(uid uuid.UUID, node *WekaNode) error {
+func (a *ApiClient) GetNodeByUid(ctx context.Context, uid uuid.UUID, node *WekaNode) error {
 	n := &WekaNode{
 		Uid: uid,
 	}
-	err := a.Get(n.GetApiUrl(), nil, node)
+	err := a.Get(ctx, n.GetApiUrl(), nil, node)
 	if err != nil {
 		return err
 	}
