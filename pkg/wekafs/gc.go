@@ -2,7 +2,7 @@ package wekafs
 
 import (
 	"context"
-	"github.com/golang/glog"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io"
 	"io/ioutil"
@@ -52,46 +52,48 @@ func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume UnifiedVol
 }
 
 func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume UnifiedVolume) {
-	glog.V(3).Infoln("Starting garbage collection of volume", volume.GetId())
+	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
+	logger.Debug().Msg("Starting garbage collection of volume")
 	fsName := volume.FilesystemName
 	innerPath := volume.getInnerPath()
 	defer gc.finishGcCycle(ctx, fsName, volume.apiClient)
 	path, err, unmount := gc.mounter.Mount(ctx, fsName, volume.apiClient)
 	defer unmount()
 	fullPath := filepath.Join(path, garbagePath, innerPath)
-	glog.Infof("Purging deleted volume data in %s", fullPath)
+	logger.Trace().Str("full_path", fullPath).Msg("Purging deleted volume data")
 	if err != nil {
-		glog.Errorf("Failed mounting FS %s for GC", fsName)
+		logger.Error().Err(err).Msg("Failed to mount filesystem for GC processing")
 		return
 	}
-	if err := purgeDirectory(fullPath); err != nil {
-		glog.Errorf("Failed to remove directory %s", fullPath)
+	if err := purgeDirectory(ctx, fullPath); err != nil {
+		logger.Error().Err(err).Str("full_path", fullPath).Msg("Failed to remove directory")
 		return
 	}
 
-	glog.V(4).Infof("Directory %s was successfully deleted", fullPath)
-	glog.V(3).Infoln("Garbage collection of volume", volume.GetId(), "completed successfully")
+	logger.Debug().Str("full_path", fullPath).Msg("Directory was successfully deleted")
 }
 
-func purgeDirectory(path string) error {
+func purgeDirectory(ctx context.Context, path string) error {
+	logger := log.Ctx(ctx).With().Str("path", path).Logger()
 	if !PathExists(path) {
-		glog.Warningf("GC failed to remove directory %s, not since it doesn't exist", path)
+		logger.Error().Msg("Failed to remove existing directory")
 		return nil
 	}
 	for !pathIsEmptyDir(path) { // to make sure that if new files still appeared during invocation
 		files, err := ioutil.ReadDir(path)
 		if err != nil {
-			glog.Infof("GC failed to read contents of %s", path)
+			logger.Error().Err(err).Msg("GC failed to read directory contents")
 			return err
 		}
 		for _, f := range files {
 			fp := filepath.Join(path, f.Name())
 			if f.IsDir() {
-				if err := purgeDirectory(fp); err != nil {
+				if err := purgeDirectory(ctx, fp); err != nil {
+					logger.Error().Err(err).Msg("")
 					return err
 				}
 			} else if err := os.Remove(fp); err != nil {
-				glog.Infof("Failed to remove entry %s", fp)
+				logger.Error().Err(err).Msg("Failed to remove directory that was used mount point")
 			}
 		}
 	}
@@ -103,11 +105,9 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	path, err, unmount := gc.mounter.Mount(ctx, fs, apiClient)
 	defer unmount()
 	if err != nil {
-		glog.Errorf("Failed mounting FS %s for GC", fs)
+		log.Ctx(ctx).Error().Err(err).Str("filesystem", fs).Str("path", path).Msg("Failed mounting FS for garbage collection")
 		return
 	}
-
-	glog.Warningf("TODO: GC filesystem in %s", path)
 }
 
 func (gc *innerPathVolGc) finishGcCycle(ctx context.Context, fs string, apiClient *apiclient.ApiClient) {

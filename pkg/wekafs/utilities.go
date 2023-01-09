@@ -1,15 +1,16 @@
 package wekafs
 
 import (
+	"context"
 	"crypto/sha1"
 	"encoding/base32"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
 	"github.com/google/uuid"
 	"github.com/pkg/xattr"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"golang.org/x/exp/constraints"
 	"google.golang.org/grpc/codes"
@@ -170,8 +171,8 @@ func PathExists(p string) bool {
 	return true
 }
 
-func PathIsWekaMount(path string) bool {
-	glog.V(2).Infof("Checking if %s is wekafs mount", path)
+func PathIsWekaMount(ctx context.Context, path string) bool {
+	log.Ctx(ctx).Trace().Str("full_path", path).Msg("Checking if path is wekafs mount")
 	mountcmd := "mount -t wekafs | grep " + path
 	res, _ := exec.Command("sh", "-c", mountcmd).Output()
 	return strings.Contains(string(res), path)
@@ -256,7 +257,6 @@ func updateXattrs(volPath string, attrs map[string][]byte) error {
 			return status.Errorf(codes.Internal, "failed to update volume attribute %s: %s, %s", key, val, err.Error())
 		}
 	}
-	glog.V(3).Infof("Xattrs updated on volume: %v", volPath)
 	return nil
 }
 
@@ -311,7 +311,6 @@ func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 	case "":
 		enforceCapacity = true
 	default:
-		glog.Warningf("Could not recognize capacity enforcement in params: %s", qt)
 		return false, errors.New("unsupported capacityEnforcement in volume params")
 	}
 	return enforceCapacity, nil

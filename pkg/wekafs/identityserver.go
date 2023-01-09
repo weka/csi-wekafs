@@ -19,7 +19,8 @@ package wekafs
 import (
 	"context"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
+	"github.com/rs/xid"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -37,7 +38,9 @@ func NewIdentityServer(name, version string) *identityServer {
 }
 
 func (ids *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
-	glog.V(5).Infof("Using default GetPluginInfo")
+	ctx = log.With().Str("trace_id", xid.New().String()).Logger().WithContext(ctx)
+	log.Ctx(ctx).Info().Msg(">>>> Received GetPluginInfo request")
+	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
 
 	if ids.name == "" {
 		return nil, status.Error(codes.Unavailable, "Driver name not configured")
@@ -46,7 +49,6 @@ func (ids *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPlugin
 	if ids.version == "" {
 		return nil, status.Error(codes.Unavailable, "Driver is missing version")
 	}
-
 	return &csi.GetPluginInfoResponse{
 		Name:          ids.name,
 		VendorVersion: ids.version,
@@ -58,7 +60,9 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 }
 
 func (ids *identityServer) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
-	glog.V(5).Infof("Using default capabilities")
+	ctx = log.With().Str("trace_id", xid.New().String()).Logger().WithContext(ctx)
+	log.Ctx(ctx).Info().Msg(">>>> Received GetPluginCapabilities request")
+	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{

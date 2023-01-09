@@ -21,7 +21,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
+	"github.com/rs/xid"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
@@ -105,16 +106,16 @@ func renderKeyValuePairs(m map[string]string) string {
 	return b.String()
 }
 
-func CreateVolumeError(errorCode codes.Code, errorMessage string) (*csi.CreateVolumeResponse, error) {
-	glog.ErrorDepth(1, fmt.Sprintln("Error creating volume, code:", errorCode, ", error:", errorMessage))
+func CreateVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.CreateVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error creating volume")
 	return &csi.CreateVolumeResponse{}, err
 }
 
 // CheckCreateVolumeRequestSanity returns error if any generic validation fails
 func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, req *csi.CreateVolumeRequest) error {
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
-		glog.V(3).Infof("invalid create volume req: %v", req)
+		log.Ctx(ctx).Err(err).Fields(req).Msg("invalid create volume request")
 		return err
 	}
 
@@ -144,10 +145,11 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 }
 
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", "CreateVolume").Logger().WithContext(ctx)
 	params := req.GetParameters()
-	renderedParams := renderKeyValuePairs(params)
-	glog.V(3).Infof(">>>> Received a CreateVolume request: %s (%s)", req.GetName(), renderedParams)
-	defer glog.V(3).Infof("<<<< Completed processing CreateVolume request: %s (%s)", req.GetName(), renderedParams)
+	logger := log.Ctx(ctx)
+	logger.Info().Str("name", req.GetName()).Fields(params).Msg(">>>> Received request")
+	defer logger.Info().Msg("<<<< Completed processing request")
 
 	// First, validate that basic request validation passes
 	if err := cs.CheckCreateVolumeRequestSanity(ctx, req); err != nil {
@@ -160,13 +162,13 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, err
 	}
 	if volume == nil {
-		return CreateVolumeError(codes.Internal, "Could not initialize volume representation object from request")
+		return CreateVolumeError(ctx, codes.Internal, "Could not initialize volume representation object from request")
 	}
 
 	// check if with current API client state we can modify this volume or not
 	// (basically only legacy dirVolume with xAttr fallback can be operated without API client)
 	if err := volume.canBeOperated(); err != nil {
-		return CreateVolumeError(codes.InvalidArgument, err.Error())
+		return CreateVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
 
 	// Check for maximum available capacity
@@ -177,9 +179,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	if err != nil {
 		if !volExists {
-			return CreateVolumeError(codes.Internal, fmt.Sprintf("Could not check if volume %s exists: %s", volume.GetId(), err.Error()))
+			return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check if volume %s exists: %s", volume.GetId(), err.Error()))
 		} else {
-			return CreateVolumeError(codes.Internal, fmt.Sprintf("Could not check for capacity of existing volume %s: %s", volume.GetId(), err.Error()))
+			return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check for capacity of existing volume %s: %s", volume.GetId(), err.Error()))
 		}
 	}
 	if volExists && volMatchesCapacity {
@@ -192,11 +194,11 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}, nil
 	} else if volExists {
 		// current capacity differs from requested, this is another volume request
-		return CreateVolumeError(codes.AlreadyExists, fmt.Sprintf("Volume %s already exists, but has different capacity", volume.GetId()))
+		return CreateVolumeError(ctx, codes.AlreadyExists, fmt.Sprintf("Volume %s already exists, but has different capacity", volume.GetId()))
 	}
 
 	// Actually try to create the volume here
-	glog.V(3).Infoln("Creating volume", volume.GetId(), "capacity:", capacity)
+	logger.Info().Int64("capacity", capacity).Str("volume_id", volume.GetId()).Msg("Creating volume")
 	if err := volume.Create(ctx, capacity); err != nil {
 		return nil, err
 	}
@@ -210,23 +212,25 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}, nil
 }
 
-func DeleteVolumeError(errorCode codes.Code, errorMessage string) (*csi.DeleteVolumeResponse, error) {
-	glog.ErrorDepth(1, fmt.Sprintln("Error deleting volume, code:", errorCode, ", error:", errorMessage))
+func DeleteVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.DeleteVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error deleting volume")
 	return &csi.DeleteVolumeResponse{}, err
 }
 
 func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
-	glog.V(3).Infof(">>>> Received a DeleteVolume request for volume ID %s", req.GetVolumeId())
-	defer glog.V(3).Infof("<<<< Completed processing DeleteVolume request for volume ID %s", req.GetVolumeId())
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", "DeleteVolume").Logger().WithContext(ctx)
 	volumeID := req.GetVolumeId()
+	logger := log.Ctx(ctx)
+	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	defer logger.Info().Msg("<<<< Completed processing request")
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
 
 	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets)
 	if err != nil {
-		return DeleteVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
+		return DeleteVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
 	volume, err := NewVolumeFromId(ctx, volumeID, client, cs.mounter)
@@ -236,31 +240,34 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
-		glog.V(3).Infof("invalid delete volume req: %v", req)
-		return DeleteVolumeError(codes.Internal, err.Error())
+		logger.Warn().Err(err).Msg("invalid delete volume request")
+		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
 
 	err = volume.moveToTrash(ctx)
 	if os.IsNotExist(err) {
-		glog.V(4).Infof("Volume not found %s, but returning success for idempotence", volume.GetId())
+		logger.Debug().Str("volume_id", volume.GetId()).Msg("Volume not found, but returning success for idempotence")
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 	// cleanup
 	if err != nil {
-		return DeleteVolumeError(codes.Internal, err.Error())
+		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
 	return &csi.DeleteVolumeResponse{}, nil
 }
 
-func ExpandVolumeError(errorCode codes.Code, errorMessage string) (*csi.ControllerExpandVolumeResponse, error) {
-	glog.ErrorDepth(1, fmt.Sprintln("Error expanding volume, code:", errorCode, ", error:", errorMessage))
+func ExpandVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.ControllerExpandVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error expanding volume")
 	return &csi.ControllerExpandVolumeResponse{}, err
 }
 
 func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
-	glog.V(3).Infof(">>>> Received a ControllerExpandVolume request for volume ID %s", req.GetVolumeId())
-	defer glog.V(3).Infof("<<<< Completed processing ControllerExpandVolume request for volume ID %s", req.GetVolumeId())
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", "ExpandVolume").Logger().WithContext(ctx)
+	volumeID := req.GetVolumeId()
+	logger := log.Ctx(ctx)
+	logger.Info().Str("volume_id", volumeID).Str("capacity", req.GetCapacityRange().String()).Msg(">>>> Received request")
+	defer logger.Info().Msg("<<<< Completed processing request")
 
 	if len(req.GetVolumeId()) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
@@ -269,46 +276,46 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 
 	if err != nil {
 		// this case can happen only if we had client that failed to initialise, and not if we do not have a client at all
-		return ExpandVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
+		return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
 	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, cs.mounter)
 	if err != nil {
-		return ExpandVolumeError(codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
+		return ExpandVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
 	}
 
 	capRange := req.GetCapacityRange()
 	if capRange == nil {
-		return ExpandVolumeError(codes.InvalidArgument, "Capacity range not provided")
+		return ExpandVolumeError(ctx, codes.InvalidArgument, "Capacity range not provided")
 	}
 
 	capacity := capRange.GetRequiredBytes()
 
 	maxStorageCapacity, err := volume.getMaxCapacity(ctx)
 	if err != nil {
-		return ExpandVolumeError(codes.Unknown, fmt.Sprintf("ExpandVolume: Cannot obtain free capacity for volume %s", volume.GetId()))
+		return ExpandVolumeError(ctx, codes.Unknown, fmt.Sprintf("ExpandVolume: Cannot obtain free capacity for volume %s", volume.GetId()))
 	}
 	if capacity > maxStorageCapacity {
-		return ExpandVolumeError(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
+		return ExpandVolumeError(ctx, codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
 
 	ok, err := volume.Exists(ctx)
 	if err != nil {
-		return ExpandVolumeError(codes.Internal, err.Error())
+		return ExpandVolumeError(ctx, codes.Internal, err.Error())
 	}
 	if !ok {
-		return ExpandVolumeError(codes.Internal, "Volume does not exist")
+		return ExpandVolumeError(ctx, codes.Internal, "Volume does not exist")
 	}
 
 	currentSize, err := volume.GetCapacity(ctx)
 	if err != nil {
-		return ExpandVolumeError(codes.Internal, "Could not get volume capacity")
+		return ExpandVolumeError(ctx, codes.Internal, "Could not get volume capacity")
 	}
-	glog.Infof("Volume %s: current capacity: %d, expanding to %d", volume.GetId(), currentSize, capacity)
+	logger.Debug().Int64("current_capacity", currentSize).Int64("new_capacity", capacity).Msg("Expanding volume capacity")
 
 	if currentSize != capacity {
 		if err := volume.UpdateCapacity(ctx, nil, capacity); err != nil {
-			return ExpandVolumeError(codes.Internal, fmt.Sprintf("Could not update volume %s: %v", volume, err))
+			return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not update volume %s: %v", volume, err))
 		}
 	}
 	return &csi.ControllerExpandVolumeResponse{
@@ -317,49 +324,51 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}, nil
 }
 
-func CreateSnapshotError(errorCode codes.Code, errorMessage string) (*csi.CreateSnapshotResponse, error) {
-	glog.ErrorDepth(1, fmt.Sprintln("Error creating snapshot, code:", errorCode, ", error:", errorMessage))
+func CreateSnapshotError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.CreateSnapshotResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error creating snapshot")
 	return &csi.CreateSnapshotResponse{}, err
 }
 
 //goland:noinspection GoUnusedParameter
-func (cs *ControllerServer) CreateSnapshot(ctx context.Context, request *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
-	srcVolumeId := request.GetSourceVolumeId()
-	secrets := request.GetSecrets()
-	snapName := request.GetName()
-	glog.V(3).Infof(">>>> Received a CreateSnapshot request for srcVolume %s, snapName: %s", srcVolumeId, snapName)
-	defer glog.V(3).Infof("<<<< Completed processing CreateSnapshot request for srcVolume %s, snapName: %s", srcVolumeId, snapName)
+func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", "CreateSnapshot").Logger().WithContext(ctx)
+	srcVolumeId := req.GetSourceVolumeId()
+	secrets := req.GetSecrets()
+	snapName := req.GetName()
+	logger := log.Ctx(ctx)
+	logger.Info().Str("src_volume_id", srcVolumeId).Str("name", snapName).Msg(">>>> Received request")
+	defer logger.Info().Msg("<<<< Completed processing request")
 
 	if srcVolumeId == "" {
-		return CreateSnapshotError(codes.InvalidArgument, "Cannot create snapshot without specifying SourceVolumeId")
+		return CreateSnapshotError(ctx, codes.InvalidArgument, "Cannot create snapshot without specifying SourceVolumeId")
 	}
 
 	if snapName == "" {
-		return CreateSnapshotError(codes.InvalidArgument, "Cannot create snapshot without snapName")
+		return CreateSnapshotError(ctx, codes.InvalidArgument, "Cannot create snapshot without snapName")
 	}
 
 	client, err := cs.api.GetClientFromSecrets(ctx, secrets)
 	if err != nil {
-		return CreateSnapshotError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
+		return CreateSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the req", err))
 	}
 
 	srcVolume, err := NewVolumeFromId(ctx, srcVolumeId, client, cs.mounter)
 	if err != nil {
-		return CreateSnapshotError(codes.InvalidArgument, fmt.Sprintln("Invalid sourceVolumeId", srcVolumeId))
+		return CreateSnapshotError(ctx, codes.InvalidArgument, fmt.Sprintln("Invalid sourceVolumeId", srcVolumeId))
 	}
 
 	srcVolExists, err := srcVolume.Exists(ctx)
 	if err != nil {
-		return CreateSnapshotError(codes.Internal, fmt.Sprintln("Failed to check for existence of source volume", srcVolume.String()))
+		return CreateSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to check for existence of source volume", srcVolume.String()))
 	}
 	if !srcVolExists {
-		return CreateSnapshotError(codes.FailedPrecondition, fmt.Sprintln("Could not find source colume", srcVolume.String()))
+		return CreateSnapshotError(ctx, codes.FailedPrecondition, fmt.Sprintln("Could not find source colume", srcVolume.String()))
 	}
 
 	s, err := srcVolume.CreateSnapshot(ctx, snapName)
 	if err != nil {
-		return CreateSnapshotError(codes.Internal, fmt.Sprintln("Failed to create snapshot for volume", err.Error()))
+		return CreateSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to create snapshot for volume", err.Error()))
 	}
 
 	ret := &csi.CreateSnapshotResponse{
@@ -368,20 +377,22 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, request *csi.Cre
 	return ret, nil
 }
 
-func DeleteSnapshotError(errorCode codes.Code, errorMessage string) (*csi.DeleteSnapshotResponse, error) {
-	glog.ErrorDepth(1, fmt.Sprintln("Error deleting snapshot, code:", errorCode, ", error:", errorMessage))
+func DeleteSnapshotError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.DeleteSnapshotResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error deleting snapshot")
 	return &csi.DeleteSnapshotResponse{}, err
 }
 
 //goland:noinspection GoUnusedParameter
-func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, request *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
-	snapshotID := request.GetSnapshotId()
-	secrets := request.GetSecrets()
-	glog.V(3).Infoln(">>>> Received a DeleteSnapshot request for snapshotId", snapshotID)
-	defer glog.V(3).Infoln("<<<< Completed processing DeleteSnapshot request for snapshotId", snapshotID)
+func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
+	snapshotID := req.GetSnapshotId()
+	secrets := req.GetSecrets()
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", "DeleteSnapshot").Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Str("snapshot_id", snapshotID).Msg(">>>> Received request")
+	defer logger.Info().Msg("<<<< Completed processing request")
 	if snapshotID == "" {
-		return DeleteSnapshotError(codes.InvalidArgument, "Failed to delete snapshot, no ID specified")
+		return DeleteSnapshotError(ctx, codes.InvalidArgument, "Failed to delete snapshot, no ID specified")
 	}
 	err := validateSnapshotId(snapshotID)
 	if err != nil {
@@ -391,15 +402,15 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, request *csi.Del
 
 	client, err := cs.api.GetClientFromSecrets(ctx, secrets)
 	if err != nil {
-		return DeleteSnapshotError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
+		return DeleteSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the req", err))
 	}
 	existingSnap, err := NewSnapshotFromId(ctx, snapshotID, client)
 	if err != nil {
-		return DeleteSnapshotError(codes.Internal, fmt.Sprintln("Failed to initialize snapshot from ID", snapshotID, err.Error()))
+		return DeleteSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize snapshot from ID", snapshotID, err.Error()))
 	}
 	err = existingSnap.Delete(ctx)
 	if err != nil {
-		return DeleteSnapshotError(codes.Internal, fmt.Sprintln("Failed to delete snapshot", snapshotID, err))
+		return DeleteSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to delete snapshot", snapshotID, err))
 	}
 	return &csi.DeleteSnapshotResponse{}, err
 }
@@ -416,20 +427,23 @@ func (cs *ControllerServer) ControllerGetCapabilities(ctx context.Context, req *
 	}, nil
 }
 
-func ValidateVolumeCapsError(errorCode codes.Code, errorMessage string) (*csi.ValidateVolumeCapabilitiesResponse, error) {
-	glog.ErrorDepth(1, fmt.Sprintln("Error getting volume capabilities, code:", errorCode, ", error:", errorMessage))
+func ValidateVolumeCapsError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error validating volume capabilities")
 	return &csi.ValidateVolumeCapabilitiesResponse{}, err
 }
 
 //goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
-	glog.V(3).Infof(">>>> Received a ValidateVolumeCapabilities request for volume ID %s", req.GetVolumeId())
-	defer glog.V(3).Infof("<<<< Completed processing ValidateVolumeCapabilities request for volume ID %s", req.GetVolumeId())
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", "ValidateVolumeCapabilities").Logger().WithContext(ctx)
+	volumeID := req.GetVolumeId()
+	logger := log.Ctx(ctx)
+	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	defer logger.Info().Msg("<<<< Completed processing request")
 
 	// Check arguments
 	if len(req.GetVolumeId()) == 0 {
-		return ValidateVolumeCapsError(codes.InvalidArgument, "Volume ID cannot be empty")
+		return ValidateVolumeCapsError(ctx, codes.InvalidArgument, "Volume ID cannot be empty")
 	}
 	if len(req.GetVolumeCapabilities()) == 0 {
 		return nil, status.Error(codes.InvalidArgument, req.GetVolumeId())
@@ -437,21 +451,21 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 
 	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets)
 	if err != nil {
-		return ValidateVolumeCapsError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
+		return ValidateVolumeCapsError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
 	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, cs.mounter)
 	if err != nil {
-		return ValidateVolumeCapsError(codes.Internal, err.Error())
+		return ValidateVolumeCapsError(ctx, codes.Internal, err.Error())
 	}
 	ok, err := volume.Exists(ctx)
 	if err != nil || !ok {
-		return ValidateVolumeCapsError(codes.NotFound, fmt.Sprintf("Could not find volume %s", req.GetVolumeId()))
+		return ValidateVolumeCapsError(ctx, codes.NotFound, fmt.Sprintf("Could not find volume %s", req.GetVolumeId()))
 	}
 
 	for _, capability := range req.GetVolumeCapabilities() {
 		if capability.GetMount() == nil && capability.GetBlock() == nil {
-			return ValidateVolumeCapsError(codes.InvalidArgument, "cannot have both Mount and block access type be undefined")
+			return ValidateVolumeCapsError(ctx, codes.InvalidArgument, "cannot have both Mount and block access type be undefined")
 		}
 	}
 
@@ -481,7 +495,7 @@ func getControllerServiceCapabilities(cl []csi.ControllerServiceCapability_RPC_T
 	var csc []*csi.ControllerServiceCapability
 
 	for _, capability := range cl {
-		glog.Infof("Enabling controller service capability: %v", capability.String())
+		log.Info().Str("capability", capability.String()).Msg("Enabling ControllerServiceCapability")
 		csc = append(csc, &csi.ControllerServiceCapability{
 			Type: &csi.ControllerServiceCapability_Rpc{
 				Rpc: &csi.ControllerServiceCapability_RPC{

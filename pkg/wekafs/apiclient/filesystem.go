@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/golang/glog"
 	qs "github.com/google/go-querystring/query"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
 	"time"
@@ -115,8 +115,6 @@ func (a *ApiClient) GetFileSystemByName(ctx context.Context, name string) (*File
 }
 
 func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateRequest, fs *FileSystem) error {
-	f := a.Log(3, "Creating filesystem", r)
-	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -140,21 +138,21 @@ func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateReq
 }
 
 func (a *ApiClient) WaitFilesystemReady(ctx context.Context, fsName string, waitPeriodMax time.Duration) (*FileSystem, error) {
+	logger := log.Ctx(ctx).With().Str("filesysem", fsName).Logger()
 	for start := time.Now(); time.Since(start) < waitPeriodMax; {
 		fs, err := a.GetFileSystemByName(ctx, fsName)
 		if err != nil || fs == nil {
-			a.Log(3, "Filesystem", fs.Name, "object not exists", time.Since(start).String())
+			logger.Debug().Msg("Filesystem not exists")
 			continue
 		}
 		if fs.IsReady {
-			a.Log(3, "Filesystem", fs.Name, "is ready after", time.Since(start).String())
+			logger.Debug().TimeDiff("created_after", time.Now(), start).Msg("Filesystem is ready")
 			return fs, nil
 		}
 		if fs.IsCreating {
-			a.Log(5, "Filesystem", fs.Name, "is still creating...")
+			logger.Debug().Msg("Filesystem still creating")
 		}
 		if fs.IsRemoving {
-			a.Log(3, "Filesystem", fs.Name, "is marked for deletion!")
 			return fs, ObjectMarkedForDeletion
 		}
 		time.Sleep(time.Second)
@@ -163,8 +161,6 @@ func (a *ApiClient) WaitFilesystemReady(ctx context.Context, fsName string, wait
 }
 
 func (a *ApiClient) UpdateFileSystem(ctx context.Context, r *FileSystemResizeRequest, fs *FileSystem) error {
-	f := a.Log(3, "Updating filesystem", r)
-	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -181,8 +177,6 @@ func (a *ApiClient) UpdateFileSystem(ctx context.Context, r *FileSystemResizeReq
 }
 
 func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteRequest) error {
-	f := a.Log(3, "Deleting filesystem", r.Uid)
-	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -204,22 +198,24 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 }
 
 func (a *ApiClient) GetFileSystemMountToken(ctx context.Context, r *FileSystemMountTokenRequest, token *FileSystemMountToken) error {
-	f := a.Log(5, "Getting a mount token for filesystem", r.Uid)
-	defer f()
+	log.Ctx(ctx).Trace().Str("filesystem_uid", r.Uid.String()).Msg("Obtaining a mount token")
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
 	err := a.Get(ctx, r.getApiUrl(), nil, token)
 	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("Failed to obtain a mount token")
 		return err
 	}
-	glog.V(6).Infoln("Fetched token for filesystem UID", r.Uid, "name", token.FilesystemName, "token", token.Token)
+	log.Ctx(ctx).Debug().Msg("Successfully obtained mount token")
 	return nil
 }
 
 func (a *ApiClient) GetMountTokenForFilesystemName(ctx context.Context, fsName string) (string, error) {
+	logger := log.Ctx(ctx)
+	logger.Trace().Str("filesystem", fsName).Msg("Obtaining a mount token")
 	if !a.SupportsAuthenticatedMounts() {
-		glog.V(3).Infof("API client not supports authenticated mounts")
+		logger.Debug().Msg("Current version of Weka cluster does not support authenticated mounts")
 		return "", nil
 	}
 	filesystem, err := a.GetFileSystemByName(ctx, fsName)
@@ -230,11 +226,11 @@ func (a *ApiClient) GetMountTokenForFilesystemName(ctx context.Context, fsName s
 	token := &FileSystemMountToken{}
 	err = a.GetFileSystemMountToken(ctx, req, token)
 	if err != nil {
+		logger.Error().Err(err).Msg("Failed to obtain a mount token")
 		return "", err
 	}
 	if token.FilesystemName != fsName {
-		glog.Errorln("Failed to fetch mount token, reported token is for different filesystem name",
-			fsName, token.FilesystemName)
+		logger.Error().Msg("Inconsistent mount token obtained, does not match the filesystem")
 		return "", errors.New(fmt.Sprintf(
 			"failed to fetch mount token, got token for different filesystem name, %s, %s",
 			fsName, token.FilesystemName),

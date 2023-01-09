@@ -1,8 +1,8 @@
 package apiclient
 
 import (
-	"github.com/golang/glog"
 	"github.com/hashicorp/go-version"
+	"github.com/rs/zerolog/log"
 )
 
 type WekaCompatibilityRequiredVersions struct {
@@ -47,7 +47,7 @@ type WekaCompatibilityMap struct {
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	v, err := version.NewVersion(versionStr)
 	if err != nil {
-		glog.Errorln("Could not parse cluster version", versionStr, "assuming legacy mode, new features are unsupported!")
+		log.Error().Err(err).Str("cluster_version_string", versionStr).Msg("Could not parse cluster version")
 		cm.DirectoryAsCSIVolume = true
 		cm.FilesystemAsCSIVolume = false
 		cm.QuotaOnDirectoryVolume = false

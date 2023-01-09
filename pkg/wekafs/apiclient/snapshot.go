@@ -89,8 +89,6 @@ func (a *ApiClient) GetSnapshotByUid(ctx context.Context, uid uuid.UUID, snap *S
 }
 
 func (a *ApiClient) CreateSnapshot(ctx context.Context, r *SnapshotCreateRequest, snap *Snapshot) error {
-	f := a.Log(3, "Creating snapshot", r.Name, "for filesystem", r.FsUid, "writable", r.IsWritable)
-	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -107,8 +105,6 @@ func (a *ApiClient) CreateSnapshot(ctx context.Context, r *SnapshotCreateRequest
 }
 
 func (a *ApiClient) UpdateSnapshot(ctx context.Context, r *SnapshotUpdateRequest, snap *Snapshot) error {
-	f := a.Log(3, "Updating snapshot", r)
-	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -125,8 +121,6 @@ func (a *ApiClient) UpdateSnapshot(ctx context.Context, r *SnapshotUpdateRequest
 }
 
 func (a *ApiClient) DeleteSnapshot(ctx context.Context, r *SnapshotDeleteRequest) error {
-	f := a.Log(3, "Deleting snapshot", r)
-	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -144,37 +138,6 @@ func (a *ApiClient) DeleteSnapshot(ctx context.Context, r *SnapshotDeleteRequest
 			}
 		}
 	}
-	return err
-}
-
-func (a *ApiClient) RestoreFilesystemFromSnapshot(ctx context.Context, r *SnapshotRestoreRequest) error {
-	fs := &FileSystem{}
-	if err := a.GetFileSystemByUid(ctx, r.FsUid, fs); err != nil {
-		return err
-	}
-
-	f := a.Log(3, "Restoring filesystem", fs.Name, fs.Uid.String(), "from snapshot", r.Uid.String())
-	defer f()
-	if !r.hasRequiredFields() {
-		return RequestMissingParams
-	}
-	apiResponse := &ApiResponse{}
-	err := a.Post(ctx, r.getApiUrl(), nil, nil, apiResponse)
-	if err != nil {
-		switch t := err.(type) {
-		case *ApiNotFoundError:
-			return ObjectNotFoundError
-		case *ApiBadRequestError:
-			for _, c := range t.ApiResponse.ErrorCodes {
-				if c == "SnapshotDoesNotExistException" {
-					return ObjectNotFoundError
-				}
-			}
-		}
-		return err
-	}
-	waitPeriodMax := time.Hour * 12
-	fs, err = a.WaitFilesystemReady(ctx, fs.Name, waitPeriodMax)
 	return err
 }
 

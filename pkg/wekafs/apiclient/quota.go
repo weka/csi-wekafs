@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
@@ -223,7 +223,6 @@ func (qd *QuotaDeleteRequest) getRelatedObject() ApiObject {
 }
 
 func (a *ApiClient) CreateQuota(ctx context.Context, qr *QuotaCreateRequest, q *Quota, waitForCompletion bool) error {
-	f := a.Log(3, "Creating quota", qr.String(), "wait for completion:", waitForCompletion)
 	if !qr.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -239,22 +238,22 @@ func (a *ApiClient) CreateQuota(ctx context.Context, qr *QuotaCreateRequest, q *
 	if waitForCompletion {
 		q.FilesystemUid = qr.filesystemUid
 		if q.InodeId != qr.inodeId { // WEKAPP-240948
-			a.Log(4, "Workaround for WEKAPP-240948, replacing quota inodeID")
 			q.InodeId = qr.inodeId
 		}
 		return a.WaitForQuotaActive(ctx, q)
 	}
-	f()
 	return nil
 }
 
 func (a *ApiClient) WaitForQuotaActive(ctx context.Context, q *Quota) error {
-	glog.V(4).Infof("Waiting for quota %d@%s to become active", q.InodeId, q.FilesystemUid.String())
+	log.Ctx(ctx).Debug().Uint64("inode_id", q.InodeId).Str("filesystem_uid", q.FilesystemUid.String()).
+		Msg("Waiting for quota to become active")
 	f := wait.ConditionFunc(func() (bool, error) {
 		return a.IsQuotaActive(ctx, q)
 	})
 	err := wait.Poll(5*time.Second, time.Hour*24, f)
 	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("")
 		return err
 	}
 	return nil
@@ -279,6 +278,7 @@ func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultS
 }
 
 func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSystem, inodeId uint64) (*Quota, error) {
+	logger := log.Ctx(ctx).With().Str("filesystem", fs.Name).Uint64("inode_id", inodeId).Logger()
 	if fs == nil || inodeId == 0 {
 		return nil, RequestMissingParams
 	}
@@ -290,16 +290,16 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 	if err != nil {
 		switch t := err.(type) {
 		case ApiNotFoundError:
-			glog.V(5).Infoln("Could not find existing quota object for filesystem", fs.Uid, "inodeId", inodeId, "got error 404:", t.ApiResponse.Message)
+			logger.Debug().Err(err).Msg("Could not find existing quota, got error 404")
 			return nil, ObjectNotFoundError
 		case ApiInternalError:
 			if strings.Contains(t.ApiResponse.Message, "Directory has no quota") {
-				glog.V(5).Infoln("Could not find existing quota object for filesystem", fs.Uid, "inodeId", inodeId, "got error 500:", t.ApiResponse.Message)
+				logger.Debug().Err(err).Msg("Could not find existing quota, got error 404")
 				return nil, ObjectNotFoundError
 			}
 			return nil, err
 		default:
-			glog.Errorln("Invalid condition on getting quota", err)
+			logger.Error().Err(err).Msg("Invalid condition on getting quota")
 			return nil, err
 		}
 	}
@@ -309,8 +309,6 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 }
 
 func (a *ApiClient) GetQuotaByFilter(ctx context.Context, query *Quota) (*Quota, error) {
-	f := a.Log(3, "Looking for quota", query.String())
-	defer f()
 	rs := &[]Quota{}
 	err := a.FindQuotaByFilter(ctx, query, rs)
 	if err != nil {
@@ -342,8 +340,6 @@ func (a *ApiClient) IsQuotaActive(ctx context.Context, query *Quota) (done bool,
 }
 
 func (a *ApiClient) UpdateQuota(ctx context.Context, r *QuotaUpdateRequest, q *Quota) error {
-	f := a.Log(3, "Updating quota", r)
-	defer f()
 	//if !r.hasRequiredFields() {
 	//	return RequestMissingParams
 	//}
@@ -360,8 +356,6 @@ func (a *ApiClient) UpdateQuota(ctx context.Context, r *QuotaUpdateRequest, q *Q
 }
 
 func (a *ApiClient) DeleteQuota(ctx context.Context, r *QuotaDeleteRequest) error {
-	f := a.Log(3, "Deleting quota", r)
-	defer f()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
