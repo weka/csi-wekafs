@@ -3,13 +3,12 @@ package wekafs
 import (
 	"context"
 	"fmt"
-	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/utils/mount"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -46,10 +45,12 @@ type wekaMounter struct {
 }
 
 func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, selinuxSupport bool) error {
+	ctx = log.With().Logger().WithContext(ctx)
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.refCount < 0 {
-		glog.V(4).Infof("During incRef negative refcount encountered, %v", m.refCount)
+		log.Ctx(ctx).Error().Str("mount_point", m.mountPoint).Int("refcount", m.refCount).Msg("During incRef negative refcount encountered")
 		m.refCount = 0 // to make sure that we don't have negative refcount later
 	}
 	if m.refCount == 0 {
@@ -58,41 +59,43 @@ func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, 
 		}
 	}
 	m.refCount++
-	glog.V(4).Infof("Refcount +1 =  %d @ %s", m.refCount, m.mountPoint)
+	log.Ctx(ctx).Trace().Int("refcount", m.refCount).Msg("RefCount increased")
 	return nil
 }
 
-func (m *wekaMount) decRef() error {
+func (m *wekaMount) decRef(ctx context.Context) error {
+	logger := log.Ctx(ctx)
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.refCount--
 	m.lastUsed = time.Now()
-	glog.V(4).Infof("Refcount -1 =  %d @ %s", m.refCount, m.mountPoint)
+	logger.Trace().Int("refcount", m.refCount).Msg("RefCount increased")
 	if m.refCount < 0 {
-		glog.V(4).Infof("During decRef negative refcount encountered, %v", m.refCount)
+		logger.Error().Int("refcount", m.refCount).Msg("During decRef negative refcount encountered")
 		m.refCount = 0 // to make sure that we don't have negative refcount later
 	}
 	if m.refCount == 0 {
-		if err := m.doUnmount(); err != nil {
+		if err := m.doUnmount(ctx); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (m *wekaMount) doUnmount() error {
-	glog.V(3).Infof("Calling k8s unmounter for fsName: %s (xattr %t) @ %s", m.fsRequest.fsName, m.fsRequest.xattr, m.mountPoint)
+func (m *wekaMount) doUnmount(ctx context.Context) error {
+	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
+	logger.Debug().Bool("xattr_flag", m.fsRequest.xattr).Msg("Performing umount via k8s native mounter")
 	err := m.kMounter.Unmount(m.mountPoint)
 	if err != nil {
-		glog.V(3).Infof("Failed unmounting %s at %s: %s", m.fsRequest.fsName, m.mountPoint, err)
+		logger.Error().Err(err).Msg("Failed to unmount")
 	} else {
-		glog.V(3).Infof("Successfully unmounted %s (xattr %t) at %s", m.fsRequest.fsName, m.fsRequest.xattr, m.mountPoint)
+		logger.Debug().Msg("Unmounted successfully")
 	}
 	return err
 }
 
 func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, selinuxSupport bool) error {
-	glog.Infof("Creating mount for filesystem %s on mount point %s", m.fsRequest.fsName, m.mountPoint)
+	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
 	mountToken := ""
 	var mountOptionsSensitive []string
 	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
@@ -101,27 +104,25 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 	if m.debugPath == "" {
 		mountOptions := getMountOptions(m.fsRequest, selinuxSupport)
 		if apiClient == nil {
-			glog.V(3).Infof("No API client for mount, not requesting mount token")
+			logger.Trace().Msg("No API client for mount, not requesting mount token")
 		} else {
 			var err error
-			glog.V(3).Infof("Requesting mount token for filesystem %s via API", m.fsRequest.fsName)
+			logger.Trace().Msg("Requesting mount token via API")
 			if mountToken, err = apiClient.GetMountTokenForFilesystemName(ctx, m.fsRequest.fsName); err != nil {
 				return err
 			}
 			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
 		}
-		glog.V(3).Infof("Calling k8s mounter for fsName: %s (xattr %t) @ %s, options: %s, authenticated: %s",
-			m.fsRequest.fsName, m.fsRequest.xattr, m.mountPoint, mountOptions, func() string {
-				return strconv.FormatBool(mountToken != "")
-			}(),
-		)
+		logger.Debug().Bool("xattr_flag", m.fsRequest.xattr).Bool("xattr_flag", m.fsRequest.xattr).
+			Fields(mountOptions).Msg("Performing mount")
 		return m.kMounter.MountSensitive(m.fsRequest.fsName, m.mountPoint, "wekafs", mountOptions, mountOptionsSensitive)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fsName)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
 			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
 		}
-		glog.V(3).Infof("Calling debugPath k8s mounter for fsName: %s (xattr %t) @ %s on fakePath %s", m.fsRequest.fsName, m.fsRequest.xattr, m.mountPoint, fakePath)
+		logger.Debug().Bool("xattr_flag", m.fsRequest.xattr).Bool("xattr_flag", m.fsRequest.xattr).
+			Str("debug_path", m.debugPath).Msg("Performing mount")
 
 		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
 	}
@@ -178,45 +179,39 @@ func (m *wekaMounter) mountParams(ctx context.Context, fs string, xattr bool, ap
 	mountErr := mounter.incRef(ctx, apiClient, m.selinuxSupport)
 
 	if mountErr != nil {
-		glog.Errorf("Failed mounting %s at %s: %e", fs, mounter.mountPoint, mountErr)
+		log.Ctx(ctx).Error().Err(mountErr).Msg("Failed mounting")
 		return "", mountErr, func() {}
 	}
 	return mounter.mountPoint, nil, func() {
 		if mountErr == nil {
-			_ = m.mountMap[request].decRef()
+			_ = m.mountMap[request].decRef(ctx)
 		}
 	}
 }
 
 func (m *wekaMounter) Mount(ctx context.Context, fs string, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	m.LogActiveMounts()
 	return m.mountParams(ctx, fs, false, apiClient)
 }
 
 func (m *wekaMounter) MountXattr(ctx context.Context, fs string, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	m.LogActiveMounts()
 	return m.mountParams(ctx, fs, true, apiClient)
 }
 
 func (m *wekaMounter) Unmount(ctx context.Context, fs string) error {
-	defer m.LogActiveMounts()
 	return m.unmount(ctx, fs, false)
 }
 
 func (m *wekaMounter) UnmountXattr(ctx context.Context, fs string) error {
-	defer m.LogActiveMounts()
 	return m.unmount(ctx, fs, true)
 }
 
 func (m *wekaMounter) unmount(ctx context.Context, fs string, xattr bool) error {
-	m.LogActiveMounts()
-	defer m.gcInactiveMounts()
 	fsReq := fsMountRequest{fs, xattr}
 	if mnt, ok := m.mountMap[fsReq]; ok {
-		err := mnt.decRef()
+		err := mnt.decRef(ctx)
 		if err != nil {
 			if m.mountMap[fsReq].refCount <= 0 {
-				glog.V(5).Infoln("This is a last use of this mount, removing from map")
+				log.Ctx(ctx).Trace().Str("filesystem", fsReq.fsName).Bool("xattr_flag", fsReq.xattr).Msg("This is a last use of this mount, removing from map")
 				delete(m.mountMap, fsReq)
 			}
 		}
@@ -224,7 +219,7 @@ func (m *wekaMounter) unmount(ctx context.Context, fs string, xattr bool) error 
 
 	} else {
 		// TODO: this could happen if the plugin was rebooted with this mount intact. Maybe we might add it to map?
-		glog.Warningf("Attempted to access mount point which is not known to the system (filesystem %s)", fs)
+		log.Ctx(ctx).Warn().Msg("Attempted to access mount point which is not known to the system")
 		return nil
 	}
 }
@@ -240,37 +235,46 @@ func (m *wekaMounter) HasMount(filesystem string, xattr bool) bool {
 func (m *wekaMounter) LogActiveMounts() {
 	if len(m.mountMap) > 0 {
 		count := 0
-		glog.Infof("There are currently %v distinct mounts in map:", len(m.mountMap))
 		for mnt := range m.mountMap {
 			mapEntry := m.mountMap[mnt]
-			if mapEntry.refCount < 0 {
-				glog.Errorf("There is a negative refcount on mount %s", mapEntry.mountPoint)
-			} else if mapEntry.refCount > 0 {
-				glog.Infof("Active mount: %s -> %s, xattr: %t, refcount: %d", mnt.fsName, mapEntry.mountPoint, mnt.xattr, mapEntry.refCount)
+			if mapEntry.refCount > 0 {
+				log.Trace().Str("filesystem", mnt.fsName).Int("refcount", mapEntry.refCount).Bool("xattr_flag", mnt.xattr).
+					Msg("Mount is active")
 				count++
 			} else {
-				glog.Infof("Inactive mount: %s, xattr: %t", mnt.fsName, mnt.xattr)
+				log.Trace().Str("filesystem", mnt.fsName).Int("refcount", mapEntry.refCount).Bool("xattr_flag", mnt.xattr).Msg("Mount is not active")
 			}
 
 		}
-		glog.Infof("Total %v of active mounts", count)
-	} else {
-		glog.Info("There are currently no active mounts")
+		log.Debug().Int("total", len(m.mountMap)).Int("active", count).Msg("Periodic checkup on mount map")
 	}
 }
 
 func (m *wekaMounter) gcInactiveMounts() {
-	glog.Infof("Running mount GC")
-	for fsRequest, wekaMount := range m.mountMap {
-		if wekaMount.refCount == 0 {
-			if wekaMount.lastUsed.Before(time.Now().Add(-inactiveMountGcPeriod)) {
-				m.lock.Lock()
-				if wekaMount.refCount == 0 {
-					glog.Infoln("Mount for", fsRequest, "not active since", wekaMount.lastUsed.String(), ", removing from map")
-					delete(m.mountMap, fsRequest)
+	if len(m.mountMap) > 0 {
+		log.Trace().Msg("Running mount GC")
+		for fsRequest, wekaMount := range m.mountMap {
+			if wekaMount.refCount == 0 {
+				if wekaMount.lastUsed.Before(time.Now().Add(-inactiveMountGcPeriod)) {
+					m.lock.Lock()
+					if wekaMount.refCount == 0 {
+						log.Trace().Str("filesystem", fsRequest.fsName).Bool("xattr_flag", fsRequest.xattr).Time("last_used", wekaMount.lastUsed).Msg("Removing stale moung from map")
+						delete(m.mountMap, fsRequest)
+					}
+					m.lock.Unlock()
 				}
-				m.lock.Unlock()
 			}
 		}
 	}
+}
+
+func (m *wekaMounter) schedulePeriodicMountGc() {
+	go func() {
+		log.Debug().Msg("Initializing periodic mount GC")
+		for true {
+			m.LogActiveMounts()
+			m.gcInactiveMounts()
+			time.Sleep(1 * time.Minute)
+		}
+	}()
 }

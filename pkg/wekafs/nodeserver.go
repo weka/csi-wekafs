@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
+	"github.com/google/uuid"
+	"github.com/rs/xid"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/utils/mount"
@@ -73,50 +75,54 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 }
 
 func isWekaInstalled() bool {
-	glog.Info("Checking if wekafs is installed on host")
+	log.Info().Msg("Checking if wekafs is installed on host")
 	cmd := fmt.Sprintf("lsmod | grep -w %s", WekaKernelModuleName)
 	res, _ := exec.Command("sh", "-c", cmd).Output()
 	return strings.Contains(string(res), WekaKernelModuleName)
 }
 
-func NodePublishVolumeError(errorCode codes.Code, errorMessage string) (*csi.NodePublishVolumeResponse, error) {
-	glog.Errorln("Error publishing volume, code:", errorCode, ", error:", errorMessage)
+func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodePublishVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error publishing volume")
 	return &csi.NodePublishVolumeResponse{}, err
 }
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	glog.V(3).Infof(">>>> Received a NodePublishVolume request for volume ID %s", req.GetVolumeId())
-	defer glog.V(3).Infof("<<<< Completed processing NodePublishVolume request for volume ID %s", req.GetVolumeId())
+	volumeID := req.GetVolumeId()
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", "NodePublishVolume").Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
+
 	client, err := ns.api.GetClientFromSecrets(ctx, req.Secrets)
 	if err != nil {
-		return NodePublishVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
+		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, ns.mounter)
 	if err != nil {
-		return NodePublishVolumeError(codes.InvalidArgument, err.Error())
+		return NodePublishVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
 
 	// Check volume capabitily arguments
 	if req.GetVolumeCapability() == nil {
-		return NodePublishVolumeError(codes.InvalidArgument, "Volume capability missing in request")
+		return NodePublishVolumeError(ctx, codes.InvalidArgument, "Volume capability missing in request")
 	}
 	if req.GetVolumeCapability().GetBlock() != nil &&
 		req.GetVolumeCapability().GetMount() != nil {
-		return NodePublishVolumeError(codes.InvalidArgument, "cannot have both block and Mount access type")
+		return NodePublishVolumeError(ctx, codes.InvalidArgument, "cannot have both block and Mount access type")
 	}
 
 	// check that requested capability is a mount
 	if req.GetVolumeCapability().GetBlock() != nil {
-		return NodePublishVolumeError(codes.InvalidArgument, "block volume mount not supported")
+		return NodePublishVolumeError(ctx, codes.InvalidArgument, "block volume mount not supported")
 	}
 
 	// check targetPath
 	targetPath := filepath.Clean(req.GetTargetPath())
 	mounter := mount.New("")
 	if len(targetPath) == 0 {
-		return NodePublishVolumeError(codes.InvalidArgument, "Target path missing in request")
+		return NodePublishVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
 	}
 
 	fsType := req.GetVolumeCapability().GetMount().GetFsType()
@@ -137,22 +143,28 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	attrib := req.GetVolumeContext()
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
 
-	glog.V(4).Infof("Mount is going to be performed this way:\ntarget %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeId %v\nattributes %v\nmountflags %v\n",
-		targetPath, fsType, deviceId, readOnly, volume.GetId(), attrib, mountFlags)
+	logger.Debug().Str("target_path", targetPath).
+		Str("fs_type", fsType).
+		Str("device_id", deviceId).
+		Bool("read_only", readOnly).
+		Str("volume_id", volumeID).
+		Fields(attrib).
+		Fields(mountFlags).Msg("Performing mount")
 
 	err, unmount := volume.Mount(ctx, false)
 	if err != nil {
 		unmount()
-		return NodePublishVolumeError(codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
+		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
 	fullPath := volume.getFullPath(ctx, false)
 
-	glog.Infof("Ensuring target mount root directory exists: %s", filepath.Dir(targetPath))
-	if err = os.MkdirAll(filepath.Dir(targetPath), DefaultVolumePermissions); err != nil {
-		return NodePublishVolumeError(codes.Internal, err.Error())
-	}
+	targetPathDir := filepath.Dir(targetPath)
+	logger.Debug().Str("target_path", targetPathDir).Msg("Checking for path existence")
 
-	glog.Infof("Ensuring mount target directory exists: %s", targetPath)
+	if err = os.MkdirAll(targetPathDir, DefaultVolumePermissions); err != nil {
+		return NodePublishVolumeError(ctx, codes.Internal, err.Error())
+	}
+	logger.Debug().Str("target_path", targetPath).Msg("Creating target path")
 	if err = os.Mkdir(targetPath, 0750); err != nil {
 		// If failed to create directory - other call succeded and not this one,
 		// TODO: Returning success, but this is not completely right.
@@ -160,167 +172,158 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
 			if ns.mounter.debugPath == "" {
-				if PathIsWekaMount(targetPath) {
-					glog.Infof("Target path directory %s already exists and is a Weka filesystem mount", targetPath)
+				if PathIsWekaMount(ctx, targetPath) {
+					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
 					unmount()
 					return &csi.NodePublishVolumeResponse{}, nil
 				} else {
-					glog.Infof("Target path directory %s already exists but is not mounted", targetPath)
+					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
 				}
 			} else {
-				glog.Infof("Assuming debug execution and not validating WekaFS mount")
+				log.Ctx(ctx).Warn().Msg("Assuming debug execution and not validating WekaFS mount")
 				unmount()
 				return &csi.NodePublishVolumeResponse{}, nil
 			}
 
 		} else {
-			glog.Errorf("Target path directory %s could not be created, %s", targetPath, err)
+			log.Error().Err(err).Str("target_path", targetPath).Msg("Failed creating directory")
 			unmount()
-			return NodePublishVolumeError(codes.Internal, err.Error())
+			return NodePublishVolumeError(ctx, codes.Internal, err.Error())
 		}
 	}
-
-	glog.Infof("Attempting mount bind between volume %s and mount target %s, options: %s", volume.GetId(), targetPath, options)
+	logger.Debug().Str("volume_id", volumeID).Str("target_path", targetPath).Fields(options).Msg("Mounting")
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
 		var errList strings.Builder
 		errList.WriteString(err.Error())
 		unmount() // unmount only if mount bind failed
-		return NodePublishVolumeError(codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
+		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
 	}
 
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
-	glog.Infof("Successfully published volume %s", volume.GetId())
+	logger.Info().Msg("Success")
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
-func NodeUnpublishVolumeError(errorCode codes.Code, errorMessage string) (*csi.NodeUnpublishVolumeResponse, error) {
-	glog.Errorln("Error publishing volume, code:", errorCode, ", error:", errorMessage)
+func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeUnpublishVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error deleting volume")
 	return &csi.NodeUnpublishVolumeResponse{}, err
 }
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-	glog.V(3).Infof(">>>> Received a NodeUnpublishVolume request for volume ID %s", req.GetVolumeId())
-	defer glog.V(3).Infof("<<<< Completed processing NodeUnpublishVolume request for volume ID %s", req.GetVolumeId())
+	ctx = log.With().Str("trace-id", uuid.New().String()).Str("op", "NodeUnpublishVolume").Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	volumeID := req.GetVolumeId()
+	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	defer logger.Info().Msg("<<<< Completed processing request")
 	// Check arguments
 
 	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns.mounter)
 	if err != nil {
 		return &csi.NodeUnpublishVolumeResponse{}, err
-		//return NodeUnpublishVolumeError(codes.Internal, err.Error())
+		//return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 	}
 
 	if len(req.GetTargetPath()) == 0 {
-		return NodeUnpublishVolumeError(codes.InvalidArgument, "Target path missing in request")
+		return NodeUnpublishVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
 	}
 	targetPath := req.GetTargetPath()
 
 	// TODO: Verify that targetPath is indeed equals to expected source of bind mount
 	//		 Which is not straightforward in case plugin was restarted, as in this case
 	//		 we lose information of source. Probably Context can be used
-	glog.V(2).Infof("Checking if target path %s exists", targetPath)
+	logger.Debug().Str("target_path", targetPath).Msg("Checking if target path exists")
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
-			glog.Warningf("Seems like volume %s is not published under target path %s, assuming repeating unpublish request", volume.GetId(), targetPath)
+			logger.Debug().Msg("Target path does not exist, assuming repeating unpublish request")
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		} else {
-			return NodeUnpublishVolumeError(codes.Internal, "unexpected situation, please contact support")
+			return NodeUnpublishVolumeError(ctx, codes.Internal, "unexpected situation, please contact support")
 		}
 
 	}
 	// check if this path is a wekafs mount
 	if ns.mounter.debugPath == "" {
-		if PathIsWekaMount(targetPath) {
-			glog.Infof("Directory %s exists and is weka mount [%s]", targetPath, volume.GetId())
+		if PathIsWekaMount(ctx, targetPath) {
+			logger.Debug().Msg("Directory exists and is weka mount")
 		} else {
 			msg := fmt.Sprintf("Directory %s exists, but not a weka mount", targetPath)
-			glog.Info()
-			return NodeUnpublishVolumeError(codes.Internal, msg)
+			return NodeUnpublishVolumeError(ctx, codes.Internal, msg)
 		}
 	}
 
-	glog.V(2).Infof("Attempting to perform unmount of target path %s", targetPath)
+	logger.Trace().Str("target_path", targetPath).Msg("Unmounting")
 	if err := mount.New("").Unmount(targetPath); err != nil {
 		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
-		glog.Errorf("failed unmounting volume %s at %s : %s", volume.GetId(), targetPath, err)
-		return NodeUnpublishVolumeError(codes.Internal, err.Error())
+		return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 	} else {
-		glog.Infof("Successfully unmounted %s", targetPath)
+		logger.Trace().Msg("Success")
 	}
-
-	glog.Infof("Attempting to remove target path %s [%s]", targetPath, volume.GetId())
+	logger.Trace().Str("target_path", targetPath).Msg("Removing stale target path")
 	if err := os.Remove(targetPath); err != nil {
-		return NodeUnpublishVolumeError(codes.Internal, err.Error())
+		return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 	}
 
-	glog.V(4).Infof("wekafs: volume %s has been unpublished.", volume.GetId())
-	// Doing this only in case both bind unmount and remove succeeded
-	glog.Infof("Calling decrease refcount on mount %s", volume.GetId())
+	logger.Trace().Msg("Success")
+	logger.Trace().Str("volume_id", volumeID).Msg("Unmounting")
 	err = volume.Unmount(ctx, false)
 	if err != nil {
-		glog.Errorf("Post-unpublish unmount failed %s", err)
+		logger.Error().Str("volume_id", volumeID).Err(err).Msg("Post-unpublish task failed")
 	}
-	glog.Infof("Successfully unpublished volume %s", volume.GetId())
+	logger.Info().Str("volume_id", volumeID).Msg("Unpublish Success")
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func NodeStageVolumeError(errorCode codes.Code, errorMessage string) (*csi.NodeStageVolumeResponse, error) {
-	glog.Errorln("Error staging volume on node, code:", errorCode, ", error:", errorMessage)
+func NodeStageVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeStageVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error staging volume")
 	return &csi.NodeStageVolumeResponse{}, err
 }
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	glog.V(3).Infof("Received a NodeStageVolume request for volume ID %s", req.GetVolumeId())
-	defer glog.V(3).Infof("Completed processing NodeStageVolume request for volume ID %s", req.GetVolumeId())
-	client, err := ns.api.GetClientFromSecrets(ctx, req.Secrets)
-	if err != nil {
-		return NodeStageVolumeError(codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
-	}
-	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, ns.mounter)
-	if err != nil {
-		return NodeStageVolumeError(codes.Internal, err.Error())
-	}
+	ctx = log.With().Str("trace-id", uuid.New().String()).Str("op", "NodeStageVolume").Logger().WithContext(ctx)
+	volumeId := req.GetVolumeId()
+	logger := log.Ctx(ctx)
+	logger.Info().Str("volume_id", volumeId).Msg(">>>> Received request")
+	defer logger.Info().Msg("<<<< Completed processing request")
 	// Check arguments
 	if len(req.GetStagingTargetPath()) == 0 {
-		return NodeStageVolumeError(codes.InvalidArgument, "Target path missing in request")
+		return NodeStageVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
 	}
 
 	if req.GetVolumeCapability() == nil {
-		return NodeStageVolumeError(codes.InvalidArgument, "Error occured, volume Capability missing in request")
+		return NodeStageVolumeError(ctx, codes.InvalidArgument, "Error occured, volume Capability missing in request")
 	}
 
 	if req.GetVolumeCapability().GetBlock() != nil {
-		return NodeStageVolumeError(codes.InvalidArgument, "Block accessType is unsupported")
+		return NodeStageVolumeError(ctx, codes.InvalidArgument, "Block accessType is unsupported")
 	}
-	glog.V(4).Infof("wekafs: volume %s has been staged.", volume.GetId())
+	logger.Info().Str("volume_id", volumeId).Msg("Volume staged successfully")
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-func NodeUnstageVolumeError(errorCode codes.Code, errorMessage string) (*csi.NodeUnstageVolumeResponse, error) {
-	glog.Errorln("Error UNstaging volume on node, code:", errorCode, ", error:", errorMessage)
+func NodeUnstageVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeUnstageVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error unstaging volume")
 	return &csi.NodeUnstageVolumeResponse{}, err
 }
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-
-	// Check arguments
-	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns.mounter)
-	if err != nil {
-		return NodeUnstageVolumeError(codes.Internal, err.Error())
-	}
+	volumeId := req.GetVolumeId()
+	ctx = log.With().Str("trace-id", uuid.New().String()).Str("op", "NodeUnstageVolume").Logger().WithContext(ctx)
+	log.Ctx(ctx).Info().Str("volume_id", volumeId).Msg(">>>> Received request")
+	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
 
 	if len(req.GetStagingTargetPath()) == 0 {
-		return NodeUnstageVolumeError(codes.InvalidArgument, "Target path missing in request")
+		return NodeUnstageVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
 	}
-	glog.V(4).Infof("wekafs: volume %s has been unstaged.", volume.GetId())
+	log.Ctx(ctx).Info().Str("volume_id", volumeId).Msg("Volume unstaged successfully")
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
@@ -352,7 +355,7 @@ func getNodeServiceCapabilities(nl []csi.NodeServiceCapability_RPC_Type) []*csi.
 	var nsc []*csi.NodeServiceCapability
 
 	for _, capability := range nl {
-		glog.Infof("Enabling node service capability: %v", capability.String())
+		log.Info().Str("capability", capability.String()).Msg("Enabling node service capability")
 		nsc = append(nsc, &csi.NodeServiceCapability{
 			Type: &csi.NodeServiceCapability_Rpc{
 				Rpc: &csi.NodeServiceCapability_RPC{

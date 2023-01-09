@@ -17,10 +17,10 @@ type Volume interface {
 	ExistsAndMatchesCapacity(ctx context.Context, capacity int64) (bool, bool, error)
 	GetCapacity(ctx context.Context) (int64, error)
 	GetId() string
-	GetMountPoint(xattr bool) (string, error)
+	GetMountPoint(ctx context.Context, xattr bool) (string, error)
 	GetType() VolumeType
 	Mount(ctx context.Context, xattr bool) (error, UnmountFunc)
-	SetParamsFromRequestParams(params map[string]string) error
+	SetParamsFromRequestParams(ctx context.Context, params map[string]string) error
 	String() string
 	Unmount(ctx context.Context, xattr bool) error
 	UpdateCapacity(ctx context.Context, enforceCapacity *bool, capacity int64) error
@@ -30,7 +30,7 @@ type Volume interface {
 	getFullPath(ctx context.Context, xattr bool) string
 	getInnerPath() string
 	getMaxCapacity(ctx context.Context) (int64, error)
-	isMounted(xattr bool) bool
+	isMounted(ctx context.Context, xattr bool) bool
 	moveToTrash(ctx context.Context) error
 	opportunisticMount(ctx context.Context, xattr bool) (err error, unmountFunc func())
 }

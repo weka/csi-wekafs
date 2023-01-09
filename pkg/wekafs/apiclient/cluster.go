@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-version"
+	"github.com/rs/zerolog/log"
 )
 
 const ApiPathLogin = "login"
@@ -23,13 +24,14 @@ func (a *ApiClient) updateTokensExpiryInterval(ctx context.Context) error {
 	}
 	a.refreshTokenExpiryInterval = responseData.RefreshTokenExpiry
 	a.apiTokenExpiryInterval = responseData.AccessTokenExpiry
-	a.Log(3, "Updated refresh token validity period")
+	log.Ctx(ctx).Trace().Msg("Updated refresh token validity period")
 	return nil
 }
 
 // fetchClusterInfo performed each login and checks for version
 func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
-	a.Log(4, "Checking for Weka cluster version...")
+	logger := log.Ctx(ctx).With().Str("credentials", a.Credentials.String()).Logger()
+	logger.Debug().Msg("Checking for Weka cluster version...")
 	responseData := &ClusterInfoResponse{}
 	if err := a.Get(ctx, ApiPathClusterInfo, nil, responseData); err != nil {
 		return err
@@ -39,14 +41,15 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	clusterVersion := fmt.Sprintf("v%s", responseData.Release)
 	v, _ := version.NewVersion(clusterVersion)
 	a.CompatibilityMap.fillIn(clusterVersion)
-	a.Log(2, "Connected to cluster:", a.ClusterName, "GUID:", a.ClusterGuid, "version:", clusterVersion, v)
-	a.Log(3, "Cluster compatibility for filesystem as CSI volume:", a.SupportsFilesystemAsVolume())
-	a.Log(3, "Cluster compatibility for quota directory as CSI volume:", a.SupportsQuotaDirectoryAsVolume())
-	a.Log(3, "Cluster compatibility for quota on non-empty CSI volume:", a.SupportsQuotaOnNonEmptyDirs())
-	a.Log(3, "Cluster compatibility for regular directory as CSI volume:", a.SupportsDirectoryAsVolume())
-	a.Log(3, "Cluster compatibility for authenticated filesystem mounts", a.SupportsAuthenticatedMounts())
-	a.Log(3, "Cluster compatibility for new filesystem from snapshot", a.SupportsNewFileSystemFromSnapshot())
-	a.Log(3, "Cluster compatibility for cloning filesystems", a.SupportsFilesystemCloning())
+	logger.Info().Str("cluster_guid", a.ClusterGuid.String()).Str("cluster_name", a.ClusterName).
+		Str("cluster_version", clusterVersion).Str("parsed_version", v.String()).Msg("Successfully connected to cluster")
+	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for filesystem as CSI volume:", a.SupportsFilesystemAsVolume()))
+	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for quota directory as CSI volume:", a.SupportsQuotaDirectoryAsVolume()))
+	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for quota on non-empty CSI volume:", a.SupportsQuotaOnNonEmptyDirs()))
+	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for regular directory as CSI volume:", a.SupportsDirectoryAsVolume()))
+	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for authenticated filesystem mounts", a.SupportsAuthenticatedMounts()))
+	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for new filesystem from snapshot", a.SupportsNewFileSystemFromSnapshot()))
+	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for cloning filesystems", a.SupportsFilesystemCloning()))
 	return nil
 }
 
@@ -56,7 +59,7 @@ func (a *ApiClient) GetFreeCapacity(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 	capacity := responseData.Capacity.UnprovisionedBytes
-	a.Log(5, "Free capacity on cluster is", capacity)
+	log.Ctx(ctx).Debug().Uint64("free_capacity", capacity).Msg("Obtained cluster free capacity")
 	return capacity, nil
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/golang/glog"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,15 +13,14 @@ import (
 )
 
 func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.ApiClient, mounter *wekaMounter) (Volume, error) {
-	glog.V(5).Infof("Initializing representation object for volume ID %s", volumeId)
+	logger := log.Ctx(ctx).With().Str("volume_id", volumeId).Logger()
+	logger.Trace().Msg("Initializating volume object")
 	if err := validateVolumeId(volumeId); err != nil {
-		glog.Errorln("Failed to validate volume ID", volumeId)
+		logger.Error().Err(err).Msg("Failed to validate volume ID")
 		return &UnifiedVolume{}, err
 	}
 	if apiClient != nil {
-		glog.V(5).Infof("Successfully bound volume to backend API client %s", apiClient.Credentials.String())
-	} else {
-		glog.V(5).Infof("Volume was not bound to any backend API client")
+		logger.Trace().Msg("Successfully bound volume to backend API client")
 	}
 	volumeType := GetVolumeType(volumeId)
 	volId := ""
@@ -41,6 +40,8 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 	default:
 		return nil, errors.New("unsupported volume type requested")
 	}
+	logger = log.Ctx(ctx).With().Str("volume_id", volId).Logger()
+
 	v := &UnifiedVolume{
 		id:             volId,
 		FilesystemName: GetFSName(volId),
@@ -51,7 +52,7 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 		mounter:        mounter,
 		mountPath:      make(map[bool]string),
 	}
-	glog.Infoln("Successfully initialized object", v.String())
+	logger.Trace().Msg("Successfully initialized object")
 	return v, nil
 }
 
@@ -65,6 +66,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 	var err error
 	var cSourceVolume *csi.VolumeContentSource_VolumeSource
 	var cSourceSnapshot *csi.VolumeContentSource_SnapshotSource
+	logger := log.Ctx(ctx)
 	cSource := req.GetVolumeContentSource()
 	if cSource != nil {
 		cSourceVolume = cSource.GetVolume()
@@ -93,12 +95,11 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 		return nil, err
 	}
 	params := req.GetParameters()
-	glog.Infoln("Received the following request params:", renderKeyValuePairs(params))
-	err = volume.SetParamsFromRequestParams(params)
+	err = volume.SetParamsFromRequestParams(ctx, params)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not set parameters on volume")
 	}
-
+	logger.Info().Str("volume_id", volume.GetId()).Fields(params).Msg("Successfully initialized volume object")
 	return volume, nil
 }
 
@@ -115,7 +116,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 	volType := VolumeType(req.GetParameters()["volumeType"])
 
 	var volId string
-	var vol Volume
+	var volume Volume
 
 	filesystemName := GetFSNameFromRequest(req)
 	if filesystemName == "" {
@@ -133,7 +134,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		// assume that this is a dynamical provision of a raw FS volume, must be allowed in configuration
 		filesystemName = cs.newVolumePrefix + calculateFsBaseNameForUnifiedVolume(requestedVolumeName)
 		volId = filepath.Join(string(VolumeTypeUnified), filesystemName)
-		vol = &UnifiedVolume{
+		volume = &UnifiedVolume{
 			id:             volId,
 			FilesystemName: filesystemName,
 			innerPath:      "",
@@ -156,7 +157,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 				volId = filepath.Join(string(volType), filesystemName, folderName)
 			}
 
-			vol = &UnifiedVolume{
+			volume = &UnifiedVolume{
 				id:             volId,
 				FilesystemName: filesystemName,
 				innerPath:      innerPath,
@@ -173,7 +174,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 			}
 			snapName := calculateSnapNameForSnapVolume(requestedVolumeName, filesystemName)
 			snapAccessPoint := calculateSnapshotParamsHash(requestedVolumeName, filesystemName)
-			vol = &UnifiedVolume{
+			volume = &UnifiedVolume{
 				id:                  "",
 				FilesystemName:      "",
 				SnapshotName:        snapName,
@@ -186,8 +187,8 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		}
 
 	}
-	glog.Infoln("Constructed a new volume representation", vol)
-	return vol, nil
+	log.Ctx(ctx).Info().Str("volume_id", volume.GetId()).Msg("Successfully initialized volume object")
+	return volume, nil
 }
 
 // NewVolumeForSrcSnapshotVolumeRequest can accept those possible combinations:

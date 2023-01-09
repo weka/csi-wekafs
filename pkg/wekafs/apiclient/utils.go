@@ -1,13 +1,12 @@
 package apiclient
 
 import (
-	"github.com/golang/glog"
+	"github.com/rs/zerolog/log"
 	"reflect"
 )
 
 // ObjectsAreEqual returns true if both ApiObject have same immutable fields (other fields and nil fields are disregarded)
 func ObjectsAreEqual(o1 ApiObject, o2 ApiObject) bool {
-	//glog.V(6).Infoln("Comparing objects", o1, o2)
 	if reflect.TypeOf(o1) != reflect.TypeOf(o2) {
 		return false
 	}
@@ -22,7 +21,6 @@ func ObjectsAreEqual(o1 ApiObject, o2 ApiObject) bool {
 			}
 		}
 	}
-	//glog.V(6).Infoln("Objects", o1, o2, "are equal")
 	return true
 }
 
@@ -36,7 +34,7 @@ func ObjectRequestHasRequiredFields(o ApiObjectRequest) bool {
 		}
 	}
 	if len(missingFields) > 0 {
-		glog.Errorln("Object is missing the following fields:", missingFields)
+		log.Error().Strs("missing_fileds", missingFields).Msg("Object is missing mandatory fields")
 		return false
 	}
 	return true

@@ -19,19 +19,34 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs"
 	"math/rand"
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"time"
 )
 
 func init() {
-	_ = flag.Set("logtostderr", "true")
 	rand.Seed(time.Now().UnixNano())
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
+	zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {
+		short := file
+		for i := len(file) - 1; i > 0; i-- {
+			if file[i] == '/' {
+				short = file[i+1:]
+				break
+			}
+		}
+		file = short
+		return file + ":" + strconv.Itoa(line)
+	}
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).With().Caller().Logger()
+
 }
 
 var (
@@ -56,13 +71,34 @@ var (
 	removeVolumeCloneCapability = flag.Bool("removevolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
 	enableMetrics               = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint") // TODO: change to false and instrument via Helm
 	metricsPort                 = flag.String("metricsport", "9000", "HTTP port to expose metrics on")    // TODO: instrument via Helm
+	verbosity                   = flag.Int("v", 1, "sets log verbosity level")
 
 	// Set by the build process
 	version = ""
 )
 
+func mapVerbosity(verbosity int) zerolog.Level {
+	verbMap := make(map[int]zerolog.Level)
+
+	verbMap[0] = zerolog.Disabled
+	verbMap[1] = zerolog.PanicLevel
+	verbMap[2] = zerolog.FatalLevel
+	verbMap[3] = zerolog.ErrorLevel
+	verbMap[4] = zerolog.InfoLevel
+	verbMap[5] = zerolog.DebugLevel
+	verbMap[6] = zerolog.TraceLevel
+
+	v := verbosity
+	if v >= len(verbMap) {
+		v = len(verbMap) - 1
+	}
+	return verbMap[v]
+}
+
 func main() {
 	flag.Parse()
+	zerolog.SetGlobalLevel(mapVerbosity(*verbosity))
+
 	csiMode = wekafs.GetCsiPluginMode(csimodetext)
 	if *showVersion {
 		baseName := path.Base(os.Args[0])
@@ -70,22 +106,17 @@ func main() {
 		return
 	}
 	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode {
-		wekafs.Die("Invalid mode specified for CSI driver")
+		log.Panic().Str("requestedCsiMode", string(csiMode)).Msg("Invalid mode specified for CSI driver")
 	}
-	glog.Infof("Running in mode: %s, SELinux support: %s", csiMode, func() string {
-		if *selinuxSupport {
-			return "ON"
-		}
-		return "OFF"
-	}())
+	log.Info().Str("csi_mode", string(csiMode)).Bool("selinux_mode", *selinuxSupport).Msg("Started CSI driver")
 
 	if enableMetrics != nil && *enableMetrics {
 		go func() {
-			glog.Infoln("Enabling metrics server on port", *metricsPort)
 			http.Handle("/metrics", promhttp.Handler())
 			if err := http.ListenAndServe(fmt.Sprintf(":%s", *metricsPort), nil); err != nil {
-				glog.Errorln("Failed to enable metrics server", err.Error())
+				log.Error().Str("metrics_port", *metricsPort).Err(err).Msg("Failed to start metrics service")
 			}
+			log.Debug().Str("metrics_port", *metricsPort).Msg("Started metrics service")
 		}()
 	}
 	handle()

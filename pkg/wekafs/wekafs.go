@@ -20,8 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang/glog"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
 	"io/ioutil"
@@ -93,12 +93,12 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 			return val, nil
 		}
 	}
-	glog.Errorln("Could not fetch API client for cluster GUID", guid.String())
+	log.Error().Str("cluster_guid", guid.String()).Msg("Could not fetch API client for cluster GUID")
 	return nil, ClusterApiNotFoundError
 }
 
 // fromSecrets returns a pointer to API by secret contents
-func (api *ApiStore) fromSecrets(secrets map[string]string) (*apiclient.ApiClient, error) {
+func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
 	endpointsRaw := strings.TrimSpace(secrets["endpoints"])
 	endpoints := func() []string {
 		var ret []string
@@ -114,26 +114,26 @@ func (api *ApiStore) fromSecrets(secrets map[string]string) (*apiclient.ApiClien
 		Endpoints:    endpoints,
 		HttpScheme:   strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
 	}
-	return api.fromCredentials(credentials)
+	return api.fromCredentials(ctx, credentials)
 }
 
 // fromCredentials returns a pointer to API by credentials and endpoints
 // If this is a new API, it will be created and put in hashmap
-func (api *ApiStore) fromCredentials(credentials apiclient.Credentials) (*apiclient.ApiClient, error) {
+func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.Credentials) (*apiclient.ApiClient, error) {
 	// doing this to fetch a client hash
-	newClient, err := apiclient.NewApiClient(credentials)
+	newClient, err := apiclient.NewApiClient(ctx, credentials)
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
 	}
 	hash := newClient.Hash()
 
 	if existingApi := api.getByHash(hash); existingApi != nil {
-		glog.V(4).Infoln("Found an existing Weka API client", credentials.String())
+		log.Trace().Str("api_client", credentials.String()).Msg("Found an existing Weka API client")
 		return existingApi, nil
 	}
 	api.Lock()
 	defer api.Unlock()
-	glog.V(4).Infoln("Creating new Weka API client", credentials.String())
+	log.Trace().Str("api_client", credentials.String()).Msg("Creating new Weka API client")
 	if api.getByHash(hash) != nil {
 		return api.getByHash(hash), nil
 	}
@@ -169,25 +169,26 @@ func (api *ApiStore) GetDefaultSecrets() (*map[string]string, error) {
 }
 
 func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
+	logger := log.Ctx(ctx)
 	if len(secrets) == 0 {
 		if api.legacySecrets != nil {
-			glog.V(4).Infof("No explicit API service for request, using legacySecrets")
+			logger.Trace().Msg("No explicit API service for request, using legacySecrets")
 			secrets = *api.legacySecrets
 		} else {
-			glog.V(4).Infof("No API service for request, switching to legacy mode")
+			logger.Trace().Msg("No API service for request, switching to legacy mode")
 			return nil, nil
 		}
 	}
-	client, err := api.fromSecrets(secrets)
+	client, err := api.fromSecrets(ctx, secrets)
 	if err != nil || client == nil {
-		glog.V(4).Infof("API service was not found for request, switching to legacy mode")
+		logger.Trace().Msg("API service was not found for request, switching to legacy mode")
 		return nil, nil
 	}
 	if err := client.Init(ctx); err != nil {
-		glog.Errorln("Failed to initialize API client", client.Credentials.String(), err)
+		logger.Error().Err(err).Msg("Failed to initialize API client")
 		return nil, err
 	}
-	glog.V(4).Infof("Successfully initialized API backend for request")
+	logger.Trace().Msg("Successfully initialized API backend for request")
 	return client, nil
 }
 
@@ -198,9 +199,9 @@ func NewApiStore() *ApiStore {
 	}
 	secrets, err := s.GetDefaultSecrets()
 	if err != nil {
-		glog.V(2).Infoln("No legacy API secrets could be found:", err)
+		log.Debug().Err(err).Msg("No legacy API secrets could be found")
 	} else {
-		glog.V(2).Infoln("Initialized legacy API secrets")
+		log.Trace().Msg("Initialized legacy API secrets")
 		s.legacySecrets = secrets
 	}
 	return s
@@ -226,10 +227,10 @@ func NewWekaFsDriver(
 		vendorVersion = version
 	}
 
-	glog.Infof("Driver: %v ", driverName)
-	glog.Infof("Version: %s", vendorVersion)
+	log.Info().Msg(fmt.Sprintf("Driver: %v ", driverName))
+	log.Info().Msg(fmt.Sprintf("Version: %s", vendorVersion))
 
-	glog.Infof("csiMode: %s", csiMode)
+	log.Info().Msg(fmt.Sprintf("csiMode: %s", csiMode))
 
 	return &WekaFsDriver{
 		name:                         driverName,
@@ -255,12 +256,14 @@ func (driver *WekaFsDriver) Run() {
 	// Create GRPC servers
 	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
 	mounter.gc = initInnerPathVolumeGc(mounter)
+	mounter.schedulePeriodicMountGc()
+
 	// identity server runs always
-	glog.Info("Loading IdentityServer")
+	log.Info().Msg("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver.name, driver.version)
 
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
-		glog.Infof("Loading ControllerServer")
+		log.Info().Msg("Loading ControllerServer")
 		// bring up controller part
 		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.dynamicVolPath,
 			driver.newVolumePrefix, driver.newSnapshotPrefix, driver.allowAutoFsCreation, driver.allowAutoFsExpansion,
@@ -272,7 +275,7 @@ func (driver *WekaFsDriver) Run() {
 	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
 
 		// bring up node part
-		glog.Infof("Loading NodeServer")
+		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter)
 	} else {
 		driver.ns = &NodeServer{}
@@ -311,7 +314,7 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 		CsiModeAll:
 		return ret
 	default:
-		glog.Fatalln("Unsupported plugin mode", ret)
+		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
 		return ""
 	}
 }
