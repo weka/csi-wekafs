@@ -111,7 +111,7 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 		}
 	}
 
-	log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections")
+	log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
 
 	if err := server.Serve(listener); err != nil {
 		Die(err.Error())

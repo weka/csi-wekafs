@@ -84,12 +84,12 @@ func (m *wekaMount) decRef(ctx context.Context) error {
 
 func (m *wekaMount) doUnmount(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
-	logger.Debug().Bool("xattr_flag", m.fsRequest.xattr).Msg("Performing umount via k8s native mounter")
+	logger.Trace().Bool("xattr_flag", m.fsRequest.xattr).Msg("Performing umount via k8s native mounter")
 	err := m.kMounter.Unmount(m.mountPoint)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
 	} else {
-		logger.Debug().Msg("Unmounted successfully")
+		logger.Trace().Msg("Unmounted successfully")
 	}
 	return err
 }
@@ -113,7 +113,7 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 			}
 			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
 		}
-		logger.Debug().Bool("xattr_flag", m.fsRequest.xattr).Bool("xattr_flag", m.fsRequest.xattr).
+		logger.Trace().Bool("xattr_flag", m.fsRequest.xattr).Bool("xattr_flag", m.fsRequest.xattr).
 			Fields(mountOptions).Msg("Performing mount")
 		return m.kMounter.MountSensitive(m.fsRequest.fsName, m.mountPoint, "wekafs", mountOptions, mountOptionsSensitive)
 	} else {
@@ -121,7 +121,7 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
 			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
 		}
-		logger.Debug().Bool("xattr_flag", m.fsRequest.xattr).Bool("xattr_flag", m.fsRequest.xattr).
+		logger.Trace().Bool("xattr_flag", m.fsRequest.xattr).Bool("xattr_flag", m.fsRequest.xattr).
 			Str("debug_path", m.debugPath).Msg("Performing mount")
 
 		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})

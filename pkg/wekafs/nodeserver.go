@@ -22,6 +22,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
 	"github.com/rs/xid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -44,6 +45,24 @@ type NodeServer struct {
 	maxVolumesPerNode int64
 	mounter           *wekaMounter
 	api               *ApiStore
+	VolumePrefix      string
+	SnapshotPrefix    string
+}
+
+func (ns *NodeServer) getVolumeNamePrefix() string {
+	return ns.VolumePrefix
+}
+
+func (ns *NodeServer) getApiStore() *ApiStore {
+	return ns.api
+}
+
+func (ns *NodeServer) getSnapshotNamePrefix() string {
+	return ns.SnapshotPrefix
+}
+
+func (ns *NodeServer) getMounter() *wekaMounter {
+	return ns.mounter
 }
 
 //goland:noinspection GoUnusedParameter
@@ -89,8 +108,9 @@ func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
+	op := "NodePublishVolume"
 	volumeID := req.GetVolumeId()
-	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", "NodePublishVolume").Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
 	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
@@ -99,7 +119,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if err != nil {
 		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
-	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, ns.mounter)
+	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, ns)
 	if err != nil {
 		return NodePublishVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
@@ -180,7 +200,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
 				}
 			} else {
-				log.Ctx(ctx).Warn().Msg("Assuming debug execution and not validating WekaFS mount")
+				log.Ctx(ctx).Trace().Msg("Assuming debug execution and not validating WekaFS mount")
 				unmount()
 				return &csi.NodePublishVolumeResponse{}, nil
 			}
@@ -202,7 +222,6 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
-	logger.Info().Msg("Success")
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -214,17 +233,24 @@ func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMe
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-	ctx = log.With().Str("trace-id", uuid.New().String()).Str("op", "NodeUnpublishVolume").Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
+	op := "NodeUnpublishVolume"
+	result := "FAILURE"
 	volumeID := req.GetVolumeId()
-	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
-	defer logger.Info().Msg("<<<< Completed processing request")
+	ctx = log.With().Str("trace_id", uuid.New().String()).Str("volume_id", volumeID).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Msg(">>>> Received request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
 	// Check arguments
 
-	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns.mounter)
+	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns)
 	if err != nil {
 		return &csi.NodeUnpublishVolumeResponse{}, err
-		//return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 	}
 
 	if len(req.GetTargetPath()) == 0 {
@@ -239,6 +265,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	if _, err := os.Stat(targetPath); err != nil {
 		if os.IsNotExist(err) {
 			logger.Debug().Msg("Target path does not exist, assuming repeating unpublish request")
+			result = "SUCCESS"
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		} else {
 			return NodeUnpublishVolumeError(ctx, codes.Internal, "unexpected situation, please contact support")
@@ -267,13 +294,12 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 	}
 
-	logger.Trace().Msg("Success")
 	logger.Trace().Str("volume_id", volumeID).Msg("Unmounting")
 	err = volume.Unmount(ctx, false)
 	if err != nil {
 		logger.Error().Str("volume_id", volumeID).Err(err).Msg("Post-unpublish task failed")
 	}
-	logger.Info().Str("volume_id", volumeID).Msg("Unpublish Success")
+	result = "SUCCESS"
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -285,11 +311,20 @@ func NodeStageVolumeError(ctx context.Context, errorCode codes.Code, errorMessag
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	ctx = log.With().Str("trace-id", uuid.New().String()).Str("op", "NodeStageVolume").Logger().WithContext(ctx)
+	op := "NodeStageVolume"
+	ctx = log.With().Str("trace_id", uuid.New().String()).Str("op", op).Logger().WithContext(ctx)
 	volumeId := req.GetVolumeId()
 	logger := log.Ctx(ctx)
+	result := "FAILURE"
 	logger.Info().Str("volume_id", volumeId).Msg(">>>> Received request")
-	defer logger.Info().Msg("<<<< Completed processing request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
+
 	// Check arguments
 	if len(req.GetStagingTargetPath()) == 0 {
 		return NodeStageVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
@@ -302,8 +337,7 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	if req.GetVolumeCapability().GetBlock() != nil {
 		return NodeStageVolumeError(ctx, codes.InvalidArgument, "Block accessType is unsupported")
 	}
-	logger.Info().Str("volume_id", volumeId).Msg("Volume staged successfully")
-
+	result = "SUCCESS"
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
@@ -315,20 +349,41 @@ func NodeUnstageVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
+	op := "NodeUnstageVolume"
+	result := "FAILURE"
 	volumeId := req.GetVolumeId()
-	ctx = log.With().Str("trace-id", uuid.New().String()).Str("op", "NodeUnstageVolume").Logger().WithContext(ctx)
-	log.Ctx(ctx).Info().Str("volume_id", volumeId).Msg(">>>> Received request")
-	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
+	ctx = log.With().Str("trace_id", uuid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Str("volume_id", volumeId).Msg(">>>> Received request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
 
 	if len(req.GetStagingTargetPath()) == 0 {
 		return NodeUnstageVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
 	}
-	log.Ctx(ctx).Info().Str("volume_id", volumeId).Msg("Volume unstaged successfully")
+	result = "SUCCESS"
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	op := "NodeGetInfo"
+	result := "SUCCESS"
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Msg(">>>> Received request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
 	topology := &csi.Topology{
 		Segments: map[string]string{
 			TopologyKeyNode:   ns.nodeID, // required exactly same way as this is how node is accessed by K8s
@@ -346,6 +401,18 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+	op := "NodeGetCapabilities"
+	result := "SUCCESS"
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Msg(">>>> Received request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
 	return &csi.NodeGetCapabilitiesResponse{
 		Capabilities: ns.caps,
 	}, nil

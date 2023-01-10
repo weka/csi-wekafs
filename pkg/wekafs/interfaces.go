@@ -3,6 +3,7 @@ package wekafs
 import (
 	"context"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/rs/zerolog"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
@@ -21,7 +22,6 @@ type Volume interface {
 	GetType() VolumeType
 	Mount(ctx context.Context, xattr bool) (error, UnmountFunc)
 	SetParamsFromRequestParams(ctx context.Context, params map[string]string) error
-	String() string
 	Unmount(ctx context.Context, xattr bool) error
 	UpdateCapacity(ctx context.Context, enforceCapacity *bool, capacity int64) error
 	UpdateParams(ctx context.Context) error
@@ -33,6 +33,10 @@ type Volume interface {
 	isMounted(ctx context.Context, xattr bool) bool
 	moveToTrash(ctx context.Context) error
 	opportunisticMount(ctx context.Context, xattr bool) (err error, unmountFunc func())
+	hasInnerPath() bool
+	isOnSnapshot() bool
+	getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error)
+	MarshalZerologObject(e *zerolog.Event)
 }
 
 // Snapshot represent an interface of single snapshot representation of any type
@@ -42,12 +46,16 @@ type Snapshot interface {
 	Delete(ctx context.Context) error
 	Exists(ctx context.Context) (bool, error)
 	GetId() string
-	String() string
 	getCsiSnapshot(ctx context.Context) *csi.Snapshot
 	getInnerPath() string
-	getInternalAccessPoint() string
-	getInternalSnapName() string
 	getObject(ctx context.Context) (*apiclient.Snapshot, error)
-	getParamsHash() string
-	getSourceVolumeId() string
+	getFileSystemObject(ctx context.Context) (*apiclient.FileSystem, error)
+	hasInnerPath() bool
+}
+
+type AnyServer interface {
+	getVolumeNamePrefix() string
+	getSnapshotNamePrefix() string
+	getMounter() *wekaMounter
+	getApiStore() *ApiStore
 }

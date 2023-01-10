@@ -55,28 +55,39 @@ func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume UnifiedVolume)
 	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
 	logger.Debug().Msg("Starting garbage collection of volume")
 	fsName := volume.FilesystemName
-	innerPath := volume.getInnerPath()
 	defer gc.finishGcCycle(ctx, fsName, volume.apiClient)
 	path, err, unmount := gc.mounter.Mount(ctx, fsName, volume.apiClient)
 	defer unmount()
-	fullPath := filepath.Join(path, garbagePath, innerPath)
-	logger.Trace().Str("full_path", fullPath).Msg("Purging deleted volume data")
+	volumeTrashLoc := filepath.Join(path, garbagePath)
+	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
+		logger.Error().Err(err).Msg("Failed to create garbage collector directory")
+	}
+	fullPath := volume.getFullPath(ctx, false)
+	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Moving volume contents to trash")
+	if err := os.Rename(fullPath, volumeTrashLoc); err == nil {
+		logger.Error().Err(err).Str("full_path", fullPath).
+			Str("volume_trash_location", volumeTrashLoc).Msg("Failed to move volume contents to volumeTrashLoc")
+	}
+	// TODO: there is a problem of directory leaks here. If the volume innerPath is deeper than /csi-volumes/vol-name,
+	// e.g. if using statically provisioned volume, we move only the deepest directory
+
+	logger.Trace().Str("purge_path", volumeTrashLoc).Msg("Purging deleted volume data")
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to mount filesystem for GC processing")
 		return
 	}
-	if err := purgeDirectory(ctx, fullPath); err != nil {
-		logger.Error().Err(err).Str("full_path", fullPath).Msg("Failed to remove directory")
+	if err := purgeDirectory(ctx, volumeTrashLoc); err != nil {
+		logger.Error().Err(err).Str("purge_path", volumeTrashLoc).Msg("Failed to remove directory")
 		return
 	}
 
-	logger.Debug().Str("full_path", fullPath).Msg("Directory was successfully deleted")
+	logger.Debug().Msg("Volume purged")
 }
 
 func purgeDirectory(ctx context.Context, path string) error {
 	logger := log.Ctx(ctx).With().Str("path", path).Logger()
 	if !PathExists(path) {
-		logger.Error().Msg("Failed to remove existing directory")
+		logger.Error().Str("path", path).Msg("Failed to remove existing directory")
 		return nil
 	}
 	for !pathIsEmptyDir(path) { // to make sure that if new files still appeared during invocation

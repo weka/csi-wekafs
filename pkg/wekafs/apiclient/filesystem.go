@@ -310,18 +310,14 @@ func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64) (*F
 type FileSystemResizeRequest struct {
 	Uid           uuid.UUID `json:"-"`
 	TotalCapacity *int64    `json:"total_capacity,omitempty"`
-	SsdCapacity   *int64    `json:"ssd_capacity,omitempty"`
 }
 
-func NewFileSystemResizeRequest(fsUid uuid.UUID, totalCapacity, ssdCapacity *int64) *FileSystemResizeRequest {
+func NewFileSystemResizeRequest(fsUid uuid.UUID, totalCapacity *int64) *FileSystemResizeRequest {
 	ret := &FileSystemResizeRequest{
 		Uid: fsUid,
 	}
 	if totalCapacity != nil {
 		ret.TotalCapacity = totalCapacity
-	}
-	if ssdCapacity != nil {
-		ret.SsdCapacity = ssdCapacity
 	}
 	return ret
 }

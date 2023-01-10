@@ -61,17 +61,19 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csimodetext                 = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
-	selinuxSupport              = flag.Bool("selinux-support", false, "Enable support for SELinux")
-	newVolumePrefix             = flag.String("newfsprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
-	newSnapshotPrefix           = flag.String("newsnapshotprefix", "csisnap-", "Prefix for Weka snapshots that represent a CSI snapshot")
-	allowAutoFsExpansion        = flag.Bool("allowautofsexpansion", true, "Allow expansion of filesystems used as CSI volumes")
-	allowAutoFsCreation         = flag.Bool("allowautofscreation", true, "Allow provisioning of CSI volumes as new Weka filesystems")
-	removeSnapshotsCapability   = flag.Bool("removesnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
-	removeVolumeCloneCapability = flag.Bool("removevolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
-	enableMetrics               = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint") // TODO: change to false and instrument via Helm
-	metricsPort                 = flag.String("metricsport", "9000", "HTTP port to expose metrics on")    // TODO: instrument via Helm
-	verbosity                   = flag.Int("v", 1, "sets log verbosity level")
+	csimodetext                   = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
+	selinuxSupport                = flag.Bool("selinux-support", false, "Enable support for SELinux")
+	newVolumePrefix               = flag.String("newfsprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
+	newSnapshotPrefix             = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
+	seedSnapshotPrefix            = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
+	allowAutoFsExpansion          = flag.Bool("allowautofsexpansion", true, "Allow expansion of filesystems used as CSI volumes")
+	allowAutoFsCreation           = flag.Bool("allowautofscreation", true, "Allow provisioning of CSI volumes as new Weka filesystems")
+	allowSnapshotsOfLegacyVolumes = flag.Bool("allowsnapshotsoflegacyvolumes", true, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
+	removeSnapshotsCapability     = flag.Bool("removesnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
+	removeVolumeCloneCapability   = flag.Bool("removevolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
+	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint") // TODO: change to false and instrument via Helm
+	metricsPort                   = flag.String("metricsport", "9000", "HTTP port to expose metrics on")    // TODO: instrument via Helm
+	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
 
 	// Set by the build process
 	version = ""
@@ -127,7 +129,8 @@ func handle() {
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version,
 		*debugPath, *dynamicSubPath, csiMode, *selinuxSupport,
-		*newVolumePrefix, *newSnapshotPrefix, *allowAutoFsCreation, *allowAutoFsExpansion,
+		*newVolumePrefix, *newSnapshotPrefix, *seedSnapshotPrefix,
+		*allowSnapshotsOfLegacyVolumes, *allowAutoFsCreation, *allowAutoFsExpansion,
 		*removeSnapshotsCapability, *removeVolumeCloneCapability)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
