@@ -168,6 +168,17 @@ func (snap *Snapshot) EQ(q ApiObject) bool {
 	return ObjectsAreEqual(q, snap)
 }
 
+func NewSnapshotCreateRequest(name, accessPoint string, fsUid uuid.UUID, sourceSnapUid *uuid.UUID, isWritable bool) (*SnapshotCreateRequest, error) {
+	ret := &SnapshotCreateRequest{
+		FsUid:         fsUid,
+		Name:          name,
+		AccessPoint:   accessPoint,
+		SourceSnapUid: sourceSnapUid,
+		IsWritable:    isWritable,
+	}
+	return ret, nil
+}
+
 type SnapshotCreateRequest struct {
 	FsUid         uuid.UUID  `json:"fs_uid"`
 	Name          string     `json:"name"`

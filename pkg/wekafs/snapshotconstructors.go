@@ -2,45 +2,68 @@ package wekafs
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
-func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume Volume, apiClient *apiclient.ApiClient) (Snapshot, error) {
+func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume Volume, apiClient *apiclient.ApiClient, server AnyServer) (Snapshot, error) {
 	srcVolId := sourceVolume.GetId()
 	logger := log.Ctx(ctx).With().Str("src_volume_id", srcVolId).Str("snapshot_name", name).Logger()
 	logger.Trace().Msg("Initializating snapshot object")
 	if apiClient != nil {
 		logger.Trace().Msg("Successfully bound volume to backend API client")
 	}
-	hash := calculateSnapshotParamsHash(name, sourceVolume.GetId())
-	snap := &UnifiedSnapshot{
-		paramsHash: &hash,
-		srcVolume:  sourceVolume,
-		apiClient:  apiClient,
+
+	filesystemName := sliceFilesystemNameFromVolumeId(srcVolId)
+	snapNameHash := generateSnapshotNameHash(name)
+	snapIntegrityId := generateSnapshotIntegrityID(name, srcVolId)
+	snapName := generateWekaSnapNameForSnapshot(server.getSnapshotNamePrefix(), name)
+	innerPath := sliceInnerPathFromVolumeId(srcVolId)
+	snapshotId := generateSnapshotIdFromComponents(VolumeTypeUnifiedSnap, filesystemName, snapNameHash, snapIntegrityId, innerPath)
+	var sourceSnapUid *uuid.UUID
+	if sourceVolume.isOnSnapshot() {
+		obj, err := sourceVolume.getSnapshotObj(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to fetch content object of source volume")
+			return nil, err
+		}
+		sourceSnapUid = &(obj.Uid)
 	}
-	logger = log.Ctx(ctx).With().Str("snapshot_id", snap.GetId()).Logger()
-	logger.Trace().Msg("Successfully initialized object")
-	return snap, nil
+	s := &UnifiedSnapshot{
+		id:                  snapshotId,
+		FilesystemName:      filesystemName,
+		SnapshotNameHash:    snapNameHash,
+		SnapshotIntegrityId: snapIntegrityId,
+		SnapshotName:        snapName,
+		innerPath:           innerPath,
+		SourceVolume:        sourceVolume,
+		srcSnapshotUid:      sourceSnapUid,
+		apiClient:           apiClient,
+	}
+	logger = log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Logger()
+	logger.Trace().Object("snap_info", s).Msg("Successfully initialized object")
+	return s, nil
 }
 
-func NewSnapshotFromId(ctx context.Context, id string, apiClient *apiclient.ApiClient) (Snapshot, error) {
-	logger := log.Ctx(ctx).With().Str("snapshot_id", id).Logger()
+func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apiclient.ApiClient, server AnyServer) (Snapshot, error) {
+	logger := log.Ctx(ctx).With().Str("snapshot_id", snapshotId).Logger()
 	logger.Trace().Msg("Initializating snapshot object")
-	if err := validateSnapshotId(id); err != nil {
+	if err := validateSnapshotId(snapshotId); err != nil {
 		return &UnifiedSnapshot{}, err
 	}
 	if apiClient != nil {
 		logger.Trace().Msg("Successfully bound volume to backend API client")
 	}
-	Uid := GetSnapshotUuid(id)
-	paramsHash := GetSnapshotParamsHash(id)
 	s := &UnifiedSnapshot{
-		id:         &id,
-		Uid:        Uid,
-		paramsHash: &paramsHash,
-		apiClient:  apiClient,
+		id:                  snapshotId,
+		FilesystemName:      sliceFilesystemNameFromSnapshotId(snapshotId),
+		SnapshotNameHash:    sliceSnapshotNameHashFromSnapshotId(snapshotId),
+		SnapshotIntegrityId: sliceSnapshotIntegrityIdFromSnapshotId(snapshotId),
+		SnapshotName:        server.getSnapshotNamePrefix() + sliceSnapshotNameHashFromSnapshotId(snapshotId),
+		innerPath:           sliceInnerPathFromSnapshotId(snapshotId),
+		apiClient:           apiClient,
 	}
-	logger.Trace().Msg("Successfully initialized object")
+	logger.Trace().Object("snap_info", s).Msg("Successfully initialized object")
 	return s, nil
 }

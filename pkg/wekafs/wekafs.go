@@ -51,12 +51,14 @@ type WekaFsDriver struct {
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 
-	newVolumePrefix              string
-	newSnapshotPrefix            string
-	allowAutoFsCreation          bool
-	allowAutoFsExpansion         bool
-	supportSnapshotCapability    bool
-	supportVolumeCloneCapability bool
+	newVolumePrefix               string
+	newSnapshotPrefix             string
+	seedSnapshotPrefix            string
+	allowAutoFsCreation           bool
+	allowAutoFsExpansion          bool
+	allowSnapshotsOfLegacyVolumes bool
+	supportSnapshotCapability     bool
+	supportVolumeCloneCapability  bool
 }
 
 type VolumeType string
@@ -199,9 +201,9 @@ func NewApiStore() *ApiStore {
 	}
 	secrets, err := s.GetDefaultSecrets()
 	if err != nil {
-		log.Debug().Err(err).Msg("No legacy API secrets could be found")
+		log.Trace().Msg("No global API secret defined")
 	} else {
-		log.Trace().Msg("Initialized legacy API secrets")
+		log.Info().Msg("Initialized API with global API secret")
 		s.legacySecrets = secrets
 	}
 	return s
@@ -210,8 +212,9 @@ func NewApiStore() *ApiStore {
 func NewWekaFsDriver(
 	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version, debugPath string,
 	dynmamicVolPath string, csiMode CsiPluginMode, selinuxSupport bool,
-	newVolumePrefix, newSnapshotPrefix string,
-	allowAutoFsCreation, allowAutoFsExpansion, removeSnapshotCapability, removeVolumeCloneCapability bool) (*WekaFsDriver, error) {
+	newVolumePrefix, newSnapshotPrefix, seedSnapshotPrefix string,
+	allowSnapshotsOfLegacyVolumes, allowAutoFsCreation, allowAutoFsExpansion bool,
+	removeSnapshotCapability, removeVolumeCloneCapability bool) (*WekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -233,22 +236,24 @@ func NewWekaFsDriver(
 	log.Info().Msg(fmt.Sprintf("csiMode: %s", csiMode))
 
 	return &WekaFsDriver{
-		name:                         driverName,
-		version:                      vendorVersion,
-		nodeID:                       nodeID,
-		endpoint:                     endpoint,
-		maxVolumesPerNode:            maxVolumesPerNode,
-		debugPath:                    debugPath,
-		dynamicVolPath:               dynmamicVolPath,
-		csiMode:                      csiMode, // either "controller", "node", "all"
-		api:                          NewApiStore(),
-		selinuxSupport:               selinuxSupport,
-		newVolumePrefix:              newVolumePrefix,
-		newSnapshotPrefix:            newSnapshotPrefix,
-		allowAutoFsCreation:          allowAutoFsCreation,
-		allowAutoFsExpansion:         allowAutoFsExpansion,
-		supportSnapshotCapability:    !removeSnapshotCapability,
-		supportVolumeCloneCapability: !removeVolumeCloneCapability,
+		name:                          driverName,
+		version:                       vendorVersion,
+		nodeID:                        nodeID,
+		endpoint:                      endpoint,
+		maxVolumesPerNode:             maxVolumesPerNode,
+		debugPath:                     debugPath,
+		dynamicVolPath:                dynmamicVolPath,
+		csiMode:                       csiMode, // either "controller", "node", "all"
+		api:                           NewApiStore(),
+		selinuxSupport:                selinuxSupport,
+		newVolumePrefix:               newVolumePrefix,
+		newSnapshotPrefix:             newSnapshotPrefix,
+		seedSnapshotPrefix:            seedSnapshotPrefix,
+		allowSnapshotsOfLegacyVolumes: allowSnapshotsOfLegacyVolumes,
+		allowAutoFsCreation:           allowAutoFsCreation,
+		allowAutoFsExpansion:          allowAutoFsExpansion,
+		supportSnapshotCapability:     !removeSnapshotCapability,
+		supportVolumeCloneCapability:  !removeVolumeCloneCapability,
 	}, nil
 }
 
@@ -267,7 +272,7 @@ func (driver *WekaFsDriver) Run() {
 		// bring up controller part
 		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.dynamicVolPath,
 			driver.newVolumePrefix, driver.newSnapshotPrefix, driver.allowAutoFsCreation, driver.allowAutoFsExpansion,
-			driver.supportSnapshotCapability, driver.supportVolumeCloneCapability)
+			driver.allowSnapshotsOfLegacyVolumes, driver.supportSnapshotCapability, driver.supportVolumeCloneCapability)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -290,12 +295,10 @@ type CsiPluginMode string
 
 const (
 	VolumeTypeDirV1       VolumeType = "dir/v1"      // if specified in storage class, create directory quotas (as in legacy CSI volumes). FS name must be set in SC as well
-	VolumeTypeFsV1        VolumeType = "fs/v1"       // if specified in storage class, or volumeType is not specified at all - we will create filesystems
-	VolumeTypeFsSnapV1    VolumeType = "snap/v1"     // if specified in storage class, create snapshots of a filesystem, name of the FS must be set in SC as well
-	VolumeTypeUnified     VolumeType = "weka/v1"     // no need to specify this
-	VolumeTypeUnifiedSnap VolumeType = "wekasnap/v1" // no need to specify this
-	VolumeTypeNone        VolumeType = ""
+	VolumeTypeUnified     VolumeType = "weka/v2"     // no need to specify this in storageClass
+	VolumeTypeUnifiedSnap VolumeType = "wekasnap/v2" // no need to specify this in SnapshotClass
 	VolumeTypeUNKNOWN     VolumeType = "AMBIGUOUS_VOLUME_TYPE"
+	VolumeTypeEmpty       VolumeType = ""
 
 	LegacySecretPath = "/legacy-volume-access"
 
@@ -304,7 +307,7 @@ const (
 	CsiModeAll        CsiPluginMode = "all"
 )
 
-var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeFsV1, VolumeTypeFsSnapV1, VolumeTypeUnified}
+var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeUnified}
 
 func GetCsiPluginMode(mode *string) CsiPluginMode {
 	ret := CsiPluginMode(*mode)

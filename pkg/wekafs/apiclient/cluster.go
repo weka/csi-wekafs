@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/hashicorp/go-version"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,8 +29,6 @@ func (a *ApiClient) updateTokensExpiryInterval(ctx context.Context) error {
 
 // fetchClusterInfo performed each login and checks for version
 func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("credentials", a.Credentials.String()).Logger()
-	logger.Debug().Msg("Checking for Weka cluster version...")
 	responseData := &ClusterInfoResponse{}
 	if err := a.Get(ctx, ApiPathClusterInfo, nil, responseData); err != nil {
 		return err
@@ -39,17 +36,17 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	a.ClusterName = responseData.Name
 	a.ClusterGuid = responseData.Guid
 	clusterVersion := fmt.Sprintf("v%s", responseData.Release)
-	v, _ := version.NewVersion(clusterVersion)
 	a.CompatibilityMap.fillIn(clusterVersion)
-	logger.Info().Str("cluster_guid", a.ClusterGuid.String()).Str("cluster_name", a.ClusterName).
-		Str("cluster_version", clusterVersion).Str("parsed_version", v.String()).Msg("Successfully connected to cluster")
-	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for filesystem as CSI volume:", a.SupportsFilesystemAsVolume()))
-	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for quota directory as CSI volume:", a.SupportsQuotaDirectoryAsVolume()))
-	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for quota on non-empty CSI volume:", a.SupportsQuotaOnNonEmptyDirs()))
-	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for regular directory as CSI volume:", a.SupportsDirectoryAsVolume()))
-	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for authenticated filesystem mounts", a.SupportsAuthenticatedMounts()))
-	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for new filesystem from snapshot", a.SupportsNewFileSystemFromSnapshot()))
-	logger.Info().Msg(fmt.Sprintln("Cluster compatibility for cloning filesystems", a.SupportsFilesystemCloning()))
+	logger := log.Logger.With().Str("cluster_name", a.ClusterName).Logger()
+	logger.Info().Str("cluster_guid", a.ClusterGuid.String()).
+		Str("cluster_version", clusterVersion).Msg("Successfully connected to cluster")
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for filesystem as CSI volume: %t", a.SupportsFilesystemAsVolume()))
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for quota directory as CSI volume: %t", a.SupportsQuotaDirectoryAsVolume()))
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for quota on non-empty CSI volume: %t", a.SupportsQuotaOnNonEmptyDirs()))
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for regular directory as CSI volume: %t", a.SupportsDirectoryAsVolume()))
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for authenticated filesystem mounts: %t", a.SupportsAuthenticatedMounts()))
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for new filesystem from snapshot: %t", a.SupportsNewFileSystemFromSnapshot()))
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for cloning filesystems: %t", a.SupportsFilesystemCloning()))
 	return nil
 }
 

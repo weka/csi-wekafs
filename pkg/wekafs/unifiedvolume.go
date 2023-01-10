@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/pkg/xattr"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -19,11 +21,8 @@ import (
 )
 
 const (
-	MaxFileSystemDeletionDuration = time.Hour * 2 // max time for FS deletion
-
-	AllowAutoExpandFilesystemForSnapVols      = true // whether we allow resize of filesystem to expand Snap vol
-	AllowAutoExpandFilesystemForInnerPathVols = true // whether we allow resize of filesystem to expand innerPath vol
-	MaxHashLengthForObjectNames               = 12
+	MaxHashLengthForObjectNames = 12
+	SeedSnapshotPrefix          = "csi-seed-snap-"
 )
 
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
@@ -42,23 +41,34 @@ type UnifiedVolume struct {
 	permissions         fs.FileMode
 	ownerUid            int
 	ownerGid            int
-	mounter             *wekaMounter
+	mounter             *wekaMounter // TODO: could be removed in favor of volume.server.getMounter(), but should we?
 	mountPath           map[bool]string
-	ssdCapacityPercent  int
 	enforceCapacity     bool
 
-	srcSnapshotUid *uuid.UUID
+	srcVolume   Volume
+	srcSnapshot Snapshot
+
+	server AnyServer
 }
 
-func (v *UnifiedVolume) String() string {
-	ret := string(v.GetType()) + "/" + v.FilesystemName
-	if v.SnapshotUuid != nil {
-		ret = ret + ":" + v.SnapshotName
+func (v *UnifiedVolume) MarshalZerologObject(e *zerolog.Event) {
+
+	e.Str("id", v.id).
+		Str("filesystem", v.FilesystemName).
+		Str("group_name", v.filesystemGroupName).
+		Str("snapshot_name", v.SnapshotName).
+		Str("snapshot_access_point", v.SnapshotAccessPoint).
+		Str("inner_path", v.innerPath)
+
+	if v.srcVolume != nil {
+		srcVolID := v.srcVolume.GetId()
+		e.Str("source_volume_id", srcVolID)
 	}
-	if v.hasInnerPath() {
-		ret = ret + "/" + v.innerPath
+
+	if v.srcSnapshot != nil {
+		srcSnapID := v.srcSnapshot.GetId()
+		e.Str("source_snapshot_id", srcSnapID)
 	}
-	return ret
 }
 
 func (v *UnifiedVolume) requiresGc() bool {
@@ -90,6 +100,9 @@ func (v *UnifiedVolume) isFilesystem() bool {
 
 // hasUnderlyingSnapshots returns True if volume is a FS (not its snapshot) and has any weka snapshots beneath it
 func (v *UnifiedVolume) hasUnderlyingSnapshots(ctx context.Context) (bool, error) {
+	logger := log.Ctx(ctx)
+	has := false
+
 	if v.isOnSnapshot() {
 		return false, nil
 	}
@@ -97,7 +110,21 @@ func (v *UnifiedVolume) hasUnderlyingSnapshots(ctx context.Context) (bool, error
 	if err != nil {
 		return true, err
 	}
-	return snapshots != nil, nil
+	if snapshots == nil {
+		return false, nil
+	}
+	if len(*snapshots) > 0 {
+		seedSnapshotName := v.getSeedSnapshotName()
+		for _, s := range *snapshots {
+			if s.IsRemoving || s.Name == seedSnapshotName {
+				continue
+			}
+			logger.Debug().Str("snapshot", s.Name).Str("snapshot_access_point", s.AccessPoint).Msg("Existing snapshot prevents filesystem from deletion")
+			has = true
+			return has, nil
+		}
+	}
+	return has, nil
 }
 
 // isAllowedForDeletion returns true if volume can be deleted (basically all cases besides FS volume having Weka snapshots)
@@ -132,6 +159,14 @@ func (v *UnifiedVolume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclien
 		return nil, err
 	}
 	return snapshots, nil
+}
+
+func (v *UnifiedVolume) getSeedSnapshotName() string {
+	return generateWekaSeedSnapshotName(SeedSnapshotPrefix, v.FilesystemName)
+}
+
+func (v *UnifiedVolume) getSeedSnapshotAccessPoint() string {
+	return generateWekaSeedAccessPoint(v.FilesystemName)
 }
 
 // UpdateParams updates params on volume upon creation. Was part of Create initially, but must be done after content source is applied
@@ -269,7 +304,7 @@ func (v *UnifiedVolume) getCapacityFromQuota(ctx context.Context) (int64, error)
 		return 0, err
 	}
 
-	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() {
+	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && v.mounter.debugPath != "" {
 		size, err := v.getSizeFromQuota(ctx)
 		if err == nil {
 			logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
@@ -312,14 +347,6 @@ func (v *UnifiedVolume) GetCapacity(ctx context.Context) (int64, error) {
 	}
 }
 
-func (v *UnifiedVolume) calcRequiredSsdCapacity(requiredCapacity int64) *int64 {
-	if v.ssdCapacityPercent == 100 {
-		return nil
-	}
-	ret := requiredCapacity / 100 * int64(v.ssdCapacityPercent/100)
-	return &ret
-}
-
 func (v *UnifiedVolume) resizeFilesystem(ctx context.Context, capacity int64) error {
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
@@ -327,9 +354,8 @@ func (v *UnifiedVolume) resizeFilesystem(ctx context.Context, capacity int64) er
 	}
 
 	capLimit := capacity
-	ssdLimit := v.calcRequiredSsdCapacity(capLimit)
 
-	fsu := apiclient.NewFileSystemResizeRequest(fsObj.Uid, &capLimit, ssdLimit)
+	fsu := apiclient.NewFileSystemResizeRequest(fsObj.Uid, &capLimit)
 	err = v.apiClient.UpdateFileSystem(ctx, fsu, fsObj)
 	return err
 }
@@ -342,7 +368,7 @@ func (v *UnifiedVolume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Conte
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	if v.apiClient == nil {
-		logger.Debug().Msg("Volume is not bound to API client, expansion is not possible")
+		logger.Trace().Msg("Volume is not bound to API client, expansion is not possible")
 		return nil
 	} else {
 
@@ -352,12 +378,15 @@ func (v *UnifiedVolume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Conte
 		return status.Errorf(codes.FailedPrecondition, "Failed to get current volume capacity for volume %s", v.GetId())
 	}
 	if currentFsCapacity < capacityLimit {
-		// TODO: replace it with cs.allowAutoExpandFs...
-		if (v.isOnSnapshot() && !AllowAutoExpandFilesystemForSnapVols) || (v.hasInnerPath() && !AllowAutoExpandFilesystemForInnerPathVols) {
-			// do not permit auto-resize of filesystems
+		if (v.isOnSnapshot() || v.hasInnerPath()) && (v.server != nil && !v.server.(*ControllerServer).allowAutoFsExpansion) {
 			return status.Errorf(codes.FailedPrecondition, "Not allowed to expand volume of %s as underlying filesystem %s is too small", v.GetType(), v.FilesystemName)
 		}
 		logger.Debug().Str("filesystem", v.FilesystemName).Int64("desired_capacity", capacityLimit).Msg("New volume size doesn't fit current filesystem limits, expanding filesystem")
+		err := v.resizeFilesystem(ctx, capacityLimit)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to expand filesystem to support new volume capacity")
+			return status.Errorf(codes.FailedPrecondition, "Could not expand filesystem to support new volume capacity")
+		}
 		// TODO: Add actual FS resize and err handling
 	}
 	return nil
@@ -371,11 +400,11 @@ func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *boo
 	}
 
 	// update capacity of the volume by updating quota object on its root directory (or XATTR)
-	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Expanding volume")
+	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
 	var fallback = true // whether we should try to use xAttr fallback or not
 	f := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
 	if v.apiClient == nil {
-		logger.Debug().Msg("Volume has no API client bound, updating capacity in legacy mode")
+		logger.Trace().Msg("Volume has no API client bound, updating capacity in legacy mode")
 		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
 		fallback = false
 	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
@@ -384,6 +413,10 @@ func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *boo
 		fallback = false
 	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
 		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode")
+		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
+		fallback = false
+	} else if v.mounter.debugPath != "" {
+		logger.Trace().Msg("Updating quota via API is not possible since running in debug mode")
 		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
 		fallback = false
 	}
@@ -427,41 +460,19 @@ func (v *UnifiedVolume) updateCapacityQuota(ctx context.Context, enforceCapacity
 	}
 
 	// check if the quota already exists. If not - create it and exit
-	q, err := v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
+	_, err = v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
 	if err != nil {
-		if err != apiclient.ObjectNotFoundError {
-			// any other error
+		if err == apiclient.ObjectNotFoundError {
+			logger.Trace().Uint64("inode_id", inodeId).Msg("No quota entry for inode ID")
+		} else {
 			logger.Error().Err(err).Uint64("inode_id", inodeId).Msg("Failed to fetch quota object of the volume")
 			return status.Error(codes.Internal, err.Error())
 		}
-		_, err := v.setQuota(ctx, enforceCapacity, uint64(capacityLimit))
-		return err
 	}
 
-	var quotaType apiclient.QuotaType
-	if enforceCapacity != nil {
-		if !*enforceCapacity {
-			quotaType = apiclient.QuotaTypeSoft
-		} else {
-			quotaType = apiclient.QuotaTypeHard
-		}
-	} else {
-		quotaType = apiclient.QuotaTypeDefault
-	}
+	_, err = v.setQuota(ctx, enforceCapacity, uint64(capacityLimit))
+	return err
 
-	if q.GetQuotaType() == quotaType && q.GetCapacityLimit() == uint64(capacityLimit) {
-		logger.Trace().Msg("No need to update quota as it matches current")
-		return nil
-	}
-	updatedQuota := &apiclient.Quota{}
-	r := apiclient.NewQuotaUpdateRequest(*fsObj, inodeId, quotaType, uint64(capacityLimit))
-	err = v.apiClient.UpdateQuota(ctx, r, updatedQuota)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to set quota on volume")
-		return err
-	}
-	logger.Info().Str("quota_type", string(quotaType)).Int64("new_capacity", capacityLimit).Msg("Successfully set quota")
-	return nil
 }
 
 func (v *UnifiedVolume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool, capacityLimit int64) error {
@@ -808,6 +819,116 @@ func (v *UnifiedVolume) snapshotExists(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// isFilesystemEmpty returns true if the filesystem root directory is empty (excluding .snapshots directory)
+func (v *UnifiedVolume) isFilesystemEmpty(ctx context.Context) (bool, error) {
+	err, umount := v.opportunisticMount(ctx, false)
+	if err != nil {
+		return false, err
+	}
+	defer umount()
+
+	dir, err := os.Open(v.getFullPath(ctx, false))
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = dir.Close() }()
+
+	fileNames, err := dir.Readdirnames(2)
+	if err == io.EOF {
+		return true, nil
+	}
+	for _, name := range fileNames {
+		if name == ".snapshots" {
+			continue
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func (v *UnifiedVolume) createSeedSnapshot(ctx context.Context) error {
+	seedName := v.getSeedSnapshotName()
+	seedAccessPoint := v.getSeedSnapshotAccessPoint()
+	ctx = log.Ctx(ctx).With().
+		Str("seed_snapshot_name", seedName).
+		Str("seed_access_point", seedAccessPoint).
+		Str("filesystem", v.FilesystemName).
+		Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	fsObj, err := v.getFilesystemObj(ctx)
+	if err != nil {
+		return err
+	}
+	r, err := apiclient.NewSnapshotCreateRequest(seedName, seedAccessPoint, fsObj.Uid, nil, false)
+	if err != nil {
+		return err
+	}
+	snapObj := &apiclient.Snapshot{}
+	logger.Trace().Msg("Creating seed snapshot")
+	err = v.apiClient.CreateSnapshot(ctx, r, snapObj)
+	if err != nil {
+		log.Error().Err(err).Msg("")
+	}
+	return err
+}
+
+func (v *UnifiedVolume) deleteSeedSnapshot(ctx context.Context) {
+	logger := log.Ctx(ctx)
+	snapObj, err := v.getSeedSnapshot(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch seed snapshot, skipping its cleanup")
+	}
+	if snapObj != nil && snapObj.Uid != uuid.Nil {
+		dr := &apiclient.SnapshotDeleteRequest{Uid: snapObj.Uid}
+		logger.Trace().Msg("Scheduling background deletion of seed snapshot")
+		go func() {
+			if err := v.apiClient.DeleteSnapshot(ctx, dr); err != nil {
+				logger.Error().Err(err).Msg("Failed to delete seed snapshot")
+			}
+		}()
+	} else {
+		logger.Trace().Msg("No seed snapshot was found for filesystem")
+	}
+}
+
+func (v *UnifiedVolume) getSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
+	snapObj, err := v.apiClient.GetSnapshotByName(ctx, v.getSeedSnapshotName())
+	if err != nil {
+		return nil, err
+	}
+	if snapObj == nil || snapObj.Uid == uuid.Nil {
+		return nil, nil
+	}
+	if snapObj.AccessPoint != v.getSeedSnapshotAccessPoint() {
+		return nil, errors.New("mismatch detected between seed snapshot identifiers")
+	}
+	if snapObj.IsWritable {
+		return nil, errors.New("seed snapshot is writable")
+	}
+	return snapObj, nil
+}
+
+func (v *UnifiedVolume) hasSeedSnapshot(ctx context.Context) bool {
+	snapObj, err := v.getSeedSnapshot(ctx)
+	return err == nil && snapObj != nil && snapObj.Uid != uuid.Nil
+}
+
+func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) error {
+	logger := log.Ctx(ctx)
+	if v.hasSeedSnapshot(ctx) {
+		return nil
+	}
+	logger.Debug().Msg("Ensuring seed snapshot exists for filesystem")
+	empty, err := v.isFilesystemEmpty(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("")
+	}
+	if empty {
+		return v.createSeedSnapshot(ctx)
+	}
+	return errors.New("cannot create seed snaspshot on non-empty filesystem")
+}
+
 // Create actually creates the storage location for the particular volume object
 func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
@@ -821,6 +942,7 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 		return status.Errorf(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
 	if v.isFilesystem() {
+		// this is a new blank volume by definition
 		// create the filesystem actually
 		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, capacity)
 		if err != nil {
@@ -830,19 +952,71 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateFileSystem(ctx, cr, fsObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
+		// create the seed snapshot
+		if err := v.ensureSeedSnapshot(ctx); err != nil {
+			logger.Error().Err(err).Msg("Failed to create seed snapshot, new snapshot volumes cannot be created from this filesystem!")
+		}
+	} else if v.isOnSnapshot() { // running on real CSI system and not in docker sanity
+		// this might be either blank or copy content volume
+		snapSrcUid, err := v.getUidOfSourceSnap(ctx)
+		if err != nil {
+			return err
+		}
+		fsObj, err := v.getFilesystemObj(ctx)
+		if err != nil {
+			return err
+		}
 
-	}
+		// create the snapshot actually
+		sr, err := apiclient.NewSnapshotCreateRequest(v.SnapshotName, v.SnapshotAccessPoint, fsObj.Uid, snapSrcUid, true)
+		if err != nil {
+			return status.Errorf(codes.Internal, "Failed to create snapshot %s: %s", v.SnapshotName, err.Error())
+		}
+		snapObj := &apiclient.Snapshot{}
+		if err := v.apiClient.CreateSnapshot(ctx, sr, snapObj); err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
 
-	// TODO: move all to params
-	const xattrMount = true // no need to have xattr mount to do that
-	err, unmount := v.opportunisticMount(ctx, xattrMount)
-	defer unmount()
-	if err != nil {
-		return err
-	}
+		// here comes a workaround to enable running CSI sanity in detached mode
+		if v.mounter.debugPath != "" {
+			const xattrMount = true // no need to have xattr mount to do that
+			err, unmount := v.opportunisticMount(ctx, xattrMount)
+			defer unmount()
+			if err != nil {
+				return err
+			}
+			volPath := v.getFullPath(ctx, xattrMount)
+			dirPath := filepath.Dir(volPath)
 
-	volPath := v.getFullPath(ctx, xattrMount)
-	if v.hasInnerPath() { // ensure that we have the root directory on which we will later create the volume
+			// make sure that root directory is created with Default Permissions no matter what the requested permissions are
+			if err := os.MkdirAll(dirPath, DefaultVolumePermissions); err != nil {
+				logger.Error().Err(err).Str("directory_path", dirPath).Msg("Failed to create CSI volumes directory")
+				return err
+			}
+			// make sure we don't hit umask upon creating directory
+			oldMask := syscall.Umask(0)
+			defer syscall.Umask(oldMask)
+
+			if err := os.Mkdir(volPath, DefaultVolumePermissions); err != nil {
+				logger.Error().Err(err).Str("volume_path", volPath).Msg("Failed to create volume directory")
+				return err
+			}
+			logger.Debug().Str("full_path", v.getFullPath(ctx, true)).Msg("Successully created directory")
+
+		}
+
+	} else if v.hasInnerPath() { // the last condition is needed for being able to run CSI sanity in docker
+
+		// if it was a snapshot and had inner path, it anyway should already exist.
+		// So creating inner path only in such case
+		const xattrMount = true // no need to have xattr mount to do that
+		err, unmount := v.opportunisticMount(ctx, xattrMount)
+		defer unmount()
+		if err != nil {
+			return err
+		}
+		volPath := v.getFullPath(ctx, xattrMount)
+
 		logger.Trace().Str("inner_path", v.innerPath).Str("full_path", volPath).Interface("permissions", v.permissions).Msg("Creating directory and setting permissions")
 		dirPath := filepath.Dir(volPath)
 
@@ -862,7 +1036,6 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 		logger.Debug().Msg("Successully created directory")
 	}
 
-	logger.Info().Int64("desired_capacity", capacity).Msg("Updating volume capacity")
 	// Update volume capacity
 	if err := v.UpdateCapacity(ctx, &(v.enforceCapacity), capacity); err != nil {
 		logger.Error().Err(err).Msg("Failed to update capacity on newly created volume, reverting volume creation")
@@ -887,12 +1060,38 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 	return nil
 }
 
+func (v *UnifiedVolume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, error) {
+	logger := log.Ctx(ctx)
+	var srcSnap *apiclient.Snapshot
+	var err error
+	if v.srcSnapshot != nil {
+		logger.Trace().Msg("Attempting to fetch the Weka snapshot of CSI source snap")
+		srcSnap, err = v.srcSnapshot.getObject(ctx)
+	} else if v.srcVolume != nil && v.srcVolume.isOnSnapshot() {
+		logger.Trace().Msg("Attempting to fetch the Weka snapshot of CSI source volume")
+		srcSnap, err = v.srcVolume.getSnapshotObj(ctx)
+	} else if v.hasSeedSnapshot(ctx) {
+		logger.Trace().Msg("Attempting to fetch the Weka seed snapshot filesystem")
+		srcSnap, err = v.getSeedSnapshot(ctx)
+	}
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to locate source snapshot object")
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if srcSnap == nil || srcSnap.Uid == uuid.Nil {
+		logger.Trace().Msg("There is no Weka source snapshot to originate from")
+		return nil, nil
+	}
+	return &(srcSnap.Uid), nil
+}
+
 // Delete is a synchronous delete, used for cleanup on unsuccessful ControllerCreateVolume. GC flow is separate
 func (v *UnifiedVolume) Delete(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	var err error
 	logger.Debug().Msg("Starting deletion of volume")
 	if v.isFilesystem() {
+		v.deleteSeedSnapshot(ctx)
 		if !v.isAllowedForDeletion(ctx) {
 			return status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
 		}
@@ -949,7 +1148,7 @@ func (v *UnifiedVolume) deleteFilesystem(ctx context.Context) error {
 		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 	}
 	logger.Trace().Msg("Waiting for filesystem deletion to complete")
-	for start := time.Now(); time.Since(start) < time.Second*30; {
+	for start := time.Now(); time.Since(start) < MaxSnapshotDeletionDuration; {
 		fsObj := &apiclient.FileSystem{}
 		err := v.apiClient.GetFileSystemByUid(ctx, fsUid, fsObj)
 		if err != nil {
@@ -986,7 +1185,7 @@ func (v *UnifiedVolume) deleteSnapshot(ctx context.Context) error {
 		return nil
 	}
 	snapUid := snapObj.Uid
-	logger.Trace().Str("snapshot_uid", v.srcSnapshotUid.String()).Msg("Attempting deletion of snapshot")
+	logger.Trace().Str("snapshot_uid", snapUid.String()).Msg("Attempting deletion of snapshot")
 	fsd := &apiclient.SnapshotDeleteRequest{Uid: snapObj.Uid}
 	err = v.apiClient.DeleteSnapshot(ctx, fsd)
 	if err != nil {
@@ -994,7 +1193,7 @@ func (v *UnifiedVolume) deleteSnapshot(ctx context.Context) error {
 			logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot not found, assuming repeating request")
 			return nil
 		}
-		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Str("snapshot_uid", v.srcSnapshotUid.String()).
+		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Str("snapshot_uid", snapUid.String()).
 			Msg("Failed to delete snapshot")
 		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 	}
@@ -1064,42 +1263,27 @@ func (v *UnifiedVolume) SetParamsFromRequestParams(ctx context.Context, params m
 		return err
 	}
 	v.enforceCapacity = enforceCapacity
-
-	// ssdCapacityPercent
-	if val, ok := params["ssdCapacityPercent"]; ok {
-		ssdPercent, err := strconv.Atoi(val)
-		if err != nil {
-			return status.Errorf(codes.InvalidArgument, "Failed to parse percents from storageclass")
-		}
-		v.ssdCapacityPercent = ssdPercent
-	} else {
-		// default value
-		v.ssdCapacityPercent = 100
-	}
 	return nil
 }
 
-// CreateSnapshot creates a UnifiedSnapshot object and creates its actual Weka counterpart (this is not yet the CSI snapshot)
+// CreateSnapshot creates a UnifiedSnapshot object which repres(this is not yet the CSI snapshot)
 // The snapshot object will have a method to convert it to Csi snapshot object
 func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (Snapshot, error) {
-	s, err := NewSnapshotFromVolumeCreate(ctx, name, v, v.apiClient)
+	s, err := NewSnapshotFromVolumeCreate(ctx, name, v, v.apiClient, v.server)
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("snapshot_id", s.GetId()).Logger()
 	if err != nil {
 		return &UnifiedSnapshot{}, err
 	}
-
 	// check if snapshot with this name already exists
-	snapObj, err := s.getObject(ctx)
+	exists, err := s.Exists(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to check for existence of snapshot")
+		return &UnifiedSnapshot{}, err
 	}
-	if snapObj != nil {
-		// check if we are not asked to create same snapshot name from different source volume ID
-		if s.getParamsHash() != calculateSnapshotParamsHash(name, v.GetId()) {
-			logger.Error().Msg("Snapshot already exists with different source volume")
-			return nil, status.Errorf(codes.Internal, "Snapshot with same name already exists")
-		}
+	if exists {
+		logger.Trace().Msg("Seems that snapshot already exists")
+		return s, err
 	}
+
 	logger.Debug().Msg("Attempting to create snapshot")
 	if err := s.Create(ctx); err != nil {
 		return s, err

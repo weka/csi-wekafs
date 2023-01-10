@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/google/uuid"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -18,29 +17,99 @@ import (
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 )
 
-func calculateSnapshotParamsHash(name string, sourceVolumeId string) string {
-	return getStringSha1(name)[:MaxHashLengthForObjectNames] + getStringSha1(sourceVolumeId)[:MaxHashLengthForObjectNames]
+func generateInnerPathForDirBasedVol(dynamicVolPath, csiVolName string) string {
+	requestedNameHash := getStringSha1(csiVolName)
+	asciiPart := getAsciiPart(csiVolName, 64)
+	folderName := asciiPart + "-" + requestedNameHash
+	innerPath := "/" + folderName
+	if dynamicVolPath != "" {
+		innerPath = filepath.Join(dynamicVolPath, folderName)
+	}
+	return innerPath
 }
 
-func calculateFsBaseNameForUnifiedVolume(name string) string {
-	truncatedName := getAsciiPart(name, MaxHashLengthForObjectNames)
-	return truncatedName + "-" + getStringSha1AsB64(name)[:MaxHashLengthForObjectNames]
+// generateWekaObjectNameBase used for calculating of partial names for multiple Weka API objects
+// will not be used directly in the code, only in the functions below
+func generateWekaObjectNameBase(csiObjName string) string {
+	truncatedName := getAsciiPart(csiObjName, MaxHashLengthForObjectNames)
+	return truncatedName + "-" + getStringSha1AsB32(csiObjName)[:MaxHashLengthForObjectNames]
 }
 
-func calculateSnapNameForSnapVolume(name string, fsName string) string {
-	truncatedVolName := getAsciiPart(name, 12)
-	paramsHash := getStringSha1AsB64(fsName + ":" + name)[:MaxHashLengthForObjectNames]
-	return truncatedVolName + "-" + paramsHash
+// generateWekaFsNameForFsBasedVol for every FS-based volume we create
+// calculated from CSI volume name and will be used to construct the CSI volumeId
+func generateWekaFsNameForFsBasedVol(prefix, csiVolName string) string {
+	return prefix + generateWekaObjectNameBase(csiVolName)
 }
-func calculateSnapBaseNameForSnapshot(name string, sourceVolumeId string) string {
-	paramsHash := getStringSha1AsB64(name)[:MaxHashLengthForObjectNames] + getStringSha1AsB64(sourceVolumeId)[:MaxHashLengthForObjectNames]
-	return paramsHash
+
+// generateWekaSnapNameForSnapBasedVol derives the weka snapshot name for every Weka writable-snap-based volume
+// calculated from CSI volume name and will be used to construct the CSI volumeId
+func generateWekaSnapNameForSnapBasedVol(prefix, csiVolName string) string {
+	return prefix + generateWekaObjectNameBase(csiVolName)
+}
+
+// generateWekaSnapAccessPointForSnapBasedVol derives the weka snapshot access point for every Weka writable-snap-based volume
+// calculated from CSI volume name and will be used to construct the CSI volumeId
+func generateWekaSnapAccessPointForSnapBasedVol(csiVolName string) string {
+	return generateWekaObjectNameBase(csiVolName)
+}
+
+// generateVolumeIdFromComponents constructs a full-fledged volume ID from different components of the Volume
+func generateVolumeIdFromComponents(volumeType VolumeType, filesystemName, snapshotAccessPoint, innerPath string) string {
+	volId := string(volumeType) + "/" + filesystemName
+	if snapshotAccessPoint != "" {
+		volId += ":" + snapshotAccessPoint
+	}
+	if innerPath != "" {
+		volId += "/" + innerPath
+	}
+	return volId
+}
+
+// generateWekaSnapNameForSnapshot used for creating Weka snapshot name
+func generateWekaSnapNameForSnapshot(prefix, csiSnapName string) string {
+	return prefix + generateWekaObjectNameBase(csiSnapName)
+}
+
+func generateSnapshotNameHash(csiSnapName string) string {
+	return generateWekaObjectNameBase(csiSnapName)
+}
+
+// generateSnapshotIntegrityID is used to create a unique identifier for snapshot that encodes also source vol ID
+// when CSI snapshot is created:
+// - Weka snapshot name will be based on snapshot name only (for fast lookup),
+// - Weka access point for the snapshot will be set with this integrity ID, that comprises of hash of both of them
+func generateSnapshotIntegrityID(name string, sourceVolumeId string) string {
+	return getStringSha1AsB32(name + ":" + sourceVolumeId)[:MaxHashLengthForObjectNames]
+}
+
+// generateSnapshotIdFromComponents constructs a full-fledged volume ID from different components of the Volume
+func generateSnapshotIdFromComponents(volumeType VolumeType, filesystemName, snapshotNameHash, snapshotIntegrityId, innerPath string) string {
+	volId := string(volumeType) + "/" + filesystemName + ":" + snapshotNameHash + ":" + snapshotIntegrityId
+	if innerPath != "" {
+		if !strings.HasPrefix(innerPath, "/") {
+			innerPath = "/" + innerPath
+		}
+		volId += innerPath
+	}
+	return volId
+}
+
+// generateWekaSeedSnapshotName: for every new FS we create, we will create an empty seed snapshot right away,
+// that would allow creating empty Snap volume based on that filesystem.
+func generateWekaSeedSnapshotName(prefix, fsName string) string {
+	return prefix + generateWekaSeedAccessPoint(fsName)
+}
+
+// generateWekaSeedAccessPoint: for every new FS we create, we will create an empty seed snapshot right away,
+// that would allow creating empty Snap volume based on that filesystem.
+func generateWekaSeedAccessPoint(fsName string) string {
+	return getStringSha1AsB32(fsName)[:MaxHashLengthForObjectNames]
 }
 
 func getStringSha1(name string) string {
@@ -50,7 +119,7 @@ func getStringSha1(name string) string {
 	return hash
 }
 
-func getStringSha1AsB64(name string) string {
+func getStringSha1AsB32(name string) string {
 	h := sha1.New()
 	h.Write([]byte(name))
 	hash := base32.StdEncoding.EncodeToString(h.Sum(nil))
@@ -69,73 +138,8 @@ func GetFSNameFromRequest(req *csi.CreateVolumeRequest) string {
 	return ""
 }
 
-func GetFSName(volumeID string) string {
-	// VolID format:
-	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
-	slices := strings.Split(volumeID, "/")
-	if len(slices) < 3 {
-		return ""
-	}
-	return strings.Split(slices[2], ":")[0]
-}
-
-func GetVolumeDirName(volumeID string) string {
-	slices := strings.Split(volumeID, "/")
-	if len(slices) < 3 {
-		return ""
-	}
-	return strings.Join(slices[3:], "/") // may be either directory name or innerPath
-}
-
-func GetSnapshotUuid(snapshotId string) *uuid.UUID {
-	// VolID format:
-	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
-	slices := strings.Split(snapshotId, "/")
-	if len(slices) < 3 {
-		return nil
-	}
-	spl := strings.Split(slices[2], ":")
-	if len(spl) == 2 {
-		if id, err := uuid.Parse(spl[len(spl)-1]); err != nil {
-			return &id
-		}
-	}
-	return nil
-}
-
-func GetSnapshotParamsHash(snapshotId string) string {
-	spl := strings.Split(snapshotId, ":")
-	if len(spl) < 3 {
-		return ""
-	}
-	return spl[len(spl)-1]
-}
-
-func GetSnapshotInternalPath(snapshotId string) string {
-	// getting snapshot Id of one of the following formats:
-	// "aaaa:{SnapshotUuid}:HASH"   	# FS name, snap name (root of volume) + hash
-	// "aaaa:{SnapshotUuid}/snapaaaa/ass/s-aifsda0fyd:HASH"   	# FS name, snap name and internal path + hash
-
-	spl := strings.Split(snapshotId, ":")
-	if len(spl) < 3 {
-		// it is invalid string in our case
-		return ""
-	}
-	pathParts := strings.Split(snapshotId, "/")
-
-	if len(pathParts) < 2 {
-		// for a case where inner path is a root of the FS
-		// {SnapshotUuid}
-		return ""
-	} else {
-		// inner path is between snapshot Uid and HASH
-		return path.Join(pathParts[1 : len(pathParts)-1]...)
-	}
-
-}
-
-func GetVolumeType(volumeID string) VolumeType {
-	slices := strings.Split(volumeID, "/")
+func sliceVolumeTypeFromVolumeId(volumeId string) VolumeType {
+	slices := strings.Split(volumeId, "/")
 	if len(slices) >= 2 {
 		volTypeCandidate := strings.Join(slices[0:2], "/")
 		for _, volType := range KnownVolTypes {
@@ -144,13 +148,106 @@ func GetVolumeType(volumeID string) VolumeType {
 			}
 		}
 	}
-	if slices[0] == "" {
-		return VolumeTypeUNKNOWN // probably in format of Unix root path '/var/log/messages'
-	}
 	if len(slices) > 1 && !strings.HasPrefix(slices[1], "v") {
 		return VolumeTypeUNKNOWN // probably not in format of 'type/version'
 	}
+	if len(slices) == 1 {
+		return VolumeTypeUNKNOWN
+	}
+	if slices[0] == "" {
+		return VolumeTypeUNKNOWN // probably in format of Unix root path '/var/log/messages'
+	}
 	return VolumeTypeUnified
+}
+
+// sliceFilesystemNameFromVolumeId: given existing volumeId, slice the filesystem name part
+func sliceFilesystemNameFromVolumeId(volumeId string) string {
+	// VolID format:
+	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
+	slices := strings.Split(volumeId, "/")
+	if len(slices) < 3 {
+		return ""
+	}
+	return strings.Split(slices[2], ":")[0]
+}
+
+// sliceSnapshotIntegrityIdFromSnapshotId: given existing snapshotId, slice the filesystem name part
+func sliceSnapshotAccessPointFromVolumeId(volumeId string) string {
+	// VolID format:
+	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
+	slices := strings.Split(volumeId, "/")
+	if len(slices) < 3 {
+		return ""
+	}
+	slices = strings.Split(slices[2], ":")
+	if len(slices) < 2 {
+		return ""
+	}
+	return slices[1]
+}
+
+// sliceInnerPathFromVolumeId: returns innerPath from volumeId
+func sliceInnerPathFromVolumeId(volumeId string) string {
+	// VolID format:
+	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
+	slices := strings.Split(volumeId, "/")
+	if len(slices) <= 3 {
+		return ""
+	}
+	return "/" + strings.Join(slices[3:], "/")
+}
+
+// sliceFilesystemNameFromSnapshotId: given existing snapshotID, slice the filesystem name part
+func sliceFilesystemNameFromSnapshotId(snapshotId string) string {
+	// SnapshotID format:
+	// "wekasnap/v1/<WEKA_FS_NAME>:<SNAP_NAME_HASH>:<SNAP_INTEGRITY_ID>[/<INNER_PATH>]"
+	slices := strings.Split(snapshotId, "/")
+	if len(slices) < 3 {
+		return ""
+	}
+	return strings.Split(slices[2], ":")[0]
+}
+
+// sliceSnapshotNameHashFromSnapshotId: returns base name from snapshot ID
+// this name can be expanded to full Weka snapshot name by adding prefix
+func sliceSnapshotNameHashFromSnapshotId(snapshotId string) string {
+	// SnapshotID format:
+	// "wekasnap/v1/<WEKA_FS_NAME>:<SNAP_NAME_HASH>:<SNAP_INTEGRITY_ID>[/<INNER_PATH>]"
+	slices := strings.Split(snapshotId, "/")
+	if len(slices) < 3 {
+		return ""
+	}
+	slices = strings.Split(slices[2], ":")
+	if len(slices) < 3 {
+		return ""
+	}
+	return slices[1]
+}
+
+// sliceSnapshotIntegrityIdFromSnapshotId: returns the integrity id of CSI snapshot, which is also the AccessPoint name
+func sliceSnapshotIntegrityIdFromSnapshotId(snapshotId string) string {
+	// SnapshotID format:
+	// "wekasnap/v1/<WEKA_FS_NAME>:<SNAP_NAME_HASH>:<SNAP_INTEGRITY_ID>[/<INNER_PATH>]"
+	slices := strings.Split(snapshotId, "/")
+	if len(slices) < 3 {
+		return ""
+	}
+	slices = strings.Split(slices[2], ":")
+	if len(slices) < 3 {
+		return ""
+	}
+	return slices[2]
+}
+
+// sliceInnerPathFromSnapshotId: returns innerPath from snapshotId
+func sliceInnerPathFromSnapshotId(snapshotId string) string {
+	// SnapshotID format:
+	// "wekasnap/v1/<WEKA_FS_NAME>:<SNAP_NAME_HASH>:<SNAP_INTEGRITY_ID>[/<INNER_PATH>]"
+	slices := strings.Split(snapshotId, "/")
+	if len(slices) <= 3 {
+		return ""
+	}
+	return "/" + strings.Join(slices[3:], "/")
 }
 
 func PathExists(p string) bool {
@@ -179,6 +276,12 @@ func PathIsWekaMount(ctx context.Context, path string) bool {
 }
 
 func validateVolumeId(volumeId string) error {
+	// Volume New format:
+	// VolID format is as following:
+	// <VolType><WEKA_FS_NAME>[:<WEKA_SNAP_ACCESS_POINT>][/<INNER_PATH_ASCII>-<INNER_PATH_ASCII_SHA1_HASH>]
+	// \__pfx__/\__ fsName __/\____ snapIdentifier _____/\___________________ innerPath __________________/
+	// pfx is either dir/v1 or weka/v2
+
 	if len(volumeId) == 0 {
 		return status.Errorf(codes.InvalidArgument, "volume ID may not be empty")
 	}
@@ -186,28 +289,41 @@ func validateVolumeId(volumeId string) error {
 		return status.Errorf(codes.InvalidArgument, "volume ID exceeds max length")
 	}
 
-	volumeType := GetVolumeType(volumeId)
+	volumeType := sliceVolumeTypeFromVolumeId(volumeId)
 	switch volumeType {
 	case VolumeTypeDirV1:
+		// Old volume match
 		// VolID format is as following:
 		// "<VolType>/<WEKA_FS_NAME>/<FOLDER_NAME_ASCII>-<FOLDER_NAME_SHA1_HASH>"
-		// e.g.
-		// "dir/v1/default/my-awesome-folder-HASH"
-		// length limited to maxVolumeIdLength
+		//  dir/v1/csi-filesystem/csi-volumes/my-test-volume-97ab4a2a2b6d7db8dce4ddd31723dc38d49b14b5
+		//  \_pfx_/\__ fsName __/\_______________________________ innerPath ________________________/
+		// snapIdentifier empty
+
 		r := VolumeTypeDirV1 + "/[^/]*/.+"
 		re := regexp.MustCompile(string(r))
 		if re.MatchString(volumeId) {
 			return nil
 		}
 	case VolumeTypeUnified:
-		// VolID format is as following:
-		// "[<WEKA_FS_NAME>][:<WEKA_SNAP_UID>][/<INNER_PATH_ASCII>-<INNER_PATH_ASCII_SHA1_HASH>][:NAME_HASH]"
-		// e.g.
-		// "aaaa:{SnapshotUuid}/snapaaaa-aifsda0fyd:xxxx # FS name, snap, inner path, name hash. Required for volumes that were created from snapshot or other volume
-		// "aaaa:{SnapshotUuid}/snapaaaa-aifsda0fyd"   	# FS name, snap and directory (e.g. volume created from snapshot of directory)
-		// "aaaa/snapaaaa-aifsda0fyd"          	# FS name, directory (as in legacy model)
-		// "aaaa:snap01"	       			 	# FS name, snap (e.g. volume created from snapshot of fs)
-		// "aaaa"								# FS name only (e.g. new volume provisioned on top of filesystem)
+		// New volume that is FS only
+		// weka/v2/csivol-my-test-volu-97ab4a2a2b6d
+		// \_pfx__/\______ fsName 32 chars _______/\SnapIdentifier/\InnerPath/
+		// snapIdentifier, InnerPath empty
+
+		//New volume that is snapshot on filesystem
+		// weka/v2/csi-volsgen2:my-test-volu-97ab4a2a2b6d
+		// \_pfx__/\_ fsName _/\____ SnapIdentifier ____/\InnerPath/
+		// InnerPath empty
+		// snapIdentifier - first chars of name + hash
+		// Weka snap name: csivol-$snapIdentifier
+		// Weka snap acess point $snapIdentifier
+
+		//New volume that is a directory on snapshot
+		// weka/v2/csi-volsgen2:my-test-volu-97ab4a2a2b6d/csi-volumes/my-test-volume-97ab4a2a2b6d7db8dce4ddd31723dc38d49b14b5
+		// \_pfx__/\_ fsName _/\____ SnapIdentifier ____/\__________________________ innerPath _____________________________/
+		// SnapIdentifier - first chars of name + hash
+		// Weka snap name: csivol-$snapIdentifier
+		// Weka snap acess point $snapIdentifier
 
 		// length limited to maxVolumeIdLength
 		r := "[^:/]+(:[^/]+)*(/[^:]+)*(:[.+])*"
@@ -221,10 +337,29 @@ func validateVolumeId(volumeId string) error {
 			return errors.New(fmt.Sprintln("Volume ID does not match regex:", r, volumeId))
 		}
 	}
-	return status.Errorf(codes.InvalidArgument, fmt.Sprintf("unsupported volumeID %s for type %s", volumeId, volumeType))
+	return status.Errorf(codes.InvalidArgument, fmt.Sprintf("unsupported volumeId %s for type %s", volumeId, volumeType))
 }
 
 func validateSnapshotId(snapshotId string) error {
+	// SnapshotID format is as following:
+	// <VolType><WEKA_FS_NAME>:<CSI_SNAP_NAME_HASH>:<SNAP_NAME+SRC_VOL_ID_HASH>[/<INNER_PATH_ASCII>-<INNER_PATH_ASCII_SHA1_HASH>]
+	// \__pfx__/\__ fsName __/\___ snapNameHash ___/\____ snapIntegrityId _____/\___________________ innerPath __________________/
+	//                        \_______________ SnapIdentifier _________________/
+	// pfx: wekasnap/v1
+	// snapNameHash is hash of CSI snapshot name
+	// snapIntegrityId: additional hash of CSI sourceVolumeID/sourceSnapshotID + CSI snap name
+	// Weka snapName is "csisnap-$snapNameHash"
+	// accessPoint == snapIntegrityID
+
+	// Snapshot of Directory volume:
+	// wekasnap/v1/csi-volsgen2:my-first-sn-GQ4TCMRQMNTD:BWMQ3GMYTGGM/csi-volumes/my-test-volume-97ab4a2a2b6d7db8dce4ddd31723dc38d49b14b5
+	// \__ pfx ___/\_ fsName _/\__________ SnapIdentifier __________/\____________________________ InnerPath ___________________________/
+	//                         \_____ snapNameHash ____/\IntegrityId/
+
+	// Snapshot of FS / Snapshot root volume:
+	// wekasnap/v1/csi-volsgen2:my-first-sn-GQ4TCMRQMNTD:BWMQ3GMYTGGM
+	// \__ pfx ___/\_ fsName _/\__________ SnapIdentifier __________/
+	//                         \_____ snapNameHash ____/\IntegrityId/
 	if len(snapshotId) == 0 {
 		return status.Errorf(codes.InvalidArgument, "snapshot ID may not be empty")
 	}
@@ -232,14 +367,11 @@ func validateSnapshotId(snapshotId string) error {
 		return status.Errorf(codes.InvalidArgument, "snapshot ID exceeds max length")
 	}
 
-	// SnapshotId format can be one of the following:
-	// "<WEKA_FS_NAME>:<WEKA_SNAP_UID>[/<FOLDER_NAME_ASCII>-<FOLDER_NAME_SHA1_HASH>]:<SNAP_NAME+SRC_VOL_ID_HASH>"
-	// e.g.
-	// "aaaa:{SnapshotUuid}/snapaaaa-aifsda0fyd:HASH"   	# FS name, snap name and internal path + hash
-	// "aaaa:{SnapshotUuid}:HASH"   	# FS name, snap name (root of volume) + hash
+	// "wekasnap/v1/my-filesystem:my-awsome-sn-GUZTQNZTMZSD:GQ4TCMRQMNTD/csi-volumes/asefgdfg-3f786850e387550fdab836ed7e6dc881de23001b"  FS name, snap name and internal path
+	// "wekasnap/v1/my-filesystem:my-awsome-sn-GUZTQNZTMZSD:GQ4TCMRQMNTD # FS / FS Snap only (without internal path)
 
 	// length limited to maxVolumeIdLength
-	r := "[^:]+:[a-z0-9-]{36}(/[^:]+)*:[A-Za-z0-9]+"
+	r := "[^:]+:[^:]+:[A-Za-z0-9]{12}(/.+)*"
 	if strings.HasPrefix(snapshotId, string(VolumeTypeUnifiedSnap)) {
 		r = string(VolumeTypeUnifiedSnap) + r
 	}

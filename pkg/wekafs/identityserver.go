@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/xid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -38,9 +39,19 @@ func NewIdentityServer(name, version string) *identityServer {
 }
 
 func (ids *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+	op := "GetPluginInfo"
 	ctx = log.With().Str("trace_id", xid.New().String()).Logger().WithContext(ctx)
-	log.Ctx(ctx).Info().Msg(">>>> Received GetPluginInfo request")
-	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
+	result := "SUCCESS"
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Msg(">>>> Received request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
 
 	if ids.name == "" {
 		return nil, status.Error(codes.Unavailable, "Driver name not configured")
@@ -60,9 +71,18 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 }
 
 func (ids *identityServer) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
-	ctx = log.With().Str("trace_id", xid.New().String()).Logger().WithContext(ctx)
-	log.Ctx(ctx).Info().Msg(">>>> Received GetPluginCapabilities request")
-	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
+	op := "GetPluginCapabilities"
+	result := "SUCCESS"
+	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Msg(">>>> Received request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
 			{
