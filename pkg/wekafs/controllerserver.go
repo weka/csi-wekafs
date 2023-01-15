@@ -23,6 +23,8 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
@@ -157,6 +159,9 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	op := "CreateVolume"
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	params := req.GetParameters()
 	result := "FAILURE"
 	logger := log.Ctx(ctx)
@@ -240,6 +245,9 @@ func DeleteVolumeError(ctx context.Context, errorCode codes.Code, errorMessage s
 func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	op := "DeleteVolume"
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	volumeID := req.GetVolumeId()
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -296,6 +304,9 @@ func ExpandVolumeError(ctx context.Context, errorCode codes.Code, errorMessage s
 func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	op := "ExpandVolume"
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	volumeID := req.GetVolumeId()
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -377,6 +388,9 @@ func CreateSnapshotError(ctx context.Context, errorCode codes.Code, errorMessage
 func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	op := "CreateSnapshot"
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	srcVolumeId := req.GetSourceVolumeId()
 	secrets := req.GetSecrets()
 	snapName := req.GetName()
@@ -442,6 +456,9 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	snapshotID := req.GetSnapshotId()
 	secrets := req.GetSecrets()
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	logger.Info().Str("snapshot_id", snapshotID).Msg(">>>> Received request")
@@ -487,9 +504,11 @@ func (cs *ControllerServer) ListSnapshots(c context.Context, req *csi.ListSnapsh
 //goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	op := "ControllerGetCapabilities"
-	ctx = log.With().Str("trace_id", xid.New().String()).Logger().WithContext(ctx)
 	result := "SUCCESS"
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	logger := log.Ctx(ctx)
 	defer func() {
 		level := zerolog.InfoLevel
@@ -514,6 +533,9 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	op := "ValidateVolumeCapabilities"
 	volumeID := req.GetVolumeId()
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	result := "FAILURE"
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")

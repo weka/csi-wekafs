@@ -24,6 +24,8 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/utils/mount"
@@ -111,6 +113,9 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	op := "NodePublishVolume"
 	volumeID := req.GetVolumeId()
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
 	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
@@ -237,6 +242,9 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	result := "FAILURE"
 	volumeID := req.GetVolumeId()
 	ctx = log.With().Str("trace_id", uuid.New().String()).Str("volume_id", volumeID).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
 	defer func() {
@@ -313,6 +321,9 @@ func NodeStageVolumeError(ctx context.Context, errorCode codes.Code, errorMessag
 func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	op := "NodeStageVolume"
 	ctx = log.With().Str("trace_id", uuid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	volumeId := req.GetVolumeId()
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -353,6 +364,9 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	result := "FAILURE"
 	volumeId := req.GetVolumeId()
 	ctx = log.With().Str("trace_id", uuid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeId).Msg(">>>> Received request")
 	defer func() {
@@ -375,6 +389,9 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	op := "NodeGetInfo"
 	result := "SUCCESS"
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
 	defer func() {
