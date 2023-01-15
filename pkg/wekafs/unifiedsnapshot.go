@@ -9,8 +9,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"os"
+	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -65,6 +69,11 @@ func (s *UnifiedSnapshot) GetId() string {
 }
 
 func (s *UnifiedSnapshot) Exists(ctx context.Context) (bool, error) {
+	op := "SnapshotExists"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Str("snapshot", s.SnapshotName).Logger()
 	logger.Trace().Msg("Checking if snapshot exists")
 	snapObj, err := s.getObject(ctx)
@@ -84,11 +93,27 @@ func (s *UnifiedSnapshot) Exists(ctx context.Context) (bool, error) {
 		logger.Debug().Msg("Snapshot matches by name but not by integrity ID")
 		return true, status.Error(codes.AlreadyExists, "Another snapshot with same name already exists")
 	}
+
+	if s.server != nil && s.server.getMounter().debugPath != "" {
+		// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure as if it was a real snapshot.
+		// no actual data is copied, only directory structure is created
+		// happens only if the real snapshot indeed exists and is valid
+		err := s.mimicDirectoryStructureForDebugMode(ctx)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	logger.Info().Msg("Snapshot exists")
+
 	return true, nil
 }
 
 func (s *UnifiedSnapshot) Create(ctx context.Context) error {
+	op := "SnapshotCreate"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Logger()
 
 	// check if already exists and return OK right away
@@ -127,7 +152,40 @@ func (s *UnifiedSnapshot) Create(ctx context.Context) error {
 	logger.Info().Str("snapshot", s.SnapshotName).
 		Str("snapshot_uid", snap.Uid.String()).
 		Str("access_point", s.SnapshotIntegrityId).Msg("Snapshot was created successfully")
+
+	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure as if it was a real snapshot.
+	// no actual data is copied, only directory structure is created
+	if err := s.mimicDirectoryStructureForDebugMode(ctx); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (s *UnifiedSnapshot) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
+	logger := log.Ctx(ctx)
+	logger.Warn().Bool("debug_mode", true).Msg("Creating directory mimicPath inside filesystem .snapshots to mimic Weka snapshot behavior")
+	const xattrMount = true // no need to have xattr mount to do that
+	v := s.SourceVolume
+	err, unmount := v.opportunisticMount(ctx, xattrMount)
+	defer unmount()
+	if err != nil {
+		return err
+	}
+	basePath := v.getMountPath(xattrMount)
+	mimicPath := filepath.Join(basePath, SnapshotsSubDirectory, s.SnapshotIntegrityId)
+	log.Info().Str("mimic_path", mimicPath).Msg("Creating mimicPath")
+	// make sure we don't hit umask upon creating directory
+	oldMask := syscall.Umask(0)
+	defer syscall.Umask(oldMask)
+
+	if err := os.MkdirAll(mimicPath, DefaultVolumePermissions); err != nil {
+		logger.Error().Err(err).Str("volume_path", mimicPath).Msg("Failed to create volume directory")
+		return err
+	}
+	logger.Debug().Str("mimic_path", v.getFullPath(ctx, true)).Msg("Successully created directory")
+	return nil
+
 }
 
 func (s *UnifiedSnapshot) getInnerPath() string {
@@ -139,6 +197,11 @@ func (s *UnifiedSnapshot) hasInnerPath() bool {
 }
 
 func (s *UnifiedSnapshot) getObject(ctx context.Context) (*apiclient.Snapshot, error) {
+	op := "SnapshotGetObject"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Str("snapshot", s.SnapshotName).Logger()
 	if s.apiClient == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "Could not bind snapshot %s to API endpoint", s.GetId())
@@ -156,6 +219,11 @@ func (s *UnifiedSnapshot) getObject(ctx context.Context) (*apiclient.Snapshot, e
 }
 
 func (s *UnifiedSnapshot) Delete(ctx context.Context) error {
+	op := "SnapshotDelete"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Str("snapshot", s.SnapshotName).Logger()
 	obj, err := s.getObject(ctx)
 	if err != nil {
@@ -206,6 +274,10 @@ func (s *UnifiedSnapshot) Delete(ctx context.Context) error {
 }
 
 func (s *UnifiedSnapshot) getFileSystemObject(ctx context.Context) (*apiclient.FileSystem, error) {
+	op := "getFileSystemObject"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Str("filesystem", s.FilesystemName).Logger()
 	if s.apiClient == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "Could not bind snapshot %s to API endpoint", s.GetId())

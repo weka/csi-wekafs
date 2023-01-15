@@ -10,7 +10,6 @@ require (
 	github.com/kubernetes-csi/csi-lib-utils v0.11.0
 	github.com/pkg/xattr v0.4.9
 	github.com/prometheus/client_golang v1.11.0
-	github.com/rs/xid v1.4.0
 	github.com/rs/zerolog v1.28.0
 	go.opentelemetry.io/otel v1.11.2
 	go.opentelemetry.io/otel/exporters/jaeger v1.11.2

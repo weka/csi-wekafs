@@ -24,7 +24,7 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 	v := &UnifiedVolume{
 		id:                  volumeId,
 		FilesystemName:      sliceFilesystemNameFromVolumeId(volumeId),
-		SnapshotName:        server.getVolumeNamePrefix() + sliceSnapshotNameHashFromSnapshotId(volumeId),
+		SnapshotName:        server.getVolumeNamePrefix() + sliceSnapshotAccessPointFromVolumeId(volumeId),
 		SnapshotAccessPoint: sliceSnapshotAccessPointFromVolumeId(volumeId),
 		innerPath:           sliceInnerPathFromVolumeId(volumeId),
 		apiClient:           apiClient,
@@ -33,7 +33,7 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 		mountPath:           make(map[bool]string),
 		server:              server,
 	}
-	logger.Trace().Msg("Successfully initialized object")
+	logger.Trace().Object("volume_info", v).Msg("Successfully initialized object")
 	return v, nil
 }
 
@@ -49,18 +49,21 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 	var cSourceSnapshot *csi.VolumeContentSource_SnapshotSource
 	logger := log.Ctx(ctx)
 	cSource := req.GetVolumeContentSource()
+	origin := "blank_volume"
 	if cSource != nil {
 		cSourceVolume = cSource.GetVolume()
 		cSourceSnapshot = cSource.GetSnapshot()
 
 		if cSourceSnapshot != nil {
 			// this is volume from source snapshot (CREATE_FROM_SNAPSHOT)
+			origin = "source_snapshot"
 			volume, err = NewVolumeForCreateFromSnapshotRequest(ctx, req, cs)
 			if err != nil {
 				return nil, err
 			}
 		} else if cSourceVolume != nil {
 			// this is volume from source volume (CLONE_VOLUME)
+			origin = "source_volume"
 			volume, err = NewVolumeForCloneVolumeRequest(ctx, req, cs)
 			if err != nil {
 				return nil, err
@@ -87,7 +90,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not set parameters on volume")
 	}
-	logger.Trace().Object("volume_info", volume).Msg("Successfully initialized object")
+	logger.Trace().Object("volume_info", volume).Str("origin", origin).Msg("Successfully initialized object")
 	return volume, nil
 }
 
@@ -128,6 +131,8 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 			// explicitly required to create DirVolume by setting volumeType=dir/v1 in StorageClass
 			innerPath = generateInnerPathForDirBasedVol(dynamicVolPath, requestedVolumeName)
 		} else {
+			volType = VolumeTypeUnified
+
 			// assume we create a new snapshot of a filesystem
 			// TODO: need to validate that the filesystem is indeed empty an return error otherwise
 
@@ -217,7 +222,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 	// - accessPoint must be calculated as usual, from volume name
 	// - snapshot name must be calculated as as usual too
 
-	targetWekaSnapName := generateWekaSnapNameForSnapBasedVol(server.(*ControllerServer).newVolumePrefix, requestedVolumeName)
+	targetWekaSnapName := generateWekaSnapNameForSnapBasedVol(server.getVolumeNamePrefix(), requestedVolumeName)
 	targetWekaSnapAccessPoint := generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
 
 	innerPath := sourceSnap.getInnerPath()
