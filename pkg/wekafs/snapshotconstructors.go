@@ -12,7 +12,7 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 	logger := log.Ctx(ctx).With().Str("src_volume_id", srcVolId).Str("snapshot_name", name).Logger()
 	logger.Trace().Msg("Initializating snapshot object")
 	if apiClient != nil {
-		logger.Trace().Msg("Successfully bound volume to backend API client")
+		logger.Trace().Msg("Successfully bound snapshot to backend API client")
 	}
 
 	filesystemName := sliceFilesystemNameFromVolumeId(srcVolId)
@@ -53,7 +53,7 @@ func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apicli
 		return &UnifiedSnapshot{}, err
 	}
 	if apiClient != nil {
-		logger.Trace().Msg("Successfully bound volume to backend API client")
+		logger.Trace().Msg("Successfully bound snapshot to backend API client")
 	}
 	s := &UnifiedSnapshot{
 		id:                  snapshotId,

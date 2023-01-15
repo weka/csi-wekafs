@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/google/uuid"
-	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -35,11 +33,13 @@ import (
 	"strings"
 )
 
-const TopologyKeyNode = "topology.wekafs.csi/node"
-const TopologyLabelNode = "topology.csi.weka.io/node"
-const TopologyLabelWeka = "topology.csi.weka.io/global"
-const WekaKernelModuleName = "wekafsgw"
-const crashOnNoWeka = false
+const (
+	TopologyKeyNode      = "topology.wekafs.csi/node"
+	TopologyLabelNode    = "topology.csi.weka.io/node"
+	TopologyLabelWeka    = "topology.csi.weka.io/global"
+	WekaKernelModuleName = "wekafsgw"
+	crashOnNoWeka        = false
+)
 
 type NodeServer struct {
 	caps              []*csi.NodeServiceCapability
@@ -112,9 +112,9 @@ func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	op := "NodePublishVolume"
 	volumeID := req.GetVolumeId()
-	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
-	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
@@ -241,9 +241,9 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	op := "NodeUnpublishVolume"
 	result := "FAILURE"
 	volumeID := req.GetVolumeId()
-	ctx = log.With().Str("trace_id", uuid.New().String()).Str("volume_id", volumeID).Str("op", op).Logger().WithContext(ctx)
-	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
@@ -320,9 +320,9 @@ func NodeStageVolumeError(ctx context.Context, errorCode codes.Code, errorMessag
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	op := "NodeStageVolume"
-	ctx = log.With().Str("trace_id", uuid.New().String()).Str("op", op).Logger().WithContext(ctx)
-	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 
 	volumeId := req.GetVolumeId()
 	logger := log.Ctx(ctx)
@@ -363,9 +363,9 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	op := "NodeUnstageVolume"
 	result := "FAILURE"
 	volumeId := req.GetVolumeId()
-	ctx = log.With().Str("trace_id", uuid.New().String()).Str("op", op).Logger().WithContext(ctx)
-	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeId).Msg(">>>> Received request")
@@ -388,9 +388,9 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	op := "NodeGetInfo"
 	result := "SUCCESS"
-	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
-	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
@@ -420,7 +420,10 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 func (ns *NodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
 	op := "NodeGetCapabilities"
 	result := "SUCCESS"
-	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
 	defer func() {

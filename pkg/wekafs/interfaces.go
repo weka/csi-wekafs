@@ -37,6 +37,7 @@ type Volume interface {
 	isOnSnapshot() bool
 	getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error)
 	MarshalZerologObject(e *zerolog.Event)
+	getMountPath(xattr bool) string
 }
 
 // Snapshot represent an interface of single snapshot representation of any type

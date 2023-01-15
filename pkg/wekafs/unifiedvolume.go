@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
@@ -23,6 +24,7 @@ import (
 const (
 	MaxHashLengthForObjectNames = 12
 	SeedSnapshotPrefix          = "csi-seed-snap-"
+	SnapshotsSubDirectory       = ".snapshots"
 )
 
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
@@ -171,6 +173,11 @@ func (v *UnifiedVolume) getSeedSnapshotAccessPoint() string {
 
 // UpdateParams updates params on volume upon creation. Was part of Create initially, but must be done after content source is applied
 func (v *UnifiedVolume) UpdateParams(ctx context.Context) error {
+	op := "UpdateParams"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	// need to set permissions, for this have to mount as root and change ownership
@@ -203,6 +210,11 @@ func (v *UnifiedVolume) UpdateParams(ctx context.Context) error {
 
 // getFilesystemFreeSpace returns maximum capacity that can be obtained on filesystem, e.g. disk free (for directory volumes)
 func (v *UnifiedVolume) getFilesystemFreeSpace(ctx context.Context) (int64, error) {
+	op := "getFilesystemFreeSpace"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // need to have xattr mount to do that
 	err, unmount := v.opportunisticMount(ctx, xattrMount)
@@ -226,8 +238,13 @@ func (v *UnifiedVolume) getFilesystemFreeSpace(ctx context.Context) (int64, erro
 
 // getFreeSpaceOnStorage returns maximum capacity on storage (for either creating new or resizing an FS)
 func (v *UnifiedVolume) getFreeSpaceOnStorage(ctx context.Context) (int64, error) {
+	op := "getFreeSpaceOnStorage"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-	existsOk, err := v.Exists(ctx)
+	existsOk, err := v.fileSystemExists(ctx)
 	if err != nil {
 		return -1, status.Errorf(codes.Internal, "Failed to check for existence of volume")
 	}
@@ -296,6 +313,11 @@ func (v *UnifiedVolume) GetType() VolumeType {
 }
 
 func (v *UnifiedVolume) getCapacityFromQuota(ctx context.Context) (int64, error) {
+	op := "getCapacityFromQuota"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // need to have xattr mount to do that
 	err, unmount := v.opportunisticMount(ctx, xattrMount)
@@ -321,6 +343,11 @@ func (v *UnifiedVolume) getCapacityFromQuota(ctx context.Context) (int64, error)
 }
 
 func (v *UnifiedVolume) getCapacityFromFsSize(ctx context.Context) (int64, error) {
+	op := "getCapacityFromFsSize"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
@@ -335,14 +362,10 @@ func (v *UnifiedVolume) getCapacityFromFsSize(ctx context.Context) (int64, error
 }
 
 func (v *UnifiedVolume) GetCapacity(ctx context.Context) (int64, error) {
-	capacityFromQuota, err1 := v.getCapacityFromQuota(ctx)
-	capacityFromFsSise, err2 := v.getCapacityFromFsSize(ctx)
-	if err1 == nil && err2 == nil {
-		return Min(capacityFromFsSise, capacityFromQuota), nil
-	} else if err1 != nil {
-		return capacityFromFsSise, nil
+	capacityFromQuota, err := v.getCapacityFromQuota(ctx)
+	if err != nil {
+		return -1, err
 	} else {
-		// TODO: naive implementation, should review as we must have both errors
 		return capacityFromQuota, nil
 	}
 }
@@ -365,6 +388,11 @@ func (v *UnifiedVolume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Conte
 	// this is important for all types of volumes (FS, FSSNAP, Dir)
 	// NOTE1: but for DirVolume we still can't ensure user will not hit limits due to sharing single FS / SNAP between multiple DirVolumes
 	// NOTE2: this cannot be done without API
+	op := "ensureSufficientFsSizeOnUpdateCapacity"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	if v.apiClient == nil {
@@ -393,6 +421,11 @@ func (v *UnifiedVolume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Conte
 }
 
 func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capacityLimit int64) error {
+	op := "UpdateCapacity"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	// check if required AND possible to expand filesystem, expand if needed or fail
 	if err := v.ensureSufficientFsSizeOnUpdateCapacity(ctx, capacityLimit); err != nil {
@@ -438,6 +471,11 @@ func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *boo
 }
 
 func (v *UnifiedVolume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool, capacityLimit int64) error {
+	op := "updateCapacityQuota"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	enfCapacity := "RETAIN"
 	if enforceCapacity != nil {
@@ -476,6 +514,11 @@ func (v *UnifiedVolume) updateCapacityQuota(ctx context.Context, enforceCapacity
 }
 
 func (v *UnifiedVolume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool, capacityLimit int64) error {
+	op := "updateCapacityXattr"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // must have xattrs for this case
 	if !v.isMounted(ctx, xattrMount) {
@@ -519,7 +562,7 @@ func (v *UnifiedVolume) getInnerPath() string {
 func (v *UnifiedVolume) getFullPath(ctx context.Context, xattr bool) string {
 	mountParts := []string{v.mountPath[xattr]}
 	if v.isOnSnapshot() {
-		mountParts = append(mountParts, []string{".snapshots", v.SnapshotAccessPoint}...) //TODO: validate when and how it is populated
+		mountParts = append(mountParts, []string{SnapshotsSubDirectory, v.SnapshotAccessPoint}...) //TODO: validate when and how it is populated
 	}
 	if v.hasInnerPath() {
 		mountParts = append(mountParts, v.getInnerPath())
@@ -528,8 +571,17 @@ func (v *UnifiedVolume) getFullPath(ctx context.Context, xattr bool) string {
 	return fullPath
 }
 
+func (v *UnifiedVolume) getMountPath(xattr bool) string {
+	return v.mountPath[xattr]
+}
+
 //getInodeId used for obtaining the mount Path inode ID (to set quota on it later)
 func (v *UnifiedVolume) getInodeId(ctx context.Context) (uint64, error) {
+	op := "getInodeId"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = false // no need to have xattr mount to do that
 	err, unmount := v.opportunisticMount(ctx, xattrMount)
@@ -561,6 +613,11 @@ func (v *UnifiedVolume) GetId() string {
 
 // setQuota creates a quota object for the volume. set for every type of volume including root of FS
 func (v *UnifiedVolume) setQuota(ctx context.Context, enforceCapacity *bool, capacityLimit uint64) (*apiclient.Quota, error) {
+	op := "setQuota"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	var quotaType apiclient.QuotaType
 	if enforceCapacity != nil {
@@ -593,6 +650,11 @@ func (v *UnifiedVolume) setQuota(ctx context.Context, enforceCapacity *bool, cap
 
 // getQuota returns quota object for volume (if exists) or error
 func (v *UnifiedVolume) getQuota(ctx context.Context) (*apiclient.Quota, error) {
+	op := "getQuota"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Trace().Msg("Getting existing quota for volume")
 	fsObj, err := v.getFilesystemObj(ctx)
@@ -657,20 +719,27 @@ func (v *UnifiedVolume) getFilesystemObj(ctx context.Context) (*apiclient.FileSy
 
 func (v *UnifiedVolume) getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error) {
 	if v.apiClient == nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "Could not bind snapshot %s to API endpoint", v.GetId())
+		return nil, errors.New("cannot get object of API-unbound snapshot")
 	}
-	snap := &apiclient.Snapshot{}
-	if v.SnapshotUuid != nil {
-		err := v.apiClient.GetSnapshotByUid(ctx, *v.SnapshotUuid, snap)
-		return snap, err
+	snapObj, err := v.apiClient.GetSnapshotByName(ctx, v.SnapshotName)
+	if err != nil {
+		if err == apiclient.ObjectNotFoundError {
+			return nil, nil
+		}
+		return nil, err
 	}
-	return nil, nil // no snapshot found
+	return snapObj, nil // no snapshot found
 }
 
 // Mount creates a mount using specific options (currently only xattr true/false) and increases reference to it
 // returns UmnountFunc that can be executed to decrese refCount / unmount
 // NOTE: it always mounts only the filesystem directly. Any navigation inside should be done on the mount
 func (v *UnifiedVolume) Mount(ctx context.Context, xattr bool) (error, UnmountFunc) {
+	op := "VolumeMount"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	if v.mounter == nil {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
@@ -691,6 +760,11 @@ func (v *UnifiedVolume) Mount(ctx context.Context, xattr bool) (error, UnmountFu
 
 // Unmount decreases refCount / unmounts volume using specific mount options, currently only xattr true/false
 func (v *UnifiedVolume) Unmount(ctx context.Context, xattr bool) error {
+	op := "VolumeUnmount"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	if v.mounter == nil {
 		Die("Volume unmount could not be done since mounter not defined on it")
 	}
@@ -725,7 +799,13 @@ func (v *UnifiedVolume) opportunisticMount(ctx context.Context, xattr bool) (err
 
 // Exists returns true if the actual data representing volume object exists,e.g. filesystem, snapshot and innerPath
 func (v *UnifiedVolume) Exists(ctx context.Context) (bool, error) {
+	op := "VolumeExists"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
+	const xattrMount = false // no need to mount with xattr for this
 	if (v.isOnSnapshot() || v.isFilesystem()) && v.apiClient == nil {
 		logger.Error().Msg("No API bound, assuming volume does not exist")
 		return false, nil
@@ -741,10 +821,20 @@ func (v *UnifiedVolume) Exists(ctx context.Context) (bool, error) {
 		}
 		if !exists {
 			logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist on storage")
+			return false, nil
 		}
+		if v.mounter.debugPath != "" {
+			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
+			// no actual data is copied, only directory structure is created as if it was a real snapshot.
+			// happens only if the real snapshot indeed exists
+			err := v.mimicDirectoryStructureForDebugMode(ctx)
+			if err != nil {
+				return false, err
+			}
+		}
+
 	}
 	if v.hasInnerPath() {
-		const xattrMount = false // no need to mount with xattr for this
 		err, unmount := v.opportunisticMount(ctx, xattrMount)
 		defer unmount()
 		if err != nil {
@@ -759,9 +849,8 @@ func (v *UnifiedVolume) Exists(ctx context.Context) (bool, error) {
 			logger.Error().Err(err).Str("full_path", v.getFullPath(ctx, xattrMount)).Msg("Volume is unusable: path is not a directory")
 			return false, status.Error(codes.Internal, err.Error())
 		}
-		logger.Debug().Str("full_path", v.getFullPath(ctx, xattrMount)).Msg("Volume exists and is accessible")
-		return true, nil
 	}
+	logger.Debug().Str("full_path", v.getFullPath(ctx, xattrMount)).Msg("Volume exists and is accessible")
 	return true, nil
 }
 
@@ -780,46 +869,56 @@ func (v *UnifiedVolume) ExistsAndMatchesCapacity(ctx context.Context, capacity i
 }
 
 func (v *UnifiedVolume) fileSystemExists(ctx context.Context) (bool, error) {
+	op := "fileSystemExists"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-	logger.Trace().Msg("Checking if volume exists")
+	logger.Trace().Msg("Checking if filesystem exists")
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch volume from underlying storage")
+		logger.Error().Err(err).Msg("Failed to fetch filesystem from underlying storage")
 		return false, err
 	}
 	if fsObj == nil || fsObj.Uid == uuid.Nil {
-		logger.Debug().Msg("Volume does not exist")
+		logger.Debug().Msg("Filesystem does not exist")
 		return false, err
 	}
 	if fsObj.IsRemoving {
-		logger.Debug().Msg("Volume exists but is in removing state")
+		logger.Debug().Msg("Filesystem exists but is in removing state")
 		return false, nil
 	}
-	logger.Info().Msg("Volume exists")
+	logger.Debug().Msg("Filesystem exists")
 	return true, nil
 }
 
 func (v *UnifiedVolume) snapshotExists(ctx context.Context) (bool, error) {
+	op := "snapshotExists"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-	logger.Trace().Msg("Checking if volume exists")
+	logger.Trace().Msg("Checking if snapshot exists")
 	snapObj, err := v.getSnapshotObj(ctx)
 	if err != nil {
-		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Msg("Failed to fetch volume from underlying storage")
+		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Msg("Failed to fetch snapshot from underlying storage")
 		return false, err
 	}
 	if snapObj == nil || snapObj.Uid == uuid.Nil {
-		logger.Trace().Msg("Volume does not exist")
+		logger.Trace().Msg("Snapshot does not exist")
 		return false, err
 	}
 	if snapObj.IsRemoving {
-		logger.Debug().Msg("Volume exists but is in removing state")
+		logger.Debug().Msg("Snapshot exists but is in removing state")
 		return false, nil
 	}
-	logger.Debug().Msg("Volume exists")
+	logger.Debug().Msg("Snapshot exists")
 	return true, nil
 }
 
-// isFilesystemEmpty returns true if the filesystem root directory is empty (excluding .snapshots directory)
+// isFilesystemEmpty returns true if the filesystem root directory is empty (excluding SnapshotsSubDirectory)
 func (v *UnifiedVolume) isFilesystemEmpty(ctx context.Context) (bool, error) {
 	err, umount := v.opportunisticMount(ctx, false)
 	if err != nil {
@@ -838,7 +937,7 @@ func (v *UnifiedVolume) isFilesystemEmpty(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 	for _, name := range fileNames {
-		if name == ".snapshots" {
+		if name == SnapshotsSubDirectory {
 			continue
 		}
 		return false, nil
@@ -847,6 +946,11 @@ func (v *UnifiedVolume) isFilesystemEmpty(ctx context.Context) (bool, error) {
 }
 
 func (v *UnifiedVolume) createSeedSnapshot(ctx context.Context) error {
+	op := "createSeedSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	seedName := v.getSeedSnapshotName()
 	seedAccessPoint := v.getSeedSnapshotAccessPoint()
 	ctx = log.Ctx(ctx).With().
@@ -873,6 +977,11 @@ func (v *UnifiedVolume) createSeedSnapshot(ctx context.Context) error {
 }
 
 func (v *UnifiedVolume) deleteSeedSnapshot(ctx context.Context) {
+	op := "deleteSeedSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx)
 	snapObj, err := v.getSeedSnapshot(ctx)
 	if err != nil {
@@ -931,6 +1040,11 @@ func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) error {
 
 // Create actually creates the storage location for the particular volume object
 func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
+	op := "VolumeCreate"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	// validate minimum capacity before create new volume
 	maxStorageCapacity, err := v.getMaxCapacity(ctx)
@@ -976,33 +1090,16 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateSnapshot(ctx, sr, snapObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-
-		// here comes a workaround to enable running CSI sanity in detached mode
 		if v.mounter.debugPath != "" {
-			const xattrMount = true // no need to have xattr mount to do that
-			err, unmount := v.opportunisticMount(ctx, xattrMount)
-			defer unmount()
+			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
+			// no actual data is copied, only directory structure is created as if it was a real snapshot.
+			// happens only if the real snapshot indeed exists
+			err := v.mimicDirectoryStructureForDebugMode(ctx)
 			if err != nil {
+				logger.Error().Err(err).Msg("Error happened during snapshot mimicking. Cleaning snapshot up")
+				_ = v.deleteSnapshot(ctx)
 				return err
 			}
-			volPath := v.getFullPath(ctx, xattrMount)
-			dirPath := filepath.Dir(volPath)
-
-			// make sure that root directory is created with Default Permissions no matter what the requested permissions are
-			if err := os.MkdirAll(dirPath, DefaultVolumePermissions); err != nil {
-				logger.Error().Err(err).Str("directory_path", dirPath).Msg("Failed to create CSI volumes directory")
-				return err
-			}
-			// make sure we don't hit umask upon creating directory
-			oldMask := syscall.Umask(0)
-			defer syscall.Umask(oldMask)
-
-			if err := os.Mkdir(volPath, DefaultVolumePermissions); err != nil {
-				logger.Error().Err(err).Str("volume_path", volPath).Msg("Failed to create volume directory")
-				return err
-			}
-			logger.Debug().Str("full_path", v.getFullPath(ctx, true)).Msg("Successully created directory")
-
 		}
 
 	} else if v.hasInnerPath() { // the last condition is needed for being able to run CSI sanity in docker
@@ -1060,7 +1157,31 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 	return nil
 }
 
+func (v *UnifiedVolume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
+	logger := log.Ctx(ctx)
+	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside snapshot to mimic Weka snapshot behavior")
+	const xattrMount = true
+	err, unmount := v.opportunisticMount(ctx, xattrMount)
+	defer unmount()
+	if err != nil {
+		return err
+	}
+	volPath := v.getFullPath(ctx, xattrMount)
+
+	if err := os.MkdirAll(volPath, DefaultVolumePermissions); err != nil {
+		logger.Error().Err(err).Str("volume_path", volPath).Msg("Failed to create volume debug directory")
+		return err
+	}
+	logger.Debug().Str("full_path", v.getFullPath(ctx, true)).Msg("Successully created debug directory")
+	return nil
+}
+
 func (v *UnifiedVolume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, error) {
+	op := "getUidOfSourceSnap"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx)
 	var srcSnap *apiclient.Snapshot
 	var err error
@@ -1087,6 +1208,11 @@ func (v *UnifiedVolume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, err
 
 // Delete is a synchronous delete, used for cleanup on unsuccessful ControllerCreateVolume. GC flow is separate
 func (v *UnifiedVolume) Delete(ctx context.Context) error {
+	op := "VolumeDelete"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	var err error
 	logger.Debug().Msg("Starting deletion of volume")
@@ -1125,6 +1251,11 @@ func (v *UnifiedVolume) deleteDirectory(ctx context.Context) error {
 }
 
 func (v *UnifiedVolume) deleteFilesystem(ctx context.Context) error {
+	op := "deleteFilesystem"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
@@ -1173,6 +1304,11 @@ func (v *UnifiedVolume) deleteFilesystem(ctx context.Context) error {
 }
 
 func (v *UnifiedVolume) deleteSnapshot(ctx context.Context) error {
+	op := "deleteSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	snapObj, err := v.getSnapshotObj(ctx)
 	if err != nil {
@@ -1266,9 +1402,14 @@ func (v *UnifiedVolume) SetParamsFromRequestParams(ctx context.Context, params m
 	return nil
 }
 
-// CreateSnapshot creates a UnifiedSnapshot object which repres(this is not yet the CSI snapshot)
+// CreateSnapshot creates a UnifiedSnapshot object which represents a potential CSI snapshot (this is not yet the CSI snapshot)
 // The snapshot object will have a method to convert it to Csi snapshot object
 func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (Snapshot, error) {
+	op := "VolumeCreateSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	s, err := NewSnapshotFromVolumeCreate(ctx, name, v, v.apiClient, v.server)
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("snapshot_id", s.GetId()).Logger()
 	if err != nil {

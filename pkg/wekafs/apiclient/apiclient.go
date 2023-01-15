@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"hash/fnv"
 	"io/ioutil"
@@ -421,14 +422,13 @@ func (a *ApiClient) getUrl(ctx context.Context, path string) string {
 
 // Login logs into API, updates refresh token expiry
 func (a *ApiClient) Login(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("credentials", a.Credentials.String()).Logger()
+	oldCtx := ctx
+	logger := log.Ctx(ctx)
 	if a.isLoggedIn() {
 		return nil
 	}
 	a.Lock()
 	defer a.Unlock()
-	logger.Trace().Msg("Logging in")
-
 	r := LoginRequest{
 		Username: a.Credentials.Username,
 		Password: a.Credentials.Password,
@@ -439,10 +439,13 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		return err
 	}
 	responseData := &LoginResponse{}
+	logger.Debug().Msg("Logging in. For safety, API logging is suppressed")
+	ctx = log.Ctx(ctx).Level(zerolog.Disabled).With().Str("credentials", a.Credentials.String()).Logger().WithContext(ctx)
 	if err := a.request(ctx, "POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
 			logger.Error().Err(err).Str("endpoint", a.getEndpoint(ctx)).Msg("Could not log in to endpoint")
 		}
+		logger.Error().Err(err).Msg("")
 		return err
 	}
 	a.apiToken = responseData.AccessToken
@@ -451,6 +454,7 @@ func (a *ApiClient) Login(ctx context.Context) error {
 	if a.refreshTokenExpiryInterval < 1 {
 		_ = a.updateTokensExpiryInterval(ctx)
 	}
+	ctx = oldCtx
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
 	_ = a.fetchClusterInfo(ctx)
 	logger.Debug().Msg("Successfully connected to cluster API")
