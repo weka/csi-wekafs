@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -71,9 +72,12 @@ var (
 	allowSnapshotsOfLegacyVolumes = flag.Bool("allowsnapshotsoflegacyvolumes", true, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
 	removeSnapshotsCapability     = flag.Bool("removesnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
 	removeVolumeCloneCapability   = flag.Bool("removevolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
-	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint") // TODO: change to false and instrument via Helm
+	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint") // TODO: instrument via Helm
 	metricsPort                   = flag.String("metricsport", "9000", "HTTP port to expose metrics on")    // TODO: instrument via Helm
 	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
+	enableTracing                 = flag.Bool("enabletracing", false, "Enable OpenTelemetry exporter") // TODO: change to false and instrument via Helm
+	tracingUrl                    = flag.String("tracingurl", "http://logzio-monitoring-otel-collector.monitoring.svc.cluster.local:14268/api/traces",
+		"OpenTelemetry endpoint") // TODO: change default value and instrument via Helm
 
 	// Set by the build process
 	version = ""
@@ -120,6 +124,18 @@ func main() {
 			}
 			log.Debug().Str("metrics_port", *metricsPort).Msg("Started metrics service")
 		}()
+	}
+
+	if enableTracing != nil && *enableTracing {
+		log.Info().Msg("Starting tracing instrumentation")
+		if *tracingUrl == "" {
+			log.Error().Err(errors.New("Cannot start tracing instrumentation, no endpoint defined")).Msg("")
+		} else {
+			_, err := wekafs.TracerProvider(version, *tracingUrl)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
+			}
+		}
 	}
 	handle()
 	os.Exit(0)

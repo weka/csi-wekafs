@@ -22,6 +22,8 @@ import (
 	"github.com/rs/xid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -40,9 +42,11 @@ func NewIdentityServer(name, version string) *identityServer {
 
 func (ids *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	op := "GetPluginInfo"
-	ctx = log.With().Str("trace_id", xid.New().String()).Logger().WithContext(ctx)
 	result := "SUCCESS"
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
 	defer func() {
@@ -74,6 +78,9 @@ func (ids *identityServer) GetPluginCapabilities(ctx context.Context, req *csi.G
 	op := "GetPluginCapabilities"
 	result := "SUCCESS"
 	ctx = log.With().Str("trace_id", xid.New().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(op).Start(ctx, "saveEventsAndRunIntegrations", trace.WithNewRoot())
+	defer span.End()
+
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
 	defer func() {
