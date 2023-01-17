@@ -1275,9 +1275,21 @@ func (v *UnifiedVolume) deleteFilesystem(ctx context.Context) error {
 			logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
 			return nil
 		}
+		if _, ok := err.(*apiclient.ApiBadRequestError); ok {
+			logger.Trace().Err(err).Msg("Bad request during snapshot deletion, probably already removed")
+			return nil
+		}
 		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")
 		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 	}
+	err, done := v.waitForFilesystemDeletion(ctx, logger, fsUid)
+	if done {
+		return err
+	}
+	return nil
+}
+
+func (v *UnifiedVolume) waitForFilesystemDeletion(ctx context.Context, logger zerolog.Logger, fsUid uuid.UUID) (error, bool) {
 	logger.Trace().Msg("Waiting for filesystem deletion to complete")
 	for start := time.Now(); time.Since(start) < MaxSnapshotDeletionDuration; {
 		fsObj := &apiclient.FileSystem{}
@@ -1285,22 +1297,22 @@ func (v *UnifiedVolume) deleteFilesystem(ctx context.Context) error {
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
 				logger.Trace().Str("filesystem", v.FilesystemName).Msg("Filesystem was removed successfully")
-				return nil
+				return nil, true
 			}
-			return err
+			return err, true
 		}
 		if fsObj.Uid != uuid.Nil {
 			if fsObj.IsRemoving {
 				logger.Trace().Str("filesystem", v.FilesystemName).Msg("Filesystem is still being removed")
 			} else {
-				return errors.New(fmt.Sprintf("FilesystemName %s not marked for deletion but it should", v.FilesystemName))
+				return errors.New(fmt.Sprintf("FilesystemName %s not marked for deletion but it should", v.FilesystemName)), true
 			}
 		}
 		time.Sleep(time.Second)
 	}
 
 	logger.Error().Str("filesystem", v.FilesystemName).Msg("Timeout deleting volume")
-	return nil
+	return nil, false
 }
 
 func (v *UnifiedVolume) deleteSnapshot(ctx context.Context) error {
@@ -1329,10 +1341,22 @@ func (v *UnifiedVolume) deleteSnapshot(ctx context.Context) error {
 			logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot not found, assuming repeating request")
 			return nil
 		}
+		if _, ok := err.(*apiclient.ApiBadRequestError); ok {
+			logger.Trace().Err(err).Msg("Bad request during snapshot deletion, probably already removed")
+			return nil
+		}
 		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Str("snapshot_uid", snapUid.String()).
 			Msg("Failed to delete snapshot")
 		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 	}
+	err2, done := v.waitForSnapshotDeletion(ctx, logger, snapUid)
+	if done {
+		return err2
+	}
+	return nil
+}
+
+func (v *UnifiedVolume) waitForSnapshotDeletion(ctx context.Context, logger zerolog.Logger, snapUid uuid.UUID) (error, bool) {
 	logger.Trace().Msg("Waiting for snapshot deletion to complete")
 	for start := time.Now(); time.Since(start) < MaxSnapshotDeletionDuration; {
 		snapObj := &apiclient.Snapshot{}
@@ -1340,22 +1364,22 @@ func (v *UnifiedVolume) deleteSnapshot(ctx context.Context) error {
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
 				logger.Trace().Msg("Snapshot was removed successfully")
-				return nil
+				return nil, true
 			}
-			return err
+			return err, true
 		}
 		if snapObj.Uid != uuid.Nil {
 			if snapObj.IsRemoving {
 				logger.Trace().Msg("Snapshot is still being removed")
 			} else {
-				return errors.New(fmt.Sprintf("Snapshot %s not marked for deletion but it should", v.SnapshotUuid.String()))
+				return errors.New(fmt.Sprintf("Snapshot %s not marked for deletion but it should", v.SnapshotUuid.String())), true
 			}
 		}
 		time.Sleep(time.Second)
 	}
 
-	logger.Info().Str("filesystem", v.FilesystemName).Str("snapshot", v.SnapshotName).Msg("Volume deleted successfully")
-	return nil
+	logger.Info().Str("filesystem", v.FilesystemName).Str("snapshot", v.SnapshotName).Msg("Snapshot deleted successfully")
+	return nil, false
 }
 
 // SetParamsFromRequestParams takes additional optional params from storage class params and applies them to Volume object
