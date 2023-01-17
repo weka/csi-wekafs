@@ -29,6 +29,7 @@ const (
 	ApiRetryMaxCount              = 5
 	RetryBackoffExponentialFactor = 1
 	RootOrganizationName          = "Root"
+	TracerName                    = "weka-csi"
 )
 
 //ApiClient is a structure that defines Weka API client

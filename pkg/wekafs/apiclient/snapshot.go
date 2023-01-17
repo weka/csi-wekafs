@@ -7,6 +7,8 @@ import (
 	"fmt"
 	qs "github.com/google/go-querystring/query"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 	"k8s.io/helm/pkg/urlutil"
 	"time"
 )
@@ -61,6 +63,11 @@ func (a *ApiClient) FindSnapshotsByFilesystem(ctx context.Context, query *FileSy
 
 // GetSnapshotByFilter expected to return exactly one result of FindSnapshotsByFilter (error)
 func (a *ApiClient) GetSnapshotByFilter(ctx context.Context, query *Snapshot) (*Snapshot, error) {
+	op := "GetSnapshotByFilter"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+
 	rs := &[]Snapshot{}
 	err := a.FindSnapshotsByFilter(ctx, query, rs)
 	if err != nil {
@@ -89,6 +96,10 @@ func (a *ApiClient) GetSnapshotByUid(ctx context.Context, uid uuid.UUID, snap *S
 }
 
 func (a *ApiClient) CreateSnapshot(ctx context.Context, r *SnapshotCreateRequest, snap *Snapshot) error {
+	op := "CreateSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -105,6 +116,10 @@ func (a *ApiClient) CreateSnapshot(ctx context.Context, r *SnapshotCreateRequest
 }
 
 func (a *ApiClient) UpdateSnapshot(ctx context.Context, r *SnapshotUpdateRequest, snap *Snapshot) error {
+	op := "UpdateSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -121,6 +136,10 @@ func (a *ApiClient) UpdateSnapshot(ctx context.Context, r *SnapshotUpdateRequest
 }
 
 func (a *ApiClient) DeleteSnapshot(ctx context.Context, r *SnapshotDeleteRequest) error {
+	op := "DeleteSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}

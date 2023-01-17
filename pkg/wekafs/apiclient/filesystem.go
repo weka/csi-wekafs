@@ -8,6 +8,7 @@ import (
 	qs "github.com/google/go-querystring/query"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
 	"time"
@@ -78,6 +79,10 @@ func (a *ApiClient) GetFileSystemByUid(ctx context.Context, uid uuid.UUID, fs *F
 
 // FindFileSystemsByFilter returns result set of 0-many objects matching filter
 func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSystem, resultSet *[]FileSystem) error {
+	op := "FindFileSystemsByFilter"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	ret := &[]FileSystem{}
 	q, _ := qs.Values(query)
 	err := a.Get(ctx, query.GetBasePath(), q, ret)
@@ -115,6 +120,10 @@ func (a *ApiClient) GetFileSystemByName(ctx context.Context, name string) (*File
 }
 
 func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateRequest, fs *FileSystem) error {
+	op := "CreateFileSystem"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -161,6 +170,10 @@ func (a *ApiClient) WaitFilesystemReady(ctx context.Context, fsName string, wait
 }
 
 func (a *ApiClient) UpdateFileSystem(ctx context.Context, r *FileSystemResizeRequest, fs *FileSystem) error {
+	op := "UpdateFileSystem"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -177,6 +190,10 @@ func (a *ApiClient) UpdateFileSystem(ctx context.Context, r *FileSystemResizeReq
 }
 
 func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteRequest) error {
+	op := "DeleteFileSystem"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -198,6 +215,10 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 }
 
 func (a *ApiClient) GetFileSystemMountToken(ctx context.Context, r *FileSystemMountTokenRequest, token *FileSystemMountToken) error {
+	op := "GetFileSystemMountToken"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	log.Ctx(ctx).Trace().Str("filesystem_uid", r.Uid.String()).Msg("Obtaining a mount token")
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
