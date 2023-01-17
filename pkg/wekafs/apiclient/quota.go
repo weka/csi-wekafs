@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
@@ -223,6 +224,10 @@ func (qd *QuotaDeleteRequest) getRelatedObject() ApiObject {
 }
 
 func (a *ApiClient) CreateQuota(ctx context.Context, qr *QuotaCreateRequest, q *Quota, waitForCompletion bool) error {
+	op := "CreateQuota"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	if !qr.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -278,6 +283,10 @@ func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultS
 }
 
 func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSystem, inodeId uint64) (*Quota, error) {
+	op := "GetQuotaByFileSystemAndInode"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("filesystem", fs.Name).Uint64("inode_id", inodeId).Logger()
 	if fs == nil || inodeId == 0 {
 		return nil, RequestMissingParams
@@ -340,6 +349,10 @@ func (a *ApiClient) IsQuotaActive(ctx context.Context, query *Quota) (done bool,
 }
 
 func (a *ApiClient) UpdateQuota(ctx context.Context, r *QuotaUpdateRequest, q *Quota) error {
+	op := "UpdateQuota"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	//if !r.hasRequiredFields() {
 	//	return RequestMissingParams
 	//}
@@ -356,6 +369,10 @@ func (a *ApiClient) UpdateQuota(ctx context.Context, r *QuotaUpdateRequest, q *Q
 }
 
 func (a *ApiClient) DeleteQuota(ctx context.Context, r *QuotaDeleteRequest) error {
+	op := "DeleteQuota"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
