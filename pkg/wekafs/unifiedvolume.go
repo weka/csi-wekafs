@@ -27,6 +27,8 @@ const (
 	SnapshotsSubDirectory       = ".snapshots"
 )
 
+var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
+
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
 var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
 
@@ -102,6 +104,10 @@ func (v *UnifiedVolume) isFilesystem() bool {
 
 // hasUnderlyingSnapshots returns True if volume is a FS (not its snapshot) and has any weka snapshots beneath it
 func (v *UnifiedVolume) hasUnderlyingSnapshots(ctx context.Context) (bool, error) {
+	op := "getFilesystemFreeSpace"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	has := false
 
@@ -135,8 +141,11 @@ func (v *UnifiedVolume) isAllowedForDeletion(ctx context.Context) bool {
 		return true
 	} else {
 		hasSnaps, err := v.hasUnderlyingSnapshots(ctx)
-		if hasSnaps || err != nil {
-			return false
+		if err != nil {
+			return true // we want to be on the safe side. If we fail to get snapshots, just block the FS from deletion
+		}
+		if hasSnaps {
+			return true
 		}
 	}
 	return true
@@ -176,7 +185,7 @@ func (v *UnifiedVolume) UpdateParams(ctx context.Context) error {
 	op := "UpdateParams"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
@@ -213,7 +222,7 @@ func (v *UnifiedVolume) getFilesystemFreeSpace(ctx context.Context) (int64, erro
 	op := "getFilesystemFreeSpace"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // need to have xattr mount to do that
@@ -241,7 +250,7 @@ func (v *UnifiedVolume) getFreeSpaceOnStorage(ctx context.Context) (int64, error
 	op := "getFreeSpaceOnStorage"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	existsOk, err := v.fileSystemExists(ctx)
@@ -316,7 +325,7 @@ func (v *UnifiedVolume) getCapacityFromQuota(ctx context.Context) (int64, error)
 	op := "getCapacityFromQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // need to have xattr mount to do that
@@ -346,7 +355,7 @@ func (v *UnifiedVolume) getCapacityFromFsSize(ctx context.Context) (int64, error
 	op := "getCapacityFromFsSize"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	fsObj, err := v.getFilesystemObj(ctx)
@@ -391,7 +400,7 @@ func (v *UnifiedVolume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Conte
 	op := "ensureSufficientFsSizeOnUpdateCapacity"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
@@ -424,7 +433,7 @@ func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *boo
 	op := "UpdateCapacity"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	// check if required AND possible to expand filesystem, expand if needed or fail
@@ -474,7 +483,7 @@ func (v *UnifiedVolume) updateCapacityQuota(ctx context.Context, enforceCapacity
 	op := "updateCapacityQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	enfCapacity := "RETAIN"
@@ -517,7 +526,7 @@ func (v *UnifiedVolume) updateCapacityXattr(ctx context.Context, enforceCapacity
 	op := "updateCapacityXattr"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // must have xattrs for this case
@@ -546,13 +555,7 @@ func (v *UnifiedVolume) moveToTrash(ctx context.Context) error {
 		v.mounter.gc.triggerGcVolume(ctx, *v)
 		return nil
 	}
-	go func() {
-		err := v.Delete(ctx)
-		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msg("Failed to delete filesystem")
-		}
-	}()
-	return nil
+	return v.Delete(ctx)
 }
 
 func (v *UnifiedVolume) getInnerPath() string {
@@ -580,7 +583,7 @@ func (v *UnifiedVolume) getInodeId(ctx context.Context) (uint64, error) {
 	op := "getInodeId"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = false // no need to have xattr mount to do that
@@ -616,7 +619,7 @@ func (v *UnifiedVolume) setQuota(ctx context.Context, enforceCapacity *bool, cap
 	op := "setQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	var quotaType apiclient.QuotaType
@@ -653,7 +656,7 @@ func (v *UnifiedVolume) getQuota(ctx context.Context) (*apiclient.Quota, error) 
 	op := "getQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Trace().Msg("Getting existing quota for volume")
@@ -738,7 +741,7 @@ func (v *UnifiedVolume) Mount(ctx context.Context, xattr bool) (error, UnmountFu
 	op := "VolumeMount"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	if v.mounter == nil {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
@@ -763,7 +766,7 @@ func (v *UnifiedVolume) Unmount(ctx context.Context, xattr bool) error {
 	op := "VolumeUnmount"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	if v.mounter == nil {
 		Die("Volume unmount could not be done since mounter not defined on it")
@@ -802,7 +805,7 @@ func (v *UnifiedVolume) Exists(ctx context.Context) (bool, error) {
 	op := "VolumeExists"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = false // no need to mount with xattr for this
@@ -872,7 +875,7 @@ func (v *UnifiedVolume) fileSystemExists(ctx context.Context) (bool, error) {
 	op := "fileSystemExists"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Trace().Msg("Checking if filesystem exists")
@@ -897,7 +900,7 @@ func (v *UnifiedVolume) snapshotExists(ctx context.Context) (bool, error) {
 	op := "snapshotExists"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Trace().Msg("Checking if snapshot exists")
@@ -949,7 +952,7 @@ func (v *UnifiedVolume) createSeedSnapshot(ctx context.Context) error {
 	op := "createSeedSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	seedName := v.getSeedSnapshotName()
 	seedAccessPoint := v.getSeedSnapshotAccessPoint()
@@ -980,7 +983,7 @@ func (v *UnifiedVolume) deleteSeedSnapshot(ctx context.Context) {
 	op := "deleteSeedSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	snapObj, err := v.getSeedSnapshot(ctx)
@@ -1032,10 +1035,32 @@ func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) error {
 	if err != nil {
 		logger.Error().Err(err).Msg("")
 	}
-	if empty {
-		return v.createSeedSnapshot(ctx)
+	if !empty {
+		return errors.New("cannot create seed snaspshot on non-empty filesystem")
 	}
-	return errors.New("cannot create seed snaspshot on non-empty filesystem")
+
+	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
+	// no actual data is copied, only directory structure is created as if it was a real snapshot.
+	// happens only if the real snapshot indeed exists
+	if v.mounter.debugPath != "" {
+		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
+		const xattrMount = true
+		err, unmount := v.opportunisticMount(ctx, xattrMount)
+		defer unmount()
+		if err != nil {
+			return err
+		}
+		seedPath := filepath.Join(v.getMountPath(xattrMount), SnapshotsSubDirectory, v.getSeedSnapshotAccessPoint())
+
+		if err := os.MkdirAll(seedPath, DefaultVolumePermissions); err != nil {
+			logger.Error().Err(err).Str("seed_path", seedPath).Msg("Failed to create seed snapshot debug directory")
+			return err
+		}
+		logger.Debug().Str("full_path", v.getFullPath(ctx, true)).Msg("Successully created seed snapshot debug directory")
+		return nil
+	}
+
+	return v.createSeedSnapshot(ctx)
 }
 
 // Create actually creates the storage location for the particular volume object
@@ -1043,7 +1068,7 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 	op := "VolumeCreate"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	// validate minimum capacity before create new volume
@@ -1159,7 +1184,7 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 
 func (v *UnifiedVolume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
 	logger := log.Ctx(ctx)
-	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside snapshot to mimic Weka snapshot behavior")
+	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside filesystem .fsnapshots to mimic Weka snapshot behavior")
 	const xattrMount = true
 	err, unmount := v.opportunisticMount(ctx, xattrMount)
 	defer unmount()
@@ -1180,7 +1205,7 @@ func (v *UnifiedVolume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, err
 	op := "getUidOfSourceSnap"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	var srcSnap *apiclient.Snapshot
@@ -1211,16 +1236,17 @@ func (v *UnifiedVolume) Delete(ctx context.Context) error {
 	op := "VolumeDelete"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	var err error
 	logger.Debug().Msg("Starting deletion of volume")
 	if v.isFilesystem() {
-		v.deleteSeedSnapshot(ctx)
 		if !v.isAllowedForDeletion(ctx) {
-			return status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
+			logger.Error().Msg("AAAAAAAA")
+			return ErrFilesystemHasUnderlyingSnapshots
 		}
+		v.deleteSeedSnapshot(ctx)
 		err = v.deleteFilesystem(ctx)
 	} else if v.isOnSnapshot() {
 		err = v.deleteSnapshot(ctx)
@@ -1229,9 +1255,10 @@ func (v *UnifiedVolume) Delete(ctx context.Context) error {
 	}
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to delete volume")
+		return err
 	}
 	logger.Debug().Msg("Deletion of volume completed successfully")
-	return err
+	return nil
 }
 
 func (v *UnifiedVolume) deleteDirectory(ctx context.Context) error {
@@ -1254,9 +1281,10 @@ func (v *UnifiedVolume) deleteFilesystem(ctx context.Context) error {
 	op := "deleteFilesystem"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
+	logger.Debug().Str("filesystem", v.FilesystemName).Msg("Deleting filesystem")
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
 		return status.Errorf(codes.Internal, "Failed to delete filesystem %s", v.FilesystemName)
@@ -1275,8 +1303,12 @@ func (v *UnifiedVolume) deleteFilesystem(ctx context.Context) error {
 			logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
 			return nil
 		}
+		if _, ok := err.(*apiclient.ApiNotFoundError); ok {
+			logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
+			return nil
+		}
 		if _, ok := err.(*apiclient.ApiBadRequestError); ok {
-			logger.Trace().Err(err).Msg("Bad request during snapshot deletion, probably already removed")
+			logger.Trace().Err(err).Msg("Bad request during filesystem deletion, probably already removed")
 			return nil
 		}
 		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")
@@ -1319,7 +1351,7 @@ func (v *UnifiedVolume) deleteSnapshot(ctx context.Context) error {
 	op := "deleteSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	snapObj, err := v.getSnapshotObj(ctx)
@@ -1339,6 +1371,10 @@ func (v *UnifiedVolume) deleteSnapshot(ctx context.Context) error {
 	if err != nil {
 		if err == apiclient.ObjectNotFoundError {
 			logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot not found, assuming repeating request")
+			return nil
+		}
+		if _, ok := err.(*apiclient.ApiNotFoundError); ok {
+			logger.Debug().Str("snapshot", v.SnapshotName).Msg("v not found, assuming repeating request")
 			return nil
 		}
 		if _, ok := err.(*apiclient.ApiBadRequestError); ok {
@@ -1363,7 +1399,11 @@ func (v *UnifiedVolume) waitForSnapshotDeletion(ctx context.Context, logger zero
 		err := v.apiClient.GetSnapshotByUid(ctx, snapUid, snapObj)
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
-				logger.Trace().Msg("Snapshot was removed successfully")
+				logger.Trace().Msg("Snapshot does not exist")
+				return nil, true
+			}
+			if _, ok := err.(*apiclient.ApiNotFoundError); ok {
+				logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist")
 				return nil, true
 			}
 			return err, true
@@ -1432,7 +1472,7 @@ func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (Snapsh
 	op := "VolumeCreateSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	s, err := NewSnapshotFromVolumeCreate(ctx, name, v, v.apiClient, v.server)
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("snapshot_id", s.GetId()).Logger()

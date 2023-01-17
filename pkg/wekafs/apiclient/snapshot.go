@@ -66,7 +66,7 @@ func (a *ApiClient) GetSnapshotByFilter(ctx context.Context, query *Snapshot) (*
 	op := "GetSnapshotByFilter"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
 	rs := &[]Snapshot{}
 	err := a.FindSnapshotsByFilter(ctx, query, rs)
@@ -99,7 +99,7 @@ func (a *ApiClient) CreateSnapshot(ctx context.Context, r *SnapshotCreateRequest
 	op := "CreateSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -119,7 +119,7 @@ func (a *ApiClient) UpdateSnapshot(ctx context.Context, r *SnapshotUpdateRequest
 	op := "UpdateSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -139,7 +139,7 @@ func (a *ApiClient) DeleteSnapshot(ctx context.Context, r *SnapshotDeleteRequest
 	op := "DeleteSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
