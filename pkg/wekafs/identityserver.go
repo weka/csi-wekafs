@@ -44,7 +44,7 @@ func (ids *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPlugin
 	result := "SUCCESS"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
@@ -78,7 +78,7 @@ func (ids *identityServer) GetPluginCapabilities(ctx context.Context, req *csi.G
 	result := "SUCCESS"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")

@@ -11,12 +11,6 @@ import (
 
 func TracerProvider(version string, url string) (*sdktrace.TracerProvider, error) {
 
-	// Create the Jaeger exporter
-	exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(url)))
-	if err != nil {
-		return nil, err
-	}
-
 	// Ensure default SDK resources and the required service name are set.
 	hostname, _ := os.Hostname()
 	r, err := resource.Merge(
@@ -26,15 +20,27 @@ func TracerProvider(version string, url string) (*sdktrace.TracerProvider, error
 			semconv.ServiceNameKey.String("Weka CSI Plugin"),
 			semconv.ServiceVersionKey.String(version),
 			attribute.String("hostname", hostname),
-			attribute.String("environment", "demo"),
 		),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
-		sdktrace.WithResource(r),
-	), nil
+	// Create the Jaeger exporter if tracing is enabled
+	if url != "" {
+		exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(url)))
+		if err != nil {
+			return nil, err
+		}
+		return sdktrace.NewTracerProvider(
+			sdktrace.WithBatcher(exp),
+			sdktrace.WithResource(r),
+		), nil
+
+	} else {
+		return sdktrace.NewTracerProvider(
+			sdktrace.WithResource(r),
+		), nil
+	}
+
 }

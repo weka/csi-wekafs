@@ -24,7 +24,7 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 	v := &UnifiedVolume{
 		id:                  volumeId,
 		FilesystemName:      sliceFilesystemNameFromVolumeId(volumeId),
-		SnapshotName:        server.getVolumeNamePrefix() + sliceSnapshotAccessPointFromVolumeId(volumeId),
+		SnapshotName:        sliceSnapshotNameFromVolumeId(server.getVolumeNamePrefix(), volumeId),
 		SnapshotAccessPoint: sliceSnapshotAccessPointFromVolumeId(volumeId),
 		innerPath:           sliceInnerPathFromVolumeId(volumeId),
 		apiClient:           apiClient,
@@ -33,8 +33,15 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 		mountPath:           make(map[bool]string),
 		server:              server,
 	}
-	logger.Trace().Object("volume_info", v).Msg("Successfully initialized object")
 	return v, nil
+}
+
+func sliceSnapshotNameFromVolumeId(prefix, volumeId string) string {
+	base := sliceSnapshotAccessPointFromVolumeId(volumeId)
+	if base != "" {
+		return prefix + base
+	}
+	return ""
 }
 
 func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVolumeRequest, cs *ControllerServer) (Volume, error) {
@@ -241,6 +248,9 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 		srcSnapshot:         sourceSnap,
 		server:              server,
 	}
+	logger := log.Ctx(ctx)
+	logger.Error().Str("src_vol_id", vol.id).Str("snap_name", vol.SnapshotName).Str("access_point", vol.SnapshotAccessPoint).
+		Str("inner_path", vol.innerPath).Msg("")
 	return vol, nil
 }
 
@@ -303,7 +313,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 	wekaSnapName := generateWekaSnapNameForSnapBasedVol(server.(*ControllerServer).newVolumePrefix, requestedVolumeName)
 	wekaSnapAccessPoint := generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
 
-	volId := generateVolumeIdFromComponents(volType, filesystemName, filesystemName, wekaSnapAccessPoint)
+	volId := generateVolumeIdFromComponents(volType, filesystemName, wekaSnapAccessPoint, innerPath)
 	vol := &UnifiedVolume{
 		id:                  volId,
 		FilesystemName:      filesystemName,

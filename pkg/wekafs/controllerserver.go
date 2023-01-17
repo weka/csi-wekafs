@@ -160,7 +160,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	op := "CreateVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	params := req.GetParameters()
 	result := "FAILURE"
@@ -246,7 +246,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	op := "DeleteVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	volumeID := req.GetVolumeId()
 	logger := log.Ctx(ctx)
@@ -289,6 +289,9 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 	// cleanup
 	if err != nil {
+		if err == ErrFilesystemHasUnderlyingSnapshots {
+			return &csi.DeleteVolumeResponse{}, err
+		}
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
 	result = "SUCCESS"
@@ -305,7 +308,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	op := "ExpandVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	volumeID := req.GetVolumeId()
 	logger := log.Ctx(ctx)
@@ -389,7 +392,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	op := "CreateSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	srcVolumeId := req.GetSourceVolumeId()
 	secrets := req.GetSecrets()
@@ -457,7 +460,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	secrets := req.GetSecrets()
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -507,9 +510,10 @@ func (cs *ControllerServer) ControllerGetCapabilities(ctx context.Context, req *
 	result := "SUCCESS"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
+	logger.Info().Msg(">>>> Received request")
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
@@ -534,7 +538,7 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	volumeID := req.GetVolumeId()
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	result := "FAILURE"
 	logger := log.Ctx(ctx)

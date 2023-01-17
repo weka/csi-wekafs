@@ -7,6 +7,7 @@ rm -rf /tmp/csi-test-staging
 
 
 # ---------------------- LEGACY DIR VOLUME NO API BINDING (NO SNAPSHOT SUPPORT) ----------------------
+echo "LEGACY SANITY STARTED"
 mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
 if \
   csi-sanity -csi.stagingdir /tmp/csi-test-staging \
@@ -29,6 +30,7 @@ fi
 
 
 # ---------------------- DIR VOLUME WITH API BINDING EXCLUDING SNAPSHOTS ----------------------
+echo "DIRECTORY VOLUME NO SNAPSHOTS STARTED"
 mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
 if \
   csi-sanity -csi.stagingdir /tmp/csi-test-staging \
@@ -51,7 +53,8 @@ fi
 
 
 # ---------------------- FS VOLUME WITH API BINDING EXCLUDING SNAPSHOTS ----------------------
-mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
+echo "FS VOLUME NO SNAPSHOTS STARTED"
+ mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
 if \
   csi-sanity -csi.stagingdir /tmp/csi-test-staging \
     --csi.controllerendpoint /tmp/weka-csi-test/controller-no-snaps.sock \
@@ -71,12 +74,8 @@ else
   exit $RETCODE
 fi
 
-
-
-
-
-sleep 90
 # ---------------------- DIR VOLUME WITH API BINDING AND SNAPSHOTS ----------------------
+echo "DIRECTORY VOLUME AND SNAPSHOTS STARTED"
 mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
 if \
   csi-sanity -csi.stagingdir /tmp/csi-test-staging \
@@ -97,7 +96,9 @@ else
   exit $RETCODE
 fi
 
+
 # ---------------------- SNAPSHOT VOLUME WITH API BINDING AND SNAPSHOTS ----------------------
+echo "SNAPSHOT VOLUMES WITH 2nd LEVEL SNAPSHOTS STARTED"
 mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
 if \
   csi-sanity -csi.stagingdir /tmp/csi-test-staging \
@@ -111,14 +112,15 @@ if \
     -ginkgo.v \
     -csi.testvolumeparameters /test/wekafs-snapvol.yaml
 then
-  echo "SNAPSHOT VOLUMES PASSED"
+  echo "SNAPSHOT VOLUMES WITH 2nd LEVEL SNAPSHOTS PASSED"
 else
   RETCODE=$?
-  echo "SNAPSHOT VOLUMES FAILED"
+  echo "SNAPSHOT VOLUMES WITH 2nd LEVEL SNAPSHOTS FAILED"
   exit $RETCODE
 fi
 
 # ---------------------- FILESYSTEM VOLUME WITH API BINDING AND SNAPSHOTS ----------------------
+echo "FILESYSTEM VOLUMES STARTED"
 mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
 if \
   csi-sanity -csi.stagingdir /tmp/csi-test-staging \
@@ -129,7 +131,8 @@ if \
     -ginkgo.seed 0 \
     -ginkgo.failFast \
     -ginkgo.progress \
-    -ginkgo.v
+    -ginkgo.v \
+    -csi.testvolumeparameters /test/wekafs-fs.yaml
 then
   echo "FILESYSTEM VOLUMES PASSED"
 else

@@ -114,7 +114,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	volumeID := req.GetVolumeId()
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
@@ -243,7 +243,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	volumeID := req.GetVolumeId()
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
@@ -322,7 +322,7 @@ func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	op := "NodeStageVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	volumeId := req.GetVolumeId()
 	logger := log.Ctx(ctx)
@@ -365,7 +365,7 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	volumeId := req.GetVolumeId()
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeId).Msg(">>>> Received request")
@@ -390,7 +390,7 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	result := "SUCCESS"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
@@ -422,7 +422,7 @@ func (ns *NodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetC
 	result := "SUCCESS"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str(op, op).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")

@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -26,6 +25,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs"
 	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"math/rand"
 	"net/http"
 	"os"
@@ -78,9 +78,7 @@ var (
 	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint") // TODO: instrument via Helm
 	metricsPort                   = flag.String("metricsport", "9000", "HTTP port to expose metrics on")    // TODO: instrument via Helm
 	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
-	enableTracing                 = flag.Bool("enabletracing", true, "Enable OpenTelemetry exporter") // TODO: change to false and instrument via Helm
-	tracingUrl                    = flag.String("tracingurl", "http://3.250.88.149:14268/api/traces",
-		"OpenTelemetry endpoint") // TODO: change default value and instrument via Helm
+	tracingUrl                    = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
 
 	// Set by the build process
 	version = ""
@@ -129,50 +127,52 @@ func main() {
 		}()
 	}
 
-	if enableTracing != nil && *enableTracing {
-		ctx := context.Background()
-		if *tracingUrl == "" {
-			log.Error().Err(errors.New("Cannot start tracing instrumentation, no endpoint defined")).Msg("")
-		} else {
-			log.Info().Str("tracing_server_url", *tracingUrl).Msg("Starting tracing instrumentation")
+	ctx := context.Background()
+	var tp *sdktrace.TracerProvider
+	var err error
+	var url string
+	if *tracingUrl != "" {
+		url = *tracingUrl
 
-			tp, err := wekafs.TracerProvider(version, *tracingUrl)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
-			} else {
-				otel.SetTracerProvider(tp)
-				ctx, cancel := context.WithCancel(ctx)
-				c := make(chan os.Signal, 1)
-				signal.Notify(c, os.Interrupt)
-				defer func() {
-					signal.Stop(c)
-					cancel()
-				}()
-				go func() {
-					select {
-					case <-c:
-						cancel()
-					case <-ctx.Done():
-					}
-				}()
-
-				defer func() {
-					if err := tp.ForceFlush(ctx); err != nil {
-						log.Error().Err(err).Msg("Failed to flush traces")
-					} else {
-						log.Info().Msg("Flushed traces successfully")
-					}
-
-					if err := tp.Shutdown(ctx); err != nil {
-						log.Error().Err(err).Msg("Failed to shutdown tracing engine")
-					} else {
-						log.Info().Msg("Tracing engine shut down successfully")
-					}
-
-				}()
-			}
-		}
+	} else {
+		url = ""
 	}
+	tp, err = wekafs.TracerProvider(version, url)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
+	} else {
+		otel.SetTracerProvider(tp)
+		ctx, cancel := context.WithCancel(ctx)
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		defer func() {
+			signal.Stop(c)
+			cancel()
+		}()
+		go func() {
+			select {
+			case <-c:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+
+		defer func() {
+			if err := tp.ForceFlush(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to flush traces")
+			} else {
+				log.Info().Msg("Flushed traces successfully")
+			}
+
+			if err := tp.Shutdown(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to shutdown tracing engine")
+			} else {
+				log.Info().Msg("Tracing engine shut down successfully")
+			}
+
+		}()
+	}
+
 	handle()
 	os.Exit(0)
 }
