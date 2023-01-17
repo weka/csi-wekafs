@@ -478,8 +478,9 @@ func (a *ApiClient) Hash() uint32 {
 // Init checks if API token refresh is required and transparently refreshes or fails back to (re)login
 func (a *ApiClient) Init(ctx context.Context) error {
 	if a.apiTokenExpiryDate.After(time.Now()) {
-		log.Ctx(ctx).Trace().TimeDiff("valid_for", a.apiTokenExpiryDate, time.Now()).Msg("Auth token is valid")
 		return nil
+	} else {
+		log.Ctx(ctx).Trace().TimeDiff("valid_for", a.apiTokenExpiryDate, time.Now()).Msg("Auth token is expired")
 	}
 	if !a.isLoggedIn() {
 		log.Ctx(ctx).Trace().Msg("Client is not authenticated, logging in...")
