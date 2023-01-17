@@ -244,6 +244,10 @@ func (s *UnifiedSnapshot) Delete(ctx context.Context) error {
 
 	err = s.apiClient.DeleteSnapshot(ctx, snapd)
 	if err != nil {
+		if _, ok := err.(*apiclient.ApiBadRequestError); ok {
+			logger.Trace().Err(err).Msg("Bad request during snapshot deletion, probably already removed")
+			return nil
+		}
 		logger.Error().Err(err).Msg("Failed to delete snapshot")
 		return err
 	}
@@ -251,26 +255,34 @@ func (s *UnifiedSnapshot) Delete(ctx context.Context) error {
 	retryInterval := time.Second
 	maxretryInterval := time.Minute
 
+	err, done := s.waitForSnapshotDeletion(ctx, logger, retryInterval, maxretryInterval)
+	if done {
+		return err
+	}
+	return nil
+}
+
+func (s *UnifiedSnapshot) waitForSnapshotDeletion(ctx context.Context, logger zerolog.Logger, retryInterval time.Duration, maxretryInterval time.Duration) (error, bool) {
 	for start := time.Now(); time.Since(start) < MaxSnapshotDeletionDuration; {
 		snap, err := s.getObject(ctx)
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
-				return nil
+				return nil, true
 			}
 		}
 		if snap == nil || snap.Uid == uuid.Nil {
 			logger.Trace().Msg("Snapshot was removed successfully")
-			return nil
+			return nil, true
 		} else if snap.IsRemoving {
 			logger.Trace().Msg("Snapshot is still being removed")
 		} else {
-			return errors.New(fmt.Sprintf("Snapshot %s not marked for deletion but it should", s.SnapshotName))
+			return errors.New(fmt.Sprintf("Snapshot %s not marked for deletion but it should", s.SnapshotName)), true
 		}
 		time.Sleep(retryInterval)
 		retryInterval = Min(retryInterval*2, maxretryInterval)
 	}
 	logger.Error().Msg("Timeout deleting snapshot")
-	return nil
+	return nil, false
 }
 
 func (s *UnifiedSnapshot) getFileSystemObject(ctx context.Context) (*apiclient.FileSystem, error) {
