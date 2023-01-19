@@ -70,11 +70,12 @@ var (
 	newVolumePrefix               = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
 	newSnapshotPrefix             = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
 	seedSnapshotPrefix            = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
-	allowAutoFsExpansion          = flag.Bool("allowautofsexpansion", true, "Allow expansion of filesystems used as CSI volumes")
-	allowAutoFsCreation           = flag.Bool("allowautofscreation", true, "Allow provisioning of CSI volumes as new Weka filesystems")
-	allowSnapshotsOfLegacyVolumes = flag.Bool("allowsnapshotsoflegacyvolumes", true, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
-	removeSnapshotsCapability     = flag.Bool("removesnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
-	removeVolumeCloneCapability   = flag.Bool("removevolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
+	allowAutoFsExpansion          = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
+	allowAutoFsCreation           = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
+	allowSnapshotsOfLegacyVolumes = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
+	allowAutoSeedSnapshotCreation = flag.Bool("allowautoseedsnapshotcreation", false, "Allow automatic creation of empty snapshot on new filesystem")
+	suppressSnapshotsCapability   = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
+	suppressVolumeCloneCapability = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
 	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
 	metricsPort                   = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
 	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
@@ -178,12 +179,13 @@ func main() {
 }
 
 func handle() {
+	config := wekafs.NewDriverConfig(*dynamicSubPath,
+		*newVolumePrefix, *newSnapshotPrefix, *seedSnapshotPrefix, *debugPath,
+		*allowAutoFsCreation, *allowAutoFsExpansion,
+		*allowAutoSeedSnapshotCreation, *allowSnapshotsOfLegacyVolumes,
+		*suppressSnapshotsCapability, *suppressVolumeCloneCapability)
 	driver, err := wekafs.NewWekaFsDriver(
-		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version,
-		*debugPath, *dynamicSubPath, csiMode, *selinuxSupport,
-		*newVolumePrefix, *newSnapshotPrefix, *seedSnapshotPrefix,
-		*allowSnapshotsOfLegacyVolumes, *allowAutoFsCreation, *allowAutoFsExpansion,
-		*removeSnapshotsCapability, *removeVolumeCloneCapability)
+		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

@@ -24,7 +24,7 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 	v := &UnifiedVolume{
 		id:                  volumeId,
 		FilesystemName:      sliceFilesystemNameFromVolumeId(volumeId),
-		SnapshotName:        sliceSnapshotNameFromVolumeId(server.getVolumeNamePrefix(), volumeId),
+		SnapshotName:        sliceSnapshotNameFromVolumeId(server.getConfig().VolumePrefix, volumeId),
 		SnapshotAccessPoint: sliceSnapshotAccessPointFromVolumeId(volumeId),
 		innerPath:           sliceInnerPathFromVolumeId(volumeId),
 		apiClient:           apiClient,
@@ -78,7 +78,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 		} else {
 			logger.Warn().Msg("Received a request with content source but without definition")
 			// this is blank volume
-			volume, err = NewVolumeForBlankVolumeRequest(ctx, req, cs.dynamicVolPath, cs)
+			volume, err = NewVolumeForBlankVolumeRequest(ctx, req, cs.getConfig().DynamicVolPath, cs)
 			if err != nil {
 				return nil, err
 			}
@@ -86,7 +86,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 
 	} else {
 		// this is blank volume
-		volume, err = NewVolumeForBlankVolumeRequest(ctx, req, cs.dynamicVolPath, cs)
+		volume, err = NewVolumeForBlankVolumeRequest(ctx, req, cs.getConfig().DynamicVolPath, cs)
 		if err != nil {
 			return nil, err
 		}
@@ -127,11 +127,11 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		} else if volType == VolumeTypeEmpty {
 			volType = VolumeTypeUnified
 		}
-		if !cs.allowAutoFsCreation {
+		if !cs.getConfig().allowAutoFsCreation {
 			// assume that this is a dynamical provision of a raw FS volume, must be allowed in configuration
 			return nil, status.Errorf(codes.PermissionDenied, "creating new filesystems is not allowed, check CSI driver configuration")
 		}
-		filesystemName = generateWekaFsNameForFsBasedVol(cs.newVolumePrefix, requestedVolumeName)
+		filesystemName = generateWekaFsNameForFsBasedVol(cs.getConfig().VolumePrefix, requestedVolumeName)
 	} else {
 		// filesystem name is specified, we assume this is a new snapshot volume OR new dir provisioned as a volume, depends on volumeType in request
 		if volType == VolumeTypeDirV1 {
@@ -146,7 +146,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 			if !client.SupportsQuotaOnSnapshots() {
 				return nil, status.Error(codes.FailedPrecondition, "Quota not supported for snapshots, please upgrade Weka cluster to latest version")
 			}
-			snapName = generateWekaSnapNameForSnapBasedVol(cs.newVolumePrefix, requestedVolumeName)
+			snapName = generateWekaSnapNameForSnapBasedVol(cs.getConfig().VolumePrefix, requestedVolumeName)
 			snapAccessPoint = generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
 		}
 
@@ -195,7 +195,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 
 	}
 
-	if sourceSnap.hasInnerPath() && !server.(*ControllerServer).allowSnapshotsOfLegacyVolumes {
+	if sourceSnap.hasInnerPath() && !server.getConfig().allowSnapshotsOfLegacyVolumes {
 		// block creation of snapshots from legacy volumes, as it wastes space
 		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is not supported for Legacy CSI volumes")
 	}
@@ -229,7 +229,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 	// - accessPoint must be calculated as usual, from volume name
 	// - snapshot name must be calculated as as usual too
 
-	targetWekaSnapName := generateWekaSnapNameForSnapBasedVol(server.getVolumeNamePrefix(), requestedVolumeName)
+	targetWekaSnapName := generateWekaSnapNameForSnapBasedVol(server.getConfig().VolumePrefix, requestedVolumeName)
 	targetWekaSnapAccessPoint := generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
 
 	innerPath := sourceSnap.getInnerPath()
@@ -283,7 +283,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Failed to validate source volume ID %s", sourceVolId)
 	}
-	if sourceVol.hasInnerPath() && !server.(*ControllerServer).allowSnapshotsOfLegacyVolumes {
+	if sourceVol.hasInnerPath() && !server.getConfig().allowSnapshotsOfLegacyVolumes {
 		// block cloning of snapshots from legacy volumes, as it wastes space
 		return nil, status.Errorf(codes.FailedPrecondition, "Cloning is not supported for Legacy CSI volumes")
 	}
@@ -310,7 +310,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 	volType := VolumeTypeUnified
 	filesystemName = sourceVolFsName
 	innerPath := sourceVol.getInnerPath()
-	wekaSnapName := generateWekaSnapNameForSnapBasedVol(server.(*ControllerServer).newVolumePrefix, requestedVolumeName)
+	wekaSnapName := generateWekaSnapNameForSnapBasedVol(server.getConfig().VolumePrefix, requestedVolumeName)
 	wekaSnapAccessPoint := generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
 
 	volId := generateVolumeIdFromComponents(volType, filesystemName, wekaSnapAccessPoint, innerPath)

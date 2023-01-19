@@ -37,24 +37,19 @@ const (
 )
 
 type ControllerServer struct {
-	caps                          []*csi.ControllerServiceCapability
-	nodeID                        string
-	mounter                       *wekaMounter
-	dynamicVolPath                string
-	api                           *ApiStore
-	newVolumePrefix               string
-	newSnapshotPrefix             string
-	allowAutoFsCreation           bool
-	allowAutoFsExpansion          bool
-	allowSnapshotsOfLegacyVolumes bool
+	caps    []*csi.ControllerServiceCapability
+	nodeID  string
+	mounter *wekaMounter
+	api     *ApiStore
+	config  *DriverConfig
 }
 
-func (cs *ControllerServer) getVolumeNamePrefix() string {
-	return cs.newVolumePrefix
+func (cs *ControllerServer) isInDebugMode() bool {
+	return cs.getConfig().isInDebugMode()
 }
 
-func (cs *ControllerServer) getSnapshotNamePrefix() string {
-	return cs.newSnapshotPrefix
+func (cs *ControllerServer) getConfig() *DriverConfig {
+	return cs.config
 }
 
 func (cs *ControllerServer) getMounter() *wekaMounter {
@@ -90,31 +85,26 @@ func (cs *ControllerServer) ControllerGetVolume(context.Context, *csi.Controller
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, dynamicVolPath string,
-	newVolumePrefix, newSnapshotPrefix string, allowAutoFsCreation, allowAutoFsExpansion,
-	allowSnapshotsOfLegacyVolumes, supportSnapshotCapability, supportVolumeCloneCapability bool) *ControllerServer {
+func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, config *DriverConfig) *ControllerServer {
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 	}
-	if supportSnapshotCapability {
+	if config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
 	}
-	if supportVolumeCloneCapability {
+	if config.advertiseVolumeCloneSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CLONE_VOLUME)
 	}
 
+	capabilities := getControllerServiceCapabilities(exposedCapabilities)
+
 	return &ControllerServer{
-		caps:                          getControllerServiceCapabilities(exposedCapabilities),
-		nodeID:                        nodeID,
-		mounter:                       mounter,
-		dynamicVolPath:                dynamicVolPath,
-		api:                           api,
-		newVolumePrefix:               newVolumePrefix,
-		newSnapshotPrefix:             newSnapshotPrefix,
-		allowAutoFsCreation:           allowAutoFsCreation,
-		allowAutoFsExpansion:          allowAutoFsExpansion,
-		allowSnapshotsOfLegacyVolumes: allowSnapshotsOfLegacyVolumes,
+		caps:    capabilities,
+		nodeID:  nodeID,
+		mounter: mounter,
+		api:     api,
+		config:  config,
 	}
 }
 

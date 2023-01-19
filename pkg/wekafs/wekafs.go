@@ -46,19 +46,9 @@ type WekaFsDriver struct {
 	cs             *ControllerServer
 	api            *ApiStore
 	debugPath      string
-	dynamicVolPath string
-
 	csiMode        CsiPluginMode
 	selinuxSupport bool
-
-	newVolumePrefix               string
-	newSnapshotPrefix             string
-	seedSnapshotPrefix            string
-	allowAutoFsCreation           bool
-	allowAutoFsExpansion          bool
-	allowSnapshotsOfLegacyVolumes bool
-	supportSnapshotCapability     bool
-	supportVolumeCloneCapability  bool
+	config         *DriverConfig
 }
 
 type VolumeType string
@@ -211,10 +201,7 @@ func NewApiStore() *ApiStore {
 
 func NewWekaFsDriver(
 	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version, debugPath string,
-	dynmamicVolPath string, csiMode CsiPluginMode, selinuxSupport bool,
-	newVolumePrefix, newSnapshotPrefix, seedSnapshotPrefix string,
-	allowSnapshotsOfLegacyVolumes, allowAutoFsCreation, allowAutoFsExpansion bool,
-	removeSnapshotCapability, removeVolumeCloneCapability bool) (*WekaFsDriver, error) {
+	csiMode CsiPluginMode, selinuxSupport bool, config *DriverConfig) (*WekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
 	}
@@ -236,24 +223,16 @@ func NewWekaFsDriver(
 	log.Info().Msg(fmt.Sprintf("csiMode: %s", csiMode))
 
 	return &WekaFsDriver{
-		name:                          driverName,
-		version:                       vendorVersion,
-		nodeID:                        nodeID,
-		endpoint:                      endpoint,
-		maxVolumesPerNode:             maxVolumesPerNode,
-		debugPath:                     debugPath,
-		dynamicVolPath:                dynmamicVolPath,
-		csiMode:                       csiMode, // either "controller", "node", "all"
-		api:                           NewApiStore(),
-		selinuxSupport:                selinuxSupport,
-		newVolumePrefix:               newVolumePrefix,
-		newSnapshotPrefix:             newSnapshotPrefix,
-		seedSnapshotPrefix:            seedSnapshotPrefix,
-		allowSnapshotsOfLegacyVolumes: allowSnapshotsOfLegacyVolumes,
-		allowAutoFsCreation:           allowAutoFsCreation,
-		allowAutoFsExpansion:          allowAutoFsExpansion,
-		supportSnapshotCapability:     !removeSnapshotCapability,
-		supportVolumeCloneCapability:  !removeVolumeCloneCapability,
+		name:              driverName,
+		nodeID:            nodeID,
+		version:           vendorVersion,
+		endpoint:          endpoint,
+		maxVolumesPerNode: maxVolumesPerNode,
+		api:               NewApiStore(),
+		debugPath:         debugPath,
+		csiMode:           csiMode, // either "controller", "node", "all"
+		selinuxSupport:    selinuxSupport,
+		config:            config,
 	}, nil
 }
 
@@ -270,9 +249,7 @@ func (driver *WekaFsDriver) Run() {
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
 		// bring up controller part
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.dynamicVolPath,
-			driver.newVolumePrefix, driver.newSnapshotPrefix, driver.allowAutoFsCreation, driver.allowAutoFsExpansion,
-			driver.allowSnapshotsOfLegacyVolumes, driver.supportSnapshotCapability, driver.supportVolumeCloneCapability)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -281,7 +258,7 @@ func (driver *WekaFsDriver) Run() {
 
 		// bring up node part
 		log.Info().Msg("Loading NodeServer")
-		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter)
+		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
 	} else {
 		driver.ns = &NodeServer{}
 	}
