@@ -50,3 +50,26 @@ selinuxSupport: off
 selinuxNodeLabel: "csi.weka.io/selinux_enabled"
 # -- kubelet path, in cases Kubernetes is installed not in default folder
 kubeletPath: "/var/lib/kubelet"
+
+# -- CSI plugin features configuration
+pluginConfig:
+  objectNaming:
+    # -- Prefix that will be added to names of Weka cluster filesystems / snapshots assocciated with CSI volume,
+    # must not exceed 7 symbols.
+    volumePrefix: "csivol-"
+    # -- Prefix that will be added to names of Weka cluster snapshots assocciated with CSI snapshot,
+    # must not exceed 7 symbols.
+    snapshotPrefix: "csisnp-"
+    # -- Prefix that will be added to automatically created "seed" snapshot of empty filesytem,
+    # must not exceed 12 symbols.
+    seedSnapshotPrefix: "csisnp-seed-"
+
+# -- Prometheus Metrics configuration
+metrics:
+  # -- Enable Metrics
+  enabled: true
+  # -- Metrics port
+  port: 9090
+
+# -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
+tracingUrl: ""
