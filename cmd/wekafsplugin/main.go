@@ -67,7 +67,7 @@ var (
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
 	csimodetext                   = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
 	selinuxSupport                = flag.Bool("selinux-support", false, "Enable support for SELinux")
-	newVolumePrefix               = flag.String("newfsprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
+	newVolumePrefix               = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
 	newSnapshotPrefix             = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
 	seedSnapshotPrefix            = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
 	allowAutoFsExpansion          = flag.Bool("allowautofsexpansion", true, "Allow expansion of filesystems used as CSI volumes")
@@ -75,8 +75,8 @@ var (
 	allowSnapshotsOfLegacyVolumes = flag.Bool("allowsnapshotsoflegacyvolumes", true, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
 	removeSnapshotsCapability     = flag.Bool("removesnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
 	removeVolumeCloneCapability   = flag.Bool("removevolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
-	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint") // TODO: instrument via Helm
-	metricsPort                   = flag.String("metricsport", "9000", "HTTP port to expose metrics on")    // TODO: instrument via Helm
+	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
+	metricsPort                   = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
 	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
 	tracingUrl                    = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
 
