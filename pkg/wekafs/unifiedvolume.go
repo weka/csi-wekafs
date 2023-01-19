@@ -44,7 +44,6 @@ type UnifiedVolume struct {
 	permissions         fs.FileMode
 	ownerUid            int
 	ownerGid            int
-	mounter             *wekaMounter // TODO: could be removed in favor of volume.server.getMounter(), but should we?
 	mountPath           map[bool]string
 	enforceCapacity     bool
 
@@ -551,7 +550,7 @@ func (v *UnifiedVolume) updateCapacityXattr(ctx context.Context, enforceCapacity
 
 func (v *UnifiedVolume) moveToTrash(ctx context.Context) error {
 	if v.requiresGc() {
-		v.mounter.gc.triggerGcVolume(ctx, *v)
+		v.server.getMounter().gc.triggerGcVolume(ctx, *v)
 		return nil
 	}
 	return v.Delete(ctx)
@@ -742,17 +741,17 @@ func (v *UnifiedVolume) Mount(ctx context.Context, xattr bool) (error, UnmountFu
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
-	if v.mounter == nil {
+	if v.server.getMounter() == nil {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
 	if xattr {
-		mountXattr, err, unmountFunc := v.mounter.MountXattr(ctx, v.FilesystemName, v.apiClient)
+		mountXattr, err, unmountFunc := v.server.getMounter().MountXattr(ctx, v.FilesystemName, v.apiClient)
 		if err == nil {
 			v.mountPath[xattr] = mountXattr
 		}
 		return err, unmountFunc
 	} else {
-		mount, err, unmountFunc := v.mounter.Mount(ctx, v.FilesystemName, v.apiClient)
+		mount, err, unmountFunc := v.server.getMounter().Mount(ctx, v.FilesystemName, v.apiClient)
 		if err == nil {
 			v.mountPath[xattr] = mount
 		}
@@ -767,17 +766,17 @@ func (v *UnifiedVolume) Unmount(ctx context.Context, xattr bool) error {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
-	if v.mounter == nil {
+	if v.server.getMounter() == nil {
 		Die("Volume unmount could not be done since mounter not defined on it")
 	}
 	if xattr {
-		err := v.mounter.Unmount(ctx, v.FilesystemName)
+		err := v.server.getMounter().Unmount(ctx, v.FilesystemName)
 		if err == nil {
 			v.mountPath[xattr] = ""
 		}
 		return err
 	} else {
-		err := v.mounter.UnmountXattr(ctx, v.FilesystemName)
+		err := v.server.getMounter().UnmountXattr(ctx, v.FilesystemName)
 		if err == nil {
 			v.mountPath[xattr] = ""
 		}
