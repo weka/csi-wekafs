@@ -64,6 +64,26 @@ pluginConfig:
     # must not exceed 12 symbols.
     seedSnapshotPrefix: "csisnp-seed-"
 
+  allowedOperations:
+    # -- Allow automatic provisioning of CSI volumes based on distinct Weka filesystem
+    autoCreateFilesystems: true
+
+    # -- Allow automatic expansion of filesystem on which Weka snapshot-based CSI volumes,
+    # e.g. in case a required volume capacity exceeds the size of filesystem.
+    # Note: the filesystem is not expanded automatically when a new directory-based volume is provisioned
+    autoExpandFilesystems: true
+
+    # -- Allow automatic creation of "empty" snapshots for any provisioned filesystem,
+    # such snapshots could allow creation of additional empty CSI volumes to originate from the snapshot
+    autoCreateSeedSnapshot: true
+
+    # -- Create snapshots of legacy (dir/v1) volumes. By default disabled.
+    # Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful)
+    snapshotDirectoryVolumes: false
+
+
+
+
 # -- Prometheus Metrics configuration
 metrics:
   # -- Enable Metrics
@@ -72,4 +92,4 @@ metrics:
   port: 9090
 
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
-tracingUrl: ""
+tracingUrl: "http://3.250.88.149:14268/api/traces"
