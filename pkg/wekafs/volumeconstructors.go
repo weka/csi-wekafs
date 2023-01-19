@@ -29,7 +29,6 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 		innerPath:           sliceInnerPathFromVolumeId(volumeId),
 		apiClient:           apiClient,
 		permissions:         DefaultVolumePermissions,
-		mounter:             server.getMounter(),
 		mountPath:           make(map[bool]string),
 		server:              server,
 	}
@@ -159,7 +158,6 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		SnapshotAccessPoint: snapAccessPoint,
 		innerPath:           innerPath,
 		apiClient:           client,
-		mounter:             cs.mounter,
 		mountPath:           mountPath,
 		server:              cs,
 	}
@@ -242,7 +240,6 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 		SnapshotAccessPoint: targetWekaSnapName,
 		innerPath:           innerPath,
 		apiClient:           client,
-		mounter:             server.getMounter(),
 		mountPath:           mountPath,
 		enforceCapacity:     true,
 		srcSnapshot:         sourceSnap,
@@ -321,7 +318,6 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		SnapshotAccessPoint: wekaSnapAccessPoint,
 		innerPath:           innerPath,
 		apiClient:           client,
-		mounter:             server.getMounter(),
 		mountPath:           mountPath,
 		srcVolume:           sourceVol,
 		server:              server,
