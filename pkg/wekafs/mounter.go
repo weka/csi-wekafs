@@ -44,6 +44,10 @@ type wekaMounter struct {
 	gc             *innerPathVolGc
 }
 
+func (m *wekaMount) isInDebugMode() bool {
+	return m.debugPath != ""
+}
+
 func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, selinuxSupport bool) error {
 	ctx = log.With().Logger().WithContext(ctx)
 
@@ -101,7 +105,7 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
 		return err
 	}
-	if m.debugPath == "" {
+	if !m.isInDebugMode() {
 		mountOptions := getMountOptions(m.fsRequest, selinuxSupport)
 		if apiClient == nil {
 			logger.Trace().Msg("No API client for mount, not requesting mount token")

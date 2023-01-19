@@ -23,7 +23,6 @@ import (
 
 const (
 	MaxHashLengthForObjectNames = 12
-	SeedSnapshotPrefix          = "csi-seed-snap-"
 	SnapshotsSubDirectory       = ".snapshots"
 )
 
@@ -173,7 +172,7 @@ func (v *UnifiedVolume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclien
 }
 
 func (v *UnifiedVolume) getSeedSnapshotName() string {
-	return generateWekaSeedSnapshotName(SeedSnapshotPrefix, v.FilesystemName)
+	return generateWekaSeedSnapshotName(v.server.getConfig().SeedSnapshotPrefix, v.FilesystemName)
 }
 
 func (v *UnifiedVolume) getSeedSnapshotAccessPoint() string {
@@ -335,7 +334,7 @@ func (v *UnifiedVolume) getCapacityFromQuota(ctx context.Context) (int64, error)
 		return 0, err
 	}
 
-	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && v.mounter.debugPath != "" {
+	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && v.server.isInDebugMode() {
 		size, err := v.getSizeFromQuota(ctx)
 		if err == nil {
 			logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
@@ -415,7 +414,7 @@ func (v *UnifiedVolume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Conte
 		return status.Errorf(codes.FailedPrecondition, "Failed to get current volume capacity for volume %s", v.GetId())
 	}
 	if currentFsCapacity < capacityLimit {
-		if (v.isOnSnapshot() || v.hasInnerPath()) && (v.server != nil && !v.server.(*ControllerServer).allowAutoFsExpansion) {
+		if (v.isOnSnapshot() || v.hasInnerPath()) && (v.server != nil && !v.server.getConfig().allowAutoFsExpansion) {
 			return status.Errorf(codes.FailedPrecondition, "Not allowed to expand volume of %s as underlying filesystem %s is too small", v.GetType(), v.FilesystemName)
 		}
 		logger.Debug().Str("filesystem", v.FilesystemName).Int64("desired_capacity", capacityLimit).Msg("New volume size doesn't fit current filesystem limits, expanding filesystem")
@@ -457,7 +456,7 @@ func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *boo
 		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode")
 		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
 		fallback = false
-	} else if v.mounter.debugPath != "" {
+	} else if v.server.isInDebugMode() {
 		logger.Trace().Msg("Updating quota via API is not possible since running in debug mode")
 		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
 		fallback = false
@@ -826,7 +825,7 @@ func (v *UnifiedVolume) Exists(ctx context.Context) (bool, error) {
 			logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist on storage")
 			return false, nil
 		}
-		if v.mounter.debugPath != "" {
+		if v.server.isInDebugMode() {
 			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
 			// no actual data is copied, only directory structure is created as if it was a real snapshot.
 			// happens only if the real snapshot indeed exists
@@ -1042,7 +1041,7 @@ func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) error {
 	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
 	// no actual data is copied, only directory structure is created as if it was a real snapshot.
 	// happens only if the real snapshot indeed exists
-	if v.mounter.debugPath != "" {
+	if v.server.isInDebugMode() {
 		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
 		const xattrMount = true
 		err, unmount := v.opportunisticMount(ctx, xattrMount)
@@ -1115,7 +1114,7 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateSnapshot(ctx, sr, snapObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-		if v.mounter.debugPath != "" {
+		if v.server.isInDebugMode() {
 			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
 			// no actual data is copied, only directory structure is created as if it was a real snapshot.
 			// happens only if the real snapshot indeed exists
@@ -1500,7 +1499,7 @@ func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (Snapsh
 // canBeOperated returns true if the object can be CRUDed without API backing (basically only dirVolume without snapshot)
 func (v *UnifiedVolume) canBeOperated() error {
 	if v.SnapshotUuid != nil {
-		if v.apiClient == nil && v.mounter.debugPath == "" {
+		if v.apiClient == nil && !v.server.isInDebugMode() {
 			return errors.New("Cannot operate volume of this type without API binding")
 		}
 

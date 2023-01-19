@@ -55,8 +55,8 @@ type Snapshot interface {
 }
 
 type AnyServer interface {
-	getVolumeNamePrefix() string
-	getSnapshotNamePrefix() string
 	getMounter() *wekaMounter
 	getApiStore() *ApiStore
+	getConfig() *DriverConfig
+	isInDebugMode() bool
 }

@@ -18,7 +18,7 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 	filesystemName := sliceFilesystemNameFromVolumeId(srcVolId)
 	snapNameHash := generateSnapshotNameHash(name)
 	snapIntegrityId := generateSnapshotIntegrityID(name, srcVolId)
-	snapName := generateWekaSnapNameForSnapshot(server.getSnapshotNamePrefix(), name)
+	snapName := generateWekaSnapNameForSnapshot(server.getConfig().SnapshotPrefix, name)
 	innerPath := sliceInnerPathFromVolumeId(srcVolId)
 	snapshotId := generateSnapshotIdFromComponents(VolumeTypeUnifiedSnap, filesystemName, snapNameHash, snapIntegrityId, innerPath)
 	var sourceSnapUid *uuid.UUID
@@ -60,7 +60,7 @@ func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apicli
 		FilesystemName:      sliceFilesystemNameFromSnapshotId(snapshotId),
 		SnapshotNameHash:    sliceSnapshotNameHashFromSnapshotId(snapshotId),
 		SnapshotIntegrityId: sliceSnapshotIntegrityIdFromSnapshotId(snapshotId),
-		SnapshotName:        server.getSnapshotNamePrefix() + sliceSnapshotNameHashFromSnapshotId(snapshotId),
+		SnapshotName:        server.getConfig().SnapshotPrefix + sliceSnapshotNameHashFromSnapshotId(snapshotId),
 		innerPath:           sliceInnerPathFromSnapshotId(snapshotId),
 		apiClient:           apiClient,
 	}
