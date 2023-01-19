@@ -83,6 +83,18 @@ spec:
             - "--newvolumeprefix={{ .Values.pluginConfig.objectNaming.volumePrefix | default "csivol-" | trunc 7 }}"
             - "--newsnapshotprefix={{ .Values.pluginConfig.objectNaming.snapshotPrefix | default "csisnp-" | trunc 7 }}"
             - "--seedsnapshotprefix={{ .Values.pluginConfig.objectNaming.seedSnapshotPrefix | default "csisnp-seed-" | trunc 12 }}"
+          {{- if .Values.pluginConfig.allowedOperations.autoCreateFilesystems | default true }}
+            - "--allowautofscreation"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowedOperations.autoExpandFilesystems | default true }}
+            - "--allowautofsexpansion"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowedOperations.autoCreateSeedSnapshot | default true }}
+            - "--autocreateseedsnapshot"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes }}
+            - "--allowsnapshotsoflegacyvolumes"
+          {{- end }}
             - "--tracingurl={{ .Values.tracingUrl | quote }}"
           {{- if .Values.metrics.enabled }}
             - "--enablemetrics"
