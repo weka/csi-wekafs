@@ -262,7 +262,7 @@ func (m *wekaMounter) gcInactiveMounts() {
 				if wekaMount.lastUsed.Before(time.Now().Add(-inactiveMountGcPeriod)) {
 					m.lock.Lock()
 					if wekaMount.refCount == 0 {
-						log.Trace().Str("filesystem", fsRequest.fsName).Bool("xattr_flag", fsRequest.xattr).Time("last_used", wekaMount.lastUsed).Msg("Removing stale moung from map")
+						log.Trace().Str("filesystem", fsRequest.fsName).Bool("xattr_flag", fsRequest.xattr).Time("last_used", wekaMount.lastUsed).Msg("Removing stale mount from map")
 						delete(m.mountMap, fsRequest)
 					}
 					m.lock.Unlock()
