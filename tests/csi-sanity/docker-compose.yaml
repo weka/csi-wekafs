@@ -8,7 +8,7 @@ services:
       - test-volume:/tmp/weka-csi-test
     privileged: true
     ports:
-      - "9001:9000"
+      - "9001:9090"
   plugin_node:
     build: .
     command: wekafsplugin -nodeid 1 -v 9 --endpoint=unix://tmp/weka-csi-test/node.sock --debugpath=/tmp/weka-csi-test/filesystems --csimode=node -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -allowautoseedsnapshotcreation
@@ -16,7 +16,7 @@ services:
       - test-volume:/tmp/weka-csi-test
     privileged: true
     ports:
-      - "9002:9000"
+      - "9002:9090"
   plugin_controller_no_snaps:
     build: .
     command: wekafsplugin -nodeid 1 -v 9 --endpoint=unix://tmp/weka-csi-test/controller-no-snaps.sock --debugpath=/tmp/weka-csi-test/filesystems --csimode=controller -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -allowautoseedsnapshotcreation -suppresssnapshotcapability -suppressrvolumeclonecapability
@@ -24,7 +24,7 @@ services:
       - test-volume:/tmp/weka-csi-test
     privileged: true
     ports:
-      - "9003:9000"
+      - "9003:9090"
   plugin_node_no_snaps:
     build: .
     command: wekafsplugin -nodeid 1 -v 9 --endpoint=unix://tmp/weka-csi-test/node-no-snaps.sock --debugpath=/tmp/weka-csi-test/filesystems --csimode=node -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -allowautoseedsnapshotcreation -suppresssnapshotcapability -suppressrvolumeclonecapability
@@ -32,7 +32,7 @@ services:
       - test-volume:/tmp/weka-csi-test
     privileged: true
     ports:
-      - "9004:9000"
+      - "9004:9090"
   sanity:
     build: .
     command: run_sanity
