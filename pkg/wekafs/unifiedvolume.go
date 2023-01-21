@@ -422,7 +422,6 @@ func (v *UnifiedVolume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Conte
 			logger.Error().Err(err).Msg("Failed to expand filesystem to support new volume capacity")
 			return status.Errorf(codes.FailedPrecondition, "Could not expand filesystem to support new volume capacity")
 		}
-		// TODO: Add actual FS resize and err handling
 	}
 	return nil
 }
@@ -565,7 +564,7 @@ func (v *UnifiedVolume) getInnerPath() string {
 func (v *UnifiedVolume) getFullPath(ctx context.Context, xattr bool) string {
 	mountParts := []string{v.mountPath[xattr]}
 	if v.isOnSnapshot() {
-		mountParts = append(mountParts, []string{SnapshotsSubDirectory, v.SnapshotAccessPoint}...) //TODO: validate when and how it is populated
+		mountParts = append(mountParts, []string{SnapshotsSubDirectory, v.SnapshotAccessPoint}...)
 	}
 	if v.hasInnerPath() {
 		mountParts = append(mountParts, v.getInnerPath())

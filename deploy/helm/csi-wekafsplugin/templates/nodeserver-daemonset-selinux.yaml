@@ -56,10 +56,10 @@ spec:
             - "--newsnapshotprefix={{ .Values.pluginConfig.objectNaming.snapshotPrefix | default "csisnp-" | trunc 7 }}"
             - "--seedsnapshotprefix={{ .Values.pluginConfig.objectNaming.seedSnapshotPrefix | default "csisnp-seed-" | trunc 12 }}"
             - "--selinux-support"
-            - "--tracingurl={{ .Values.tracingUrl | quote }}"
+            - "--tracingurl={{ .Values.tracingUrl | squote }}"
           {{- if .Values.metrics.enabled }}
             - "--enablemetrics"
-            - "--metricsport={{ .Values.metrics.port | quote | default "9090"}}"
+            - "--metricsport={{ .Values.metrics.port | default 9090 | squote }}"
           {{- end }}
           ports:
             - containerPort: 9898
