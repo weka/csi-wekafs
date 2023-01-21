@@ -153,10 +153,14 @@ func (s *UnifiedSnapshot) Create(ctx context.Context) error {
 		Str("snapshot_uid", snap.Uid.String()).
 		Str("access_point", s.SnapshotIntegrityId).Msg("Snapshot was created successfully")
 
-	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure as if it was a real snapshot.
-	// no actual data is copied, only directory structure is created
-	if err := s.mimicDirectoryStructureForDebugMode(ctx); err != nil {
-		return err
+	if s.server != nil && s.server.isInDebugMode() {
+		// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure as if it was a real snapshot.
+		// no actual data is copied, only directory structure is created
+		// happens only if the real snapshot indeed exists and is valid
+		err := s.mimicDirectoryStructureForDebugMode(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
