@@ -188,15 +188,12 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		r.URL.RawQuery = Query.Encode()
 	}
 
-	//LOG EVERY REQUEST
-	//WARNING: If logLevel >= 6, might expose sensitive data in cleartext
-	payload := "<no-payload>"
+	payload := ""
 	if Payload != nil {
 		payload = string(*Payload)
 	}
-	// TODO: SANITIZE PAYLOADS
 	logger := log.Ctx(ctx)
-	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("request", payload).Msg("")
+	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", payload).Msg("")
 
 	response, err := a.client.Do(r)
 	if err != nil {
@@ -209,9 +206,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 	}
 	responseBody, err := ioutil.ReadAll(response.Body)
-
-	// LOG EVERY RESPONSE
-	// WARNING: If logLevel >= 6, might expose sensitive data in cleartext
 	logger.Trace().Str("response", string(responseBody))
 
 	if err != nil {
