@@ -56,7 +56,7 @@ func (a *ApiClient) GetFreeCapacity(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 	capacity := responseData.Capacity.UnprovisionedBytes
-	log.Ctx(ctx).Debug().Uint64("free_capacity", capacity).Msg("Obtained cluster free capacity")
+	log.Ctx(ctx).Trace().Uint64("free_capacity", capacity).Msg("Obtained cluster free capacity")
 	return capacity, nil
 }
 

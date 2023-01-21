@@ -299,11 +299,11 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 	if err != nil {
 		switch t := err.(type) {
 		case ApiNotFoundError:
-			logger.Debug().Err(err).Msg("Could not find existing quota, got error 404")
+			logger.Trace().Msg("Could not find existing quota, got error 404")
 			return nil, ObjectNotFoundError
 		case ApiInternalError:
 			if strings.Contains(t.ApiResponse.Message, "Directory has no quota") {
-				logger.Debug().Err(err).Msg("Could not find existing quota, got error 404")
+				logger.Trace().Msg("Could not find existing quota, got error 404")
 				return nil, ObjectNotFoundError
 			}
 			return nil, err
