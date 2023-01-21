@@ -463,9 +463,7 @@ func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *boo
 	err := primaryFunc()
 	if err == nil {
 		logger.Info().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
-	}
-
-	if fallback {
+	} else if fallback {
 		// it means that fallback is false, and used for updating xattr if quota set failed.
 		// this is not intended to run Xattr for a second time
 		logger.Warn().Err(err).Msg("Failed to set quota via API, failing back to xattr")
