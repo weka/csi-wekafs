@@ -441,34 +441,36 @@ func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *boo
 
 	// update capacity of the volume by updating quota object on its root directory (or XATTR)
 	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
-	var fallback = true // whether we should try to use xAttr fallback or not
-	f := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
-	if v.apiClient == nil {
+	var fallback = true // whether we should try to use xAttr fallback or not if setting quota was attempted and failed. note that in certain cases a fallbackFunc will be used right away:
+	primaryFunc := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
+	fallbackFunc := func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
+	if v.server.isInDebugMode() {
+		logger.Trace().Msg("Updating quota via API is not possible since running in debug mode")
+		primaryFunc = fallbackFunc
+		fallback = false
+	} else if v.apiClient == nil {
 		logger.Trace().Msg("Volume has no API client bound, updating capacity in legacy mode")
-		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
+		primaryFunc = fallbackFunc
 		fallback = false
 	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		logger.Warn().Msg("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
-		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
+		primaryFunc = fallbackFunc
 		fallback = false
 	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
 		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode")
-		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
-		fallback = false
-	} else if v.server.isInDebugMode() {
-		logger.Trace().Msg("Updating quota via API is not possible since running in debug mode")
-		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
+		primaryFunc = fallbackFunc
 		fallback = false
 	}
-	err := f()
+	err := primaryFunc()
 	if err == nil {
 		logger.Info().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
-		return err
 	}
+
 	if fallback {
+		// it means that fallback is false, and used for updating xattr if quota set failed.
+		// this is not intended to run Xattr for a second time
 		logger.Warn().Err(err).Msg("Failed to set quota via API, failing back to xattr")
-		f = func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
-		err := f()
+		err := fallbackFunc()
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to set capacity even in failback mode")
 		}
