@@ -68,8 +68,11 @@ func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume UnifiedVolume)
 		logger.Error().Err(err).Str("full_path", fullPath).
 			Str("volume_trash_location", volumeTrashLoc).Msg("Failed to move volume contents to volumeTrashLoc")
 	}
-	// TODO: there is a problem of directory leaks here. If the volume innerPath is deeper than /csi-volumes/vol-name,
+	// NOTE: there is a problem of directory leaks here. If the volume innerPath is deeper than /csi-volumes/vol-name,
 	// e.g. if using statically provisioned volume, we move only the deepest directory
+	// so if the volume is dir/v1/<filesystem>/this/is/a/path/to/volume, we might move only the `volume`
+	// but otherwise it could be risky as if we have multiple volumes we might remove other data too, e.g.
+	// vol1: dir/v1/<filesystem>/this/is/a/path/to/volume, vol2: dir/v1/<filesystem>/this/is/a/path/to/another_volume
 
 	logger.Trace().Str("purge_path", volumeTrashLoc).Msg("Purging deleted volume data")
 	if err != nil {

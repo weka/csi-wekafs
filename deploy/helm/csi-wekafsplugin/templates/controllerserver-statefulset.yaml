@@ -90,15 +90,15 @@ spec:
             - "--allowautofsexpansion"
           {{- end }}
           {{- if .Values.pluginConfig.allowedOperations.autoCreateSeedSnapshot | default true }}
-            - "--autocreateseedsnapshot"
+            - "--allowautoseedsnapshotcreation"
           {{- end }}
           {{- if .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes }}
             - "--allowsnapshotsoflegacyvolumes"
           {{- end }}
-            - "--tracingurl={{ .Values.tracingUrl | quote }}"
+            - "--tracingurl={{ .Values.tracingUrl | squote }}"
           {{- if .Values.metrics.enabled }}
             - "--enablemetrics"
-            - "--metricsport={{ .Values.metrics.port | quote | default "9090"}}"
+            - "--metricsport={{ .Values.metrics.port | default 9090 | squote }}"
           {{- end }}
           ports:
             - containerPort: 9898

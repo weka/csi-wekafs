@@ -199,7 +199,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	if err != nil {
 		return nil, &ApiError{
 			Err:         err,
-			Text:        "Request failed",
+			Text:        fmt.Sprintf("Request failed: %s", err.Error()),
 			StatusCode:  0,
 			RawData:     nil,
 			ApiResponse: nil,
