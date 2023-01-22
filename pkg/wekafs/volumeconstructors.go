@@ -245,9 +245,6 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 		srcSnapshot:         sourceSnap,
 		server:              server,
 	}
-	logger := log.Ctx(ctx)
-	logger.Error().Str("src_vol_id", vol.id).Str("snap_name", vol.SnapshotName).Str("access_point", vol.SnapshotAccessPoint).
-		Str("inner_path", vol.innerPath).Msg("")
 	return vol, nil
 }
 
