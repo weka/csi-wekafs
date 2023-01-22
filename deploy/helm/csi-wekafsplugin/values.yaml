@@ -51,7 +51,16 @@ selinuxNodeLabel: "csi.weka.io/selinux_enabled"
 # -- kubelet path, in cases Kubernetes is installed not in default folder
 kubeletPath: "/var/lib/kubelet"
 
-# -- CSI plugin features configuration
+# -- Prometheus Metrics configuration
+metrics:
+  # -- Enable Metrics
+  enabled: true
+  # -- Metrics port
+  port: 9090
+
+# -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
+tracingUrl: "http://3.250.88.149:14268/api/traces"
+
 pluginConfig:
   objectNaming:
     # -- Prefix that will be added to names of Weka cluster filesystems / snapshots assocciated with CSI volume,
@@ -80,16 +89,3 @@ pluginConfig:
     # -- Create snapshots of legacy (dir/v1) volumes. By default disabled.
     # Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful)
     snapshotDirectoryVolumes: false
-
-
-
-
-# -- Prometheus Metrics configuration
-metrics:
-  # -- Enable Metrics
-  enabled: true
-  # -- Metrics port
-  port: 9090
-
-# -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
-tracingUrl: "http://3.250.88.149:14268/api/traces"
