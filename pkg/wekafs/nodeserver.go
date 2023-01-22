@@ -117,8 +117,16 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
+	result := "FAILURE"
+
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
-	defer log.Ctx(ctx).Info().Msg("<<<< Completed processing request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
 
 	client, err := ns.api.GetClientFromSecrets(ctx, req.Secrets)
 	if err != nil {
@@ -216,7 +224,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			return NodePublishVolumeError(ctx, codes.Internal, err.Error())
 		}
 	}
-	logger.Debug().Str("volume_id", volumeID).Str("target_path", targetPath).Fields(options).Msg("Mounting")
+	logger.Debug().Str("volume_id", volumeID).Str("target_path", targetPath).Str("source_path", fullPath).Fields(options).Msg("Mounting")
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
@@ -225,7 +233,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		unmount() // unmount only if mount bind failed
 		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
 	}
-
+	result = "SUCCESS"
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
 	return &csi.NodePublishVolumeResponse{}, nil
 }
