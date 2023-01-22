@@ -1241,6 +1241,9 @@ func (v *UnifiedVolume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, err
 	} else if v.srcVolume != nil && v.srcVolume.isOnSnapshot() {
 		logger.Trace().Msg("Attempting to fetch the Weka snapshot of CSI source volume")
 		srcSnap, err = v.srcVolume.getSnapshotObj(ctx)
+	} else if v.srcVolume != nil && !v.srcVolume.isOnSnapshot() {
+		logger.Trace().Msg("Volume is cloned from raw Weka filesystem, no source snapshot to originate from")
+		return nil, nil
 	} else if v.hasSeedSnapshot(ctx) {
 		logger.Trace().Msg("Attempting to fetch the Weka seed snapshot filesystem")
 		srcSnap, err = v.getSeedSnapshot(ctx)
