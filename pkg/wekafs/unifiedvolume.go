@@ -123,9 +123,14 @@ func (v *UnifiedVolume) hasUnderlyingSnapshots(ctx context.Context) (bool, error
 		seedSnapshotName := v.getSeedSnapshotName()
 		for _, s := range *snapshots {
 			if s.IsRemoving || s.Name == seedSnapshotName {
+				logger.Trace().Str("snapshot", s.Name).Msg("Existing snapshot does not prevent filesystem from deletion")
 				continue
 			}
-			logger.Debug().Str("snapshot", s.Name).Str("snapshot_access_point", s.AccessPoint).Msg("Existing snapshot prevents filesystem from deletion")
+			logger.Debug().Str("snapshot", s.Name).
+				Str("snapshot_access_point", s.AccessPoint).
+				Str("snapshot_uid", s.Uid.String()).
+				Str("filesystem", s.Filesystem).
+				Msg("Existing snapshot prevents filesystem from deletion")
 			has = true
 			return has, nil
 		}
