@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
@@ -51,6 +52,28 @@ type UnifiedVolume struct {
 	srcSnapshot Snapshot
 
 	server AnyServer
+}
+
+func (v *UnifiedVolume) getCsiContentSource(ctx context.Context) *csi.VolumeContentSource {
+	if v.srcVolume != nil {
+		return &csi.VolumeContentSource{
+			Type: &csi.VolumeContentSource_Volume{
+				Volume: &csi.VolumeContentSource_VolumeSource{
+					VolumeId: v.srcVolume.GetId(),
+				},
+			},
+		}
+	}
+	if v.srcSnapshot != nil {
+		return &csi.VolumeContentSource{
+			Type: &csi.VolumeContentSource_Snapshot{
+				Snapshot: &csi.VolumeContentSource_SnapshotSource{
+					SnapshotId: v.srcSnapshot.GetId(),
+				},
+			},
+		}
+	}
+	return nil
 }
 
 func (v *UnifiedVolume) MarshalZerologObject(e *zerolog.Event) {

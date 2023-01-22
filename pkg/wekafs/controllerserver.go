@@ -204,6 +204,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				VolumeId:      volume.GetId(),
 				CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
 				VolumeContext: params,
+				ContentSource: volume.getCsiContentSource(ctx),
 			},
 		}, nil
 	} else if volExists {
@@ -222,6 +223,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			VolumeId:      volume.GetId(),
 			CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
 			VolumeContext: params,
+			ContentSource: volume.getCsiContentSource(ctx),
 		},
 	}, nil
 }
