@@ -131,12 +131,18 @@ func parseEndpoint(ep string) (string, string, error) {
 
 func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	ctx = log.With().Logger().WithContext(ctx)
-	log.Ctx(ctx).Trace().Str("method", info.FullMethod).Str("request", protosanitizer.StripSecrets(req).String()).Msg("GRPC request")
+	if info.FullMethod != "/csi.v1.Identity/Probe" {
+		// suppress annoying probe messages
+		log.Ctx(ctx).Trace().Str("method", info.FullMethod).Str("request", protosanitizer.StripSecrets(req).String()).Msg("GRPC request")
+	}
 	resp, err := handler(ctx, req)
 	if err != nil {
 		log.Ctx(ctx).Trace().Err(err).Msg("GRPC error")
 	} else {
-		log.Ctx(ctx).Trace().Str("response", protosanitizer.StripSecrets(resp).String()).Msg("GRPC response")
+		if info.FullMethod != "/csi.v1.Identity/Probe" {
+			// suppress annoying probe messages
+			log.Ctx(ctx).Trace().Str("response", protosanitizer.StripSecrets(resp).String()).Msg("GRPC response")
+		}
 	}
 	return resp, err
 }

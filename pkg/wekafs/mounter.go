@@ -256,7 +256,6 @@ func (m *wekaMounter) LogActiveMounts() {
 
 func (m *wekaMounter) gcInactiveMounts() {
 	if len(m.mountMap) > 0 {
-		log.Trace().Msg("Running mount GC")
 		for fsRequest, wekaMount := range m.mountMap {
 			if wekaMount.refCount == 0 {
 				if wekaMount.lastUsed.Before(time.Now().Add(-inactiveMountGcPeriod)) {
