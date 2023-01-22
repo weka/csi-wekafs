@@ -237,7 +237,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 		FilesystemName:      sourceSnapObj.Filesystem,
 		filesystemGroupName: "",
 		SnapshotName:        targetWekaSnapName,
-		SnapshotAccessPoint: targetWekaSnapName,
+		SnapshotAccessPoint: targetWekaSnapAccessPoint,
 		innerPath:           innerPath,
 		apiClient:           client,
 		mountPath:           mountPath,
