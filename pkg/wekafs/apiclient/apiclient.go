@@ -3,6 +3,7 @@ package apiclient
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,11 +60,14 @@ type ApiClient struct {
 	clientHash                 uint32
 }
 
-func NewApiClient(ctx context.Context, credentials Credentials) (*ApiClient, error) {
+func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool) (*ApiClient, error) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
+	}
 	a := &ApiClient{
 		Mutex: sync.Mutex{},
 		client: &http.Client{
-			Transport:     nil,
+			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
 			Timeout:       0,
@@ -74,7 +78,7 @@ func NewApiClient(ctx context.Context, credentials Credentials) (*ApiClient, err
 		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
 		currentEndpointId: -1,
 	}
-	log.Ctx(ctx).Trace().Msg("Creating new API client")
+	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
 	return a, nil
 }
