@@ -61,8 +61,9 @@ var (
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
 	sync.Mutex
-	apis          map[uint32]*apiclient.ApiClient
-	legacySecrets *map[string]string
+	apis               map[uint32]*apiclient.ApiClient
+	legacySecrets      *map[string]string
+	allowInsecureHttps bool
 }
 
 // Die used to intentionally panic and exit, while updating termination log
@@ -113,7 +114,7 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string)
 // If this is a new API, it will be created and put in hashmap
 func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.Credentials) (*apiclient.ApiClient, error) {
 	// doing this to fetch a client hash
-	newClient, err := apiclient.NewApiClient(ctx, credentials)
+	newClient, err := apiclient.NewApiClient(ctx, credentials, api.allowInsecureHttps)
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
 	}
@@ -184,10 +185,11 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 	return client, nil
 }
 
-func NewApiStore() *ApiStore {
+func NewApiStore(allowInsecureHttps bool) *ApiStore {
 	s := &ApiStore{
-		Mutex: sync.Mutex{},
-		apis:  make(map[uint32]*apiclient.ApiClient),
+		Mutex:              sync.Mutex{},
+		apis:               make(map[uint32]*apiclient.ApiClient),
+		allowInsecureHttps: allowInsecureHttps,
 	}
 	secrets, err := s.GetDefaultSecrets()
 	if err != nil {
@@ -228,7 +230,7 @@ func NewWekaFsDriver(
 		version:           vendorVersion,
 		endpoint:          endpoint,
 		maxVolumesPerNode: maxVolumesPerNode,
-		api:               NewApiStore(),
+		api:               NewApiStore(config.allowInsecureHttps),
 		debugPath:         debugPath,
 		csiMode:           csiMode, // either "controller", "node", "all"
 		selinuxSupport:    selinuxSupport,

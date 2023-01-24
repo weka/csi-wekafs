@@ -80,6 +80,7 @@ var (
 	metricsPort                   = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
 	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
 	tracingUrl                    = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
+	allowInsecureHttps            = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
 
 	// Set by the build process
 	version = ""
@@ -183,7 +184,7 @@ func handle() {
 		*newVolumePrefix, *newSnapshotPrefix, *seedSnapshotPrefix, *debugPath,
 		*allowAutoFsCreation, *allowAutoFsExpansion,
 		*allowAutoSeedSnapshotCreation, *allowSnapshotsOfLegacyVolumes,
-		*suppressSnapshotsCapability, *suppressVolumeCloneCapability)
+		*suppressSnapshotsCapability, *suppressVolumeCloneCapability, *allowInsecureHttps)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

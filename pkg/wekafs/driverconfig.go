@@ -12,11 +12,13 @@ type DriverConfig struct {
 	advertiseSnapshotSupport      bool
 	advertiseVolumeCloneSupport   bool
 	debugPath                     string
+	allowInsecureHttps            bool
 }
 
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowAutoSeedSnapshotCreation, allowSnapshotsOfLegacyVolumes bool,
-	suppressnapshotSupport, suppressVolumeCloneSupport bool) *DriverConfig {
+	suppressnapshotSupport, suppressVolumeCloneSupport,
+	allowInsecureHttps bool) *DriverConfig {
 	return &DriverConfig{
 		DynamicVolPath:                dynamicVolPath,
 		VolumePrefix:                  VolumePrefix,
@@ -29,6 +31,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		advertiseSnapshotSupport:      !suppressnapshotSupport,
 		advertiseVolumeCloneSupport:   !suppressVolumeCloneSupport,
 		debugPath:                     debugPath,
+		allowInsecureHttps:            allowInsecureHttps,
 	}
 }
 

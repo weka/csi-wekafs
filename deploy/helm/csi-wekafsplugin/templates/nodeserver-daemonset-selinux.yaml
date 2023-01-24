@@ -63,6 +63,9 @@ spec:
             - "--enablemetrics"
             - "--metricsport={{ .Values.metrics.port | default 9090 }}"
           {{- end }}
+          {{- if .Values.pluginConfig.allowInsecureHttps }}
+            - "--allowinsecurehttps"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
