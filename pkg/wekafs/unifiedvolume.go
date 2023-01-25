@@ -142,9 +142,9 @@ func (v *UnifiedVolume) hasUnderlyingSnapshots(ctx context.Context) (bool, error
 	if snapshots == nil {
 		return false, nil
 	}
-	if len(*snapshots) > 0 {
+	if len(snapshots) > 0 {
 		seedSnapshotName := v.getSeedSnapshotName()
-		for _, s := range *snapshots {
+		for _, s := range snapshots {
 			if s.IsRemoving || s.Name == seedSnapshotName {
 				logger.Trace().Str("snapshot", s.Name).Msg("Existing snapshot does not prevent filesystem from deletion")
 				continue
@@ -178,8 +178,8 @@ func (v *UnifiedVolume) isAllowedForDeletion(ctx context.Context) bool {
 }
 
 // getUnderlyingSnapshots intended to return list of Weka snapshots that exist for filesystem
-func (v *UnifiedVolume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snapshot, error) {
-	snapshots := &[]apiclient.Snapshot{}
+func (v *UnifiedVolume) getUnderlyingSnapshots(ctx context.Context) ([]*apiclient.Snapshot, error) {
+	snapshots := []*apiclient.Snapshot{}
 	if v.apiClient == nil {
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}

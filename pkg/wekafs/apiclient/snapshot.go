@@ -36,22 +36,22 @@ func (snap *Snapshot) String() string {
 }
 
 // FindSnapshotsByFilter returns result set of 0-many objects matching filter
-func (a *ApiClient) FindSnapshotsByFilter(ctx context.Context, query *Snapshot, resultSet *[]Snapshot) error {
-	ret := &[]Snapshot{}
+func (a *ApiClient) FindSnapshotsByFilter(ctx context.Context, query *Snapshot, resultSet []*Snapshot) error {
+	ret := []*Snapshot{}
 	q, _ := qs.Values(query)
 	err := a.Get(ctx, query.GetBasePath(), q, ret)
 	if err != nil {
 		return err
 	}
-	for _, r := range *ret {
+	for _, r := range ret {
 		if r.EQ(query) {
-			*resultSet = append(*resultSet, r)
+			resultSet = append(resultSet, r)
 		}
 	}
 	return nil
 }
 
-func (a *ApiClient) FindSnapshotsByFilesystem(ctx context.Context, query *FileSystem, resultSet *[]Snapshot) error {
+func (a *ApiClient) FindSnapshotsByFilesystem(ctx context.Context, query *FileSystem, resultSet []*Snapshot) error {
 	if query == nil || query.Uid == uuid.Nil {
 		return errors.New("cannot search for snapshots without explicit filesystem Uid")
 	}
@@ -68,18 +68,18 @@ func (a *ApiClient) GetSnapshotByFilter(ctx context.Context, query *Snapshot) (*
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 
-	rs := &[]Snapshot{}
+	rs := []*Snapshot{}
 	err := a.FindSnapshotsByFilter(ctx, query, rs)
 	if err != nil {
 		return &Snapshot{}, err
 	}
-	if *rs == nil || len(*rs) == 0 {
+	if rs == nil || len(rs) == 0 {
 		return &Snapshot{}, ObjectNotFoundError
 	}
-	if len(*rs) > 1 {
+	if len(rs) > 1 {
 		return &Snapshot{}, MultipleObjectsFoundError
 	}
-	result := &(*rs)[0]
+	result := rs[0]
 	return result, nil
 }
 
