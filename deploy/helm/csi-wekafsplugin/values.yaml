@@ -59,7 +59,7 @@ metrics:
   port: 9090
 
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
-tracingUrl: "http://3.250.88.149:14268/api/traces"
+tracingUrl: ""
 
 pluginConfig:
   # -- Allow insecure HTTPS (skip TLS certificate verification)
