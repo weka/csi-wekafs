@@ -183,3 +183,15 @@ func (e ApiNonrecoverableError) Error() string {
 func (e ApiNonrecoverableError) getType() string {
 	return "ApiNonrecoverableError"
 }
+
+type transportError struct {
+	Err error
+}
+
+func (e transportError) Error() string {
+	return e.Err.Error()
+}
+
+func (e transportError) getType() string {
+	return "transportError"
+}

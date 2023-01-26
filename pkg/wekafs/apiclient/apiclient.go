@@ -200,37 +200,26 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", payload).Msg("")
 
 	response, err := a.client.Do(r)
-	var responseBody []byte
-	responseBody, err2 := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, &transportError{err}
+	}
+
+	if response == nil {
+		return nil, &transportError{errors.New("received no response")}
+	}
+
+	responseBody, err := ioutil.ReadAll(response.Body)
 	logger.Trace().Str("response", string(responseBody)).Msg("")
 	if err != nil {
-		return nil, &ApiError{
-			Err:         err,
-			Text:        fmt.Sprintf("Request failed: %s", err.Error()),
-			StatusCode:  response.StatusCode,
-			RawData:     &responseBody,
-			ApiResponse: nil,
-		}
-	}
-	if err2 != nil {
 		return nil, &ApiInternalError{
 			Err:         err,
-			Text:        fmt.Sprintf("Failed to parse response: %s", err2.Error()),
+			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
 			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: nil,
 		}
 	}
 
-	if err != nil {
-		return nil, &ApiError{
-			Err:         err,
-			Text:        "Failed to read from request",
-			StatusCode:  response.StatusCode,
-			RawData:     &responseBody,
-			ApiResponse: nil,
-		}
-	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
