@@ -1,6 +1,10 @@
 apiVersion: v2
 name: csi-wekafsplugin
 description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
+maintainers:
+  - name: WekaIO, Inc.
+    email: csi@weka.io
+    url: https://weka.io
 sources:
   - https://github.com/weka/csi-wekafs/tree/v0.8.4/deploy/helm/csi-wekafsplugin
 home: https://github.com/weka/csi-wekafs
