@@ -73,7 +73,7 @@ func (m *wekaMount) decRef(ctx context.Context) error {
 	defer m.lock.Unlock()
 	m.refCount--
 	m.lastUsed = time.Now()
-	logger.Trace().Int("refcount", m.refCount).Msg("RefCount increased")
+	logger.Trace().Int("refcount", m.refCount).Msg("RefCount decreased")
 	if m.refCount < 0 {
 		logger.Error().Int("refcount", m.refCount).Msg("During decRef negative refcount encountered")
 		m.refCount = 0 // to make sure that we don't have negative refcount later
