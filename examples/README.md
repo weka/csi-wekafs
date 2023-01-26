@@ -12,4 +12,4 @@ To enable snapshot functionality, Kubernetes Snapshot Controller must be install
    kubectl kustomize client/config/crd | kubectl create -f -
    ```
 
-For additional information, refer to [Kubernetes documetation](https://github.com/kubernetes-csi/external-snapshotter/tree/master#usage)
+For additional information, refer to [Kubernetes documentation](https://github.com/kubernetes-csi/external-snapshotter/tree/master#usage)

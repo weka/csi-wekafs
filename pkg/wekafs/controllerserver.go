@@ -379,7 +379,6 @@ func CreateSnapshotError(ctx context.Context, errorCode codes.Code, errorMessage
 	return &csi.CreateSnapshotResponse{}, err
 }
 
-//goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	op := "CreateSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
@@ -445,7 +444,6 @@ func DeleteSnapshotError(ctx context.Context, errorCode codes.Code, errorMessage
 	return &csi.DeleteSnapshotResponse{}, err
 }
 
-//goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteSnapshotRequest) (*csi.DeleteSnapshotResponse, error) {
 	op := "DeleteSnapshot"
 	snapshotID := req.GetSnapshotId()
@@ -492,7 +490,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 }
 
 //goland:noinspection GoUnusedParameter
-func (cs *ControllerServer) ListSnapshots(c context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
+func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	panic("Implement me")
 }
 
@@ -524,7 +522,6 @@ func ValidateVolumeCapsError(ctx context.Context, errorCode codes.Code, errorMes
 	return &csi.ValidateVolumeCapabilitiesResponse{}, err
 }
 
-//goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	op := "ValidateVolumeCapabilities"
 	volumeID := req.GetVolumeId()

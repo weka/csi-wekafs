@@ -108,7 +108,6 @@ func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 	return &csi.NodePublishVolumeResponse{}, err
 }
 
-//goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	op := "NodePublishVolume"
 	volumeID := req.GetVolumeId()
@@ -325,7 +324,6 @@ func NodeStageVolumeError(ctx context.Context, errorCode codes.Code, errorMessag
 	return &csi.NodeStageVolumeResponse{}, err
 }
 
-//goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	op := "NodeStageVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
@@ -366,7 +364,6 @@ func NodeUnstageVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 	return &csi.NodeUnstageVolumeResponse{}, err
 }
 
-//goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
 	op := "NodeUnstageVolume"
 	result := "FAILURE"

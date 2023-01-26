@@ -6,7 +6,7 @@ This example extends the example provided in previous version of the Weka CSI Pl
 2. Although new functionality is added, this mode is fully compatible with volumes provisioned in previous versions of Weka CSI Plugin
 3. This mode requires an existing Weka filesystem, on top of which directories will be provisioned, and attached to Weka quota object
 4. Snapshots of such CSI volumes (including volumes created with previous versions of the plugin) can be done as well
-5. However, since the snapshot is performed on Weka filesystem level, snapshot woult include all changes done in either one of the volumes
+5. However, since the snapshot is performed on Weka filesystem level, snapshot would include all changes done in either one of the volumes
    provisioned on top of that filesystem, hence would be very wasteful on allocated storage resources.
 6. Due to the limitation above, creation of CSI snapshots originating from directory-backed volumes is prohibited by default configuration.
    Please refer to the section below for configuration required to allow this functionality.
@@ -50,4 +50,3 @@ This example introduces automatic provisioning of filesystems. For this function
 10. Create application that tails content of `/data/temp.txt` from volume created from snapshot: `csi-app-on-dir-clone`
     - the file should exist and be accessible
     - the latest timestamp you are expected to see is the timestamp just before volume cloning
- 

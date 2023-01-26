@@ -88,7 +88,7 @@ func generateSnapshotIntegrityID(name string, sourceVolumeId string) string {
 	return getStringSha1AsB32(name + ":" + sourceVolumeId)[:MaxHashLengthForObjectNames]
 }
 
-// generateSnapshotIdFromComponents constructs a full-fledged volume ID from different components of the Volume
+// generateSnapshotIdFromComponents constructs a full-fledged snapshot ID from different components of the Snapshot
 func generateSnapshotIdFromComponents(volumeType VolumeType, filesystemName, snapshotNameHash, snapshotIntegrityId, innerPath string) string {
 	volId := string(volumeType) + "/" + filesystemName + ":" + snapshotNameHash + ":" + snapshotIntegrityId
 	if innerPath != "" {
