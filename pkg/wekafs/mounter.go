@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"hash/fnv"
 	"k8s.io/utils/mount"
 	"os"
 	"path/filepath"
@@ -18,8 +19,15 @@ const (
 )
 
 type fsMountRequest struct {
-	fsName string
-	xattr  bool
+	fsName  string
+	options *MountOptions
+}
+
+func (fsm *fsMountRequest) Hash() uint32 {
+	h := fnv.New32a()
+	s := fmt.Sprintln(fsm.options.getOpts(), fsm.fsName)
+	_, _ = h.Write([]byte(s))
+	return h.Sum32()
 }
 
 type wekaMount struct {
@@ -29,7 +37,7 @@ type wekaMount struct {
 	lock         sync.Mutex
 	kMounter     mount.Interface
 	debugPath    string
-	mountOptions []string
+	mountOptions *MountOptions
 	lastUsed     time.Time
 }
 
@@ -88,7 +96,7 @@ func (m *wekaMount) decRef(ctx context.Context) error {
 
 func (m *wekaMount) doUnmount(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
-	logger.Trace().Bool("xattr_flag", m.fsRequest.xattr).Msg("Performing umount via k8s native mounter")
+	logger.Trace().Strs("mount_options", m.fsRequest.options.getOpts()).Msg("Performing umount via k8s native mounter")
 	err := m.kMounter.Unmount(m.mountPoint)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
@@ -106,7 +114,7 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 		return err
 	}
 	if !m.isInDebugMode() {
-		mountOptions := getMountOptions(m.fsRequest, selinuxSupport)
+		mountOptions := getDefaultMountOptions().MergedWith(&MountOptions{selinuxSupport: selinuxSupport})
 		if apiClient == nil {
 			logger.Trace().Msg("No API client for mount, not requesting mount token")
 		} else {
@@ -117,34 +125,18 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 			}
 			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
 		}
-		logger.Trace().Bool("xattr_flag", m.fsRequest.xattr).Bool("xattr_flag", m.fsRequest.xattr).
+		logger.Trace().Strs("mount_options", m.fsRequest.options.getOpts()).
 			Fields(mountOptions).Msg("Performing mount")
-		return m.kMounter.MountSensitive(m.fsRequest.fsName, m.mountPoint, "wekafs", mountOptions, mountOptionsSensitive)
+		return m.kMounter.MountSensitive(m.fsRequest.fsName, m.mountPoint, "wekafs", mountOptions.getOpts(), mountOptionsSensitive)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsRequest.fsName)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
 			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
 		}
-		logger.Trace().Bool("xattr_flag", m.fsRequest.xattr).Bool("xattr_flag", m.fsRequest.xattr).
-			Str("debug_path", m.debugPath).Msg("Performing mount")
+		logger.Trace().Strs("mount_options", m.fsRequest.options.getOpts()).Str("debug_path", m.debugPath).Msg("Performing mount")
 
 		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
 	}
-}
-
-func getDefaultMountOptions() []string {
-	return []string{"writecache"}
-}
-
-func getMountOptions(fs *fsMountRequest, selinuxSupport bool) []string {
-	var mountOptions = getDefaultMountOptions()
-	if fs.xattr {
-		mountOptions = append(mountOptions, "acl")
-	}
-	if selinuxSupport {
-		mountOptions = append(mountOptions, "fscontext=\"system_u:object_r:wekafs_csi_volume_t:s0\"")
-	}
-	return mountOptions
 }
 
 func (m *wekaMounter) initFsMountObject(fsMountRequest fsMountRequest) {
@@ -177,7 +169,7 @@ func (m *wekaMounter) initFsMountObject(fsMountRequest fsMountRequest) {
 type UnmountFunc func()
 
 func (m *wekaMounter) mountParams(ctx context.Context, fs string, xattr bool, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	request := fsMountRequest{fs, xattr}
+	request := fsMountRequest{fs, getDefaultMountOptions().MergedWith(&MountOptions{xattr: xattr})}
 	m.initFsMountObject(request)
 	mounter := m.mountMap[request]
 	mountErr := mounter.incRef(ctx, apiClient, m.selinuxSupport)
@@ -210,12 +202,12 @@ func (m *wekaMounter) UnmountXattr(ctx context.Context, fs string) error {
 }
 
 func (m *wekaMounter) unmount(ctx context.Context, fs string, xattr bool) error {
-	fsReq := fsMountRequest{fs, xattr}
+	fsReq := fsMountRequest{fs, getDefaultMountOptions().MergedWith(&MountOptions{xattr: xattr})}
 	if mnt, ok := m.mountMap[fsReq]; ok {
 		err := mnt.decRef(ctx)
 		if err != nil {
 			if m.mountMap[fsReq].refCount <= 0 {
-				log.Ctx(ctx).Trace().Str("filesystem", fsReq.fsName).Bool("xattr_flag", fsReq.xattr).Msg("This is a last use of this mount, removing from map")
+				log.Ctx(ctx).Trace().Str("filesystem", fsReq.fsName).Strs("mount_options", fsReq.options.getOpts()).Msg("This is a last use of this mount, removing from map")
 				delete(m.mountMap, fsReq)
 			}
 		}
@@ -228,8 +220,8 @@ func (m *wekaMounter) unmount(ctx context.Context, fs string, xattr bool) error 
 	}
 }
 
-func (m *wekaMounter) HasMount(filesystem string, xattr bool) bool {
-	fsReq := fsMountRequest{filesystem, xattr}
+func (m *wekaMounter) HasMount(filesystem string, mountOptions *MountOptions) bool {
+	fsReq := fsMountRequest{filesystem, mountOptions}
 	if mnt, ok := m.mountMap[fsReq]; ok {
 		return mnt.refCount > 0
 	}
@@ -242,11 +234,10 @@ func (m *wekaMounter) LogActiveMounts() {
 		for mnt := range m.mountMap {
 			mapEntry := m.mountMap[mnt]
 			if mapEntry.refCount > 0 {
-				log.Trace().Str("filesystem", mnt.fsName).Int("refcount", mapEntry.refCount).Bool("xattr_flag", mnt.xattr).
-					Msg("Mount is active")
+				log.Trace().Str("filesystem", mnt.fsName).Int("refcount", mapEntry.refCount).Strs("mount_options", mapEntry.mountOptions.getOpts()).Msg("Mount is active")
 				count++
 			} else {
-				log.Trace().Str("filesystem", mnt.fsName).Int("refcount", mapEntry.refCount).Bool("xattr_flag", mnt.xattr).Msg("Mount is not active")
+				log.Trace().Str("filesystem", mnt.fsName).Int("refcount", mapEntry.refCount).Strs("mount_options", mapEntry.mountOptions.getOpts()).Msg("Mount is not active")
 			}
 
 		}
@@ -261,7 +252,8 @@ func (m *wekaMounter) gcInactiveMounts() {
 				if wekaMount.lastUsed.Before(time.Now().Add(-inactiveMountGcPeriod)) {
 					m.lock.Lock()
 					if wekaMount.refCount == 0 {
-						log.Trace().Str("filesystem", fsRequest.fsName).Bool("xattr_flag", fsRequest.xattr).Time("last_used", wekaMount.lastUsed).Msg("Removing stale mount from map")
+						log.Trace().Str("filesystem", fsRequest.fsName).Strs("mount_options", fsRequest.options.getOpts()).
+							Time("last_used", wekaMount.lastUsed).Msg("Removing stale mount from map")
 						delete(m.mountMap, fsRequest)
 					}
 					m.lock.Unlock()
