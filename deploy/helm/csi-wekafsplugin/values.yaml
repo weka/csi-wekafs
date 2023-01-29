@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 0.8.4
+csiDriverVersion: &csiDriverVersion 0.8.5-sergeyvolsnapclonesupport.44.75f99ce
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: k8s.gcr.io/sig-storage/livenessprobe:v2.6.0
@@ -50,3 +50,37 @@ selinuxSupport: off
 selinuxNodeLabel: "csi.weka.io/selinux_enabled"
 # -- kubelet path, in cases Kubernetes is installed not in default folder
 kubeletPath: "/var/lib/kubelet"
+# -- Prometheus Metrics configuration
+metrics:
+  # -- Enable Metrics
+  enabled: true
+  # -- Metrics port
+  port: 9090
+# -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
+tracingUrl: ""
+pluginConfig:
+  # -- Allow insecure HTTPS (skip TLS certificate verification)
+  allowInsecureHttps: false
+  objectNaming:
+    # -- Prefix that will be added to names of Weka cluster filesystems / snapshots assocciated with CSI volume,
+    # must not exceed 7 symbols.
+    volumePrefix: "csivol-"
+    # -- Prefix that will be added to names of Weka cluster snapshots assocciated with CSI snapshot,
+    # must not exceed 7 symbols.
+    snapshotPrefix: "csisnp-"
+    # -- Prefix that will be added to automatically created "seed" snapshot of empty filesytem,
+    # must not exceed 12 symbols.
+    seedSnapshotPrefix: "csisnp-seed-"
+  allowedOperations:
+    # -- Allow automatic provisioning of CSI volumes based on distinct Weka filesystem
+    autoCreateFilesystems: true
+    # -- Allow automatic expansion of filesystem on which Weka snapshot-based CSI volumes,
+    # e.g. in case a required volume capacity exceeds the size of filesystem.
+    # Note: the filesystem is not expanded automatically when a new directory-based volume is provisioned
+    autoExpandFilesystems: true
+    # -- Allow automatic creation of "empty" snapshots for any provisioned filesystem,
+    # such snapshots could allow creation of additional empty CSI volumes to originate from the snapshot
+    autoCreateSeedSnapshot: true
+    # -- Create snapshots of legacy (dir/v1) volumes. By default disabled.
+    # Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful)
+    snapshotDirectoryVolumes: false

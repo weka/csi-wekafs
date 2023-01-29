@@ -351,11 +351,11 @@ main() {
   docker_tag_image
   log_message INFO "Updating Helm package to version ${VERSION_STRING}"
   helm_prepare_package  # create a Helm package in termporary dir, update versions and package
+  helm_update_charts  # to update the Helm chart inside repo
+  helm-docs -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl -s file
   [[ $BUILD_MODE == local ]] && log_message NOTICE "Done building locally $VERSION_STRING" && exit 0
   docker_push_image
   [[ $BUILD_MODE == dev ]] && log_message NOTICE "Done building dev build $VERSION_STRING" && exit 0
-  helm_update_charts  # to update the Helm chart inside repo
-  helm-docs -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl -s file
   git_commit_manifests
   helm_upload_package_to_s3
   git_push_tag v"$VERSION_STRING"

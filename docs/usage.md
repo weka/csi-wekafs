@@ -1,39 +1,58 @@
 # Usage Examples
+
 ## Dynamic Provision of Volumes
+
 ### General Information
-The logic in dynamic provisioning is as following: 
-1. User creates a [storageclass](../examples/dynamic/storageclass-wekafs-dir.yaml) that describes filesystem name on which volumes are going to be provisioned
-1. User creates a [PersistentVolumeClaim](../examples/dynamic/pvc-wekafs-dir.yaml) that mentions the storageclass and provides additional info, such as desired capacity
-1. Once PersistentVolumeClaim is configured, Kubernetes dynamically provisions a new PersistentVolume of desired capacity and binds to it
-1. User creates a [pod](../examples/dynamic/csi-app-on-dir.yaml), that utilises the volume through PersistentVolumeClaim
 
-The csi-wekafs driver is configured to create new directories inside the wekafs filesystem, which is specified in 
-storageClass parameters.
+The logic in dynamic provisioning is as following:
 
-Eventually, those directories are mounted as a PersistentVolume and available to one or more pods, 
-across any number of nodes in the cluster (as long as this member is also a part of Weka cluster)
+1. User creates a [secret](../examples/common/csi-wekafs-api-secret.yaml) that defines API endpoints and credentials
+2. User creates a [snapshotClass](../examples/common/snapshotclass-csi-wekafs.yaml) to allow creation of volume
+   snapshots
+3. User creates a [storageClass](../examples/dynamic_directory/storageclass-wekafs-dir-api.yaml) that describes how new
+   volumes should be provisioned
+4. User creates a [PersistentVolumeClaim](../examples/dynamic_directory/pvc-wekafs-dir-api.yaml) that mentions the
+   storageclass and
+   provides additional info, such as desired capacity
+5. Once PersistentVolumeClaim is configured, Kubernetes dynamically provisions a new PersistentVolume of desired
+   capacity and binds the claim to the volume
+6. User creates a [pod](../examples/dynamic_directory/csi-app-on-dir-api.yaml), that utilises the volume through
+   PersistentVolumeClaim
+7. Optionally, user could create snapshots of volumes and restore them to new volumes, or clone volumes directly
 
-A file written in a properly mounted csi-wekafs volume inside an application should show up inside the filesystem,
-under one of its subfolders, and can be accessed, for example, by other applications outside of Kubernetes cluster.
-  
+> **NOTE:** The example above is based on directory-backed CSI volume, but same logic applies also to other volume
+> types.
+
+For additional information regarding different volume types and how to use them, refer to the following documentation:
+
+- Dynamic provisioning of [directory-backed volumes](../examples/dynamic_directory/README.md)
+- Dynamic provisioning of [filesystem-backed volumes](../examples/dynamic_filesystem/README.md)
+- Dynamic provisioning of [snapshot-backed volumes](../examples/dynamic_snapshot/README.md)
+
 ### Apply example configuration
-1. From the root directory, deploy the application pods including a storage class, a PVC, and a pod which mounts a volume using the csi-wekafs driver found in directory `./examples`:
+
+1. From the root directory, deploy the application pods including a storage class, a PVC, and a pod which mounts a
+   volume using the csi-wekafs driver found in directory `./examples/dynamic_<VOLUME_TYPE>`, e.g. :
 
     ```shell script
     $ for i in \
-     ./examples/dynamic/storageclass-wekafs-dir.yaml \
-     ./examples/dynamic/pvc-wekafs-dir.yaml \
-     ./examples/dynamic/csi-app-on-dir.yaml \
+     ./examples/common/csi-wekafs-secret.yaml \
+     ./examples/common/snapshotcass-csi-wekafs.yaml \
+     ./examples/dynamic_directory/storageclass-wekafs-dir.yaml \
+     ./examples/dynamic_directory/pvc-wekafs-dir.yaml \
+     ./examples/dynamic_directory/csi-app-on-dir.yaml ; do
      kubectl apply -f $i; 
     done
     
+    secret/csi-wekafs-secret created
+    volumesnapshotclass.snapshot.storage.k8s.io/snapshotcass-csi-wekafs created
     storageclass.storage.k8s.io/storageclass-wekafs-dir created      
     PersistentVolumeclaim/pvc-wekafs-dir created             
     pod/csi-app-on-dir created
     ```
 
-1. Let's validate the components are deployed as required:
-    
+2. Let's validate the components are deployed as required:
+
     ```shell script
     $ kubectl get pv
     NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                         STORAGECLASS                   REASON   AGE
@@ -47,7 +66,7 @@ under one of its subfolders, and can be accessed, for example, by other applicat
     csi-app-on-dir              1/1     Running   0          4m
     ```
 
-1. Finally, inspect one of the application pods, e.g. `csi-app-on-dir`, that a WekaFS volume is correctly mounted:
+3. Finally, inspect one of the application pods, e.g. `csi-app-on-dir`, that a WekaFS volume is correctly mounted:
 
     ```shell script
     Name:         csi-app-on-dir
@@ -109,11 +128,12 @@ under one of its subfolders, and can be accessed, for example, by other applicat
       Normal   Started           6m12s                  kubelet, kwuster-kube-7  Started container my-frontend
     ```
 
-### Check example configuration 
-The following steps confirms that csi-wekafs is working properly.  
+### Check example configuration
 
-1. mount the Weka filesystem on either Kubernetes node or other server connected to Weka Matrix.
-1. First, let's see the folder structure on the filesystem:
+The following steps confirms that csi-wekafs is working properly.
+
+1. mount the Weka filesystem on either Kubernetes node or other server connected to Weka cluster.
+2. First, let's see the folder structure on the filesystem:
     ```shell script 
     ls -al
     total 0
@@ -122,60 +142,103 @@ The following steps confirms that csi-wekafs is working properly.
     dr-xr-xr-x 1 root root 0 Jun 16 13:31 .snapshots
     drwxr-x--- 1 root root 0 Jun 24 10:55 csi-volumes
     ```
-1. By default, the volume directories are stored in `csi-volumes` directory for convenience
+3. By default, the volume directories are stored in `csi-volumes` directory for convenience
     ```shell script
     ls -al csi-volumes
     total 0
     drwxr-x--- 1 root root 0 Jun 24 10:55  pvc-382ebb8c-1f8c-4a06-b1e3-0d5e166ebacc-8fb6c993522aab48a293d488bdcc2e432863d50f
     ```
-    > **NOTE:**  the name of the produced folder `pvc-382ebb8c-1f8c-4a06-b1e3-0d5e166ebacc-8fb6c993522aab48a293d488bdcc2e432863d50f`,
-    this is the folder that was created by CSI plugin. For convenience, the ASCII part of the volume name appears in
-    directory name, which is followed by SHA1 hash for the full directory path
+   > **NOTE:**  the name of the produced
+   folder `pvc-382ebb8c-1f8c-4a06-b1e3-0d5e166ebacc-8fb6c993522aab48a293d488bdcc2e432863d50f`,
+   this is the folder that was created by CSI plugin. The truncated ASCII part of the volume name appears in
+   directory name for simpler navigation, which is followed by SHA1 hash for the full directory path
 
-1. The directory now should contain a `hello.txt` file:
+4. The directory now should contain a `hello.txt` file:
     ```shell script
     $ ls csi-volumes/8fb6c993522aab48a293d488bdcc2e432863d50f-pvc-382ebb8c-1f8c-4a06-b1e3-0d5e166ebacc/
     hello.txt
     ```
 
-
 ## Static provisioning of existing volumes
+
 ### General Information
-In some cases, e.g. when user wants to populate pre-existing data to Kubernetes pods, it is convenient to use static 
+
+In some cases, e.g. when user wants to populate pre-existing data to Kubernetes pods, it is convenient to use static
 provisioning of an existing directory as PeristentVolume
 
 The static provisioning logic, if so, is slightly different from dynamic provisioning:
-1. User creates a generic [storageclass](../examples/static/storageclass-wekafs-dir-static.yaml), which doesn't need to specify filesystem
-1. User creates a [PersistentVolume](../examples/static/pvc-wekafs-dir-static.yaml), which provides a specially crafted volumeHandle (see below)
-1. User creates a [PersistentVolumeClaim](../examples/static/pvc-wekafs-dir-static.yaml) that refers to volume name directly
-1. Kubernetes configures an existing path as a pre-existing PersistentVolume.
-1. User can utilize produced PersistentVolumeClaim as in previous example 
 
-> **NOTE:** in static provisioning, since an existing volume is implied, Kuberenetes does not request creating 
-a new volume from CSI driver; it would be called only later, when the PersistentVolumeClaim has to be published on a node.  
+1. User creates a generic [storageclass](../examples/static_volume/storageclass-wekafs-dir-static-api.yaml), which
+   doesn't need to
+   specify filesystem
+2. User creates a [PersistentVolume](../examples/static_volume/pvc-wekafs-dir-static-api.yaml), which provides a
+   specially crafted
+   volumeHandle (see below)
+3. User creates a [PersistentVolumeClaim](../examples/static_volume/pvc-wekafs-dir-static-api.yaml) that refers to
+   volume name
+   directly
+4. Kubernetes configures an existing path as a pre-existing PersistentVolume.
+5. User can utilize produced PersistentVolumeClaim as in previous example
+
+> **NOTE:** in static provisioning, since an existing volume is implied, Kuberenetes does not request creating
+> a new volume from CSI driver; it would be called only later, when the PersistentVolumeClaim has to be published on a
+> node.
+
+For additional information regarding different volume types and how to use them, refer to the following documentation:
+
+- Static provisioning of [volumes](../examples/static_volume/README.md)
+- Static provisioning of [snapshots](../examples/static_snapshot/README.md)
 
 ### volumeHandle structure
+
 The volumeHandle in static provisioning should be of the following format:
+
+#### For directory-backed volumes (as in previous versions of Weka CSI Plugin):
+
 ```shell script
 dir/v1/<FILESYSTEM_NAME>/<INNER_PATH>
 ```
-e.g. 
+
+e.g.
+
 ```shell script
 dir/v1/my_awsome_filesystem/and/very/deep/path/inside/it
 ```
-> **NOTE:**
-> 1. The directory must exist in order to be able to bind PersistentVolume to PersistentVolumeClaim
-> 1. Empty path (e.g. root directory of a filesystem) is not supported for `dir/v1` volumeType and cannot be provided
+
+#### For unified volumes (including directory volume as a subset):
+
+```shell script
+weka/v2/<FILESYSTEM_NAME>[:SNAPSHOT_ACCESS_POINT][/INNER_PATH]
+```
+
+Snapshot access point and inner path are optional, hence all the examples below represent valid volume IDs:
+
+```shell
+weka/v2/my_awesome_filesystem
+weka/v2/my_awesome_filesystem:snap02
+weka/v2/my_awesome_filesystem/charming/directory
+weka/v2/my_awesome_filesystem:snap02/another/awsome/path
+```
+
+> **NOTES:**
+> 1. The filesystem, snapshot access point and inner path must exist in order to be able to bind PersistentVolume to
+     PersistentVolumeClaim
+> 2. Empty path is not supported for `dir/v1` volumeType, but is supported for `weka/v2`
+> 3. Please note that Weka snapshot is identified not by its name, but by its access point.
+> 4. However, the snapshot name must match the pattern `csivol-<SNAPSHOT_ACCESS_POINT>`, e.g. `csivol-snap02` for the
+     example above
 
 ### Apply example configuration
-1. From the root directory, deploy the application pods including a storage class, a PVC, and a pod which mounts a volume using the csi-wekafs driver found in directory `./examples`:
-    
+
+1. From the root directory, deploy the application pods including a storage class, a PVC, and a pod which mounts a
+   volume using the csi-wekafs driver found in directory `./examples`:
+
     ```shell script
     $ for i in \
      ./examples/static/storageclass-wekafs-dir-static.yaml \
      ./examples/static/pvc-wekafs-dir-static.yaml \
-     ./examples/static/csi-app-on-dir-static.yaml \
-     kubectl apply -f $i; 
+     ./examples/static/csi-app-on-dir-static.yaml ; do
+       kubectl apply -f $i; 
     done
     
     storageclass.storage.k8s.io/storageclass-wekafs-dir-static created      
@@ -183,8 +246,8 @@ dir/v1/my_awsome_filesystem/and/very/deep/path/inside/it
     pod/csi-app-on-dir-static created
     ```
 
-1. Let's validate the components are deployed as required:
-    
+2. Let's validate the components are deployed as required:
+
     ```shell script
     $ kubectl get pv
     NAME                  CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                             STORAGECLASS                    REASON   AGE
@@ -199,12 +262,16 @@ dir/v1/my_awsome_filesystem/and/very/deep/path/inside/it
     csi-app-on-dir-static   1/1     Running    0          44h
     ```
 
+> **NOTE:** Additional examples can be found in `examples` directory
+
 ## Expanding a PersistentVolumeClaim
+
 Weka supports online or offline expansion of PersistentVolumeClaim.
 > **NOTE:** Currently, Weka CSI plugin does not enforce actual capacity limits for PersistentVolumes
 
-Assuming that there is a PersistentVolumeClaim named `pvc-wekafs-dir`, which was defined to use a 1Gi capacity, 
+Assuming that there is a PersistentVolumeClaim named `pvc-wekafs-dir`, which was defined to use a 1Gi capacity,
 and we would like to expand it to 4Gi.
+
 ```shell script
 $ kubectl get pvc
 NAME               STATUS   VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS        dir  AGE
@@ -216,8 +283,8 @@ pvc-ee54de25-14f3-4024-98d0-12225e4b8215   4Gi        RWX            Delete     
 ```
 
 1. In order to perform expansion of the volume, the existing PersistentVolumeClaim has to be edited:
-Change the value of `spec.resources.requests.storage` to desired capacity. 
-The resize usually happens within seconds, depending on size and capabilities of your Kubernetes cluster   
+   Change the value of `spec.resources.requests.storage` to desired capacity.
+   The resize usually happens within seconds, depending on size and capabilities of your Kubernetes cluster
     ```shell script
     $ kubectl edit pvc pvc-wekafs-dir
     <REPLACE spec.resources.requests.storage value with 4Gi>
@@ -234,27 +301,31 @@ The resize usually happens within seconds, depending on size and capabilities of
     pvc-wekafs-dir     Bound    pv-wekafs-dir  1Gi        RWX            storageclass-wekafs-dir  7d16h
     ```
 
-> **NOTE:** pod restart could be required if feature gate `ExpandInUsePersistentVolumes` is not true, or if pod does not support it
- 
+> **NOTE:** pod restart could be required if feature gate `ExpandInUsePersistentVolumes` is not true, or if pod does not
+> support it
+
 ## Deleting a PersistentVolumeClaim
-Weka supports both Retain and Delete reclaim policy for dynamically provisioned volumes. 
-In example configuration, a `Delete` reclaimPolicy is defined, which means that the volume will be completely removed, 
+
+Weka supports both Retain and Delete reclaim policy for dynamically provisioned volumes.
+In example configuration, a `Delete` reclaimPolicy is defined, which means that the volume will be completely removed,
 and all its data will be destroyed once `PersistentVolumeClaim` is deleted.
 
-> **NOTE:** Weka CSI plugin processes volume deletions asynchronously, which means that actual deletion (and capacity reclamation) 
-could take time if a volume contains high number of directory entries
+> **NOTE:** Weka CSI plugin processes volume deletions asynchronously, which means that actual deletion (and capacity
+> reclamation) could take time if a volume contains high number of directory entries. Filesystems and snapshots are also
+> deleted asynchronously.
 
-It is recommended using `reclaimPolicy: Retain` configuration for statically provisioned, 
+It is recommended using `reclaimPolicy: Retain` configuration for statically provisioned,
 so they are never deleted automatically by the Weka CSI Plugin.
 
-> **WARNING**:  PersistentVolumes which were provisioned using static provisioning mode, are handled by 
-Kubernetes differently. Since the static provisioning is stated for "provisioning a pre-existing volume",  
-Kubernetes does not initiate CSI `ControllerDeleteVolume` request when deleting such a volume; 
-so the CSI plugin does not perform the deletion. However, this behavior is undocumented, and it might change  
-in future versions. For this reason, we recommende using `ReclaimPolicy: Retain` for statically-provisioned volumes.   
+> **WARNING**:  PersistentVolumes which were provisioned using static provisioning mode, are handled by
+> Kubernetes differently. Since the static provisioning is stated for "provisioning a pre-existing volume",  
+> Kubernetes does not initiate CSI `ControllerDeleteVolume` request when deleting such a volume;
+> so the CSI plugin does not perform the deletion. However, this behavior is undocumented, and it might change  
+> in future versions. For this reason, we recommende using `ReclaimPolicy: Retain` for statically-provisioned volumes.
 
 
-In the example below, we remove the PersistentVolume by deleting the PersistentVolumeClaim, due to "Delete" reclaimPolicy:  
+In the example below, we remove the PersistentVolume by deleting the PersistentVolumeClaim, due to "Delete"
+reclaimPolicy:
 
 1. Assuming that we have a running pod that uses our volume:
     ```shell script
@@ -270,17 +341,17 @@ In the example below, we remove the PersistentVolume by deleting the PersistentV
     NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                             STORAGECLASS               REASON   AGE
     pvc-9a0d7f8e-f29e-4762-871b-66652eed3ac4   1Gi        RWX            Delete           Bound    default/pvc-wekafs-dir            storageclass-wekafs-dir             7d16h
     ```
-1. Delete pod that consumes PersistentVolumeClaim
+2. Delete pod that consumes PersistentVolumeClaim
     ```shell script
     $ kubectl delete pod csi-app-on-dir
     pod "csi-app-on-dir" deleted
     ```
-1. Delete PersistentVolumeClaim
+3. Delete PersistentVolumeClaim
     ```shell script
     $ kubectl delete pvc pvc-wekafs-dir
     PersistentVolumeclaim "pvc-wekafs-dir" deleted
     ```
-1. Inspect result:
+4. Inspect result:
     ```shell script
     $ kubectl get pv
     NAME    CAPACITY    ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM   STORAGECLASS    REASON   AGE

@@ -1,0 +1,8 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: snapshot-pvc-wekafs-snap-api
+spec:
+  volumeSnapshotClassName: snapshotclass-csi-wekafs
+  source:
+    persistentVolumeClaimName: pvc-wekafs-snap-api

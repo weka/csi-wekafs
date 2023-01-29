@@ -2,18 +2,21 @@ package apiclient
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/golang/glog"
 	"github.com/google/uuid"
-	"github.com/hashicorp/go-version"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"hash/fnv"
 	"io/ioutil"
 	"k8s.io/helm/pkg/urlutil"
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -27,12 +30,13 @@ const (
 	ApiRetryMaxCount              = 5
 	RetryBackoffExponentialFactor = 1
 	RootOrganizationName          = "Root"
+	TracerName                    = "weka-csi"
 )
 
 //ApiClient is a structure that defines Weka API client
 // client: http.Client ref
 // Username, Password - obvious
-// httpScheme: either 'http', 'https'
+// HttpScheme: either 'http', 'https'
 // Endpoints: slice of 'ip_address_or_fqdn:port' strings
 // apiToken, refreshToken, apiTokenExpiryDate used for bearer auth
 // currentEndpointId: refers to the currently working API endpoint
@@ -40,13 +44,9 @@ const (
 type ApiClient struct {
 	sync.Mutex
 	client                     *http.Client
+	Credentials                Credentials
 	ClusterGuid                uuid.UUID
 	ClusterName                string
-	Username                   string
-	Password                   string
-	Organization               string
-	httpScheme                 string
-	Endpoints                  []string
 	MountEndpoints             []string
 	currentEndpointId          int
 	apiToken                   string
@@ -60,85 +60,35 @@ type ApiClient struct {
 	clientHash                 uint32
 }
 
-type WekaCompatibilityRequiredVersions struct {
-	FilesystemAsVolume             string
-	DirectoryAsCSIVolume           string
-	QuotaDirectoryAsVolume         string
-	QuotaOnNonEmptyDirs            string
-	MountFilesystemsUsingAuthToken string
-}
-
-var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
-	DirectoryAsCSIVolume:           "v3.0",  // can create CSI volume from directory, without quota support
-	FilesystemAsVolume:             "v3.13", // can create CSI volume from filesystem
-	QuotaDirectoryAsVolume:         "v3.13", // can create CSI volume from directory with quota support
-	QuotaOnNonEmptyDirs:            "v9.99", // can enable quota on legacy CSI volume (directory) without quota support
-	MountFilesystemsUsingAuthToken: "v3.14", // can mount filesystems that require authentication (and non-root orgID)
-}
-
-type WekaCompatibilityMap struct {
-	FilesystemAsCSIVolume          bool
-	DirectoryAsCSIVolume           bool
-	QuotaOnDirectoryVolume         bool
-	QuotaSetOnNonEmptyVolume       bool
-	MountFilesystemsUsingAuthToken bool
-}
-
-func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
-	v, err := version.NewVersion(versionStr)
-	if err != nil {
-		glog.Errorln("Could not parse cluster version", versionStr, "assuming legacy mode, new features are unsupported!")
-		cm.DirectoryAsCSIVolume = true
-		cm.FilesystemAsCSIVolume = false
-		cm.QuotaOnDirectoryVolume = false
-		cm.QuotaSetOnNonEmptyVolume = false
-		cm.MountFilesystemsUsingAuthToken = false
-		return
+func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool) (*ApiClient, error) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
 	}
-	d, _ := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
-	f, _ := version.NewVersion(MinimumSupportedWekaVersions.FilesystemAsVolume)
-	q, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
-	n, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnNonEmptyDirs)
-	a, _ := version.NewVersion(MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken)
-
-	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
-	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
-	cm.QuotaOnDirectoryVolume = v.GreaterThanOrEqual(q)
-	cm.QuotaSetOnNonEmptyVolume = v.GreaterThanOrEqual(n)
-	cm.MountFilesystemsUsingAuthToken = v.GreaterThanOrEqual(a)
-}
-
-func NewApiClient(username, password, organization string, endpoints []string, scheme string) (*ApiClient, error) {
 	a := &ApiClient{
 		Mutex: sync.Mutex{},
 		client: &http.Client{
-			Transport:     nil,
+			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
 			Timeout:       0,
 		},
 		ClusterGuid:       uuid.UUID{},
-		Username:          username,
-		Password:          password,
-		Organization:      organization,
-		httpScheme:        scheme,
-		Endpoints:         endpoints,
+		Credentials:       credentials,
 		CompatibilityMap:  &WekaCompatibilityMap{},
 		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
 		currentEndpointId: -1,
 	}
-	a.Log(3, "Creating new API client for endpoints", endpoints, "scheme:", scheme)
+	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
 	return a, nil
 }
 
 // fetchMountEndpoints used to obtain actual data plane IP addresses
-func (a *ApiClient) fetchMountEndpoints() error {
-	f := a.Log(4, "Fetching mount points")
-	defer f()
+func (a *ApiClient) fetchMountEndpoints(ctx context.Context) error {
+	log.Ctx(ctx).Trace().Msg("Fetching mount endpoints")
 	a.MountEndpoints = []string{}
 	nodes := &[]WekaNode{}
-	err := a.GetNodesByRole(NodeRoleBackend, nodes)
+	err := a.GetNodesByRole(ctx, NodeRoleBackend, nodes)
 	if err != nil {
 		return err
 	}
@@ -154,7 +104,7 @@ func (a *ApiClient) fetchMountEndpoints() error {
 func (a *ApiClient) UpdateEndpoints(endpoints []string) {
 	a.Lock()
 	defer a.Unlock()
-	a.Endpoints = endpoints
+	a.Credentials.Endpoints = endpoints
 }
 
 // isLoggedIn returns true if client has a refresh token and it is not expired so it can refresh or perform ops directly
@@ -168,29 +118,32 @@ func (a *ApiClient) isLoggedIn() bool {
 	return true
 }
 
-//chooseRandomEndpoint returns a random endpoint of the configured ones
-func (a *ApiClient) chooseRandomEndpoint() {
-	if a.Endpoints == nil || len(a.Endpoints) == 0 {
+//rotateEndpoint returns a random endpoint of the configured ones
+func (a *ApiClient) rotateEndpoint(ctx context.Context) {
+	logger := log.Ctx(ctx)
+	if a.Credentials.Endpoints == nil || len(a.Credentials.Endpoints) == 0 {
 		a.currentEndpointId = -1
-		a.Log(3, "Failed to choose random endpoint, no endpoints exist")
+		logger.Error().Msg("Failed to choose random endpoint, no endpoints exist")
 		return
 	}
-	a.currentEndpointId = rand.Intn(len(a.Endpoints))
-	a.Log(4, "Choosing random endpoint", a.getEndpoint())
+	//a.currentEndpointId = rand.Intn(len(a.Credentials.Endpoints))
+	a.currentEndpointId = (a.currentEndpointId + 1) % len(a.Credentials.Endpoints)
+
+	logger.Trace().Str("current_endpoint", a.getEndpoint(ctx)).Msg("Switched to new API endpoint")
 }
 
 //getEndpoint returns last known endpoint to work against
-func (a *ApiClient) getEndpoint() string {
+func (a *ApiClient) getEndpoint(ctx context.Context) string {
 	if a.currentEndpointId < 0 {
-		a.chooseRandomEndpoint()
+		a.rotateEndpoint(ctx)
 	}
-	return a.Endpoints[a.currentEndpointId]
+	return a.Credentials.Endpoints[a.currentEndpointId]
 }
 
 //getBaseUrl returns the full HTTP URL of the API endpoint including schema, chosen endpoint and API prefix
-func (a *ApiClient) getBaseUrl() string {
+func (a *ApiClient) getBaseUrl(ctx context.Context) string {
 	scheme := ""
-	switch strings.ToUpper(a.httpScheme) {
+	switch strings.ToUpper(a.Credentials.HttpScheme) {
 
 	case "HTTP":
 		scheme = "http"
@@ -199,19 +152,18 @@ func (a *ApiClient) getBaseUrl() string {
 	default:
 		scheme = "http"
 	}
-	return fmt.Sprintf("%s://%s/api/v2", scheme, a.getEndpoint())
+	return fmt.Sprintf("%s://%s/api/v2", scheme, a.getEndpoint(ctx))
 }
 
 // do Makes a basic API call to the client, returns an *ApiResponse that includes raw data, error message etc.
-func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[string]string) (*ApiResponse, apiError) {
+func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values) (*ApiResponse, apiError) {
 	//construct URL path
-	if len(a.Endpoints) < 1 {
+	if len(a.Credentials.Endpoints) < 1 {
 		return &ApiResponse{}, &ApiNoEndpointsError{
 			Err: errors.New("no endpoints could be found for API client"),
 		}
 	}
-	url := a.getUrl(Path)
-	a.Log(2, "Target URL:", url)
+	u := a.getUrl(ctx, Path)
 
 	//construct base request and add auth if exists
 	var body *bytes.Reader
@@ -220,7 +172,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 	} else {
 		body = bytes.NewReader([]byte(""))
 	}
-	r, err := http.NewRequest(Method, url, body)
+	r, err := http.NewRequest(Method, u, body)
 	if err != nil {
 		return nil, &ApiError{
 			Err:         err,
@@ -236,49 +188,38 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 	}
 
 	//add query params
-	if Query != nil {
-		q := r.URL.Query()
-		for k, v := range *Query {
-			q.Add(k, v)
-		}
-		r.URL.RawQuery = q.Encode()
+	if Query != nil && len(Query) > 0 && a.SupportsUrlQueryParams() {
+		r.URL.RawQuery = Query.Encode()
 	}
 
-	//LOG EVERY REQUEST
-	//WARNING: If logLevel >= 6, might expose sensitive data in cleartext
-	a.Log(6, Method, r.URL.RequestURI(), func() string {
-		if Payload != nil {
-			return string(*Payload)
-		}
-		return "<no-payload>"
-	}(),
-	)
+	payload := ""
+	if Payload != nil {
+		payload = string(*Payload)
+	}
+	logger := log.Ctx(ctx)
+	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", payload).Msg("")
 
 	response, err := a.client.Do(r)
 	if err != nil {
-		return nil, &ApiError{
-			Err:         err,
-			Text:        "Request failed",
-			StatusCode:  0,
-			RawData:     nil,
-			ApiResponse: nil,
-		}
+		return nil, &transportError{err}
 	}
+
+	if response == nil {
+		return nil, &transportError{errors.New("received no response")}
+	}
+
 	responseBody, err := ioutil.ReadAll(response.Body)
-
-	// LOG EVERY RESPONSE
-	// WARNING: If logLevel >= 6, might expose sensitive data in cleartext
-	a.Log(6, string(responseBody))
-
+	logger.Trace().Str("response", string(responseBody)).Msg("")
 	if err != nil {
-		return nil, &ApiError{
+		return nil, &ApiInternalError{
 			Err:         err,
-			Text:        "Failed to read from request",
+			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
 			StatusCode:  response.StatusCode,
 			RawData:     &responseBody,
 			ApiResponse: nil,
 		}
 	}
+
 	defer func() {
 		_ = response.Body.Close()
 	}()
@@ -287,7 +228,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 	err = json.Unmarshal(responseBody, Response)
 	Response.HttpStatusCode = response.StatusCode
 	if err != nil {
-		a.Log(2, fmt.Sprintf("Could not response parse json, HTTP status code %d, %s", Response.HttpStatusCode, err.Error()))
+		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
 		return nil, &ApiError{
 			Err:         err,
 			Text:        "Failed to parse HTTP response body",
@@ -352,7 +293,7 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 		}
 
 	default:
-		return Response, &ApiError{
+		return Response, ApiError{
 			Err:         err,
 			Text:        "General failure during API command",
 			StatusCode:  response.StatusCode,
@@ -363,24 +304,24 @@ func (a *ApiClient) do(Method string, Path string, Payload *[]byte, Query *map[s
 }
 
 // handleNetworkErrors checks if the error returned by endpoint is a network error (transient by definition)
-func (a *ApiClient) handleNetworkErrors(err error) error {
+func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
 	if netError, ok := err.(net.Error); ok && netError.Timeout() {
-		return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection timed out to ", a.getEndpoint()))}
+		return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection timed out to ", a.getEndpoint(ctx)))}
 	} else {
 		switch t := err.(type) {
 		case *net.OpError:
 			if t.Op == "dial" {
-				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Unknown host", a.getEndpoint()))}
+				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Unknown host", a.getEndpoint(ctx)))}
 			} else if t.Op == "read" {
-				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection refused:", a.getEndpoint()))}
+				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection refused:", a.getEndpoint(ctx)))}
 			}
 
 		case syscall.Errno:
 			if t == syscall.ECONNREFUSED {
-				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection refused:", a.getEndpoint()))}
+				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection refused:", a.getEndpoint(ctx)))}
 			}
 		}
 	}
@@ -389,27 +330,22 @@ func (a *ApiClient) handleNetworkErrors(err error) error {
 }
 
 // request wraps do with retries and some more error handling
-func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *map[string]string, v interface{}) apiError {
-	f := a.Log(5, "Performing request:", Method, Path)
-	defer f()
-	err := retryBackoff(ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
-		rawResponse, reqErr := a.do(Method, Path, Payload, Query)
-		if a.handleNetworkErrors(reqErr) != nil { // transient network errors
-			a.Log(2, "Failed to perform request, error received:", reqErr.Error())
-			a.chooseRandomEndpoint()
+func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
+	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
+		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
+		logger := log.Ctx(ctx)
+		if a.handleNetworkErrors(ctx, reqErr) != nil { // transient network errors
+			a.rotateEndpoint(ctx)
+			logger.Error().Err(reqErr).Msg("")
 			return reqErr
 		}
 		if reqErr != nil {
-			a.Log(2, "requestError:", reqErr.Error())
 			return ApiNonrecoverableError{reqErr}
-		}
-		if rawResponse == nil {
-			a.Log(2, "rawResponse is nil")
 		}
 		s := rawResponse.HttpStatusCode
 		var responseCodes []string
 		if len(rawResponse.ErrorCodes) > 0 {
-			a.Log(1, "Failed to execute request, got codes", rawResponse.ErrorCodes)
+			logger.Error().Strs("error_codes", rawResponse.ErrorCodes).Msg("Failed to execute request")
 			for _, code := range rawResponse.ErrorCodes {
 				if code != "OperationFailedException" {
 					responseCodes = append(responseCodes, code)
@@ -421,19 +357,19 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 		}
 		err := json.Unmarshal(rawResponse.Data, v)
 		if err != nil {
-			a.Log(2, "Could not parse JSON request", reflect.TypeOf(v), err)
+			logger.Error().Err(err).Interface("object_type", reflect.TypeOf(v)).Msg("Failed to marshal JSON request into a valid interface")
 		}
 		switch s {
 		case http.StatusOK:
 			return nil
 		case http.StatusUnauthorized:
-			a.Log(4, "Got Authorization failure on request, trying to re-login")
-			_ = a.Init()
+			logger.Warn().Msg("Got Authorization failure on request, trying to re-login")
+			_ = a.Init(ctx)
 			return reqErr
 		case http.StatusNotFound, http.StatusConflict, http.StatusBadRequest, http.StatusInternalServerError:
 			return ApiNonrecoverableError{reqErr}
 		default:
-			a.Log(2, "Failed to perform a request, got an unhandled error", reqErr, s)
+			logger.Warn().Err(reqErr).Int("http_code", s).Msg("Failed to perform a request, got an unhandled error")
 			return ApiNonrecoverableError{reqErr}
 		}
 	})
@@ -444,11 +380,12 @@ func (a *ApiClient) request(Method string, Path string, Payload *[]byte, Query *
 }
 
 // Request makes sure that client is logged in and has a non-expired token
-func (a *ApiClient) Request(Method string, Path string, Payload *[]byte, Query *map[string]string, Response interface{}) error {
-	if err := a.Init(); err != nil {
-		a.Log(1, fmt.Sprintf("Failed to perform request since failed to re-authenticate: %s", err.Error()))
+func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
+	if err := a.Init(ctx); err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("Failed to re-authenticate on repeating request")
+		return err
 	}
-	err := a.request(Method, Path, Payload, Query, Response)
+	err := a.request(ctx, Method, Path, Payload, Query, Response)
 	if err != nil {
 		return err
 	}
@@ -456,85 +393,76 @@ func (a *ApiClient) Request(Method string, Path string, Payload *[]byte, Query *
 }
 
 // Get is shortcut for Request("GET" ...)
-func (a *ApiClient) Get(Path string, Query *map[string]string, Response interface{}) error {
-	return a.Request("GET", Path, nil, Query, Response)
+func (a *ApiClient) Get(ctx context.Context, Path string, Query url.Values, Response interface{}) error {
+	return a.Request(ctx, "GET", Path, nil, Query, Response)
 }
 
 // Post is shortcut for Request("POST" ...)
-func (a *ApiClient) Post(Path string, Payload *[]byte, Query *map[string]string, Response interface{}) error {
-	return a.Request("POST", Path, Payload, Query, Response)
+func (a *ApiClient) Post(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
+	return a.Request(ctx, "POST", Path, Payload, Query, Response)
 }
 
 // Put is shortcut for Request("PUT" ...)
-func (a *ApiClient) Put(Path string, Payload *[]byte, Query *map[string]string, Response interface{}) error {
-	return a.Request("PUT", Path, Payload, Query, Response)
+func (a *ApiClient) Put(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
+	return a.Request(ctx, "PUT", Path, Payload, Query, Response)
 }
 
 // Delete is shortcut for Request("DELETE" ...)
-func (a *ApiClient) Delete(Path string, Payload *[]byte, Query *map[string]string, Response interface{}) error {
-	return a.Request("DELETE", Path, Payload, Query, Response)
+func (a *ApiClient) Delete(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
+	return a.Request(ctx, "DELETE", Path, Payload, Query, Response)
 }
 
 // getUrl returns a URL which consists of baseUrl + path
-func (a *ApiClient) getUrl(path string) string {
-	url, _ := urlutil.URLJoin(a.getBaseUrl(), path)
-	return url
+func (a *ApiClient) getUrl(ctx context.Context, path string) string {
+	u, _ := urlutil.URLJoin(a.getBaseUrl(ctx), path)
+	return u
 }
 
 // Login logs into API, updates refresh token expiry
-func (a *ApiClient) Login() error {
+func (a *ApiClient) Login(ctx context.Context) error {
+	oldCtx := ctx
+	logger := log.Ctx(ctx)
 	if a.isLoggedIn() {
 		return nil
 	}
 	a.Lock()
 	defer a.Unlock()
-	f := a.Log(2, "Logging in to endpoint", a.getEndpoint())
-	defer f()
-
 	r := LoginRequest{
-		Username: a.Username,
-		Password: a.Password,
-		Org:      a.Organization,
+		Username: a.Credentials.Username,
+		Password: a.Credentials.Password,
+		Org:      a.Credentials.Organization,
 	}
 	jb, err := marshalRequest(r)
 	if err != nil {
 		return err
 	}
 	responseData := &LoginResponse{}
-	if err := a.request("POST", ApiPathLogin, jb, nil, responseData); err != nil {
+	logger.Debug().Msg("Logging in. For safety, API logging is suppressed")
+	ctx = log.Ctx(ctx).Level(zerolog.Disabled).With().Str("credentials", a.Credentials.String()).Logger().WithContext(ctx)
+	if err := a.request(ctx, "POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
-			glog.Errorf("Could not log in to endpoint %s, invalid credentials supplied", a.getEndpoint())
+			logger.Error().Err(err).Str("endpoint", a.getEndpoint(ctx)).Msg("Could not log in to endpoint")
 		}
+		logger.Error().Err(err).Msg("")
 		return err
 	}
 	a.apiToken = responseData.AccessToken
 	a.refreshToken = responseData.RefreshToken
 	a.apiTokenExpiryDate = time.Now().Add(time.Duration(responseData.ExpiresIn-30) * time.Second)
 	if a.refreshTokenExpiryInterval < 1 {
-		_ = a.updateTokensExpiryInterval()
+		_ = a.updateTokensExpiryInterval(ctx)
 	}
+	ctx = oldCtx
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
-	_ = a.fetchClusterInfo()
-	a.Log(2, "successfully connected to cluster API")
+	_ = a.fetchClusterInfo(ctx)
+	logger.Debug().Msg("Successfully connected to cluster API")
 	return nil
-}
-
-func (a *ApiClient) Log(level glog.Level, message ...interface{}) func() {
-	stringFormat := fmt.Sprintf("API client: %s:%s@%s (%s)", a.Username, a.Organization, a.ClusterName, a.ClusterGuid.String())
-	if a.ClusterName == "" {
-		stringFormat = fmt.Sprintf("API client: %s:%s@UNKNOWN_CLUSTER (%s)", a.Username, a.Organization, strings.Join(a.Endpoints, ","))
-	}
-	glog.V(level).Infoln(stringFormat, message)
-	return func() {
-		glog.V(level).Infoln(stringFormat, message, "completed")
-	}
 }
 
 // generateHash used for storing multiple clients in hash table. Hash() is created once as connection params might change
 func (a *ApiClient) generateHash() uint32 {
-	a.Log(5, "Generating API hash")
 	h := fnv.New32a()
-	s := fmt.Sprintln(a.Username, a.Password, a.Organization, a.Endpoints)
+	s := fmt.Sprintln(a.Credentials.Username, a.Credentials.Password, a.Credentials.Organization, a.Credentials.Endpoints)
 	_, _ = h.Write([]byte(s))
 	return h.Sum32()
 }
@@ -545,49 +473,29 @@ func (a *ApiClient) Hash() uint32 {
 }
 
 // Init checks if API token refresh is required and transparently refreshes or fails back to (re)login
-func (a *ApiClient) Init() error {
+func (a *ApiClient) Init(ctx context.Context) error {
 	if a.apiTokenExpiryDate.After(time.Now()) {
-		a.Log(5, "Authentication token is valid for", a.apiTokenExpiryDate.Sub(time.Now()))
 		return nil
+	} else {
+		log.Ctx(ctx).Trace().TimeDiff("valid_for", a.apiTokenExpiryDate, time.Now()).Msg("Auth token is expired")
 	}
 	if !a.isLoggedIn() {
-		a.Log(3, "Client is not authenticated, logging in...")
-		return a.Login()
+		log.Ctx(ctx).Trace().Msg("Client is not authenticated, logging in...")
+		return a.Login(ctx)
 	}
 
-	a.Log(5, "Performing Bearer token refresh")
 	r := RefreshRequest{RefreshToken: a.refreshToken}
 	responseData := &RefreshResponse{}
 	payload, _ := marshalRequest(r)
-	if err := a.request("POST", ApiPathRefresh, payload, nil, responseData); err != nil {
-		a.Log(4, "Failed to refresh auth token, logging in...")
-		return a.Login()
+	if err := a.request(ctx, "POST", ApiPathRefresh, payload, nil, responseData); err != nil {
+		log.Ctx(ctx).Trace().Msg("Failed to refresh auth token, logging in...")
+		return a.Login(ctx)
 	}
 	a.refreshToken = responseData.RefreshToken
 	a.apiToken = responseData.AccessToken
 	a.apiTokenExpiryDate = time.Now().Add(time.Duration(a.apiTokenExpiryInterval-30) * time.Second)
-	a.Log(5, "Authentication token refreshed successfully, valid for", a.apiTokenExpiryDate.Sub(time.Now()))
+	log.Ctx(ctx).Trace().TimeDiff("valid_for", a.refreshTokenExpiryDate, time.Now()).Msg("Auth token is valid")
 	return nil
-}
-
-func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
-	return a.CompatibilityMap.QuotaOnDirectoryVolume
-}
-
-func (a *ApiClient) SupportsQuotaOnNonEmptyDirs() bool {
-	return a.CompatibilityMap.QuotaSetOnNonEmptyVolume
-}
-
-func (a *ApiClient) SupportsFilesystemAsVolume() bool {
-	return a.CompatibilityMap.FilesystemAsCSIVolume
-}
-
-func (a *ApiClient) SupportsDirectoryAsVolume() bool {
-	return a.CompatibilityMap.DirectoryAsCSIVolume
-}
-
-func (a *ApiClient) SupportsAuthenticatedMounts() bool {
-	return a.CompatibilityMap.MountFilesystemsUsingAuthToken
 }
 
 // marshalRequest converts interface to bytes
@@ -600,22 +508,22 @@ func marshalRequest(r interface{}) (*[]byte, error) {
 }
 
 // retryBackoff performs operation and retries on transient failures. Does not retry on ApiNonrecoverableError
-func retryBackoff(attempts int, sleep time.Duration, f func() apiError) error {
+func (a *ApiClient) retryBackoff(ctx context.Context, attempts int, sleep time.Duration, f func() apiError) error {
 	maxAttempts := attempts
 	if err := f(); err != nil {
 		switch s := err.(type) {
 		case ApiNonrecoverableError:
-			glog.V(6).Infoln("Non-recoverable error occurred, stopping further attempts")
+			log.Ctx(ctx).Warn().Msg("Non-recoverable error occurred, stopping further attempts")
 			// Return the original error for later checking
 			return s.apiError
 		}
 		if attempts--; attempts > 0 {
-			glog.V(3).Infof("Failed to perform API call, %d attempts left", attempts)
+			log.Ctx(ctx).Debug().Int("remaining_attempts", attempts).Msg("Failed to perform API call")
 			// Add some randomness to prevent creating a Thundering Herd
 			jitter := time.Duration(rand.Int63n(int64(sleep)))
 			sleep = sleep + jitter/2
 			time.Sleep(sleep)
-			return retryBackoff(attempts, RetryBackoffExponentialFactor*sleep, f)
+			return a.retryBackoff(ctx, attempts, RetryBackoffExponentialFactor*sleep, f)
 		}
 		return &ApiRetriesExceeded{
 			ApiError: ApiError{
@@ -629,18 +537,6 @@ func retryBackoff(attempts int, sleep time.Duration, f func() apiError) error {
 		}
 	}
 	return nil
-}
-
-// ApiNonrecoverableError is internally generated when non-transient error is found
-type ApiNonrecoverableError struct {
-	apiError
-}
-
-func (e ApiNonrecoverableError) Error() string {
-	return e.apiError.Error()
-}
-func (e ApiNonrecoverableError) getType() string {
-	return "ApiNonrecoverableError"
 }
 
 // ApiResponse returned by Request method
@@ -671,37 +567,15 @@ type ApiObjectRequest interface {
 	String() string
 }
 
-// ObjectsAreEqual returns true if both ApiObject have same immutable fields (other fields are disregarded)
-func ObjectsAreEqual(o1 ApiObject, o2 ApiObject) bool {
-	if reflect.TypeOf(o1) != reflect.TypeOf(o2) {
-		return false
-	}
-	ref := reflect.ValueOf(o1)
-	oth := reflect.ValueOf(o2)
-	for _, field := range o1.getImmutableFields() {
-		qval := reflect.Indirect(ref).FieldByName(field)
-		val := reflect.Indirect(oth).FieldByName(field)
-		if !qval.IsZero() {
-			if !reflect.DeepEqual(qval.Interface(), val.Interface()) {
-				return false
-			}
-		}
-	}
-	return true
+type Credentials struct {
+	Username     string
+	Password     string
+	Organization string
+	HttpScheme   string
+	Endpoints    []string
 }
 
-// ObjectRequestHasRequiredFields returns true if all mandatory fields of object in API request are filled in
-func ObjectRequestHasRequiredFields(o ApiObjectRequest) bool {
-	ref := reflect.ValueOf(o)
-	var missingFields []string
-	for _, field := range o.getRequiredFields() {
-		if reflect.Indirect(ref).FieldByName(field).IsZero() {
-			missingFields = append(missingFields, field)
-		}
-	}
-	if len(missingFields) > 0 {
-		glog.Errorln("Object is missing the following fields:", missingFields)
-		return false
-	}
-	return true
+func (c *Credentials) String() string {
+	return fmt.Sprintf("%s://%s:%s@%s",
+		c.HttpScheme, c.Username, c.Organization, c.Endpoints)
 }

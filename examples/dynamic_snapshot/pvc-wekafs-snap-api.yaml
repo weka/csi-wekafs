@@ -1,11 +1,11 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: pvc-wekafs-dir-readonly
+  name: pvc-wekafs-snap-api
 spec:
   accessModes:
-    - ReadOnlyMany
-  storageClassName: storageclass-wekafs-dir
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-snap-api
   volumeMode: Filesystem
   resources:
     requests:

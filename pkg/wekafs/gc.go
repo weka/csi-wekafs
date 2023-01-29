@@ -1,7 +1,8 @@
 package wekafs
 
 import (
-	"github.com/golang/glog"
+	"context"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io"
 	"io/ioutil"
@@ -12,21 +13,21 @@ import (
 
 const garbagePath = ".__internal__wekafs-async-delete"
 
-type dirVolumeGc struct {
+type innerPathVolGc struct {
 	isRunning  map[string]bool
 	isDeferred map[string]bool
 	sync.Mutex
 	mounter *wekaMounter
 }
 
-func initDirVolumeGc(mounter *wekaMounter) *dirVolumeGc {
-	gc := dirVolumeGc{mounter: mounter}
+func initInnerPathVolumeGc(mounter *wekaMounter) *innerPathVolGc {
+	gc := innerPathVolGc{mounter: mounter}
 	gc.isRunning = make(map[string]bool)
 	gc.isDeferred = make(map[string]bool)
 	return &gc
 }
 
-func (gc *dirVolumeGc) triggerGc(fs string, apiClient *apiclient.ApiClient) {
+func (gc *innerPathVolGc) triggerGc(ctx context.Context, fs string, apiClient *apiclient.ApiClient) {
 	gc.Lock()
 	defer gc.Unlock()
 	if gc.isRunning[fs] {
@@ -34,82 +35,101 @@ func (gc *dirVolumeGc) triggerGc(fs string, apiClient *apiclient.ApiClient) {
 		return
 	}
 	gc.isRunning[fs] = true
-	go gc.purgeLeftovers(fs, apiClient)
+	go gc.purgeLeftovers(ctx, fs, apiClient)
 }
 
-func (gc *dirVolumeGc) triggerGcVolume(volume DirVolume) {
-	fs := volume.Filesystem
+func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume UnifiedVolume) {
+	fsName := volume.FilesystemName
 	gc.Lock()
 	defer gc.Unlock()
-	if gc.isRunning[fs] {
-		gc.isDeferred[fs] = true
+	if gc.isRunning[fsName] {
+		gc.isDeferred[fsName] = true
 		return
 	}
-	gc.isRunning[fs] = true
-	gc.isDeferred[fs] = true
-	go gc.purgeVolume(volume)
+	gc.isRunning[fsName] = true
+	gc.isDeferred[fsName] = true
+	go gc.purgeVolume(ctx, volume)
 }
 
-func (gc *dirVolumeGc) purgeVolume(volume DirVolume) {
-	fs := volume.Filesystem
-	innerPath := volume.dirName
-	defer gc.finishGcCycle(fs, volume.apiClient)
-	path, err, unmount := gc.mounter.Mount(fs, volume.apiClient)
+func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume UnifiedVolume) {
+	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
+	logger.Debug().Msg("Starting garbage collection of volume")
+	fsName := volume.FilesystemName
+	defer gc.finishGcCycle(ctx, fsName, volume.apiClient)
+	path, err, unmount := gc.mounter.Mount(ctx, fsName, volume.apiClient)
 	defer unmount()
-	fullPath := filepath.Join(path, garbagePath, innerPath)
-	glog.Infof("Purging deleted volume data in %s", fullPath)
+	volumeTrashLoc := filepath.Join(path, garbagePath)
+	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
+		logger.Error().Err(err).Msg("Failed to create garbage collector directory")
+	}
+	fullPath := volume.getFullPath(ctx, false)
+	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Moving volume contents to trash")
+	if err := os.Rename(fullPath, volumeTrashLoc); err == nil {
+		logger.Error().Err(err).Str("full_path", fullPath).
+			Str("volume_trash_location", volumeTrashLoc).Msg("Failed to move volume contents to volumeTrashLoc")
+	}
+	// NOTE: there is a problem of directory leaks here. If the volume innerPath is deeper than /csi-volumes/vol-name,
+	// e.g. if using statically provisioned volume, we move only the deepest directory
+	// so if the volume is dir/v1/<filesystem>/this/is/a/path/to/volume, we might move only the `volume`
+	// but otherwise it could be risky as if we have multiple volumes we might remove other data too, e.g.
+	// vol1: dir/v1/<filesystem>/this/is/a/path/to/volume, vol2: dir/v1/<filesystem>/this/is/a/path/to/another_volume
+
+	logger.Trace().Str("purge_path", volumeTrashLoc).Msg("Purging deleted volume data")
 	if err != nil {
-		glog.Errorf("Failed mounting FS %s for GC", fs)
+		logger.Error().Err(err).Msg("Failed to mount filesystem for GC processing")
+		return
 	}
-	if err := purgeDirectory(fullPath); err != nil {
-		glog.Errorf("Failed to remove directory %s", fullPath)
+	if err := purgeDirectory(ctx, volumeTrashLoc); err != nil {
+		logger.Error().Err(err).Str("purge_path", volumeTrashLoc).Msg("Failed to remove directory")
+		return
 	}
-	glog.Infof("Directory %s was successfully deleted", fullPath)
+
+	logger.Debug().Msg("Volume purged")
 }
 
-func purgeDirectory(path string) error {
+func purgeDirectory(ctx context.Context, path string) error {
+	logger := log.Ctx(ctx).With().Str("path", path).Logger()
 	if !PathExists(path) {
-		glog.Warningf("GC failed to remove directory %s, not since it doesn't exist", path)
+		logger.Error().Str("path", path).Msg("Failed to remove existing directory")
 		return nil
 	}
 	for !pathIsEmptyDir(path) { // to make sure that if new files still appeared during invocation
 		files, err := ioutil.ReadDir(path)
 		if err != nil {
-			glog.Infof("GC failed to read contents of %s", path)
+			logger.Error().Err(err).Msg("GC failed to read directory contents")
 			return err
 		}
 		for _, f := range files {
 			fp := filepath.Join(path, f.Name())
 			if f.IsDir() {
-				if err := purgeDirectory(fp); err != nil {
+				if err := purgeDirectory(ctx, fp); err != nil {
+					logger.Error().Err(err).Msg("")
 					return err
 				}
 			} else if err := os.Remove(fp); err != nil {
-				glog.Infof("Failed to remove entry %s", fp)
+				logger.Error().Err(err).Msg("Failed to remove directory that was used mount point")
 			}
 		}
 	}
 	return os.Remove(path)
 }
 
-func (gc *dirVolumeGc) purgeLeftovers(fs string, apiClient *apiclient.ApiClient) {
-	defer gc.finishGcCycle(fs, apiClient)
-	path, err, unmount := gc.mounter.Mount(fs, apiClient)
+func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClient *apiclient.ApiClient) {
+	defer gc.finishGcCycle(ctx, fs, apiClient)
+	path, err, unmount := gc.mounter.Mount(ctx, fs, apiClient)
 	defer unmount()
 	if err != nil {
-		glog.Errorf("Failed mounting FS %s for GC", fs)
+		log.Ctx(ctx).Error().Err(err).Str("filesystem", fs).Str("path", path).Msg("Failed mounting FS for garbage collection")
 		return
 	}
-
-	glog.Warningf("TODO: GC filesystem in %s", path)
 }
 
-func (gc *dirVolumeGc) finishGcCycle(fs string, apiClient *apiclient.ApiClient) {
+func (gc *innerPathVolGc) finishGcCycle(ctx context.Context, fs string, apiClient *apiclient.ApiClient) {
 	gc.Lock()
 	gc.isRunning[fs] = false
 	if gc.isDeferred[fs] {
 		gc.isDeferred[fs] = false
-		go gc.triggerGc(fs, apiClient)
+		go gc.triggerGc(ctx, fs, apiClient)
 	}
 	gc.Unlock()
 }

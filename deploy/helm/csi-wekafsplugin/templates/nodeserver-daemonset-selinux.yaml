@@ -14,6 +14,12 @@ spec:
         app: {{ .Release.Name }}-node
         component: {{ .Release.Name }}-node-selinux
         release: {{ .Release.Name }}
+    {{- if .Values.metrics.enabled }}
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/metrics'
+        prometheus.io/port: '{{ .Values.metrics.port | default 9090 }}'
+    {{- end }}
     spec:
       affinity:
         nodeAffinity:
@@ -46,11 +52,29 @@ spec:
             - "--nodeid=$(KUBE_NODE_NAME)"
             - "--dynamic-path=$(CSI_DYNAMIC_PATH)"
             - "--csimode=$(X_CSI_MODE)"
+            - "--newvolumeprefix={{ .Values.pluginConfig.objectNaming.volumePrefix | default "csivol-" | trunc 7 }}"
+            - "--newsnapshotprefix={{ .Values.pluginConfig.objectNaming.snapshotPrefix | default "csisnp-" | trunc 7 }}"
+            - "--seedsnapshotprefix={{ .Values.pluginConfig.objectNaming.seedSnapshotPrefix | default "csisnp-seed-" | trunc 12 }}"
             - "--selinux-support"
+          {{- if .Values.tracingUrl }}
+            - "--tracingurl={{ .Values.tracingUrl }}"
+          {{- end }}
+          {{- if .Values.metrics.enabled }}
+            - "--enablemetrics"
+            - "--metricsport={{ .Values.metrics.port | default 9090 }}"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowInsecureHttps }}
+            - "--allowinsecurehttps"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
               protocol: TCP
+          {{- if .Values.metrics.enabled }}
+            - containerPort: {{ .Values.metrics.port }}
+              name: metrics
+              protocol: TCP
+          {{- end }}
           livenessProbe:
             failureThreshold: 5
             httpGet:
