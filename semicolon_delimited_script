@@ -1,0 +1,4 @@
+cd /data
+helm-docs -s file -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl 
+helm-docs -s file -c deploy/helm
+
