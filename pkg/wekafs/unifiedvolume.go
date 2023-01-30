@@ -171,7 +171,7 @@ func (v *UnifiedVolume) isAllowedForDeletion(ctx context.Context) bool {
 			return true // we want to be on the safe side. If we fail to get snapshots, just block the FS from deletion
 		}
 		if hasSnaps {
-			return true
+			return false
 		}
 	}
 	return true
@@ -1280,7 +1280,6 @@ func (v *UnifiedVolume) Delete(ctx context.Context) error {
 	logger.Debug().Msg("Starting deletion of volume")
 	if v.isFilesystem() {
 		if !v.isAllowedForDeletion(ctx) {
-			logger.Error().Msg("AAAAAAAA")
 			return ErrFilesystemHasUnderlyingSnapshots
 		}
 		v.deleteSeedSnapshot(ctx)

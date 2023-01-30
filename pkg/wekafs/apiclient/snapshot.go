@@ -56,7 +56,7 @@ func (a *ApiClient) FindSnapshotsByFilesystem(ctx context.Context, query *FileSy
 		return errors.New("cannot search for snapshots without explicit filesystem Uid")
 	}
 	snapQuery := &Snapshot{
-		FileSystemUid: query.Uid,
+		Filesystem: query.Name,
 	}
 	return a.FindSnapshotsByFilter(ctx, snapQuery, resultSet)
 }
