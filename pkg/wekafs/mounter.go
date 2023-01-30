@@ -305,7 +305,7 @@ func (m *wekaMounter) schedulePeriodicMountGc() {
 		for true {
 			m.LogActiveMounts()
 			m.gcInactiveMounts()
-			time.Sleep(1 * time.Minute)
+			time.Sleep(10 * time.Minute)
 		}
 	}()
 }
