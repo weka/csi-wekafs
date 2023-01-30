@@ -292,6 +292,7 @@ func (v *UnifiedVolume) getFreeSpaceOnStorage(ctx context.Context) (int64, error
 	if err != nil {
 		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity for filesystem %s on cluster %s: %s", v.GetId(), v.apiClient.ClusterName, err.Error())
 	}
+
 	logger.Debug().Uint64("max_capacity", maxCapacity).Msg("Resolved free capacity")
 	return int64(maxCapacity), nil
 }
@@ -338,7 +339,10 @@ func (v *UnifiedVolume) getMaxCapacity(ctx context.Context) (int64, error) {
 		if err != nil {
 			return -1, err
 		}
-		return maxFsSize, nil
+		// this is an existing filesystem, assume we need to only add delta
+		if currentSize, err := v.getFilesystemTotalCapacity(ctx); err == nil {
+			maxCapacity = maxFsSize + currentSize
+		}
 	}
 	return maxCapacity, nil
 }
