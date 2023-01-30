@@ -20,14 +20,12 @@ import (
 	"context"
 	"fmt"
 	"github.com/kubernetes-csi/csi-lib-utils/protosanitizer"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"net"
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
@@ -75,7 +73,7 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 
 	proto, addr, err := parseEndpoint(endpoint)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to parse endpoint")
+		log.Fatal().Err(err)
 	}
 
 	if proto == "unix" {
@@ -133,45 +131,18 @@ func parseEndpoint(ep string) (string, string, error) {
 
 func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	ctx = log.With().Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
-	if info.FullMethod == "/csi.v1.Identity/Probe" {
+	if info.FullMethod != "/csi.v1.Identity/Probe" {
 		// suppress annoying probe messages
-
-		infoSampler := &zerolog.BurstSampler{
-			Burst:  1,
-			Period: 10 * time.Minute,
-		}
-
-		warnSampler := &zerolog.BurstSampler{
-			Burst:  1,
-			Period: 1 * time.Second,
-			// Log every 5th message after exceeding the burst rate of 3 messages per
-			// second
-			NextSampler: &zerolog.BasicSampler{N: 5},
-		}
-
-		errorSampler := &zerolog.BasicSampler{}
-
-		sampler := *&zerolog.LevelSampler{
-			TraceSampler: infoSampler,
-			DebugSampler: infoSampler,
-			InfoSampler:  infoSampler,
-			WarnSampler:  warnSampler,
-			ErrorSampler: errorSampler,
-		}
-		newCtx := log.Sample(sampler).With().Logger().WithContext(ctx)
-		logger = log.Ctx(newCtx)
+		log.Ctx(ctx).Trace().Str("method", info.FullMethod).Str("request", protosanitizer.StripSecrets(req).String()).Msg("GRPC request")
 	}
-	logger.Trace().Str("method", info.FullMethod).Str("request", protosanitizer.StripSecrets(req).String()).Msg("GRPC request")
 	resp, err := handler(ctx, req)
 	if err != nil {
-		if resp != nil {
-			logger.Trace().Err(err).Str("response", protosanitizer.StripSecrets(resp).String()).Msg("GRPC error")
-		} else {
-			logger.Trace().Err(err).Msg("GRPC error")
-		}
+		log.Ctx(ctx).Trace().Err(err).Msg("GRPC error")
 	} else {
-		logger.Trace().Str("response", protosanitizer.StripSecrets(resp).String()).Msg("GRPC response")
+		if info.FullMethod != "/csi.v1.Identity/Probe" {
+			// suppress annoying probe messages
+			log.Ctx(ctx).Trace().Str("response", protosanitizer.StripSecrets(resp).String()).Msg("GRPC response")
+		}
 	}
 	return resp, err
 }
