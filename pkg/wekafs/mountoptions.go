@@ -11,86 +11,142 @@ const (
 	selinuxContext = "wekafs_csi_volume"
 )
 
+type mountOption struct {
+	option string
+	value  string
+}
+
+func (o *mountOption) String() string {
+	ret := o.option
+	if o.value != "" {
+		ret += "=" + o.value
+	}
+	return ret
+}
+
+// newMountOptionFromString accepts a single mount option string from mount and parses it into separate option and optional value
+func newMountOptionFromString(optstring string) mountOption {
+	parts := strings.Split(optstring, "=")
+	value := ""
+	if len(parts) == 2 {
+		value = parts[1]
+	}
+	return mountOption{
+		option: parts[0],
+		value:  value,
+	}
+}
+
 type MountOptions struct {
-	customOptions  []string
+	customOptions  map[string]mountOption
 	excludeOptions []string
-	xattr          bool
-	selinuxSupport bool
 }
 
 // Merge merges mount options. The other object always take precedence over the original
-func (o *MountOptions) Merge(other *MountOptions) {
-	if other == nil {
-		return
-	}
-
+func (opts MountOptions) Merge(other MountOptions) {
 	for _, otherOpt := range other.customOptions {
-		for _, opt := range o.customOptions {
-			if opt == otherOpt {
-				break
-			}
-			o.customOptions = append(o.customOptions, otherOpt)
-		}
+		opts.customOptions[otherOpt.option] = otherOpt
 	}
 
-	o.xattr = other.xattr
-	o.selinuxSupport = other.selinuxSupport
-
-	var removeIndexes []int
 	for _, otherOpt := range other.excludeOptions {
-		for i, opt := range o.customOptions {
-			if opt == otherOpt {
-				removeIndexes = append(removeIndexes, i)
-			}
-		}
-	}
-	for _, i := range removeIndexes {
-		o.customOptions = append(o.customOptions[:i], o.customOptions[i+1:]...)
+		delete(opts.customOptions, otherOpt)
 	}
 }
 
-// MergedWith returns a new object merged with other object
-func (o *MountOptions) MergedWith(other *MountOptions) *MountOptions {
-	ret := &MountOptions{
-		customOptions:  o.customOptions,
-		excludeOptions: o.excludeOptions,
-		xattr:          o.xattr,
-		selinuxSupport: o.selinuxSupport,
-	}
-	ret.Merge(other)
+func (opts MountOptions) getOpts() []mountOption {
+	var ret []mountOption
+	keys := make([]string, 0, len(opts.customOptions))
 
-	return ret
-}
-
-func (o *MountOptions) getOpts() []string {
-	ret := o.customOptions
-	sort.Strings(ret)
-	if o.xattr {
-		ret = append(ret, "acl")
+	for k := range opts.customOptions {
+		keys = append(keys, k)
 	}
-	if o.selinuxSupport {
-		ret = append(ret, fmt.Sprintf("fscontext=\"system_u:object_r:%s_t:s0\"", selinuxContext))
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		ret = append(ret, opts.customOptions[k])
 	}
 	return ret
 }
 
-func (o *MountOptions) String() string {
-	return strings.Join(o.getOpts(), ",")
+func (opts MountOptions) Strings() []string {
+	var ret []string
+	for _, o := range opts.getOpts() {
+		ret = append(ret, o.String())
+	}
+	return ret
 }
 
-func (o *MountOptions) Hash() uint32 {
+func (opts MountOptions) String() string {
+	return strings.Join(opts.Strings(), ",")
+}
+
+func (opts MountOptions) Hash() uint32 {
 	h := fnv.New32a()
-	s := fmt.Sprintln(o.getOpts())
+	s := fmt.Sprintln(opts.getOpts())
 	_, _ = h.Write([]byte(s))
 	return h.Sum32()
 }
 
-func getDefaultMountOptions() *MountOptions {
-	return &MountOptions{
-		customOptions:  []string{""},
-		excludeOptions: nil,
-		xattr:          false,
-		selinuxSupport: false,
+func (opts MountOptions) setXattr(xattr bool) {
+	if xattr {
+		o := newMountOptionFromString("acl")
+		opts.customOptions[o.option] = o
+	} else {
+		delete(opts.customOptions, "acl")
+	}
+}
+
+func (opts MountOptions) hasXattr() bool {
+	for _, opt := range opts.customOptions {
+		if opt.option == "acl" {
+			return true
+		}
+	}
+	return false
+}
+
+func (opts MountOptions) setSelinux(selinuxSupport bool) {
+	if selinuxSupport {
+		o := newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s_t:s0\"", selinuxContext))
+		opts.customOptions[o.option] = o
+	} else {
+		delete(opts.customOptions, "fscontext")
+	}
+}
+
+func NewMountOptionsFromString(optsString string) MountOptions {
+	optstrings := strings.Split(optsString, ",")
+	return NewMountOptions(optstrings)
+}
+
+func NewMountOptions(optstrings []string) MountOptions {
+	ret := MountOptions{
+		customOptions:  make(map[string]mountOption),
+		excludeOptions: []string{},
+	}
+	for _, optstring := range optstrings {
+		o := newMountOptionFromString(optstring)
+		ret.customOptions[o.option] = o
+	}
+	return ret
+}
+
+func getDefaultMountOptions() MountOptions {
+	defaultOptions := []string{
+		"writecache",
+		"rw",
+		"readahead_kb=32768",
+		"dentry_max_age_positive=1000",
+		"dentry_max_age_negative=0",
 	}
 
+	ret := MountOptions{
+		customOptions:  make(map[string]mountOption),
+		excludeOptions: []string{""},
+	}
+	for _, optstring := range defaultOptions {
+		opt := newMountOptionFromString(optstring)
+		ret.customOptions[opt.option] = opt
+	}
+	return ret
 }
