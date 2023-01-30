@@ -1272,6 +1272,11 @@ func (v *UnifiedVolume) Delete(ctx context.Context) error {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	var err error
+	if (v.isFilesystem() || v.isOnSnapshot()) && v.apiClient == nil {
+		err := errors.New("Failed to delete volume, no API secret exists")
+		logger.Error().Err(err).Msg("Failed to delete volume")
+		return err
+	}
 	logger.Debug().Msg("Starting deletion of volume")
 	if v.isFilesystem() {
 		if !v.isAllowedForDeletion(ctx) {
