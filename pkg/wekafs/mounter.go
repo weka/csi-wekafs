@@ -61,7 +61,9 @@ type wekaMounter struct {
 func newWekaMounter(driver *WekaFsDriver) *wekaMounter {
 	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
 	if mounter.debugPath == "" {
-		mounter.recoverExistingMounts()
+		if err := mounter.recoverExistingMounts(); err != nil {
+			log.Warn().Msg("Failed to recover existing mounts")
+		}
 	}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
