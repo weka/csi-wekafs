@@ -53,6 +53,36 @@ func (opts MountOptions) Merge(other MountOptions) {
 	}
 }
 
+// MergedWith returns a new object merged with other object
+func (opts MountOptions) MergedWith(other MountOptions) MountOptions {
+	ret := MountOptions{
+		customOptions:  opts.customOptions,
+		excludeOptions: opts.excludeOptions,
+	}
+	ret.Merge(other)
+	return ret
+}
+
+func (opts MountOptions) AddOption(optstring string) MountOptions {
+	ret := MountOptions{
+		customOptions:  opts.customOptions,
+		excludeOptions: opts.excludeOptions,
+	}
+	opt := newMountOptionFromString(optstring)
+	ret.customOptions[opt.option] = opt
+	return ret
+}
+
+func (opts MountOptions) RemoveOption(optstring string) MountOptions {
+	ret := MountOptions{
+		customOptions:  opts.customOptions,
+		excludeOptions: opts.excludeOptions,
+	}
+	opt := newMountOptionFromString(optstring)
+	delete(ret.customOptions, opt.option)
+	return ret
+}
+
 func (opts MountOptions) getOpts() []mountOption {
 	var ret []mountOption
 	keys := make([]string, 0, len(opts.customOptions))
