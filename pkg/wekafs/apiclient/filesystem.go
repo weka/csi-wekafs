@@ -234,7 +234,6 @@ func (a *ApiClient) GetFileSystemMountToken(ctx context.Context, r *FileSystemMo
 
 func (a *ApiClient) GetMountTokenForFilesystemName(ctx context.Context, fsName string) (string, error) {
 	logger := log.Ctx(ctx)
-	logger.Trace().Str("filesystem", fsName).Msg("Obtaining a mount token")
 	if !a.SupportsAuthenticatedMounts() {
 		logger.Debug().Msg("Current version of Weka cluster does not support authenticated mounts")
 		return "", nil
@@ -247,7 +246,6 @@ func (a *ApiClient) GetMountTokenForFilesystemName(ctx context.Context, fsName s
 	token := &FileSystemMountToken{}
 	err = a.GetFileSystemMountToken(ctx, req, token)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to obtain a mount token")
 		return "", err
 	}
 	if token.FilesystemName != fsName {
