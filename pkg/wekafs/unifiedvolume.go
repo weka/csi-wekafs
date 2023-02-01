@@ -983,7 +983,7 @@ func (v *UnifiedVolume) isFilesystemEmpty(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (v *UnifiedVolume) createSeedSnapshot(ctx context.Context) error {
+func (v *UnifiedVolume) createSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
 	op := "createSeedSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -999,11 +999,11 @@ func (v *UnifiedVolume) createSeedSnapshot(ctx context.Context) error {
 	logger := log.Ctx(ctx)
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	r, err := apiclient.NewSnapshotCreateRequest(seedName, seedAccessPoint, fsObj.Uid, nil, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	snapObj := &apiclient.Snapshot{}
 	logger.Trace().Msg("Creating seed snapshot")
@@ -1011,7 +1011,7 @@ func (v *UnifiedVolume) createSeedSnapshot(ctx context.Context) error {
 	if err != nil {
 		log.Error().Err(err).Msg("")
 	}
-	return err
+	return snapObj, err
 }
 
 func (v *UnifiedVolume) deleteSeedSnapshot(ctx context.Context) {
@@ -1060,18 +1060,19 @@ func (v *UnifiedVolume) hasSeedSnapshot(ctx context.Context) bool {
 	return err == nil && snapObj != nil && snapObj.Uid != uuid.Nil
 }
 
-func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) error {
+func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
 	logger := log.Ctx(ctx)
-	if v.hasSeedSnapshot(ctx) {
-		return nil
+	snap, err := v.getSeedSnapshot(ctx)
+	if err != nil {
+		return snap, err
 	}
 	logger.Debug().Msg("Ensuring seed snapshot exists for filesystem")
 	empty, err := v.isFilesystemEmpty(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("")
+		logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
 	}
 	if !empty {
-		return errors.New("cannot create seed snaspshot on non-empty filesystem")
+		return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
 	}
 
 	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
@@ -1083,16 +1084,16 @@ func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) error {
 		err, unmount := v.opportunisticMount(ctx, xattrMount)
 		defer unmount()
 		if err != nil {
-			return err
+			return snap, err
 		}
 		seedPath := filepath.Join(v.getMountPath(xattrMount), SnapshotsSubDirectory, v.getSeedSnapshotAccessPoint())
 
 		if err := os.MkdirAll(seedPath, DefaultVolumePermissions); err != nil {
 			logger.Error().Err(err).Str("seed_path", seedPath).Msg("Failed to create seed snapshot debug directory")
-			return err
+			return snap, err
 		}
 		logger.Debug().Str("full_path", v.getFullPath(ctx, true)).Msg("Successully created seed snapshot debug directory")
-		return nil
+		return snap, nil
 	}
 
 	return v.createSeedSnapshot(ctx)
@@ -1127,7 +1128,7 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 			return status.Error(codes.Internal, err.Error())
 		}
 		// create the seed snapshot
-		if err := v.ensureSeedSnapshot(ctx); err != nil {
+		if _, err := v.ensureSeedSnapshot(ctx); err != nil {
 			logger.Error().Err(err).Msg("Failed to create seed snapshot, new snapshot volumes cannot be created from this filesystem!")
 		}
 	} else if v.isOnSnapshot() { // running on real CSI system and not in docker sanity
@@ -1254,14 +1255,14 @@ func (v *UnifiedVolume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, err
 	} else if v.srcVolume != nil && !v.srcVolume.isOnSnapshot() {
 		logger.Trace().Msg("Volume is cloned from raw Weka filesystem, no source snapshot to originate from")
 		return nil, nil
-	} else if v.hasSeedSnapshot(ctx) {
-		logger.Trace().Msg("Attempting to fetch the Weka seed snapshot filesystem")
-		srcSnap, err = v.getSeedSnapshot(ctx)
+	} else if v.isOnSnapshot() {
+		srcSnap, err = v.ensureSeedSnapshot(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to locate source snapshot object")
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 	}
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to locate source snapshot object")
-		return nil, status.Error(codes.Internal, err.Error())
-	}
+
 	if srcSnap == nil || srcSnap.Uid == uuid.Nil {
 		logger.Trace().Msg("There is no Weka source snapshot to originate from")
 		return nil, nil
