@@ -964,7 +964,7 @@ func (v *UnifiedVolume) isFilesystemEmpty(ctx context.Context) (bool, error) {
 	}
 	defer umount()
 
-	dir, err := os.Open(v.getFullPath(ctx, false))
+	dir, err := os.Open(v.mountPath[false])
 	if err != nil {
 		return false, err
 	}
