@@ -186,9 +186,7 @@ func (m *wekaMounter) initFsMountObject(fsMountRequest fsMountRequest) {
 
 type UnmountFunc func()
 
-func (m *wekaMounter) mountParams(ctx context.Context, fs string, xattr bool, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	mountOptions := getDefaultMountOptions()
-	mountOptions.setXattr(xattr)
+func (m *wekaMounter) mountWithOptions(ctx context.Context, fs string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	request := fsMountRequest{fs, mountOptions}
 
 	m.initFsMountObject(request)
@@ -207,11 +205,7 @@ func (m *wekaMounter) mountParams(ctx context.Context, fs string, xattr bool, ap
 }
 
 func (m *wekaMounter) Mount(ctx context.Context, fs string, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	return m.mountParams(ctx, fs, false, apiClient)
-}
-
-func (m *wekaMounter) MountXattr(ctx context.Context, fs string, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	return m.mountParams(ctx, fs, true, apiClient)
+	return m.mountWithOptions(ctx, fs, getDefaultMountOptions(), apiClient)
 }
 
 func (m *wekaMounter) Unmount(ctx context.Context, fs string) error {

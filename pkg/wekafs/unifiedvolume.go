@@ -785,19 +785,15 @@ func (v *UnifiedVolume) Mount(ctx context.Context, xattr bool) (error, UnmountFu
 	if v.server.getMounter() == nil {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
-	if xattr {
-		mountXattr, err, unmountFunc := v.server.getMounter().MountXattr(ctx, v.FilesystemName, v.apiClient)
-		if err == nil {
-			v.mountPath[xattr] = mountXattr
-		}
-		return err, unmountFunc
-	} else {
-		mount, err, unmountFunc := v.server.getMounter().Mount(ctx, v.FilesystemName, v.apiClient)
-		if err == nil {
-			v.mountPath[xattr] = mount
-		}
-		return err, unmountFunc
+
+	mountOpts := v.getMountOptions(ctx)
+	mountOpts.setXattr(xattr)
+
+	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	if err == nil {
+		v.mountPath[xattr] = mount
 	}
+	return err, unmountFunc
 }
 
 // Unmount decreases refCount / unmounts volume using specific mount options, currently only xattr true/false
