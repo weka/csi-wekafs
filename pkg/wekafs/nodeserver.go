@@ -34,11 +34,12 @@ import (
 )
 
 const (
-	TopologyKeyNode      = "topology.wekafs.csi/node"
-	TopologyLabelNode    = "topology.csi.weka.io/node"
-	TopologyLabelWeka    = "topology.csi.weka.io/global"
-	WekaKernelModuleName = "wekafsgw"
-	crashOnNoWeka        = false
+	TopologyKeyNode                  = "topology.wekafs.csi/node"
+	TopologyLabelNode                = "topology.csi.weka.io/node"
+	TopologyLabelWeka                = "topology.csi.weka.io/global"
+	WekaKernelModuleName             = "wekafsgw"
+	crashOnNoWeka                    = false
+	NodeServerAdditionalMountOptions = "sync_on_close"
 )
 
 type NodeServer struct {
@@ -48,6 +49,10 @@ type NodeServer struct {
 	mounter           *wekaMounter
 	api               *ApiStore
 	config            *DriverConfig
+}
+
+func (ns *NodeServer) getDefaultMountOptions() MountOptions {
+	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions))
 }
 
 func (ns *NodeServer) isInDebugMode() bool {

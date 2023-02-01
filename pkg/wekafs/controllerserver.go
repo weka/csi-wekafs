@@ -31,9 +31,10 @@ import (
 )
 
 const (
-	deviceID          = "deviceID"
-	maxVolumeIdLength = 1920
-	TracerName        = "weka-csi"
+	deviceID                            = "deviceID"
+	maxVolumeIdLength                   = 1920
+	TracerName                          = "weka-csi"
+	ControlServerAdditionalMountOptions = ""
 )
 
 type ControllerServer struct {
@@ -42,6 +43,10 @@ type ControllerServer struct {
 	mounter *wekaMounter
 	api     *ApiStore
 	config  *DriverConfig
+}
+
+func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
+	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(ControlServerAdditionalMountOptions))
 }
 
 func (cs *ControllerServer) isInDebugMode() bool {

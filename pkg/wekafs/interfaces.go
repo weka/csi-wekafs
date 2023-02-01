@@ -60,4 +60,5 @@ type AnyServer interface {
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
 	isInDebugMode() bool
+	getDefaultMountOptions() MountOptions
 }
