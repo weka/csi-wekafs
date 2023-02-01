@@ -124,3 +124,7 @@ func (a *ApiClient) SupportsNewFileSystemFromSnapshot() bool {
 func (a *ApiClient) SupportsUrlQueryParams() bool {
 	return a.CompatibilityMap.UrlQueryParams
 }
+
+func (a *ApiClient) SupportsSyncOnCloseMountOption() bool {
+	return a.CompatibilityMap.SyncOnCloseMountOption
+}

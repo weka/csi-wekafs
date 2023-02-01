@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	selinuxContext = "wekafs_csi_volume"
+	selinuxContext         = "wekafs_csi_volume"
+	MountOptionSyncOnClose = "sync_on_close"
 )
 
 type mountOption struct {
@@ -81,6 +82,12 @@ func (opts MountOptions) RemoveOption(optstring string) MountOptions {
 	opt := newMountOptionFromString(optstring)
 	delete(ret.customOptions, opt.option)
 	return ret
+}
+
+func (opts MountOptions) hasOption(optstring string) bool {
+	opt := newMountOptionFromString(optstring)
+	_, exists := opts.customOptions[opt.option]
+	return exists
 }
 
 func (opts MountOptions) getOpts() []mountOption {

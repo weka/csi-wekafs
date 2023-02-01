@@ -39,6 +39,7 @@ type Volume interface {
 	MarshalZerologObject(e *zerolog.Event)
 	getMountPath(xattr bool) string
 	getCsiContentSource(ctx context.Context) *csi.VolumeContentSource
+	getMountOptions(ctx context.Context) MountOptions
 }
 
 // Snapshot represent an interface of single snapshot representation of any type

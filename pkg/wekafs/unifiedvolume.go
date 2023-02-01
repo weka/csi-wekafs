@@ -76,6 +76,16 @@ func (v *UnifiedVolume) getCsiContentSource(ctx context.Context) *csi.VolumeCont
 	return nil
 }
 
+func (v *UnifiedVolume) getMountOptions(ctx context.Context) MountOptions {
+	options := v.server.getDefaultMountOptions()
+	if options.hasOption(MountOptionSyncOnClose) && (v.apiClient == nil || !v.apiClient.SupportsSyncOnCloseMountOption()) {
+		logger := log.Ctx(ctx)
+		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
+		options = options.RemoveOption(MountOptionSyncOnClose)
+	}
+	return options
+}
+
 func (v *UnifiedVolume) MarshalZerologObject(e *zerolog.Event) {
 
 	e.Str("id", v.id).

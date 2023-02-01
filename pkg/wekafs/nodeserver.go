@@ -39,7 +39,7 @@ const (
 	TopologyLabelWeka                = "topology.csi.weka.io/global"
 	WekaKernelModuleName             = "wekafsgw"
 	crashOnNoWeka                    = false
-	NodeServerAdditionalMountOptions = "sync_on_close"
+	NodeServerAdditionalMountOptions = MountOptionSyncOnClose
 )
 
 type NodeServer struct {
