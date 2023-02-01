@@ -1041,6 +1041,9 @@ func (v *UnifiedVolume) deleteSeedSnapshot(ctx context.Context) {
 func (v *UnifiedVolume) getSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
 	snapObj, err := v.apiClient.GetSnapshotByName(ctx, v.getSeedSnapshotName())
 	if err != nil {
+		if err == apiclient.ObjectNotFoundError {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if snapObj == nil || snapObj.Uid == uuid.Nil {
@@ -1055,24 +1058,28 @@ func (v *UnifiedVolume) getSeedSnapshot(ctx context.Context) (*apiclient.Snapsho
 	return snapObj, nil
 }
 
-func (v *UnifiedVolume) hasSeedSnapshot(ctx context.Context) bool {
-	snapObj, err := v.getSeedSnapshot(ctx)
-	return err == nil && snapObj != nil && snapObj.Uid != uuid.Nil
-}
-
 func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
 	logger := log.Ctx(ctx)
+	logger.Debug().Str("seed_snapshot_name", v.getSeedSnapshotName()).Msg("Ensuring seed snapshot exists for filesystem")
 	snap, err := v.getSeedSnapshot(ctx)
 	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get seed snapshot")
 		return snap, err
 	}
-	logger.Debug().Msg("Ensuring seed snapshot exists for filesystem")
-	empty, err := v.isFilesystemEmpty(ctx)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
-	}
-	if !empty {
-		return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
+	if snap == nil {
+		empty, err := v.isFilesystemEmpty(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
+			return nil, err
+		}
+		if !empty {
+			logger.Error().Err(err).Msg("Cannot create a seed snapshot, filesystem is not empty")
+			return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
+		}
+
+		if snap, err = v.createSeedSnapshot(ctx); err != nil {
+			return nil, err
+		}
 	}
 
 	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
@@ -1093,10 +1100,8 @@ func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snap
 			return snap, err
 		}
 		logger.Debug().Str("full_path", v.getFullPath(ctx, true)).Msg("Successully created seed snapshot debug directory")
-		return snap, nil
 	}
-
-	return v.createSeedSnapshot(ctx)
+	return snap, nil
 }
 
 // Create actually creates the storage location for the particular volume object
