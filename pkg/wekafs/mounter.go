@@ -189,6 +189,13 @@ type UnmountFunc func()
 func (m *wekaMounter) mountWithOptions(ctx context.Context, fs string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	request := fsMountRequest{fs, mountOptions}
 	mountOptions.setSelinux(m.selinuxSupport)
+
+	if mountOptions.hasOption(MountOptionSyncOnClose) && (apiClient == nil || apiClient.SupportsSyncOnCloseMountOption()) {
+		logger := log.Ctx(ctx)
+		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
+		mountOptions = mountOptions.RemoveOption(MountOptionSyncOnClose)
+	}
+
 	m.initFsMountObject(request)
 	mounter := m.mountMap[fs][request.getUniqueId()]
 	mountErr := mounter.incRef(ctx, apiClient, mountOptions)
