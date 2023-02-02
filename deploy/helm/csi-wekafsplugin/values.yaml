@@ -17,6 +17,8 @@ images:
   registrarsidecar: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
   # -- CSI provisioner sidecar image URL
   resizersidecar: k8s.gcr.io/sig-storage/csi-resizer:v1.4.0
+  # -- CSI snapshotter sidecar image URL
+  snapshottersidecar: k8s.gcr.io/sig-storage/csi-snapshotter:v6.2.1
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
