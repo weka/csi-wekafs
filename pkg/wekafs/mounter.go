@@ -79,7 +79,7 @@ func (m *wekaMount) isMounted() bool {
 	return PathExists(m.mountPoint) && PathIsWekaMount(context.Background(), m.mountPoint)
 }
 
-func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, selinuxSupport bool) error {
+func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
 	ctx = log.With().Logger().WithContext(ctx)
 
 	m.lock.Lock()
@@ -89,7 +89,7 @@ func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, 
 		m.refCount = 0 // to make sure that we don't have negative refcount later
 	}
 	if m.refCount == 0 || !m.isMounted() {
-		if err := m.doMount(ctx, apiClient, selinuxSupport); err != nil {
+		if err := m.doMount(ctx, apiClient, mountOptions); err != nil {
 			return err
 		}
 	}
@@ -129,7 +129,7 @@ func (m *wekaMount) doUnmount(ctx context.Context) error {
 	return err
 }
 
-func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, selinuxSupport bool) error {
+func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
 	mountToken := ""
 	var mountOptionsSensitive []string
@@ -137,8 +137,6 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 		return err
 	}
 	if !m.isInDebugMode() {
-		mountOptions := getDefaultMountOptions()
-		mountOptions.setSelinux(selinuxSupport)
 		if apiClient == nil {
 			logger.Trace().Msg("No API client for mount, not requesting mount token")
 		} else {
@@ -190,10 +188,10 @@ type UnmountFunc func()
 
 func (m *wekaMounter) mountWithOptions(ctx context.Context, fs string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	request := fsMountRequest{fs, mountOptions}
-
+	mountOptions.setSelinux(m.selinuxSupport)
 	m.initFsMountObject(request)
 	mounter := m.mountMap[fs][request.getUniqueId()]
-	mountErr := mounter.incRef(ctx, apiClient, m.selinuxSupport)
+	mountErr := mounter.incRef(ctx, apiClient, mountOptions)
 
 	if mountErr != nil {
 		log.Ctx(ctx).Error().Err(mountErr).Msg("Failed mounting")
