@@ -32,6 +32,7 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 		mountPath:           make(map[bool]string),
 		server:              server,
 	}
+	v.initMountOptions()
 	return v, nil
 }
 
@@ -90,7 +91,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 			return nil, err
 		}
 	}
-
+	volume.initMountOptions()
 	params := req.GetParameters()
 	err = volume.SetParamsFromRequestParams(ctx, params)
 	if err != nil {

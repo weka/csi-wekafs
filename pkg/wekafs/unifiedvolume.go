@@ -77,6 +77,10 @@ func (v *UnifiedVolume) getCsiContentSource(ctx context.Context) *csi.VolumeCont
 	return nil
 }
 
+func (v *UnifiedVolume) initMountOptions() {
+	v.mountOptions = v.server.getDefaultMountOptions()
+}
+
 func (v *UnifiedVolume) setMountOptions(ctx context.Context, mountOptions MountOptions) {
 	v.mountOptions.Merge(mountOptions)
 }
