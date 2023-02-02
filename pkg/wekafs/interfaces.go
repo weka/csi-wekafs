@@ -40,6 +40,7 @@ type Volume interface {
 	getMountPath(xattr bool) string
 	getCsiContentSource(ctx context.Context) *csi.VolumeContentSource
 	getMountOptions(ctx context.Context) MountOptions
+	setMountOptions(ctx context.Context, mountOptions MountOptions)
 }
 
 // Snapshot represent an interface of single snapshot representation of any type

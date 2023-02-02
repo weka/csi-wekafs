@@ -141,6 +141,15 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return NodePublishVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
 
+	// set volume mountOptions
+	params := req.GetVolumeContext()
+	if params != nil {
+		if mountOptions, ok := params["mountOptions"]; ok {
+			logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
+			volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
+		}
+	}
+
 	// Check volume capabitily arguments
 	if req.GetVolumeCapability() == nil {
 		return NodePublishVolumeError(ctx, codes.InvalidArgument, "Volume capability missing in request")

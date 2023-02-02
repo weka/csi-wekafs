@@ -47,6 +47,7 @@ type UnifiedVolume struct {
 	ownerGid            int
 	mountPath           map[bool]string
 	enforceCapacity     bool
+	mountOptions        MountOptions
 
 	srcVolume   Volume
 	srcSnapshot Snapshot
@@ -76,14 +77,12 @@ func (v *UnifiedVolume) getCsiContentSource(ctx context.Context) *csi.VolumeCont
 	return nil
 }
 
+func (v *UnifiedVolume) setMountOptions(ctx context.Context, mountOptions MountOptions) {
+	v.mountOptions.Merge(mountOptions)
+}
+
 func (v *UnifiedVolume) getMountOptions(ctx context.Context) MountOptions {
-	options := v.server.getDefaultMountOptions()
-	if options.hasOption(MountOptionSyncOnClose) && (v.apiClient == nil || !v.apiClient.SupportsSyncOnCloseMountOption()) {
-		logger := log.Ctx(ctx)
-		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
-		options = options.RemoveOption(MountOptionSyncOnClose)
-	}
-	return options
+	return v.mountOptions
 }
 
 func (v *UnifiedVolume) MarshalZerologObject(e *zerolog.Event) {
@@ -1473,6 +1472,11 @@ func (v *UnifiedVolume) waitForSnapshotDeletion(ctx context.Context, logger zero
 // SetParamsFromRequestParams takes additional optional params from storage class params and applies them to Volume object
 // those params then need to be set during actual volume creation via UpdateParams function
 func (v *UnifiedVolume) SetParamsFromRequestParams(ctx context.Context, params map[string]string) error {
+	// set explicit mount options if were passed in storageclass
+	if val, ok := params["mountOptions"]; ok {
+		v.mountOptions.Merge(NewMountOptionsFromString(val))
+	}
+
 	// filesystem group name, required for actually creating a raw FS
 	if val, ok := params["filesystemGroupName"]; ok {
 		v.filesystemGroupName = val
