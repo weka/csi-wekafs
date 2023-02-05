@@ -140,10 +140,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		} else {
 			volType = VolumeTypeUnified
 
-			// assume we create a new snapshot of a filesystem
-			// TODO: need to validate that the filesystem is indeed empty an return error otherwise
-
-			if !client.SupportsQuotaOnSnapshots() {
+			if !client.SupportsQuotaOnSnapshots() && !cs.config.alwaysAllowSnapshotVolumes {
 				return nil, status.Error(codes.FailedPrecondition, "Quota not supported for snapshots, please upgrade Weka cluster to latest version")
 			}
 			snapName = generateWekaSnapNameForSnapBasedVol(cs.getConfig().VolumePrefix, requestedVolumeName)
