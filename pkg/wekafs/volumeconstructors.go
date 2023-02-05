@@ -196,7 +196,8 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 
 	if sourceSnap.hasInnerPath() && !server.getConfig().allowSnapshotsOfLegacyVolumes {
 		// block creation of snapshots from legacy volumes, as it wastes space
-		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is not supported for Legacy CSI volumes")
+		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is prohibited on directory-based CSI volumes. "+
+			"Refer to Weka CSI plugin documentation")
 	}
 
 	sourceSnapObj, err := sourceSnap.getObject(ctx)
