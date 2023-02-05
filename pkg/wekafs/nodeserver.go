@@ -437,21 +437,6 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	op := "NodeGetCapabilities"
-	result := "SUCCESS"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-
-	logger := log.Ctx(ctx)
-	logger.Info().Msg(">>>> Received request")
-	defer func() {
-		level := zerolog.InfoLevel
-		if result != "SUCCESS" {
-			level = zerolog.ErrorLevel
-		}
-		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
-	}()
 	return &csi.NodeGetCapabilitiesResponse{
 		Capabilities: ns.caps,
 	}, nil
