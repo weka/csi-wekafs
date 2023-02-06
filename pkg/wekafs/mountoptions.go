@@ -152,10 +152,10 @@ func (opts MountOptions) setSelinux(selinuxSupport bool) {
 }
 
 func NewMountOptionsFromString(optsString string) MountOptions {
-	optstrings := strings.Split(optsString, ",")
-	if len(optstrings) == 0 {
+	if optsString == "" {
 		return NewMountOptions([]string{})
 	}
+	optstrings := strings.Split(optsString, ",")
 	return NewMountOptions(optstrings)
 }
 
