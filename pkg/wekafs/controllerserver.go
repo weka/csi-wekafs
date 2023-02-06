@@ -508,9 +508,9 @@ func (cs *ControllerServer) ControllerGetCapabilities(ctx context.Context, req *
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
-	logger.Info().Msg(">>>> Received request")
+	logger.Trace().Msg(">>>> Received request")
 	defer func() {
-		level := zerolog.InfoLevel
+		level := zerolog.TraceLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
