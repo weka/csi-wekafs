@@ -98,7 +98,6 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 			logger.Trace().Msg("No API client for mount, not requesting mount token")
 		} else {
 			var err error
-			logger.Trace().Msg("Requesting mount token via API")
 			if mountToken, err = apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
 				return err
 			}
