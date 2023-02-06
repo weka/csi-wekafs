@@ -180,6 +180,7 @@ func (snap *Snapshot) getImmutableFields() []string {
 	return []string{
 		"Name",
 		"FilesystemId",
+		"Filesystem",
 	}
 }
 
