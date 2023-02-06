@@ -53,7 +53,7 @@ func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) 
 
 	}
 	m.refCount++
-	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.mountOptions.Strings()).Msg("RefCount increased")
+	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.mountOptions.Strings()).Str("filesystem_name", m.fsName).Msg("RefCount increased")
 	return nil
 }
 
@@ -63,7 +63,7 @@ func (m *wekaMount) decRef(ctx context.Context) error {
 	defer m.lock.Unlock()
 	m.refCount--
 	m.lastUsed = time.Now()
-	logger.Trace().Int("refcount", m.refCount).Msg("RefCount decreased")
+	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.mountOptions.Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
 	if m.refCount < 0 {
 		logger.Error().Int("refcount", m.refCount).Msg("During decRef negative refcount encountered")
 		m.refCount = 0 // to make sure that we don't have negative refcount later
