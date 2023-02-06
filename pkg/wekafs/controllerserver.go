@@ -196,6 +196,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// IDEMPOTENCE FLOW: If directory already exists, return the createResponse if size matches, or error
 	volExists, volMatchesCapacity, err := volume.ExistsAndMatchesCapacity(ctx, capacity)
 
+	// set params to have all relevant mount options (default + those received in params) to be passed as part of volumeContext
+	params["mountOptions"] = volume.getMountOptions(ctx).String()
+
 	if err != nil {
 		if !volExists {
 			return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check if volume %s exists: %s", volume.GetId(), err.Error()))
