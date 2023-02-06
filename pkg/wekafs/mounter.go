@@ -83,7 +83,6 @@ func (m *wekaMounter) initFsMountObject(fsMountRequest fsMountRequest) {
 type UnmountFunc func()
 
 func (m *wekaMounter) mountWithOptions(ctx context.Context, fs string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	request := fsMountRequest{fs, mountOptions}
 	mountOptions.setSelinux(m.selinuxSupport)
 
 	if mountOptions.hasOption(MountOptionSyncOnClose) && (apiClient == nil || apiClient.SupportsSyncOnCloseMountOption()) {
@@ -91,6 +90,8 @@ func (m *wekaMounter) mountWithOptions(ctx context.Context, fs string, mountOpti
 		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
 		mountOptions = mountOptions.RemoveOption(MountOptionSyncOnClose)
 	}
+
+	request := fsMountRequest{fs, mountOptions}
 
 	m.initFsMountObject(request)
 	mounter := m.mountMap[fs][request.getUniqueId()]
@@ -112,8 +113,11 @@ func (m *wekaMounter) Mount(ctx context.Context, fs string, apiClient *apiclient
 }
 
 func (m *wekaMounter) unmountWithOptions(ctx context.Context, fs string, opts MountOptions) error {
+	mountOptions := opts
+	mountOptions.setSelinux(m.selinuxSupport)
+	fsReq := fsMountRequest{fs, mountOptions}
+
 	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fs).Msg("Received an unmount request")
-	fsReq := fsMountRequest{fs, opts}
 	if mnt, ok := m.mountMap[fsReq.fsName][fsReq.getUniqueId()]; ok {
 		err := mnt.decRef(ctx)
 		if err == nil {
