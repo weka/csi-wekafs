@@ -2,10 +2,8 @@ package wekafs
 
 import (
 	"context"
-	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"hash/fnv"
 	"k8s.io/utils/mount"
 	"os"
 	"path"
@@ -17,22 +15,6 @@ import (
 const (
 	inactiveMountGcPeriod = time.Minute * 10
 )
-
-type fsMountRequest struct {
-	fsName  string
-	options MountOptions
-}
-
-func (fsm *fsMountRequest) Hash() uint32 {
-	h := fnv.New32a()
-	s := fmt.Sprintln(fsm.options.getOpts(), fsm.fsName)
-	_, _ = h.Write([]byte(s))
-	return h.Sum32()
-}
-
-func (fsm *fsMountRequest) getUniqueId() string {
-	return getStringSha1AsB32(fsm.fsName + ":" + fsm.options.String())
-}
 
 type mountsMapPerFs map[string]*wekaMount
 type mountsMap map[string]mountsMapPerFs
@@ -59,42 +41,41 @@ func newWekaMounter(driver *WekaFsDriver) *wekaMounter {
 	return mounter
 }
 
-func (m *wekaMounter) initFsMountObject(fsMountRequest fsMountRequest) {
+func (m *wekaMounter) NewMount(fsName string, options MountOptions) *wekaMount {
 	m.lock.Lock()
 	if m.kMounter == nil {
 		m.kMounter = mount.New("")
 	}
-	if _, ok := m.mountMap[fsMountRequest.fsName]; !ok {
-		m.mountMap[fsMountRequest.fsName] = mountsMapPerFs{}
+	if _, ok := m.mountMap[fsName]; !ok {
+		m.mountMap[fsName] = mountsMapPerFs{}
 	}
-	if _, ok := m.mountMap[fsMountRequest.fsName][fsMountRequest.getUniqueId()]; !ok {
+	if _, ok := m.mountMap[fsName][options.String()]; !ok {
+		uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
 		wMount := &wekaMount{
 			kMounter:     m.kMounter,
-			fsName:       fsMountRequest.fsName,
+			fsName:       fsName,
 			debugPath:    m.debugPath,
-			mountPoint:   "/var/run/weka-fs-mounts/" + getAsciiPart(fsMountRequest.fsName, 64) + "-" + fsMountRequest.getUniqueId(),
-			mountOptions: fsMountRequest.options,
+			mountPoint:   "/var/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+			mountOptions: options,
 		}
-		m.mountMap[fsMountRequest.fsName][fsMountRequest.getUniqueId()] = wMount
+		m.mountMap[fsName][options.String()] = wMount
 	}
 	m.lock.Unlock()
+	return m.mountMap[fsName][options.String()]
 }
 
 type UnmountFunc func()
 
-func (m *wekaMounter) mountWithOptions(ctx context.Context, fs string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
+func (m *wekaMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	mountOptions.setSelinux(m.selinuxSupport)
 
-	if mountOptions.hasOption(MountOptionSyncOnClose) && (apiClient == nil || apiClient.SupportsSyncOnCloseMountOption()) {
+	if mountOptions.hasOption(MountOptionSyncOnClose) && (apiClient == nil || !apiClient.SupportsSyncOnCloseMountOption()) {
 		logger := log.Ctx(ctx)
 		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
 		mountOptions = mountOptions.RemoveOption(MountOptionSyncOnClose)
 	}
 
-	request := fsMountRequest{fs, mountOptions}
-
-	m.initFsMountObject(request)
-	mounter := m.mountMap[fs][request.getUniqueId()]
+	mounter := m.NewMount(fsName, mountOptions)
 	mountErr := mounter.incRef(ctx, apiClient)
 
 	if mountErr != nil {
@@ -103,7 +84,7 @@ func (m *wekaMounter) mountWithOptions(ctx context.Context, fs string, mountOpti
 	}
 	return mounter.mountPoint, nil, func() {
 		if mountErr == nil {
-			_ = m.mountMap[request.fsName][request.getUniqueId()].decRef(ctx)
+			_ = mounter.decRef(ctx)
 		}
 	}
 }
@@ -112,21 +93,20 @@ func (m *wekaMounter) Mount(ctx context.Context, fs string, apiClient *apiclient
 	return m.mountWithOptions(ctx, fs, getDefaultMountOptions(), apiClient)
 }
 
-func (m *wekaMounter) unmountWithOptions(ctx context.Context, fs string, opts MountOptions) error {
-	mountOptions := opts
-	mountOptions.setSelinux(m.selinuxSupport)
-	fsReq := fsMountRequest{fs, mountOptions}
+func (m *wekaMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
+	opts := options
+	options.setSelinux(m.selinuxSupport)
 
-	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fs).Msg("Received an unmount request")
-	if mnt, ok := m.mountMap[fsReq.fsName][fsReq.getUniqueId()]; ok {
+	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
+	if mnt, ok := m.mountMap[fsName][options.String()]; ok {
 		err := mnt.decRef(ctx)
 		if err == nil {
-			if m.mountMap[fsReq.fsName][fsReq.getUniqueId()].refCount <= 0 {
-				log.Ctx(ctx).Trace().Str("filesystem", fsReq.fsName).Strs("mount_options", fsReq.options.Strings()).Msg("This is a last use of this mount, removing from map")
-				delete(m.mountMap[fsReq.fsName], fsReq.getUniqueId())
+			if m.mountMap[fsName][options.String()].refCount <= 0 {
+				log.Ctx(ctx).Trace().Str("filesystem", fsName).Strs("mount_options", options.Strings()).Msg("This is a last use of this mount, removing from map")
+				delete(m.mountMap[fsName], options.String())
 			}
-			if len(m.mountMap[fsReq.fsName]) < 1 {
-				delete(m.mountMap, fsReq.fsName)
+			if len(m.mountMap[fsName]) < 1 {
+				delete(m.mountMap, fsName)
 			}
 		}
 		return err
@@ -137,14 +117,6 @@ func (m *wekaMounter) unmountWithOptions(ctx context.Context, fs string, opts Mo
 	}
 }
 
-func (m *wekaMounter) HasMount(filesystem string, mountOptions MountOptions) bool {
-	fsReq := fsMountRequest{filesystem, mountOptions}
-	if mnt, ok := m.mountMap[fsReq.fsName][fsReq.getUniqueId()]; ok {
-		return mnt.refCount > 0
-	}
-	return false
-}
-
 func (m *wekaMounter) LogActiveMounts() {
 	if len(m.mountMap) > 0 {
 		count := 0
@@ -152,12 +124,10 @@ func (m *wekaMounter) LogActiveMounts() {
 			for mnt := range m.mountMap[fsName] {
 				mapEntry := m.mountMap[fsName][mnt]
 				if mapEntry.refCount > 0 {
-					log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.refCount).
-						Str("unique_id", mnt).Strs("mount_options", mapEntry.mountOptions.Strings()).Msg("Mount is active")
+					log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.refCount).Strs("mount_options", mapEntry.mountOptions.Strings()).Msg("Mount is active")
 					count++
 				} else {
-					log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.refCount).
-						Str("unique_id", mnt).Strs("mount_options", mapEntry.mountOptions.Strings()).Msg("Mount is not active")
+					log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.refCount).Strs("mount_options", mapEntry.mountOptions.Strings()).Msg("Mount is not active")
 				}
 
 			}
@@ -238,13 +208,9 @@ func (m *wekaMounter) recoverExistingMounts() error {
 
 		mOpts := NewMountOptions(mi.SuperOptions)
 
-		fsReq := fsMountRequest{
-			fsName:  mi.Source,
-			options: mOpts,
-		}
-		m.initFsMountObject(fsReq)
-		m.mountMap[fsReq.fsName][fsReq.getUniqueId()].refCount += 1
-		m.mountMap[fsReq.fsName][fsReq.getUniqueId()].lastUsed = time.Now()
+		mounter := m.NewMount(mi.Source, mOpts)
+		mounter.refCount += 1
+		mounter.lastUsed = time.Now()
 
 	}
 	m.LogActiveMounts()

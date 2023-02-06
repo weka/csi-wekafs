@@ -32,11 +32,9 @@ func (m *wekaMount) isMounted() bool {
 }
 
 func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
-	ctx = log.With().Logger().WithContext(ctx)
-
+	logger := log.Ctx(ctx)
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	logger := log.Ctx(ctx)
 	if m.refCount < 0 {
 		logger.Error().Str("mount_point", m.mountPoint).Int("refcount", m.refCount).Msg("During incRef negative refcount encountered")
 		m.refCount = 0 // to make sure that we don't have negative refcount later
