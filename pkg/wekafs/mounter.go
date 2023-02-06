@@ -70,7 +70,7 @@ func (m *wekaMounter) initFsMountObject(fsMountRequest fsMountRequest) {
 	if _, ok := m.mountMap[fsMountRequest.fsName][fsMountRequest.getUniqueId()]; !ok {
 		wMount := &wekaMount{
 			kMounter:     m.kMounter,
-			fsRequest:    &fsMountRequest,
+			fsName:       fsMountRequest.fsName,
 			debugPath:    m.debugPath,
 			mountPoint:   "/var/run/weka-fs-mounts/" + getAsciiPart(fsMountRequest.fsName, 64) + "-" + fsMountRequest.getUniqueId(),
 			mountOptions: fsMountRequest.options,
@@ -94,7 +94,7 @@ func (m *wekaMounter) mountWithOptions(ctx context.Context, fs string, mountOpti
 
 	m.initFsMountObject(request)
 	mounter := m.mountMap[fs][request.getUniqueId()]
-	mountErr := mounter.incRef(ctx, apiClient, mountOptions)
+	mountErr := mounter.incRef(ctx, apiClient)
 
 	if mountErr != nil {
 		log.Ctx(ctx).Error().Err(mountErr).Msg("Failed mounting")

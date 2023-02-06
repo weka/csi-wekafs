@@ -13,7 +13,7 @@ import (
 )
 
 type wekaMount struct {
-	fsRequest    *fsMountRequest
+	fsName       string
 	mountPoint   string
 	refCount     int
 	lock         sync.Mutex
@@ -31,7 +31,7 @@ func (m *wekaMount) isMounted() bool {
 	return PathExists(m.mountPoint) && PathIsWekaMount(context.Background(), m.mountPoint)
 }
 
-func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
+func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
 	ctx = log.With().Logger().WithContext(ctx)
 
 	m.lock.Lock()
@@ -42,18 +42,18 @@ func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, 
 		m.refCount = 0 // to make sure that we don't have negative refcount later
 	}
 	if m.refCount == 0 {
-		if err := m.doMount(ctx, apiClient, mountOptions); err != nil {
+		if err := m.doMount(ctx, apiClient, m.mountOptions); err != nil {
 			return err
 		}
 	} else if !m.isMounted() {
 		logger.Warn().Str("mount_point", m.mountPoint).Int("refcount", m.refCount).Msg("Mount not exists although should!")
-		if err := m.doMount(ctx, apiClient, mountOptions); err != nil {
+		if err := m.doMount(ctx, apiClient, m.mountOptions); err != nil {
 			return err
 		}
 
 	}
 	m.refCount++
-	logger.Trace().Int("refcount", m.refCount).Msg("RefCount increased")
+	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.mountOptions.Strings()).Msg("RefCount increased")
 	return nil
 }
 
@@ -77,8 +77,8 @@ func (m *wekaMount) decRef(ctx context.Context) error {
 }
 
 func (m *wekaMount) doUnmount(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
-	logger.Trace().Strs("mount_options", m.fsRequest.options.Strings()).Msg("Performing umount via k8s native mounter")
+	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
+	logger.Trace().Strs("mount_options", m.mountOptions.Strings()).Msg("Performing umount via k8s native mounter")
 	err := m.kMounter.Unmount(m.mountPoint)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
@@ -89,7 +89,7 @@ func (m *wekaMount) doUnmount(ctx context.Context) error {
 }
 
 func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
+	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
 	mountToken := ""
 	var mountOptionsSensitive []string
 	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
@@ -101,20 +101,20 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 		} else {
 			var err error
 			logger.Trace().Msg("Requesting mount token via API")
-			if mountToken, err = apiClient.GetMountTokenForFilesystemName(ctx, m.fsRequest.fsName); err != nil {
+			if mountToken, err = apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
 				return err
 			}
 			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
 		}
-		logger.Trace().Strs("mount_options", m.fsRequest.options.Strings()).
+		logger.Trace().Strs("mount_options", m.mountOptions.Strings()).
 			Fields(mountOptions).Msg("Performing mount")
-		return m.kMounter.MountSensitive(m.fsRequest.fsName, m.mountPoint, "wekafs", mountOptions.Strings(), mountOptionsSensitive)
+		return m.kMounter.MountSensitive(m.fsName, m.mountPoint, "wekafs", mountOptions.Strings(), mountOptionsSensitive)
 	} else {
-		fakePath := filepath.Join(m.debugPath, m.fsRequest.fsName)
+		fakePath := filepath.Join(m.debugPath, m.fsName)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
 			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
 		}
-		logger.Trace().Strs("mount_options", m.fsRequest.options.Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
+		logger.Trace().Strs("mount_options", m.mountOptions.Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
 
 		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
 	}
