@@ -9,7 +9,6 @@ import (
 	"k8s.io/utils/mount"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -35,17 +34,6 @@ func (fsm *fsMountRequest) getUniqueId() string {
 	return getStringSha1AsB32(fsm.fsName + ":" + fsm.options.String())
 }
 
-type wekaMount struct {
-	fsRequest    *fsMountRequest
-	mountPoint   string
-	refCount     int
-	lock         sync.Mutex
-	kMounter     mount.Interface
-	debugPath    string
-	mountOptions MountOptions
-	lastUsed     time.Time
-}
-
 type mountsMapPerFs map[string]*wekaMount
 type mountsMap map[string]mountsMapPerFs
 
@@ -69,96 +57,6 @@ func newWekaMounter(driver *WekaFsDriver) *wekaMounter {
 	mounter.schedulePeriodicMountGc()
 
 	return mounter
-}
-
-func (m *wekaMount) isInDebugMode() bool {
-	return m.debugPath != ""
-}
-
-func (m *wekaMount) isMounted() bool {
-	return PathExists(m.mountPoint) && PathIsWekaMount(context.Background(), m.mountPoint)
-}
-
-func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
-	ctx = log.With().Logger().WithContext(ctx)
-
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	if m.refCount < 0 {
-		log.Ctx(ctx).Error().Str("mount_point", m.mountPoint).Int("refcount", m.refCount).Msg("During incRef negative refcount encountered")
-		m.refCount = 0 // to make sure that we don't have negative refcount later
-	}
-	if m.refCount == 0 || !m.isMounted() {
-		if err := m.doMount(ctx, apiClient, mountOptions); err != nil {
-			return err
-		}
-	}
-	m.refCount++
-	log.Ctx(ctx).Trace().Int("refcount", m.refCount).Msg("RefCount increased")
-	return nil
-}
-
-func (m *wekaMount) decRef(ctx context.Context) error {
-	logger := log.Ctx(ctx)
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.refCount--
-	m.lastUsed = time.Now()
-	logger.Trace().Int("refcount", m.refCount).Msg("RefCount decreased")
-	if m.refCount < 0 {
-		logger.Error().Int("refcount", m.refCount).Msg("During decRef negative refcount encountered")
-		m.refCount = 0 // to make sure that we don't have negative refcount later
-	}
-	if m.refCount == 0 {
-		if err := m.doUnmount(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (m *wekaMount) doUnmount(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
-	logger.Trace().Strs("mount_options", m.fsRequest.options.Strings()).Msg("Performing umount via k8s native mounter")
-	err := m.kMounter.Unmount(m.mountPoint)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to unmount")
-	} else {
-		logger.Trace().Msg("Unmounted successfully")
-	}
-	return err
-}
-
-func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsRequest.fsName).Logger()
-	mountToken := ""
-	var mountOptionsSensitive []string
-	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
-		return err
-	}
-	if !m.isInDebugMode() {
-		if apiClient == nil {
-			logger.Trace().Msg("No API client for mount, not requesting mount token")
-		} else {
-			var err error
-			logger.Trace().Msg("Requesting mount token via API")
-			if mountToken, err = apiClient.GetMountTokenForFilesystemName(ctx, m.fsRequest.fsName); err != nil {
-				return err
-			}
-			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
-		}
-		logger.Trace().Strs("mount_options", m.fsRequest.options.Strings()).
-			Fields(mountOptions).Msg("Performing mount")
-		return m.kMounter.MountSensitive(m.fsRequest.fsName, m.mountPoint, "wekafs", mountOptions.Strings(), mountOptionsSensitive)
-	} else {
-		fakePath := filepath.Join(m.debugPath, m.fsRequest.fsName)
-		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
-			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
-		}
-		logger.Trace().Strs("mount_options", m.fsRequest.options.Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
-
-		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
-	}
 }
 
 func (m *wekaMounter) initFsMountObject(fsMountRequest fsMountRequest) {
