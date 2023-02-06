@@ -32,7 +32,6 @@ type Volume interface {
 	getMaxCapacity(ctx context.Context) (int64, error)
 	isMounted(ctx context.Context, xattr bool) bool
 	moveToTrash(ctx context.Context) error
-	opportunisticMount(ctx context.Context, xattr bool) (err error, unmountFunc func())
 	hasInnerPath() bool
 	isOnSnapshot() bool
 	getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error)
