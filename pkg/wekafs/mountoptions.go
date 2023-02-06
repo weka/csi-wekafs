@@ -133,15 +133,6 @@ func (opts MountOptions) setXattr(xattr bool) {
 	}
 }
 
-func (opts MountOptions) hasXattr() bool {
-	for _, opt := range opts.customOptions {
-		if opt.option == "acl" {
-			return true
-		}
-	}
-	return false
-}
-
 func (opts MountOptions) setSelinux(selinuxSupport bool) {
 	if selinuxSupport {
 		o := newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s_t:s0\"", selinuxContext))
