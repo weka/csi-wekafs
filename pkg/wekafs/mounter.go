@@ -111,17 +111,7 @@ func (m *wekaMounter) Mount(ctx context.Context, fs string, apiClient *apiclient
 	return m.mountWithOptions(ctx, fs, getDefaultMountOptions(), apiClient)
 }
 
-func (m *wekaMounter) Unmount(ctx context.Context, fs string) error {
-	return m.unmount(ctx, fs, false)
-}
-
-func (m *wekaMounter) UnmountXattr(ctx context.Context, fs string) error {
-	return m.unmount(ctx, fs, true)
-}
-
-func (m *wekaMounter) unmount(ctx context.Context, fs string, xattr bool) error {
-	opts := getDefaultMountOptions()
-	opts.setXattr(xattr)
+func (m *wekaMounter) unmountWithOptions(ctx context.Context, fs string, opts MountOptions) error {
 	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fs).Msg("Received an unmount request")
 	fsReq := fsMountRequest{fs, opts}
 	if mnt, ok := m.mountMap[fsReq.fsName][fsReq.getUniqueId()]; ok {

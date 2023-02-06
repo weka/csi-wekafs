@@ -809,19 +809,14 @@ func (v *UnifiedVolume) Unmount(ctx context.Context, xattr bool) error {
 	if v.server.getMounter() == nil {
 		Die("Volume unmount could not be done since mounter not defined on it")
 	}
-	if xattr {
-		err := v.server.getMounter().Unmount(ctx, v.FilesystemName)
-		if err == nil {
-			v.mountPath[xattr] = ""
-		}
-		return err
-	} else {
-		err := v.server.getMounter().UnmountXattr(ctx, v.FilesystemName)
-		if err == nil {
-			v.mountPath[xattr] = ""
-		}
-		return err
+
+	mountOpts := v.getMountOptions(ctx)
+	mountOpts.setXattr(xattr)
+	err := v.server.getMounter().unmountWithOptions(ctx, v.FilesystemName, mountOpts)
+	if err == nil {
+		v.mountPath[xattr] = ""
 	}
+	return err
 }
 
 // opportunisticMount used mostly in functions that require a short mount and unmount immediately.
