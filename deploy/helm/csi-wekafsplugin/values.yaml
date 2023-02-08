@@ -86,3 +86,6 @@ pluginConfig:
     # -- Create snapshots of legacy (dir/v1) volumes. By default disabled.
     # Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful)
     snapshotDirectoryVolumes: false
+    # -- Allow creation of snapshot-based volumes even on unsupported Weka cluster versions, off by default
+    # Note: On versions of Weka < v4.2 snapshot-based volume capacity cannot be enforced
+    snapshotVolumesWithoutQuotaEnforcement: false

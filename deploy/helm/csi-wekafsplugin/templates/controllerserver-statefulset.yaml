@@ -108,6 +108,9 @@ spec:
           {{- if .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes }}
             - "--allowsnapshotsoflegacyvolumes"
           {{- end }}
+          {{- if .Values.pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement }}
+            - "--alwaysallowsnapshotvolumes"
+          {{- end }}
           {{- if .Values.tracingUrl }}
             - "--tracingurl={{ .Values.tracingUrl }}"
           {{- end }}
