@@ -141,7 +141,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 			volType = VolumeTypeUnified
 
 			if !client.SupportsQuotaOnSnapshots() && !cs.config.alwaysAllowSnapshotVolumes {
-				return nil, status.Error(codes.FailedPrecondition, "Quota not supported for snapshots, please upgrade Weka cluster to latest version")
+				return nil, status.Error(codes.FailedPrecondition, "Quota enforcement is not supported for snapshot-based volumes by current Weka software version, please upgrade Weka cluster")
 			}
 			snapName = generateWekaSnapNameForSnapBasedVol(cs.getConfig().VolumePrefix, requestedVolumeName)
 			snapAccessPoint = generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
