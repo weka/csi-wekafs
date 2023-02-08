@@ -319,45 +319,26 @@ func (v *UnifiedVolume) getFilesystemTotalCapacity(ctx context.Context) (int64, 
 	if fsObj != nil {
 		return fsObj.TotalCapacity, nil
 	}
-	return int64(apiclient.MaxQuotaSize), nil
+	return int64(0), nil
 }
 
 func (v *UnifiedVolume) getMaxCapacity(ctx context.Context) (int64, error) {
-	var maxCapacity int64 = 0
+	// max size of the volume is the current size of the filesystem (or 0 if not exists) + free space on storage
+	currentFsSize, err := v.getFilesystemTotalCapacity(ctx)
+	if err != nil {
+		return -1, err
+	}
 
-	if v.isOnSnapshot() {
-		// this is a snapshot volume, no matter
-		maxFsSize, err1 := v.getFilesystemTotalCapacity(ctx)
-		maxFreeCapacity, err2 := v.getFreeSpaceOnStorage(ctx)
-		if err1 == nil && err2 == nil {
-			maxCapacity = Min(maxFsSize, maxFreeCapacity)
-		} else if err1 != nil {
-			return -1, err1
-		} else {
-			return -1, err2
-		}
+	if !v.server.getConfig().allowAutoFsExpansion && !v.isFilesystem() {
+		// no autoexansion, so max size is the size of the FS
+		return currentFsSize, err
 	}
-	if v.hasInnerPath() {
-		maxFreeSpaceOnFs, err := v.getFilesystemFreeSpace(ctx)
-		if err != nil {
-			return -1, err
-		}
-		if maxCapacity > 0 {
-			maxCapacity = Min(maxCapacity, maxFreeSpaceOnFs)
-		} else {
-			maxCapacity = maxFreeSpaceOnFs
-		}
-	} else {
-		maxFsSize, err := v.getFreeSpaceOnStorage(ctx)
-		if err != nil {
-			return -1, err
-		}
-		// this is an existing filesystem, assume we need to only add delta
-		if currentSize, err := v.getFilesystemTotalCapacity(ctx); err == nil {
-			maxCapacity = maxFsSize + currentSize
-		}
+
+	maxFreeCapacity, err := v.getFreeSpaceOnStorage(ctx)
+	if err != nil {
+		return -1, err
 	}
-	return maxCapacity, nil
+	return maxFreeCapacity + currentFsSize, nil
 }
 
 func (v *UnifiedVolume) GetType() VolumeType {
