@@ -1,0 +1,143 @@
+name: Weka CSI Plugin workflow
+on:
+  pull_request:
+
+jobs:
+  pr-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.7.1
+        with:
+          prefix: v
+
+      - name: Set package version
+        id: version
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      # DOCKER BUILD & PUSH
+      # TODO: Replace with docker action and add caching
+      - name: Docker login
+        run: |
+          DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD=${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_REGISTRY_NAME=${{secrets.DOCKER_REGISTRY_NAME}}
+          docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD" "$DOCKER_REGISTRY_NAME" 
+
+      - name: Check if Docker image exists
+        id: docker-check-exists
+        run: |
+          DOCKER_REGISTRY_NAME=${{secrets.DOCKER_REGISTRY_NAME}}
+          DOCKER_IMAGE_NAME=csi-wekafs
+          VERSION_STRING=${{steps.auto_version.outputs.version}}
+          if ! docker manifest inspect "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
+            echo "Docker image already exists, skipping rebuild..."
+          fi
+
+      - name: Docker build
+        id: docker-build
+        run: |
+          DOCKER_IMAGE_NAME=csi-wekafs
+          VERSION_STRING=${{steps.auto_version.outputs.version}}
+          docker build --pull --build-arg VERSION="$VERSION_STRING" \
+          -t "${DOCKER_IMAGE_NAME}:$VERSION_STRING" \
+          -f Dockerfile --label revision="${VERSION_STRING}" .
+          echo "should_push=true" >> $GITHUB_OUTPUT
+        if: steps.docker-check-exists.outputs.should_build == 'true'
+
+      - name: Docker push
+        run: |
+          DOCKER_REGISTRY_NAME=${{secrets.DOCKER_REGISTRY_NAME}}
+          DOCKER_IMAGE_NAME=csi-wekafs
+          VERSION_STRING=${{ steps.auto_version.outputs.version }}
+          echo docker tag "$DOCKER_IMAGE_NAME:$VERSION_STRING" "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
+          docker tag "$DOCKER_IMAGE_NAME:$VERSION_STRING" "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
+          echo docker push "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
+          docker push "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
+          echo "Image successfully pushed"
+        if: steps.docker-build.outputs.should_push == 'true'
+
+      # HELM
+      - name: Get Helm chart version
+        id: helm_version
+        run: |
+          out="$(echo "${{ steps.auto_version.outputs.version }}" | cut -d- -f1 | sed 's/^v//1')"
+          echo "helm_version=$out" >> $GITHUB_OUTPUT
+      - name: Update Helm chart version
+        uses: mikefarah/yq@master
+        with:
+          cmd: | 
+            BASEDIR=deploy/helm/csi-wekafsplugin
+            DRIVER_VERSION="$(echo ${{ steps.version.outputs.version }} | sed 's/^v//1')"
+            CHART_VERSION="${{ steps.helm_version.outputs.helm_version }}"
+            APP_VERSION="${{ steps.version.outputs.version }}"
+            
+            yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
+            yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
+            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/deploy/helm/csi-wekafsplugin"' $BASEDIR/Chart.yaml
+            yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
+            echo ------------------ values ------------------
+            cat $BASEDIR/values.yaml
+            echo --------------------chart ------------------
+            cat $BASEDIR/Chart.yaml
+
+      - name: helm-docs
+        uses: addnab/docker-run-action@v3
+        with:
+          image: jnorwood/helm-docs:latest
+          options: -v ${{ github.workspace }}:/data
+          run: |
+            cd /data
+            helm-docs -s file -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl 
+            helm-docs -s file -c deploy/helm
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.10.0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          check-latest: true
+
+      # TEST CHART
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.3.1
+
+      - name: Run chart-testing (list-changed)
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --chart-dirs deploy/helm --target-branch ${{ github.event.repository.default_branch }})
+          if [[ -n "$changed" ]]; then
+            echo "::set-output name=changed::true"
+          fi
+
+      - name: Run chart-testing (lint)
+        run: ct lint --chart-dirs deploy/helm --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.4.0
+        if: steps.list-changed.outputs.changed == 'true'
+
+      - name: Run chart-testing (install)
+        id: helm-test
+        run: |
+          ct install --print-config --chart-dirs deploy/helm --all --debug && \
+          echo "::set-output name=passed::true"
+        if: steps.list-changed.outputs.changed == 'true'

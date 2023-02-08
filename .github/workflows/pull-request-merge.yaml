@@ -1,20 +1,11 @@
-name: Weka CSI Plugin workflow
+name: Weka CSI Plugin PR merge
 on:
-  push:
-    branches:
-      - dev
-      - master
   pull_request:
-
-  workflow_call:
-    inputs:
-      version:
-        description: "Explicit version number"
-        required: false
-        type: string
+    types:
+      - closed
 
 jobs:
-  workflow:
+  pr-merge:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -161,4 +152,5 @@ jobs:
           author_email: botty@weka.io
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.head_ref || github.ref_name }}
-        if: steps.helm-test.outputs.passed == 'true'
+        if: |
+          steps.helm-test.outputs.passed == 'true' && github.event.pull_request.merged == true
