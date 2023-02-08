@@ -795,6 +795,7 @@ func (v *UnifiedVolume) Unmount(ctx context.Context, xattr bool) error {
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
 
 	if v.server.getMounter() == nil {
 		Die("Volume unmount could not be done since mounter not defined on it")
@@ -805,6 +806,8 @@ func (v *UnifiedVolume) Unmount(ctx context.Context, xattr bool) error {
 	err := v.server.getMounter().unmountWithOptions(ctx, v.FilesystemName, mountOpts)
 	if err == nil {
 		v.mountPath[xattr] = ""
+	} else {
+		logger.Error().Err(err).Msg("Failed to unmount volume")
 	}
 	return err
 }
