@@ -365,7 +365,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 
 	currentSize, err := volume.GetCapacity(ctx)
 	if err != nil {
-		return ExpandVolumeError(ctx, codes.Internal, "Could not get volume capacity")
+		return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not get volume capacity: %s", err.Error()))
 	}
 	logger.Debug().Int64("current_capacity", currentSize).Int64("new_capacity", capacity).Msg("Expanding volume capacity")
 
