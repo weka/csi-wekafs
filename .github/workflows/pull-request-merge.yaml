@@ -151,6 +151,6 @@ jobs:
           author_name: Weka CSI Bot
           author_email: botty@weka.io
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.head_ref || github.ref_name }}
+          branch: ${{ github.event.repository.default_branch }}
         if: |
           steps.helm-test.outputs.passed == 'true' && github.event.pull_request.merged == true
