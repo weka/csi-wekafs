@@ -314,7 +314,7 @@ func (v *UnifiedVolume) getFreeSpaceOnStorage(ctx context.Context) (int64, error
 func (v *UnifiedVolume) getFilesystemTotalCapacity(ctx context.Context) (int64, error) {
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
-		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity for filesystem %s on cluster %s: %s", v.GetId(), v.apiClient.ClusterName, err.Error())
+		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity for filesystem %s: %s", v.FilesystemName, err.Error())
 	}
 	if fsObj != nil {
 		return fsObj.TotalCapacity, nil
