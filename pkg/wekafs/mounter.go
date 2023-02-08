@@ -55,7 +55,7 @@ func (m *wekaMounter) NewMount(fsName string, options MountOptions) *wekaMount {
 			kMounter:     m.kMounter,
 			fsName:       fsName,
 			debugPath:    m.debugPath,
-			mountPoint:   "/var/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+			mountPoint:   "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
 			mountOptions: options,
 		}
 		m.mountMap[fsName][options.String()] = wMount
