@@ -767,7 +767,7 @@ func (v *UnifiedVolume) Mount(ctx context.Context, xattr bool) (error, UnmountFu
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
-
+	logger := log.Ctx(ctx)
 	if v.server.getMounter() == nil {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
@@ -776,10 +776,17 @@ func (v *UnifiedVolume) Mount(ctx context.Context, xattr bool) (error, UnmountFu
 	mountOpts.setXattr(xattr)
 
 	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	retUmountFunc := func() {}
 	if err == nil {
 		v.mountPath[xattr] = mount
+		retUmountFunc = func() {
+			unmountFunc()
+			v.mountPath[xattr] = ""
+		}
+	} else {
+		logger.Error().Err(err).Msg("Failed to mount volume")
 	}
-	return err, unmountFunc
+	return err, retUmountFunc
 }
 
 // Unmount decreases refCount / unmounts volume using specific mount options, currently only xattr true/false
