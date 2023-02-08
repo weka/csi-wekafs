@@ -31,10 +31,9 @@ import (
 )
 
 const (
-	deviceID                            = "deviceID"
-	maxVolumeIdLength                   = 1920
-	TracerName                          = "weka-csi"
-	ControlServerAdditionalMountOptions = ""
+	deviceID          = "deviceID"
+	maxVolumeIdLength = 1920
+	TracerName        = "weka-csi"
 )
 
 type ControllerServer struct {
@@ -43,10 +42,6 @@ type ControllerServer struct {
 	mounter *wekaMounter
 	api     *ApiStore
 	config  *DriverConfig
-}
-
-func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
-	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(ControlServerAdditionalMountOptions))
 }
 
 func (cs *ControllerServer) isInDebugMode() bool {
@@ -195,9 +190,6 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	// IDEMPOTENCE FLOW: If directory already exists, return the createResponse if size matches, or error
 	volExists, volMatchesCapacity, err := volume.ExistsAndMatchesCapacity(ctx, capacity)
-
-	// set params to have all relevant mount options (default + those received in params) to be passed as part of volumeContext
-	params["mountOptions"] = volume.getMountOptions(ctx).String()
 
 	if err != nil {
 		if !volExists {
@@ -365,7 +357,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 
 	currentSize, err := volume.GetCapacity(ctx)
 	if err != nil {
-		return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not get volume capacity: %s", err.Error()))
+		return ExpandVolumeError(ctx, codes.Internal, "Could not get volume capacity")
 	}
 	logger.Debug().Int64("current_capacity", currentSize).Int64("new_capacity", capacity).Msg("Expanding volume capacity")
 
@@ -511,9 +503,9 @@ func (cs *ControllerServer) ControllerGetCapabilities(ctx context.Context, req *
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx)
-	logger.Trace().Msg(">>>> Received request")
+	logger.Info().Msg(">>>> Received request")
 	defer func() {
-		level := zerolog.TraceLevel
+		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}

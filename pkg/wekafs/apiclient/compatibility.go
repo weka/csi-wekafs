@@ -16,7 +16,6 @@ type WekaCompatibilityRequiredVersions struct {
 	NewFilesystemFromSnapshot      string
 	CloneFilesystem                string
 	UrlQueryParams                 string
-	SyncOnCloseMountOption         string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
@@ -30,7 +29,6 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	NewFilesystemFromSnapshot:      "v9.99", // can create new filesystem from snapshot on storage side
 	CloneFilesystem:                "v9.99", // can clone a volume directly on storage side
 	UrlQueryParams:                 "v4.1",  // can perform URL query by fields
-	SyncOnCloseMountOption:         "v4.2",  // can perform sync_on_close_mount_option
 }
 
 type WekaCompatibilityMap struct {
@@ -44,7 +42,6 @@ type WekaCompatibilityMap struct {
 	CreateNewFilesystemFromSnapshot bool
 	CloneFilesystem                 bool
 	UrlQueryParams                  bool
-	SyncOnCloseMountOption          bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -61,7 +58,6 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.CloneFilesystem = false
 		cm.QuotaOnSnapshot = false
 		cm.UrlQueryParams = false
-		cm.SyncOnCloseMountOption = false
 		return
 	}
 	d, _ := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
@@ -74,7 +70,6 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	c, _ := version.NewVersion(MinimumSupportedWekaVersions.CloneFilesystem)
 	qs, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnSnapshot)
 	u, _ := version.NewVersion(MinimumSupportedWekaVersions.UrlQueryParams)
-	sc, _ := version.NewVersion(MinimumSupportedWekaVersions.SyncOnCloseMountOption)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
@@ -86,7 +81,6 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.CloneFilesystem = v.GreaterThanOrEqual(c)
 	cm.QuotaOnSnapshot = v.GreaterThanOrEqual(qs)
 	cm.UrlQueryParams = v.GreaterThanOrEqual(u)
-	cm.SyncOnCloseMountOption = v.GreaterThanOrEqual(sc)
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
@@ -123,8 +117,4 @@ func (a *ApiClient) SupportsNewFileSystemFromSnapshot() bool {
 
 func (a *ApiClient) SupportsUrlQueryParams() bool {
 	return a.CompatibilityMap.UrlQueryParams
-}
-
-func (a *ApiClient) SupportsSyncOnCloseMountOption() bool {
-	return a.CompatibilityMap.SyncOnCloseMountOption
 }

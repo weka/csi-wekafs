@@ -32,7 +32,6 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 		mountPath:           make(map[bool]string),
 		server:              server,
 	}
-	v.initMountOptions()
 	return v, nil
 }
 
@@ -91,7 +90,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 			return nil, err
 		}
 	}
-	volume.initMountOptions()
+
 	params := req.GetParameters()
 	err = volume.SetParamsFromRequestParams(ctx, params)
 	if err != nil {
@@ -140,8 +139,11 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		} else {
 			volType = VolumeTypeUnified
 
-			if !client.SupportsQuotaOnSnapshots() && !cs.config.alwaysAllowSnapshotVolumes {
-				return nil, status.Error(codes.FailedPrecondition, "Quota enforcement is not supported for snapshot-based volumes by current Weka software version, please upgrade Weka cluster")
+			// assume we create a new snapshot of a filesystem
+			// TODO: need to validate that the filesystem is indeed empty an return error otherwise
+
+			if !client.SupportsQuotaOnSnapshots() {
+				return nil, status.Error(codes.FailedPrecondition, "Quota not supported for snapshots, please upgrade Weka cluster to latest version")
 			}
 			snapName = generateWekaSnapNameForSnapBasedVol(cs.getConfig().VolumePrefix, requestedVolumeName)
 			snapAccessPoint = generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
@@ -193,8 +195,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 
 	if sourceSnap.hasInnerPath() && !server.getConfig().allowSnapshotsOfLegacyVolumes {
 		// block creation of snapshots from legacy volumes, as it wastes space
-		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is prohibited on directory-based CSI volumes. "+
-			"Refer to Weka CSI plugin documentation")
+		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is not supported for Legacy CSI volumes")
 	}
 
 	sourceSnapObj, err := sourceSnap.getObject(ctx)

@@ -56,7 +56,7 @@ func (a *ApiClient) FindSnapshotsByFilesystem(ctx context.Context, query *FileSy
 		return errors.New("cannot search for snapshots without explicit filesystem Uid")
 	}
 	snapQuery := &Snapshot{
-		Filesystem: query.Name,
+		FileSystemUid: query.Uid,
 	}
 	return a.FindSnapshotsByFilter(ctx, snapQuery, resultSet)
 }
@@ -180,7 +180,6 @@ func (snap *Snapshot) getImmutableFields() []string {
 	return []string{
 		"Name",
 		"FilesystemId",
-		"Filesystem",
 	}
 }
 

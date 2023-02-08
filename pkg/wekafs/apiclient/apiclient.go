@@ -513,7 +513,7 @@ func (a *ApiClient) retryBackoff(ctx context.Context, attempts int, sleep time.D
 	if err := f(); err != nil {
 		switch s := err.(type) {
 		case ApiNonrecoverableError:
-			log.Ctx(ctx).Debug().Msg("Non-recoverable error occurred, stopping further attempts")
+			log.Ctx(ctx).Warn().Msg("Non-recoverable error occurred, stopping further attempts")
 			// Return the original error for later checking
 			return s.apiError
 		}
