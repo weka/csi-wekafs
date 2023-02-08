@@ -15,8 +15,10 @@ images:
   provisionersidecar: k8s.gcr.io/sig-storage/csi-provisioner:v3.1.0
   # -- CSI registrar sidercar
   registrarsidecar: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
-  # -- CSI provisioner sidecar image URL
+  # -- CSI resizer sidecar image URL
   resizersidecar: k8s.gcr.io/sig-storage/csi-resizer:v1.4.0
+  # -- CSI snapshotter sidecar image URL
+  snapshottersidecar: k8s.gcr.io/sig-storage/csi-snapshotter:v6.2.1
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
@@ -84,3 +86,6 @@ pluginConfig:
     # -- Create snapshots of legacy (dir/v1) volumes. By default disabled.
     # Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful)
     snapshotDirectoryVolumes: false
+    # -- Allow creation of snapshot-based volumes even on unsupported Weka cluster versions, off by default
+    # Note: On versions of Weka < v4.2 snapshot-based volume capacity cannot be enforced
+    snapshotVolumesWithoutQuotaEnforcement: false

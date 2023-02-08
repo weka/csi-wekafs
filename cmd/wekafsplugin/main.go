@@ -81,6 +81,7 @@ var (
 	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
 	tracingUrl                    = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
 	allowInsecureHttps            = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
+	alwaysAllowSnapshotVolumes    = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-based volumes even when Weka cluster doesn't support capacity enforcement")
 
 	// Set by the build process
 	version = ""
@@ -181,10 +182,12 @@ func main() {
 
 func handle() {
 	config := wekafs.NewDriverConfig(*dynamicSubPath,
-		*newVolumePrefix, *newSnapshotPrefix, *seedSnapshotPrefix, *debugPath,
+		*newVolumePrefix, *newSnapshotPrefix,
+		*seedSnapshotPrefix, *debugPath,
 		*allowAutoFsCreation, *allowAutoFsExpansion,
 		*allowAutoSeedSnapshotCreation, *allowSnapshotsOfLegacyVolumes,
-		*suppressSnapshotsCapability, *suppressVolumeCloneCapability, *allowInsecureHttps)
+		*suppressSnapshotsCapability, *suppressVolumeCloneCapability,
+		*allowInsecureHttps, *alwaysAllowSnapshotVolumes)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
