@@ -219,6 +219,7 @@ func (a *ApiClient) GetFileSystemMountToken(ctx context.Context, r *FileSystemMo
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	log.Ctx(ctx).Trace().Str("filesystem_uid", r.Uid.String()).Msg("Obtaining a mount token")
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -227,11 +228,13 @@ func (a *ApiClient) GetFileSystemMountToken(ctx context.Context, r *FileSystemMo
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to obtain a mount token")
 		return err
 	}
+	log.Ctx(ctx).Debug().Msg("Successfully obtained mount token")
 	return nil
 }
 
 func (a *ApiClient) GetMountTokenForFilesystemName(ctx context.Context, fsName string) (string, error) {
 	logger := log.Ctx(ctx)
+	logger.Trace().Str("filesystem", fsName).Msg("Obtaining a mount token")
 	if !a.SupportsAuthenticatedMounts() {
 		logger.Debug().Msg("Current version of Weka cluster does not support authenticated mounts")
 		return "", nil
@@ -244,6 +247,7 @@ func (a *ApiClient) GetMountTokenForFilesystemName(ctx context.Context, fsName s
 	token := &FileSystemMountToken{}
 	err = a.GetFileSystemMountToken(ctx, req, token)
 	if err != nil {
+		logger.Error().Err(err).Msg("Failed to obtain a mount token")
 		return "", err
 	}
 	if token.FilesystemName != fsName {

@@ -161,8 +161,4 @@ jobs:
           author_email: botty@weka.io
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.head_ref || github.ref_name }}
-        if: |
-          steps.helm-test.outputs.passed == 'true' && 
-          github.event_name == 'pull_request' && 
-          github.event.action == 'closed' && 
-          github.event.pull_request.merged == true
+        if: steps.helm-test.outputs.passed == 'true'

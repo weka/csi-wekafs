@@ -240,7 +240,9 @@ func NewWekaFsDriver(
 
 func (driver *WekaFsDriver) Run() {
 	// Create GRPC servers
-	mounter := newWekaMounter(driver)
+	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
+	mounter.gc = initInnerPathVolumeGc(mounter)
+	mounter.schedulePeriodicMountGc()
 
 	// identity server runs always
 	log.Info().Msg("Loading IdentityServer")

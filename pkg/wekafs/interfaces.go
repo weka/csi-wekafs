@@ -32,15 +32,13 @@ type Volume interface {
 	getMaxCapacity(ctx context.Context) (int64, error)
 	isMounted(ctx context.Context, xattr bool) bool
 	moveToTrash(ctx context.Context) error
+	opportunisticMount(ctx context.Context, xattr bool) (err error, unmountFunc func())
 	hasInnerPath() bool
 	isOnSnapshot() bool
 	getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error)
 	MarshalZerologObject(e *zerolog.Event)
 	getMountPath(xattr bool) string
 	getCsiContentSource(ctx context.Context) *csi.VolumeContentSource
-	initMountOptions()
-	getMountOptions(ctx context.Context) MountOptions
-	setMountOptions(ctx context.Context, mountOptions MountOptions)
 }
 
 // Snapshot represent an interface of single snapshot representation of any type
@@ -62,5 +60,4 @@ type AnyServer interface {
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
 	isInDebugMode() bool
-	getDefaultMountOptions() MountOptions
 }
