@@ -1424,11 +1424,11 @@ func (v *UnifiedVolume) waitForSnapshotDeletion(ctx context.Context, logger zero
 		err := v.apiClient.GetSnapshotByUid(ctx, snapUid, snapObj)
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
-				logger.Trace().Msg("Snapshot does not exist")
+				logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot deleted successfully")
 				return nil, true
 			}
 			if _, ok := err.(*apiclient.ApiNotFoundError); ok {
-				logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist")
+				logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot deleted successfully")
 				return nil, true
 			}
 			return err, true
