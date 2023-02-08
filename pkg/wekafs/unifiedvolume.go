@@ -485,6 +485,8 @@ func (v *UnifiedVolume) UpdateCapacity(ctx context.Context, enforceCapacity *boo
 		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode")
 		primaryFunc = fallbackFunc
 		fallback = false
+	} else if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
+		logger.Warn().Msg("Quota enforcement is not supported for snapshot-backed volumes on current version of Weka software. Upgrade to latest version of Weka software to enable quota enforcement")
 	}
 	err := primaryFunc()
 	if err == nil {
