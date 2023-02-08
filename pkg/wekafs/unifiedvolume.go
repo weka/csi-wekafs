@@ -323,6 +323,12 @@ func (v *UnifiedVolume) getFilesystemTotalCapacity(ctx context.Context) (int64, 
 }
 
 func (v *UnifiedVolume) getMaxCapacity(ctx context.Context) (int64, error) {
+
+	if v.apiClient == nil {
+		// this is a legacy, API-unbound volume
+		return v.getFilesystemFreeSpace(ctx)
+	}
+
 	// max size of the volume is the current size of the filesystem (or 0 if not exists) + free space on storage
 	currentFsSize, err := v.getFilesystemTotalCapacity(ctx)
 	if err != nil {
