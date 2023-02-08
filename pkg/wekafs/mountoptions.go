@@ -156,8 +156,11 @@ func NewMountOptions(optstrings []string) MountOptions {
 		excludeOptions: []string{},
 	}
 	for _, optstring := range optstrings {
-		o := newMountOptionFromString(optstring)
-		ret.customOptions[o.option] = o
+		s := strings.TrimSpace(optstring)
+		if s != "" {
+			o := newMountOptionFromString(s)
+			ret.customOptions[o.option] = o
+		}
 	}
 	return ret
 }
