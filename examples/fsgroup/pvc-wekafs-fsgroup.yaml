@@ -1,0 +1,12 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-fsgroup
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-snap-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
