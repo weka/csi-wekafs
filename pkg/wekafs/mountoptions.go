@@ -166,13 +166,7 @@ func NewMountOptions(optstrings []string) MountOptions {
 }
 
 func getDefaultMountOptions() MountOptions {
-	defaultOptions := []string{
-		"writecache",
-		"rw",
-		"readahead_kb=32768",
-		"dentry_max_age_positive=1000",
-		"dentry_max_age_negative=0",
-	}
+	var defaultOptions []string
 
 	ret := MountOptions{
 		customOptions:  make(map[string]mountOption),
