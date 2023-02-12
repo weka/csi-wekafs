@@ -46,19 +46,19 @@ priorityClassName: ""
 #    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.
 #    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!
 selinuxSupport: off
-# -- This label must be set to "true" on SELinux-enabled Kubernetes nodes,
+# -- This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,
 #    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label
-#    csi.weka.io/selinux_enabled="true"
+#    `csi.weka.io/selinux_enabled="true"`
 selinuxNodeLabel: "csi.weka.io/selinux_enabled"
 # -- kubelet path, in cases Kubernetes is installed not in default folder
 kubeletPath: "/var/lib/kubelet"
-# -- Prometheus Metrics configuration
 metrics:
-  # -- Enable Metrics
+  # -- Enable Prometheus Metrics
   enabled: true
   # -- Metrics port
   port: 9090
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
+# @ignore
 tracingUrl: ""
 pluginConfig:
   # -- Allow insecure HTTPS (skip TLS certificate verification)
