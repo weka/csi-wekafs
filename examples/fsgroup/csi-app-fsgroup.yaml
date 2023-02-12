@@ -1,0 +1,25 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: csi-app-fsgroup
+spec:
+  securityContext:
+    runAsUser: 2000
+    runAsGroup: 2000
+    fsGroup: 2000
+  # make sure that pod is scheduled only on node having weka CSI node running
+  nodeSelector:
+    topology.csi.weka.io/global: "true"
+  containers:
+    - name: my-frontend
+      image: ubuntu
+      volumeMounts:
+      - mountPath: "/data"
+        name: my-csi-volume
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do echo `date` hello >> /data/temp.txt; sleep 10;done"]
+  terminationGracePeriodSeconds: 1
+  volumes:
+    - name: my-csi-volume
+      persistentVolumeClaim:
+        claimName: pvc-wekafs-fsgroup # defined in pvc-wekafs-dir-api.yaml
