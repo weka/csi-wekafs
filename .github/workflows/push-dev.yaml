@@ -30,7 +30,13 @@ jobs:
           fi
 
       # DOCKER BUILD & PUSH
-      # TODO: Replace with docker action and add caching
+      - uses: satackey/action-docker-layer-caching@v0.0.11
+        continue-on-error: true
+        with:
+          key: foo-docker-cache-{hash}
+          restore-keys: |
+            foo-docker-cache-
+
       - name: Docker login
         run: |
           DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
