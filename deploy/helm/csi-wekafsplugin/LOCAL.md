@@ -32,7 +32,7 @@ To upgrade from versions before v0.6.0, the previous version must be uninstalled
    ``` 
    Then proceed to [Helm installation](#install-driver)
 ## Upgrading from versions below v2.0.0
-In version v2.0.0, fsGroup support was added to CSIDriver. Since CSIDriver component is considered immutual by Kubernetes,
+In version v2.0.0, fsGroup support was added to CSIDriver. Since CSIDriver component is considered immutable by Kubernetes,
 upgrading the driver requires a complete removal and reinstallation of the CSI driver.
 
 > **NOTE:** Existing Weka CSI volumes and workloads using those volumes will not be affected by Weka CSI Plugin uninstallation. 
