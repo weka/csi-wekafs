@@ -38,7 +38,7 @@ type Volume interface {
 	MarshalZerologObject(e *zerolog.Event)
 	getMountPath(xattr bool) string
 	getCsiContentSource(ctx context.Context) *csi.VolumeContentSource
-	initMountOptions()
+	initMountOptions(ctx context.Context)
 	getMountOptions(ctx context.Context) MountOptions
 	setMountOptions(ctx context.Context, mountOptions MountOptions)
 }

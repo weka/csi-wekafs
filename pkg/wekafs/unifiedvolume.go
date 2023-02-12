@@ -77,8 +77,17 @@ func (v *UnifiedVolume) getCsiContentSource(ctx context.Context) *csi.VolumeCont
 	return nil
 }
 
-func (v *UnifiedVolume) initMountOptions() {
+func (v *UnifiedVolume) initMountOptions(ctx context.Context) {
 	v.mountOptions = v.server.getDefaultMountOptions()
+	v.pruneUnsupportedMountOptions(ctx)
+}
+
+func (v *UnifiedVolume) pruneUnsupportedMountOptions(ctx context.Context) {
+	if v.mountOptions.hasOption(MountOptionSyncOnClose) && (v.apiClient == nil || !v.apiClient.SupportsSyncOnCloseMountOption()) {
+		logger := log.Ctx(ctx)
+		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
+		v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
+	}
 }
 
 func (v *UnifiedVolume) setMountOptions(ctx context.Context, mountOptions MountOptions) {
