@@ -33,9 +33,10 @@ jobs:
       - uses: satackey/action-docker-layer-caching@v0.0.11
         continue-on-error: true
         with:
-          key: foo-docker-cache-{hash}
+          key: docker-cache-{hash}
           restore-keys: |
-            foo-docker-cache-
+            docker-cache-
+        
 
       - name: Docker login
         run: |
@@ -84,7 +85,7 @@ jobs:
       - name: Get Helm chart version
         id: helm_version
         run: |
-          out="$(echo "${{ steps.auto_version.outputs.version }}" | cut -d- -f1 | sed 's/^v//1')"
+          out="$(echo "${{ steps.auto_version.outputs.version }}" | sed 's/^v//1')"
           echo "helm_version=$out" >> $GITHUB_OUTPUT
       - name: Update Helm chart version
         uses: mikefarah/yq@master
