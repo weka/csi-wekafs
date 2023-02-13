@@ -31,9 +31,9 @@ jobs:
       - uses: satackey/action-docker-layer-caching@v0.0.11
         continue-on-error: true
         with:
-          key: foo-docker-cache-{hash}
+          key: docker-cache-{hash}
           restore-keys: |
-            foo-docker-cache-
+            docker-cache-
 
       - name: Docker login
         run: |
@@ -160,14 +160,18 @@ jobs:
           echo "filename=$FILENAME" >> $GITHUB_OUTPUT
           echo "url=$URL" >> $GITHUB_OUTPUT          
 
+      - name: Install AWS CLI
+        id: install-aws-cli
+        uses: unfor19/install-aws-cli-action@v1
+        with:
+          version: 2
+
       - name: Upload Helm package to S3
         id: helm-s3-upload
-        uses: shallwefootball/s3-upload-action@master
-        with:
-          aws_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
-          aws_bucket: ${{ secrets.S3_BUCKET_NAME }}
-          source_dir: ${{ steps.helm-package.outputs.filename }}
-          destination_dir: ''
-          endpoint: '${{ secrets.S3_BUCKET_NAME }}.s3.${{ secrets.AWS_REGION }}.amazonaws.com'
+        run: |
+          export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY}}"
+          export AWS_BUCKET="${{ secrets.S3_BUCKET_NAME }}"
+          export AWS_REGION="${{ secrets.AWS_REGION }}"
+          aws s3 cp ${{ steps.helm-package.outputs.filename }} "s3://$AWS_BUCKET/"
         if: steps.helm-test.outputs.passed == 'true'

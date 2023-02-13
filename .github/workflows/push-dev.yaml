@@ -33,9 +33,10 @@ jobs:
       - uses: satackey/action-docker-layer-caching@v0.0.11
         continue-on-error: true
         with:
-          key: foo-docker-cache-{hash}
+          key: docker-cache-{hash}
           restore-keys: |
-            foo-docker-cache-
+            docker-cache-
+        
 
       - name: Docker login
         run: |
