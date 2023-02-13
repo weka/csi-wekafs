@@ -17,6 +17,8 @@ jobs:
         uses: codacy/git-version@2.7.1
         with:
           prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
 
       - name: Set package version
         id: version
