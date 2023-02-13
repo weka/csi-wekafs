@@ -117,12 +117,12 @@ jobs:
         with:
           version: v3.10.0
 
+      # TEST CHART
       - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
           check-latest: true
 
-      # TEST CHART
       - name: Set up chart-testing
         uses: helm/chart-testing-action@v2.3.1
 
@@ -147,3 +147,27 @@ jobs:
           ct install --print-config --chart-dirs deploy/helm --all --debug && \
           echo "passed=true" >> $GITHUB_OUTPUT
         if: steps.list-changed.outputs.changed == 'true'
+
+      # UPLOAD CHART TO S3
+      - name: Create Helm package
+        id: helm-package
+        run: |
+          helm package deploy/helm/csi-wekafsplugin
+          FILENAME="csi-wekafsplugin-${{ steps.helm_version.outputs.helm_version }}.tgz"
+          AWS_REGION=${{ secrets.AWS_ACCESS_SECRET_KEY }}
+          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
+          URL="https://$S3_BUCKET_NAME.s3.$AWS_REGION.amazonaws.com"
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          echo "url=$URL" >> $GITHUB_OUTPUT          
+
+      - name: Upload Helm package to S3
+        id: helm-s3-upload
+        uses: shallwefootball/s3-upload-action@master
+        with:
+          aws_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY}}
+          aws_bucket: ${{ secrets.S3_BUCKET_NAME }}
+          source_dir: ${{ steps.helm-package.outputs.filename }}
+          destination_dir: ''
+          endpoint: '${{ secrets.S3_BUCKET_NAME }}.s3.${{ secrets.AWS_REGION }}.amazonaws.com'
+        if: steps.helm-test.outputs.passed == 'true'
