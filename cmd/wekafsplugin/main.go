@@ -49,7 +49,6 @@ func init() {
 		file = short
 		return file + ":" + strconv.Itoa(line)
 	}
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).With().Caller().Logger()
 
 }
 
@@ -82,6 +81,7 @@ var (
 	tracingUrl                    = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
 	allowInsecureHttps            = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
 	alwaysAllowSnapshotVolumes    = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-based volumes even when Weka cluster doesn't support capacity enforcement")
+	usejsonlogging                = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
 
 	// Set by the build process
 	version = ""
@@ -107,6 +107,9 @@ func mapVerbosity(verbosity int) zerolog.Level {
 
 func main() {
 	flag.Parse()
+	if !*usejsonlogging {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).With().Caller().Logger()
+	}
 	zerolog.SetGlobalLevel(mapVerbosity(*verbosity))
 
 	csiMode = wekafs.GetCsiPluginMode(csimodetext)

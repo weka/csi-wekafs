@@ -121,6 +121,9 @@ spec:
           {{- if .Values.pluginConfig.allowInsecureHttps }}
             - "--allowinsecurehttps"
           {{- end }}
+          {{- if .Values.useJsonLogging }}
+            - "--usejsonlogging"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
