@@ -10,6 +10,6 @@ sources:
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
-version: 0.9.0-SNAPSHOT.71.1b331ca
-appVersion: v0.9.0-SNAPSHOT.71.1b331ca
+version: 0.9.0-SNAPSHOT.73.580d68f
+appVersion: v0.9.0-SNAPSHOT.73.580d68f
 kubeVersion: ">=1.18.0"
