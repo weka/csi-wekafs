@@ -32,56 +32,28 @@ jobs:
           fi
 
       # DOCKER BUILD & PUSH
-      - uses: satackey/action-docker-layer-caching@v0.0.11
-        continue-on-error: true
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Quay.io
+        uses: docker/login-action@v2
         with:
-          key: docker-cache-{hash}
-          restore-keys: |
-            docker-cache-
-        
-
-      - name: Docker login
-        run: |
-          DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD=${{ secrets.DOCKER_PASSWORD }}
-          DOCKER_REGISTRY_NAME=${{secrets.DOCKER_REGISTRY_NAME}}
-          docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD" "$DOCKER_REGISTRY_NAME" 
-
-      - name: Check if Docker image exists
-        id: docker-check-exists
-        run: |
-          DOCKER_REGISTRY_NAME=${{secrets.DOCKER_REGISTRY_NAME}}
-          DOCKER_IMAGE_NAME=csi-wekafs
-          VERSION_STRING=${{steps.auto_version.outputs.version}}
-          if ! docker manifest inspect "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"; then
-            echo "should_build=true" >> $GITHUB_OUTPUT
-          else
-            echo "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
-            echo "Docker image already exists, skipping rebuild..."
-          fi
-
-      - name: Docker build
-        id: docker-build
-        run: |
-          DOCKER_IMAGE_NAME=csi-wekafs
-          VERSION_STRING=${{steps.auto_version.outputs.version}}
-          docker build --pull --build-arg VERSION="$VERSION_STRING" \
-          -t "${DOCKER_IMAGE_NAME}:$VERSION_STRING" \
-          -f Dockerfile --label revision="${VERSION_STRING}" .
-          echo "should_push=true" >> $GITHUB_OUTPUT
-        if: steps.docker-check-exists.outputs.should_build == 'true'
-
-      - name: Docker push
-        run: |
-          DOCKER_REGISTRY_NAME=${{secrets.DOCKER_REGISTRY_NAME}}
-          DOCKER_IMAGE_NAME=csi-wekafs
-          VERSION_STRING=${{ steps.auto_version.outputs.version }}
-          echo docker tag "$DOCKER_IMAGE_NAME:$VERSION_STRING" "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
-          docker tag "$DOCKER_IMAGE_NAME:$VERSION_STRING" "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
-          echo docker push "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
-          docker push "$DOCKER_REGISTRY_NAME/$DOCKER_IMAGE_NAME:$VERSION_STRING"
-          echo "Image successfully pushed"
-        if: steps.docker-build.outputs.should_push == 'true'
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: quay.io
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          pull: true
+          tags: '${{ secrets.DOCKER_REGISTRY_NAME }}/csi-wekafs:${{ steps.auto_version.outputs.version }}'
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            revision='${{ steps.auto_version.outputs.version }}'
+          build-args: |
+            VERSION='${{ steps.auto_version.outputs.version }}'
 
       # HELM
       - name: Get Helm chart version
