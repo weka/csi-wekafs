@@ -28,7 +28,7 @@ const (
 )
 
 var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
-
+var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
 var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
 
@@ -401,6 +401,9 @@ func (v *UnifiedVolume) getCapacityFromFsSize(ctx context.Context) (int64, error
 	if err != nil {
 		return -1, err
 	}
+	if fsObj == nil {
+		return -1, ErrFilesystemNotFound
+	}
 	size := fsObj.TotalCapacity
 	if size > 0 {
 		logger.Debug().Int64("current_capacity", size).Str("capacity_source", "filesystem").Msg("Resolved current capacity")
@@ -422,6 +425,9 @@ func (v *UnifiedVolume) resizeFilesystem(ctx context.Context, capacity int64) er
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
 		return err
+	}
+	if fsObj == nil {
+		return ErrFilesystemNotFound
 	}
 
 	capLimit := capacity
