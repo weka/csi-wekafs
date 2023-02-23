@@ -618,7 +618,7 @@ func (v *UnifiedVolume) getMountPath(xattr bool) string {
 	return v.mountPath[xattr]
 }
 
-//getInodeId used for obtaining the mount Path inode ID (to set quota on it later)
+// getInodeId used for obtaining the mount Path inode ID (to set quota on it later)
 func (v *UnifiedVolume) getInodeId(ctx context.Context) (uint64, error) {
 	op := "getInodeId"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
@@ -1052,7 +1052,7 @@ func (v *UnifiedVolume) getSeedSnapshot(ctx context.Context) (*apiclient.Snapsho
 
 func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
 	logger := log.Ctx(ctx)
-	logger.Debug().Str("seed_snapshot_name", v.getSeedSnapshotName()).Msg("Ensuring seed snapshot exists for filesystem")
+	logger.Debug().Str("seed_snapshot_name", v.getSeedSnapshotName()).Str("filesystem", v.FilesystemName).Msg("Ensuring seed snapshot exists for filesystem")
 	snap, err := v.getSeedSnapshot(ctx)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get seed snapshot")
@@ -1064,7 +1064,7 @@ func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snap
 			logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
 			return nil, err
 		}
-		if !empty {
+		if !empty && !v.server.isInDebugMode() {
 			logger.Error().Err(err).Msg("Cannot create a seed snapshot, filesystem is not empty")
 			return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
 		}
