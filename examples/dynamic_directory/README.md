@@ -18,7 +18,12 @@ This example extends the example provided in previous version of the Weka CSI Pl
 
 
 ## Configuration Requirements
-This example introduces automatic provisioning of filesystems. For this functionality to work, the following configuration must be set:
+This example introduces dynamic provisioning of directory-based CSI volumes using Weka CSI plugin, and subsequent creation of child objects.
+Creating of snapshots from directory-based volumes basically means creation of a full filesystem snapshot.
+This means, in particular, that creating a snapshot of a small volume or unfrequently changed volume that shares a filesystem with
+another large / frequently might produce a snapshot of size much bigger than the original volume actual capacity.
+
+This behavior may be adjusted by explicitly allowing creation of directory-based volume snapshots by the following configuration:
 ```
 .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes = true
 ```
