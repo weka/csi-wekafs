@@ -890,20 +890,6 @@ func (v *UnifiedVolume) Exists(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (v *UnifiedVolume) ExistsAndMatchesCapacity(ctx context.Context, capacity int64) (bool, bool, error) {
-	exists, err := v.Exists(ctx)
-	if err != nil || !exists {
-		return exists, false, err
-	}
-	reportedCapacity, err := v.GetCapacity(ctx)
-	if err != nil {
-		return true, false, err
-	}
-	matches := reportedCapacity == capacity
-	return exists, matches, err
-
-}
-
 func (v *UnifiedVolume) fileSystemExists(ctx context.Context) (bool, error) {
 	op := "fileSystemExists"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)

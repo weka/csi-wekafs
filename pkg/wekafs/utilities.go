@@ -447,3 +447,16 @@ func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 	}
 	return enforceCapacity, nil
 }
+
+func volumeExistsAndMatchesCapacity(ctx context.Context, v Volume, capacity int64) (bool, bool, error) {
+	exists, err := v.Exists(ctx)
+	if err != nil || !exists {
+		return exists, false, err
+	}
+	reportedCapacity, err := v.GetCapacity(ctx)
+	if err != nil {
+		return true, false, err
+	}
+	matches := reportedCapacity == capacity
+	return exists, matches, err
+}

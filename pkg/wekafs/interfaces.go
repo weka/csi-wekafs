@@ -15,7 +15,6 @@ type Volume interface {
 	Delete(ctx context.Context) error
 	EnsureRightCapacity(ctx context.Context, expectedCapacity int64) (bool, error)
 	Exists(ctx context.Context) (bool, error)
-	ExistsAndMatchesCapacity(ctx context.Context, capacity int64) (bool, bool, error)
 	GetCapacity(ctx context.Context) (int64, error)
 	GetId() string
 	GetMountPoint(ctx context.Context, xattr bool) (string, error)
