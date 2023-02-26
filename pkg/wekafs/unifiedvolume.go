@@ -1536,13 +1536,14 @@ func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (Snapsh
 
 // canBeOperated returns true if the object can be CRUDed without API backing (basically only dirVolume without snapshot)
 func (v *UnifiedVolume) canBeOperated() error {
-	if v.SnapshotUuid != nil {
+	if v.isOnSnapshot() || v.isFilesystem() {
 		if v.apiClient == nil && !v.server.isInDebugMode() {
-			return errors.New("Cannot operate volume of this type without API binding")
+			return errors.New("Could not obtain a valid API secret configuration for operation")
 		}
 
 		if !v.apiClient.SupportsFilesystemAsVolume() {
-			return errors.New("volume of type Filesystem is not supported on current version of Weka cluster")
+			return errors.New(fmt.Sprintf("volume of type Filesystem is not supported on current version of Weka cluster. A version %s and up is required ",
+				apiclient.MinimumSupportedWekaVersions.FilesystemAsVolume))
 		}
 	}
 	return nil
