@@ -22,7 +22,7 @@ services:
     volumes:
       - test-volume:/tmp/weka-csi-test
     healthcheck:
-      test: test -f /tmp/weka-csi-test/controller-no-snaps.sock && test -f /tmp/weka-csi-test/node-no-snaps.sock
+      test: test -f /tmp/weka-csi-test/controller.sock && test -f /tmp/weka-csi-test/node.sock
       start_period: 5s
       timeout: 1s
       retries: 5
