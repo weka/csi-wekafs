@@ -18,7 +18,9 @@ type Volume interface {
 	GetId() string
 	GetType() VolumeType
 	MountUnderlyingFS(ctx context.Context, xattr bool) (error, UnmountFunc)
-	SetParamsFromRequestParams(ctx context.Context, params map[string]string) error
+	// ObtainRequestParams updates Volume with params passed as part of CSI operation requests
+	ObtainRequestParams(ctx context.Context, params map[string]string) error
+	// UnmountUnderlyingFS unmounts the filesystem on which volume resides
 	UnmountUnderlyingFS(ctx context.Context, xattr bool) error
 	UpdateCapacity(ctx context.Context, enforceCapacity *bool, capacity int64) error
 	UpdateParams(ctx context.Context) error

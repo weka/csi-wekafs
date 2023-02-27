@@ -596,7 +596,7 @@ func (v *UnifiedVolume) updateCapacityXattr(ctx context.Context, enforceCapacity
 	return err
 }
 
-func (v *UnifiedVolume) moveToTrash(ctx context.Context) error {
+func (v *UnifiedVolume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
 		v.server.getMounter().gc.triggerGcVolume(ctx, *v)
 		return nil
@@ -784,7 +784,7 @@ func (v *UnifiedVolume) getSnapshotObj(ctx context.Context) (*apiclient.Snapshot
 // returns UmnountFunc that can be executed to decrese refCount / unmount
 // NOTE: it always mounts only the filesystem directly. Any navigation inside should be done on the mount
 func (v *UnifiedVolume) MountUnderlyingFS(ctx context.Context, xattr bool) (error, UnmountFunc) {
-	op := "VolumeMount"
+	op := "MountUnderlyingFS"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
@@ -812,7 +812,7 @@ func (v *UnifiedVolume) MountUnderlyingFS(ctx context.Context, xattr bool) (erro
 
 // UnmountUnderlyingFS decreases refCount / unmounts volume using specific mount options, currently only xattr true/false
 func (v *UnifiedVolume) UnmountUnderlyingFS(ctx context.Context, xattr bool) error {
-	op := "VolumeUnmount"
+	op := "UnmountUnderlyingFS"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
@@ -1454,9 +1454,9 @@ func (v *UnifiedVolume) waitForSnapshotDeletion(ctx context.Context, logger zero
 	return nil, false
 }
 
-// SetParamsFromRequestParams takes additional optional params from storage class params and applies them to Volume object
+// ObtainRequestParams takes additional optional params from storage class params and applies them to Volume object
 // those params then need to be set during actual volume creation via UpdateParams function
-func (v *UnifiedVolume) SetParamsFromRequestParams(ctx context.Context, params map[string]string) error {
+func (v *UnifiedVolume) ObtainRequestParams(ctx context.Context, params map[string]string) error {
 	// set explicit mount options if were passed in storageclass
 	if val, ok := params["mountOptions"]; ok {
 		v.mountOptions.Merge(NewMountOptionsFromString(val))

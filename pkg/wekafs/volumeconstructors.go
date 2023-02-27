@@ -93,9 +93,9 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 	}
 	volume.initMountOptions(ctx)
 	params := req.GetParameters()
-	err = volume.SetParamsFromRequestParams(ctx, params)
+	err = volume.ObtainRequestParams(ctx, params)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not set parameters on volume")
+		return nil, status.Errorf(codes.Internal, "Could not obtain volume parameters from request")
 	}
 	logger.Trace().Object("volume_info", volume).Str("origin", origin).Msg("Successfully initialized object")
 	return volume, nil
