@@ -16,7 +16,6 @@ csi-sanity -csi.stagingdir /tmp/csi-test-staging \
   -csi.testvolumeparameters /test/wekafs-dirv1.yaml
 }
 
-
 # ---------------------- DIR VOLUME WITH API BINDING EXCLUDING SNAPSHOTS ----------------------
 directory_volume_no_snapshots() {
 echo "DIRECTORY VOLUME NO SNAPSHOTS STARTED"
@@ -30,7 +29,6 @@ csi-sanity -csi.stagingdir /tmp/csi-test-staging \
   -ginkgo.progress  $1\
   -csi.testvolumeparameters /test/wekafs-dirv1.yaml
 }
-
 
 # ---------------------- FS VOLUME WITH API BINDING EXCLUDING SNAPSHOTS ----------------------
 fs_volume_no_snapshots() {
@@ -59,7 +57,6 @@ csi-sanity -csi.stagingdir /tmp/csi-test-staging \
   -ginkgo.progress  $1\
   -csi.testvolumeparameters /test/wekafs-dirv1.yaml
 }
-
 
 # ---------------------- SNAPSHOT VOLUME WITH API BINDING AND SNAPSHOTS ----------------------
 snaphot_volumes_with_2nd_level_shapshots() {
@@ -90,4 +87,3 @@ csi-sanity -csi.stagingdir /tmp/csi-test-staging \
 }
 
 "$@"
-
