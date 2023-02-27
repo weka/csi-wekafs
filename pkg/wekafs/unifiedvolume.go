@@ -1564,15 +1564,3 @@ func (v *UnifiedVolume) GetMountPoint(ctx context.Context, xattr bool) (string, 
 	}
 	return v.mountPath[xattr], nil
 }
-
-func (v *UnifiedVolume) EnsureRightCapacity(ctx context.Context, expectedCapacity int64) (bool, error) {
-	currentCapacity, err := v.GetCapacity(ctx)
-	if err != nil {
-		return false, err
-	}
-	if currentCapacity == 0 {
-		return false, status.Error(codes.Internal, "Could not a valid current capacity of the volume")
-	}
-
-	return currentCapacity == expectedCapacity, nil
-}

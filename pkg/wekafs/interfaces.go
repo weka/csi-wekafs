@@ -13,7 +13,6 @@ type Volume interface {
 	Create(ctx context.Context, capacity int64) error
 	CreateSnapshot(ctx context.Context, name string) (Snapshot, error)
 	Delete(ctx context.Context) error
-	EnsureRightCapacity(ctx context.Context, expectedCapacity int64) (bool, error)
 	Exists(ctx context.Context) (bool, error)
 	GetCapacity(ctx context.Context) (int64, error)
 	GetId() string
