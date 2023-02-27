@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  plugin_controller_no_snaps:
+    image: sanity
+    command: wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/controller-no-snaps.sock --debugpath=/tmp/weka-csi-test/filesystems -metricsport=9091 --csimode=controller -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -allowautoseedsnapshotcreation -suppresssnapshotcapability -suppressrvolumeclonecapability -alwaysallowsnapshotvolumes
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    privileged: true
+    network_mode: host
+  plugin_node_no_snaps:
+    image: sanity
+    command: wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/node-no-snaps.sock --debugpath=/tmp/weka-csi-test/filesystems -metricsport=9092  --csimode=node -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -allowautoseedsnapshotcreation -suppresssnapshotcapability -suppressrvolumeclonecapability -alwaysallowsnapshotvolumes
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    privileged: true
+    network_mode: host
+  sanity:
+    image: sanity
+    command: run_sanity ${SANITY_FUNCTION} ${SANITY_VERBOSITY}
+    network_mode: host
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    healthcheck:
+      test: test -f /tmp/weka-csi-test/controller-no-snaps.sock && test -f /tmp/weka-csi-test/node-no-snaps.sock
+      start_period: 5s
+      timeout: 1s
+      retries: 5
+      interval: 3s
+volumes:
+  test-volume:
