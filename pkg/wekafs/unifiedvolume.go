@@ -1556,11 +1556,3 @@ func (v *UnifiedVolume) isMounted(ctx context.Context, xattr bool) bool {
 	}
 	return false
 }
-
-// GetMountPoint returns a path on which volume underlying filesystem is mounted (IF mounted) with / without xattr
-func (v *UnifiedVolume) GetMountPoint(ctx context.Context, xattr bool) (string, error) {
-	if !v.isMounted(ctx, xattr) {
-		return "", errors.New(fmt.Sprintf("volume %s is not mounted", v.GetId()))
-	}
-	return v.mountPath[xattr], nil
-}

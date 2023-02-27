@@ -16,7 +16,6 @@ type Volume interface {
 	Exists(ctx context.Context) (bool, error)
 	GetCapacity(ctx context.Context) (int64, error)
 	GetId() string
-	GetMountPoint(ctx context.Context, xattr bool) (string, error)
 	GetType() VolumeType
 	MountUnderlyingFS(ctx context.Context, xattr bool) (error, UnmountFunc)
 	SetParamsFromRequestParams(ctx context.Context, params map[string]string) error
