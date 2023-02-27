@@ -136,7 +136,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if err != nil {
 		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
-	volume, err := NewUnifiedVolumeFromId(ctx, req.GetVolumeId(), client, ns)
+	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, ns)
 	if err != nil {
 		return NodePublishVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
@@ -277,7 +277,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	}()
 	// Check arguments
 
-	volume, err := NewUnifiedVolumeFromId(ctx, req.GetVolumeId(), nil, ns)
+	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns)
 	if err != nil {
 		return &csi.NodeUnpublishVolumeResponse{}, err
 	}

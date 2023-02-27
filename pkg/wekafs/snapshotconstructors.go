@@ -7,7 +7,7 @@ import (
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
-func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume *UnifiedVolume, apiClient *apiclient.ApiClient, server AnyServer) (*UnifiedSnapshot, error) {
+func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume *Volume, apiClient *apiclient.ApiClient, server AnyServer) (*UnifiedSnapshot, error) {
 	srcVolId := sourceVolume.GetId()
 	logger := log.Ctx(ctx).With().Str("src_volume_id", srcVolId).Str("snapshot_name", name).Logger()
 	logger.Trace().Msg("Initializating snapshot object")

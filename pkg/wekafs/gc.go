@@ -38,7 +38,7 @@ func (gc *innerPathVolGc) triggerGc(ctx context.Context, fs string, apiClient *a
 	go gc.purgeLeftovers(ctx, fs, apiClient)
 }
 
-func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *UnifiedVolume) {
+func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *Volume) {
 	fsName := volume.FilesystemName
 	gc.Lock()
 	defer gc.Unlock()
@@ -51,7 +51,7 @@ func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *UnifiedVo
 	go gc.purgeVolume(ctx, volume)
 }
 
-func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume *UnifiedVolume) {
+func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume *Volume) {
 	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
 	logger.Debug().Msg("Starting garbage collection of volume")
 	fsName := volume.FilesystemName
