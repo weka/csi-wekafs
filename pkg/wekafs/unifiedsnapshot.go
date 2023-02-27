@@ -187,7 +187,7 @@ func (s *UnifiedSnapshot) mimicDirectoryStructureForDebugMode(ctx context.Contex
 		logger.Error().Err(err).Str("volume_path", mimicPath).Msg("Failed to create volume directory")
 		return err
 	}
-	logger.Debug().Str("mimic_path", v.getFullPath(ctx, true)).Msg("Successully created directory")
+	logger.Debug().Str("mimic_path", v.GetFullPath(ctx, true)).Msg("Successully created directory")
 	return nil
 
 }

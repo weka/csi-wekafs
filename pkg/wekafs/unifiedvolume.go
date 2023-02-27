@@ -249,7 +249,7 @@ func (v *UnifiedVolume) UpdateParams(ctx context.Context) error {
 	oldMask := syscall.Umask(0)
 	defer syscall.Umask(oldMask)
 
-	volPath := v.getFullPath(ctx, xattrMount)
+	volPath := v.GetFullPath(ctx, xattrMount)
 	if err := os.Chmod(volPath, v.permissions); err != nil {
 		logger.Error().Err(err).Str("full_path", volPath).Msg("Failed to change directory")
 		return err
@@ -589,7 +589,7 @@ func (v *UnifiedVolume) updateCapacityXattr(ctx context.Context, enforceCapacity
 	if enforceCapacity != nil && *enforceCapacity {
 		logger.Warn().Msg("Legacy volume does not support enforce capacity")
 	}
-	err := setVolumeProperties(v.getFullPath(ctx, xattrMount), capacityLimit, v.innerPath)
+	err := setVolumeProperties(v.GetFullPath(ctx, xattrMount), capacityLimit, v.innerPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to update xattrs on volume, capacity is not set")
 	}
@@ -608,7 +608,8 @@ func (v *UnifiedVolume) getInnerPath() string {
 	return v.innerPath
 }
 
-func (v *UnifiedVolume) getFullPath(ctx context.Context, xattr bool) string {
+// GetFullPath returns a full path on which volume is accessible including snapshot subdir and inner path
+func (v *UnifiedVolume) GetFullPath(ctx context.Context, xattr bool) string {
 	mountParts := []string{v.mountPath[xattr]}
 	if v.isOnSnapshot() {
 		mountParts = append(mountParts, []string{SnapshotsSubDirectory, v.SnapshotAccessPoint}...)
@@ -639,7 +640,7 @@ func (v *UnifiedVolume) getInodeId(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	fullPath := v.getFullPath(ctx, xattrMount)
+	fullPath := v.GetFullPath(ctx, xattrMount)
 	logger.Trace().Str("full_path", fullPath).Msg("Getting root inode of volume")
 	fileInfo, err := os.Stat(fullPath)
 	if err != nil {
@@ -742,7 +743,7 @@ func (v *UnifiedVolume) getSizeFromXattr(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	if capacityString, err := xattr.Get(v.getFullPath(ctx, xattrMount), xattrCapacity); err == nil {
+	if capacityString, err := xattr.Get(v.GetFullPath(ctx, xattrMount), xattrCapacity); err == nil {
 		if capacity, err := strconv.ParseInt(string(capacityString), 10, 64); err == nil {
 			return uint64(capacity), nil
 		}
@@ -877,16 +878,16 @@ func (v *UnifiedVolume) Exists(ctx context.Context) (bool, error) {
 			return false, err
 		}
 
-		if !PathExists(v.getFullPath(ctx, xattrMount)) {
+		if !PathExists(v.GetFullPath(ctx, xattrMount)) {
 			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Volume not found on filesystem")
 			return false, nil
 		}
-		if err := pathIsDirectory(v.getFullPath(ctx, xattrMount)); err != nil {
-			logger.Error().Err(err).Str("full_path", v.getFullPath(ctx, xattrMount)).Msg("Volume is unusable: path is not a directory")
+		if err := pathIsDirectory(v.GetFullPath(ctx, xattrMount)); err != nil {
+			logger.Error().Err(err).Str("full_path", v.GetFullPath(ctx, xattrMount)).Msg("Volume is unusable: path is not a directory")
 			return false, status.Error(codes.Internal, err.Error())
 		}
 	}
-	logger.Debug().Str("full_path", v.getFullPath(ctx, xattrMount)).Msg("Volume exists and is accessible")
+	logger.Debug().Str("full_path", v.GetFullPath(ctx, xattrMount)).Msg("Volume exists and is accessible")
 	return true, nil
 }
 
@@ -1083,7 +1084,7 @@ func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snap
 			logger.Error().Err(err).Str("seed_path", seedPath).Msg("Failed to create seed snapshot debug directory")
 			return snap, err
 		}
-		logger.Debug().Str("full_path", v.getFullPath(ctx, true)).Msg("Successully created seed snapshot debug directory")
+		logger.Debug().Str("full_path", v.GetFullPath(ctx, true)).Msg("Successully created seed snapshot debug directory")
 	}
 	return snap, nil
 }
@@ -1162,7 +1163,7 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 		if err != nil {
 			return err
 		}
-		volPath := v.getFullPath(ctx, xattrMount)
+		volPath := v.GetFullPath(ctx, xattrMount)
 
 		logger.Trace().Str("inner_path", v.innerPath).Str("full_path", volPath).Interface("permissions", v.permissions).Msg("Creating directory and setting permissions")
 		dirPath := filepath.Dir(volPath)
@@ -1216,13 +1217,13 @@ func (v *UnifiedVolume) mimicDirectoryStructureForDebugMode(ctx context.Context)
 	if err != nil {
 		return err
 	}
-	volPath := v.getFullPath(ctx, xattrMount)
+	volPath := v.GetFullPath(ctx, xattrMount)
 
 	if err := os.MkdirAll(volPath, DefaultVolumePermissions); err != nil {
 		logger.Error().Err(err).Str("volume_path", volPath).Msg("Failed to create volume debug directory")
 		return err
 	}
-	logger.Debug().Str("full_path", v.getFullPath(ctx, true)).Msg("Successully created debug directory")
+	logger.Debug().Str("full_path", v.GetFullPath(ctx, true)).Msg("Successully created debug directory")
 	return nil
 }
 
@@ -1303,7 +1304,7 @@ func (v *UnifiedVolume) deleteDirectory(ctx context.Context) error {
 	}
 
 	logger.Trace().Msg("Deleting volume")
-	volPath := v.getFullPath(ctx, xattrMount)
+	volPath := v.GetFullPath(ctx, xattrMount)
 	_ = os.RemoveAll(volPath)
 	logger.Trace().Str("full_path", volPath).Msg("Deleted contents of volume")
 	return nil

@@ -25,8 +25,8 @@ type Volume interface {
 	UpdateCapacity(ctx context.Context, enforceCapacity *bool, capacity int64) error
 	UpdateParams(ctx context.Context) error
 	canBeOperated() error
-	getFilesystemObj(ctx context.Context) (*apiclient.FileSystem, error)
-	getFullPath(ctx context.Context, xattr bool) string
+	// GetFullPath returns a full path on which the volume contents is accessible
+	GetFullPath(ctx context.Context, xattr bool) string
 	getInnerPath() string
 	getMaxCapacity(ctx context.Context) (int64, error)
 	// Trash starts deletion of the volume. May be synchronous or asynchronous, depends on implementation

@@ -202,7 +202,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		unmount()
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
-	fullPath := volume.getFullPath(ctx, false)
+	fullPath := volume.GetFullPath(ctx, false)
 
 	targetPathDir := filepath.Dir(targetPath)
 	logger.Debug().Str("target_path", targetPathDir).Msg("Checking for path existence")
