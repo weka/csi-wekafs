@@ -371,7 +371,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 
 	if currentSize != capacity {
 		if err := volume.UpdateCapacity(ctx, nil, capacity); err != nil {
-			return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not update volume %s: %v", volume, err))
+			return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not update volume: %s", err.Error()))
 		}
 	}
 	result = "SUCCESS"

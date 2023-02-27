@@ -30,7 +30,6 @@ type Volume interface {
 	getMaxCapacity(ctx context.Context) (int64, error)
 	// Trash starts deletion of the volume. May be synchronous or asynchronous, depends on implementation
 	Trash(ctx context.Context) error
-	hasInnerPath() bool
 	isOnSnapshot() bool
 	getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error)
 	MarshalZerologObject(e *zerolog.Event)
