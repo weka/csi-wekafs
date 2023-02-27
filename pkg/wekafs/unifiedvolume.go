@@ -49,7 +49,7 @@ type UnifiedVolume struct {
 	enforceCapacity     bool
 	mountOptions        MountOptions
 
-	srcVolume   Volume
+	srcVolume   *UnifiedVolume
 	srcSnapshot Snapshot
 
 	server AnyServer

@@ -450,7 +450,7 @@ func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 	return enforceCapacity, nil
 }
 
-func volumeExistsAndMatchesCapacity(ctx context.Context, v Volume, capacity int64) (bool, bool, error) {
+func volumeExistsAndMatchesCapacity(ctx context.Context, v *UnifiedVolume, capacity int64) (bool, bool, error) {
 	exists, err := v.Exists(ctx)
 	if err != nil || !exists {
 		return exists, false, err

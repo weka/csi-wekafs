@@ -29,7 +29,7 @@ type UnifiedSnapshot struct {
 	SnapshotIntegrityId string
 	SnapshotName        string
 	innerPath           string
-	SourceVolume        Volume
+	SourceVolume        *UnifiedVolume
 	srcSnapshotUid      *uuid.UUID
 	apiClient           *apiclient.ApiClient
 

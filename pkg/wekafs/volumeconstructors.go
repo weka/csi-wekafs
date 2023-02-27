@@ -44,13 +44,13 @@ func sliceSnapshotNameFromVolumeId(prefix, volumeId string) string {
 	return ""
 }
 
-func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVolumeRequest, cs *ControllerServer) (Volume, error) {
+func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVolumeRequest, cs *ControllerServer) (*UnifiedVolume, error) {
 	// obtain client for volume.
 	// client can be also nil if no API secrets bound for request
 	// Need to calculate volumeID first thing due to possible mapping to multiple FSes
 
 	// Check if volume should be created from source
-	var volume Volume
+	var volume *UnifiedVolume
 	var err error
 	var cSourceVolume *csi.VolumeContentSource_VolumeSource
 	var cSourceSnapshot *csi.VolumeContentSource_SnapshotSource
@@ -102,7 +102,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 }
 
 // NewVolumeForBlankVolumeRequest can create a new volume of those types: new raw FS, snapshot of empty FS, directory on predefined filesystem
-func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, dynamicVolPath string, cs *ControllerServer) (Volume, error) {
+func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, dynamicVolPath string, cs *ControllerServer) (*UnifiedVolume, error) {
 	// obtain API client (or no client for legacy)
 	client, err := cs.api.GetClientFromSecrets(ctx, req.GetSecrets())
 	if err != nil {
@@ -166,7 +166,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 // - DirectorySnapshot (has innePath and source Weka snapshot)
 // - FsSnapshot (has no innerPath and source Weka filesystem)
 // - New volume will be always in new format, any volumeType set in StorageClass will be ignored
-func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (Volume, error) {
+func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (*UnifiedVolume, error) {
 	// obtain API client
 	client, err := server.(*ControllerServer).api.GetClientFromSecrets(ctx, req.GetSecrets())
 	if err != nil {
@@ -251,7 +251,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 // - DirectoryVolume (has innePath but no Weka snapshot)
 // - FSVolume (has no innerPath and no snapshot)
 // - New volume will be always in new format, any volumeType set in StorageClass will be ignored
-func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (Volume, error) {
+func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (*UnifiedVolume, error) {
 	logger := log.Ctx(ctx)
 	// obtain API client
 	client, err := server.getApiStore().GetClientFromSecrets(ctx, req.GetSecrets())

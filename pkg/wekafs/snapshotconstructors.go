@@ -7,7 +7,7 @@ import (
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
-func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume Volume, apiClient *apiclient.ApiClient, server AnyServer) (Snapshot, error) {
+func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume *UnifiedVolume, apiClient *apiclient.ApiClient, server AnyServer) (Snapshot, error) {
 	srcVolId := sourceVolume.GetId()
 	logger := log.Ctx(ctx).With().Str("src_volume_id", srcVolId).Str("snapshot_name", name).Logger()
 	logger.Trace().Msg("Initializating snapshot object")
@@ -22,7 +22,7 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 	innerPath := sliceInnerPathFromVolumeId(srcVolId)
 	snapshotId := generateSnapshotIdFromComponents(SnapshotTypeUnifiedSnap, filesystemName, snapNameHash, snapIntegrityId, innerPath)
 	var sourceSnapUid *uuid.UUID
-	if sourceVolume.isOnSnapshot() {
+	if sourceVolume != nil && sourceVolume.isOnSnapshot() {
 		obj, err := sourceVolume.getSnapshotObj(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch content object of source volume")
