@@ -1534,7 +1534,7 @@ func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (Snapsh
 	return s, nil
 }
 
-// canBeOperated returns true if the object can be CRUDed without API backing (basically only dirVolume without snapshot)
+// canBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
 func (v *UnifiedVolume) canBeOperated() error {
 	if v.isOnSnapshot() || v.isFilesystem() {
 		if v.apiClient == nil && !v.server.isInDebugMode() {
