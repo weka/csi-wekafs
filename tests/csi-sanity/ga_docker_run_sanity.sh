@@ -1,7 +1,5 @@
 #!/usr/bin/env sh
 
-# wait for other containers to start
-sleep 8
 mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
 
 # ---------------------- LEGACY DIR VOLUME NO API BINDING (NO SNAPSHOT SUPPORT) ----------------------

@@ -29,6 +29,7 @@ jobs:
           context: .
           file: tests/csi-sanity/ga-Dockerfile
           tags: sanity:latest
+          load: true
 
   legacy_sanity:
     needs: build

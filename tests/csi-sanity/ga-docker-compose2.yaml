@@ -21,5 +21,11 @@ services:
     network_mode: host
     volumes:
       - test-volume:/tmp/weka-csi-test
+    healthcheck:
+      test: test -f /tmp/weka-csi-test/controller-no-snaps.sock && test -f /tmp/weka-csi-test/node-no-snaps.sock
+      start_period: 5s
+      timeout: 1s
+      retries: 5
+      interval: 3s
 volumes:
   test-volume:
