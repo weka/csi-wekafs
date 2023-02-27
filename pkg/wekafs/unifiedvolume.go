@@ -50,7 +50,7 @@ type UnifiedVolume struct {
 	mountOptions        MountOptions
 
 	srcVolume   *UnifiedVolume
-	srcSnapshot Snapshot
+	srcSnapshot *UnifiedSnapshot
 
 	server AnyServer
 }
@@ -1506,7 +1506,7 @@ func (v *UnifiedVolume) ObtainRequestParams(ctx context.Context, params map[stri
 
 // CreateSnapshot creates a UnifiedSnapshot object which represents a potential CSI snapshot (this is not yet the CSI snapshot)
 // The snapshot object will have a method to convert it to Csi snapshot object
-func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (Snapshot, error) {
+func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (*UnifiedSnapshot, error) {
 	op := "VolumeCreateSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
