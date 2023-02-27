@@ -1,0 +1,25 @@
+FROM golang:1.19-alpine
+
+WORKDIR /app
+
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+
+RUN go install -v github.com/kubernetes-csi/csi-test/v5/cmd/csi-sanity@v5.0.0
+
+COPY cmd cmd
+COPY pkg pkg
+
+RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o wekafsplugin ./cmd/wekafsplugin/main.go
+
+
+FROM golang:1.19-alpine
+
+ADD tests/csi-sanity/wekafs-dirv1.yaml /test/wekafs-dirv1.yaml
+ADD tests/csi-sanity/wekafs-fs.yaml /test/wekafs-fs.yaml
+ADD tests/csi-sanity/wekafs-snapvol.yaml /test/wekafs-snapvol.yaml
+ADD tests/csi-sanity/wekafs-api-secret.yaml /test/wekafs-api-secret.yaml
+ADD tests/csi-sanity/ga_docker_run_sanity.sh /usr/bin/run_sanity
+COPY --from=0 /go/bin/csi-sanity /usr/local/bin/csi-sanity
+COPY --from=0 /app/wekafsplugin  /usr/local/bin/wekafsplugin
