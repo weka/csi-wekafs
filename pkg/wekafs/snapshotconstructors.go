@@ -20,7 +20,7 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 	snapIntegrityId := generateSnapshotIntegrityID(name, srcVolId)
 	snapName := generateWekaSnapNameForSnapshot(server.getConfig().SnapshotPrefix, name)
 	innerPath := sliceInnerPathFromVolumeId(srcVolId)
-	snapshotId := generateSnapshotIdFromComponents(VolumeTypeUnifiedSnap, filesystemName, snapNameHash, snapIntegrityId, innerPath)
+	snapshotId := generateSnapshotIdFromComponents(SnapshotTypeUnifiedSnap, filesystemName, snapNameHash, snapIntegrityId, innerPath)
 	var sourceSnapUid *uuid.UUID
 	if sourceVolume.isOnSnapshot() {
 		obj, err := sourceVolume.getSnapshotObj(ctx)
