@@ -23,8 +23,8 @@ type Volume interface {
 	// UnmountUnderlyingFS unmounts the filesystem on which volume resides
 	UnmountUnderlyingFS(ctx context.Context, xattr bool) error
 	UpdateCapacity(ctx context.Context, enforceCapacity *bool, capacity int64) error
-	UpdateParams(ctx context.Context) error
-	canBeOperated() error
+	// CanBeOperated returns error if volume has no secrets attached but requires API operations to be done
+	CanBeOperated() error
 	// GetFullPath returns a full path on which the volume contents is accessible
 	GetFullPath(ctx context.Context, xattr bool) string
 	getInnerPath() string

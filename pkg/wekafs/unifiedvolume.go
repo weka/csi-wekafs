@@ -1535,8 +1535,8 @@ func (v *UnifiedVolume) CreateSnapshot(ctx context.Context, name string) (Snapsh
 	return s, nil
 }
 
-// canBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
-func (v *UnifiedVolume) canBeOperated() error {
+// CanBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
+func (v *UnifiedVolume) CanBeOperated() error {
 	if v.isOnSnapshot() || v.isFilesystem() {
 		if v.apiClient == nil && !v.server.isInDebugMode() {
 			return errors.New("Could not obtain a valid API secret configuration for operation")
