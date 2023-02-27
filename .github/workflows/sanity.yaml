@@ -1,6 +1,6 @@
 name: sanity
 on:
-  push:
+  pull_request:
 
 concurrency:
   group: sanity=${{ github.ref }}
