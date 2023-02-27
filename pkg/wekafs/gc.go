@@ -5,7 +5,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -94,7 +93,7 @@ func purgeDirectory(ctx context.Context, path string) error {
 		return nil
 	}
 	for !pathIsEmptyDir(path) { // to make sure that if new files still appeared during invocation
-		files, err := ioutil.ReadDir(path)
+		files, err := os.ReadDir(path)
 		if err != nil {
 			logger.Error().Err(err).Msg("GC failed to read directory contents")
 			return err
