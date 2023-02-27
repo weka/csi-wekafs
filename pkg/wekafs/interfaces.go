@@ -32,7 +32,6 @@ type Volume interface {
 	isOnSnapshot() bool
 	getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error)
 	MarshalZerologObject(e *zerolog.Event)
-	getMountPath(xattr bool) string
 	getCsiContentSource(ctx context.Context) *csi.VolumeContentSource
 	initMountOptions(ctx context.Context)
 	getMountOptions(ctx context.Context) MountOptions
