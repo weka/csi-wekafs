@@ -29,7 +29,6 @@ type Volume interface {
 	getFullPath(ctx context.Context, xattr bool) string
 	getInnerPath() string
 	getMaxCapacity(ctx context.Context) (int64, error)
-	isMounted(ctx context.Context, xattr bool) bool
 	moveToTrash(ctx context.Context) error
 	hasInnerPath() bool
 	isOnSnapshot() bool
