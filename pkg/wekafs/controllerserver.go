@@ -269,7 +269,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return DeleteVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
-	volume, err := NewVolumeFromId(ctx, volumeID, client, cs)
+	volume, err := NewUnifiedVolumeFromId(ctx, volumeID, client, cs)
 	if err != nil {
 		// Should return ok on incorrect ID (by CSI spec)
 		result = "SUCCESS"
@@ -342,7 +342,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
-	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, cs)
+	volume, err := NewUnifiedVolumeFromId(ctx, req.GetVolumeId(), client, cs)
 	if err != nil {
 		return ExpandVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
 	}
@@ -420,7 +420,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		return CreateSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the req", err))
 	}
 
-	srcVolume, err := NewVolumeFromId(ctx, srcVolumeId, client, cs)
+	srcVolume, err := NewUnifiedVolumeFromId(ctx, srcVolumeId, client, cs)
 	if err != nil {
 		return CreateSnapshotError(ctx, codes.InvalidArgument, fmt.Sprintln("Invalid sourceVolumeId", srcVolumeId))
 	}
@@ -561,7 +561,7 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 		return ValidateVolumeCapsError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
 
-	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, cs)
+	volume, err := NewUnifiedVolumeFromId(ctx, req.GetVolumeId(), client, cs)
 
 	if err != nil {
 		return ValidateVolumeCapsError(ctx, codes.NotFound, err.Error())

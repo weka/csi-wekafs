@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.ApiClient, server AnyServer) (Volume, error) {
+func NewUnifiedVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.ApiClient, server AnyServer) (*UnifiedVolume, error) {
 	logger := log.Ctx(ctx).With().Str("volume_id", volumeId).Logger()
 	logger.Trace().Msg("Initializating volume object")
 	if err := validateVolumeId(volumeId); err != nil {
@@ -272,7 +272,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		return nil, status.Error(codes.InvalidArgument, "Source volume ID is empty")
 	}
 
-	sourceVol, err := NewVolumeFromId(ctx, sourceVolId, client, server)
+	sourceVol, err := NewUnifiedVolumeFromId(ctx, sourceVolId, client, server)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Failed to validate source volume ID %s", sourceVolId)
 	}
