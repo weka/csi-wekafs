@@ -21,7 +21,7 @@ type Volume interface {
 	GetType() VolumeType
 	MountUnderlyingFS(ctx context.Context, xattr bool) (error, UnmountFunc)
 	SetParamsFromRequestParams(ctx context.Context, params map[string]string) error
-	Unmount(ctx context.Context, xattr bool) error
+	UnmountUnderlyingFS(ctx context.Context, xattr bool) error
 	UpdateCapacity(ctx context.Context, enforceCapacity *bool, capacity int64) error
 	UpdateParams(ctx context.Context) error
 	canBeOperated() error

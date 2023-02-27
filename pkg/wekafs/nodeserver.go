@@ -324,7 +324,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	}
 
 	logger.Trace().Str("volume_id", volumeID).Msg("Unmounting")
-	err = volume.Unmount(ctx, false)
+	err = volume.UnmountUnderlyingFS(ctx, false)
 	if err != nil {
 		logger.Error().Str("volume_id", volumeID).Err(err).Msg("Post-unpublish task failed")
 	}

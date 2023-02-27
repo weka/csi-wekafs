@@ -810,8 +810,8 @@ func (v *UnifiedVolume) MountUnderlyingFS(ctx context.Context, xattr bool) (erro
 	return err, retUmountFunc
 }
 
-// Unmount decreases refCount / unmounts volume using specific mount options, currently only xattr true/false
-func (v *UnifiedVolume) Unmount(ctx context.Context, xattr bool) error {
+// UnmountUnderlyingFS decreases refCount / unmounts volume using specific mount options, currently only xattr true/false
+func (v *UnifiedVolume) UnmountUnderlyingFS(ctx context.Context, xattr bool) error {
 	op := "VolumeUnmount"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
