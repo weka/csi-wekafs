@@ -13,7 +13,7 @@ env:
   # - '-ginkgo.v'
   # - '-ginkgo.vv'
   SANITY_VERBOSITY: ${{ vars.SANITY_VERBOSITY }}
-  COMPOSE_DEFAULTS: '--exit-code-from=sanity --always-recreate-deps'
+  COMPOSE_DEFAULTS: '--exit-code-from=sanity --always-recreate-deps --force-recreate'
 
 jobs:
   build:
