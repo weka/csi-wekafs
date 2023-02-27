@@ -9,7 +9,7 @@ concurrency:
 env:
   # through 1 to 9
   PLUGIN_VERBOSITY: ${{ vars.PLUGIN_VERBOSITY }}
-  # - ''
+  # - ' '
   # - '-ginkgo.v'
   # - '-ginkgo.vv'
   SANITY_VERBOSITY: ${{ vars.SANITY_VERBOSITY }}
