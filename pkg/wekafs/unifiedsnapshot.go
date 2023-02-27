@@ -171,7 +171,7 @@ func (s *UnifiedSnapshot) mimicDirectoryStructureForDebugMode(ctx context.Contex
 	logger.Warn().Bool("debug_mode", true).Msg("Creating directory mimicPath inside filesystem .snapshots to mimic Weka snapshot behavior")
 	const xattrMount = true // no need to have xattr mount to do that
 	v := s.SourceVolume
-	err, unmount := v.Mount(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 	defer unmount()
 	if err != nil {
 		return err

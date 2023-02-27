@@ -239,7 +239,7 @@ func (v *UnifiedVolume) UpdateParams(ctx context.Context) error {
 
 	// need to set permissions, for this have to mount as root and change ownership
 	const xattrMount = false // no need to have xattr mount to do that
-	err, unmount := v.Mount(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 	defer unmount()
 	if err != nil {
 		return err
@@ -274,7 +274,7 @@ func (v *UnifiedVolume) getFilesystemFreeSpace(ctx context.Context) (int64, erro
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // need to have xattr mount to do that
-	err, unmount := v.Mount(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 	defer unmount()
 	if err != nil {
 		return 0, err
@@ -368,7 +368,7 @@ func (v *UnifiedVolume) getCapacityFromQuota(ctx context.Context) (int64, error)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // need to have xattr mount to do that
-	err, unmount := v.Mount(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 	defer unmount()
 	if err != nil {
 		return 0, err
@@ -577,7 +577,7 @@ func (v *UnifiedVolume) updateCapacityXattr(ctx context.Context, enforceCapacity
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = true // must have xattrs for this case
 	if !v.isMounted(ctx, xattrMount) {
-		err, unmountFunc := v.Mount(ctx, xattrMount)
+		err, unmountFunc := v.MountUnderlyingFS(ctx, xattrMount)
 		if err != nil {
 			return err
 		} else {
@@ -633,7 +633,7 @@ func (v *UnifiedVolume) getInodeId(ctx context.Context) (uint64, error) {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = false // no need to have xattr mount to do that
-	err, unmount := v.Mount(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 	defer unmount()
 	if err != nil {
 		return 0, err
@@ -736,7 +736,7 @@ func (v *UnifiedVolume) getSizeFromQuota(ctx context.Context) (uint64, error) {
 // getSizeFromXattr returns volume size from extended attributes, mostly fallback for very old pre-API Weka clusters
 func (v *UnifiedVolume) getSizeFromXattr(ctx context.Context) (uint64, error) {
 	const xattrMount = true // need to have xattr mount to do that
-	err, unmount := v.Mount(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 	defer unmount()
 	if err != nil {
 		return 0, err
@@ -780,10 +780,10 @@ func (v *UnifiedVolume) getSnapshotObj(ctx context.Context) (*apiclient.Snapshot
 	return snapObj, nil // no snapshot found
 }
 
-// Mount creates a mount using specific options (currently only xattr true/false) and increases reference to it
+// MountUnderlyingFS creates a mount using the volume mount options (plus specifically xattr true/false) and increases refcount to its path
 // returns UmnountFunc that can be executed to decrese refCount / unmount
 // NOTE: it always mounts only the filesystem directly. Any navigation inside should be done on the mount
-func (v *UnifiedVolume) Mount(ctx context.Context, xattr bool) (error, UnmountFunc) {
+func (v *UnifiedVolume) MountUnderlyingFS(ctx context.Context, xattr bool) (error, UnmountFunc) {
 	op := "VolumeMount"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -871,7 +871,7 @@ func (v *UnifiedVolume) Exists(ctx context.Context) (bool, error) {
 
 	}
 	if v.hasInnerPath() {
-		err, unmount := v.Mount(ctx, xattrMount)
+		err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 		defer unmount()
 		if err != nil {
 			return false, err
@@ -942,7 +942,7 @@ func (v *UnifiedVolume) snapshotExists(ctx context.Context) (bool, error) {
 
 // isFilesystemEmpty returns true if the filesystem root directory is empty (excluding SnapshotsSubDirectory)
 func (v *UnifiedVolume) isFilesystemEmpty(ctx context.Context) (bool, error) {
-	err, umount := v.Mount(ctx, false)
+	err, umount := v.MountUnderlyingFS(ctx, false)
 	if err != nil {
 		return false, err
 	}
@@ -1072,7 +1072,7 @@ func (v *UnifiedVolume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snap
 	if v.server.isInDebugMode() {
 		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
 		const xattrMount = true
-		err, unmount := v.Mount(ctx, xattrMount)
+		err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 		defer unmount()
 		if err != nil {
 			return snap, err
@@ -1157,7 +1157,7 @@ func (v *UnifiedVolume) Create(ctx context.Context, capacity int64) error {
 		// if it was a snapshot and had inner path, it anyway should already exist.
 		// So creating inner path only in such case
 		const xattrMount = true // no need to have xattr mount to do that
-		err, unmount := v.Mount(ctx, xattrMount)
+		err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 		defer unmount()
 		if err != nil {
 			return err
@@ -1211,7 +1211,7 @@ func (v *UnifiedVolume) mimicDirectoryStructureForDebugMode(ctx context.Context)
 	logger := log.Ctx(ctx)
 	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside filesystem .fsnapshots to mimic Weka snapshot behavior")
 	const xattrMount = true
-	err, unmount := v.Mount(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 	defer unmount()
 	if err != nil {
 		return err
@@ -1296,7 +1296,7 @@ func (v *UnifiedVolume) Delete(ctx context.Context) error {
 func (v *UnifiedVolume) deleteDirectory(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	const xattrMount = false // no need to have xattr mount to do that
-	err, unmount := v.Mount(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
 	defer unmount()
 	if err != nil {
 		return err

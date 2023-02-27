@@ -197,7 +197,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		Fields(attrib).
 		Fields(mountFlags).Msg("Performing mount")
 
-	err, unmount := volume.Mount(ctx, false)
+	err, unmount := volume.MountUnderlyingFS(ctx, false)
 	if err != nil {
 		unmount()
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
