@@ -29,7 +29,8 @@ type Volume interface {
 	getFullPath(ctx context.Context, xattr bool) string
 	getInnerPath() string
 	getMaxCapacity(ctx context.Context) (int64, error)
-	moveToTrash(ctx context.Context) error
+	// Trash starts deletion of the volume. May be synchronous or asynchronous, depends on implementation
+	Trash(ctx context.Context) error
 	hasInnerPath() bool
 	isOnSnapshot() bool
 	getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error)
