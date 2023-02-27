@@ -7,7 +7,7 @@ import (
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
-func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume *Volume, apiClient *apiclient.ApiClient, server AnyServer) (*UnifiedSnapshot, error) {
+func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume *Volume, apiClient *apiclient.ApiClient, server AnyServer) (*Snapshot, error) {
 	srcVolId := sourceVolume.GetId()
 	logger := log.Ctx(ctx).With().Str("src_volume_id", srcVolId).Str("snapshot_name", name).Logger()
 	logger.Trace().Msg("Initializating snapshot object")
@@ -30,7 +30,7 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 		}
 		sourceSnapUid = &(obj.Uid)
 	}
-	s := &UnifiedSnapshot{
+	s := &Snapshot{
 		id:                  snapshotId,
 		FilesystemName:      filesystemName,
 		SnapshotNameHash:    snapNameHash,
@@ -46,16 +46,16 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 	return s, nil
 }
 
-func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apiclient.ApiClient, server AnyServer) (*UnifiedSnapshot, error) {
+func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apiclient.ApiClient, server AnyServer) (*Snapshot, error) {
 	logger := log.Ctx(ctx).With().Str("snapshot_id", snapshotId).Logger()
 	logger.Trace().Msg("Initializating snapshot object")
 	if err := validateSnapshotId(snapshotId); err != nil {
-		return &UnifiedSnapshot{}, err
+		return &Snapshot{}, err
 	}
 	if apiClient != nil {
 		logger.Trace().Msg("Successfully bound snapshot to backend API client")
 	}
-	s := &UnifiedSnapshot{
+	s := &Snapshot{
 		id:                  snapshotId,
 		FilesystemName:      sliceFilesystemNameFromSnapshotId(snapshotId),
 		SnapshotNameHash:    sliceSnapshotNameHashFromSnapshotId(snapshotId),

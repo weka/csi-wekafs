@@ -22,7 +22,7 @@ const (
 	MaxSnapshotDeletionDuration = time.Hour * 2 // Max time to delete snapshot
 )
 
-type UnifiedSnapshot struct {
+type Snapshot struct {
 	id                  string
 	FilesystemName      string
 	SnapshotNameHash    string
@@ -36,7 +36,7 @@ type UnifiedSnapshot struct {
 	server AnyServer
 }
 
-func (s *UnifiedSnapshot) MarshalZerologObject(e *zerolog.Event) {
+func (s *Snapshot) MarshalZerologObject(e *zerolog.Event) {
 	srcVolId := ""
 	if s.SourceVolume != nil {
 		srcVolId = s.SourceVolume.GetId()
@@ -50,7 +50,7 @@ func (s *UnifiedSnapshot) MarshalZerologObject(e *zerolog.Event) {
 		Str("inner_path", s.innerPath)
 }
 
-func (s *UnifiedSnapshot) getCsiSnapshot(ctx context.Context) *csi.Snapshot {
+func (s *Snapshot) getCsiSnapshot(ctx context.Context) *csi.Snapshot {
 	snapObj, err := s.getObject(ctx)
 	if err != nil {
 		return &csi.Snapshot{}
@@ -64,11 +64,11 @@ func (s *UnifiedSnapshot) getCsiSnapshot(ctx context.Context) *csi.Snapshot {
 	}
 }
 
-func (s *UnifiedSnapshot) GetId() string {
+func (s *Snapshot) GetId() string {
 	return s.id
 }
 
-func (s *UnifiedSnapshot) Exists(ctx context.Context) (bool, error) {
+func (s *Snapshot) Exists(ctx context.Context) (bool, error) {
 	op := "SnapshotExists"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -109,7 +109,7 @@ func (s *UnifiedSnapshot) Exists(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (s *UnifiedSnapshot) Create(ctx context.Context) error {
+func (s *Snapshot) Create(ctx context.Context) error {
 	op := "SnapshotCreate"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -166,7 +166,7 @@ func (s *UnifiedSnapshot) Create(ctx context.Context) error {
 	return nil
 }
 
-func (s *UnifiedSnapshot) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
+func (s *Snapshot) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
 	logger := log.Ctx(ctx)
 	logger.Warn().Bool("debug_mode", true).Msg("Creating directory mimicPath inside filesystem .snapshots to mimic Weka snapshot behavior")
 	const xattrMount = true // no need to have xattr mount to do that
@@ -192,15 +192,15 @@ func (s *UnifiedSnapshot) mimicDirectoryStructureForDebugMode(ctx context.Contex
 
 }
 
-func (s *UnifiedSnapshot) getInnerPath() string {
+func (s *Snapshot) getInnerPath() string {
 	return s.innerPath
 }
 
-func (s *UnifiedSnapshot) hasInnerPath() bool {
+func (s *Snapshot) hasInnerPath() bool {
 	return s.getInnerPath() != ""
 }
 
-func (s *UnifiedSnapshot) getObject(ctx context.Context) (*apiclient.Snapshot, error) {
+func (s *Snapshot) getObject(ctx context.Context) (*apiclient.Snapshot, error) {
 	op := "SnapshotGetObject"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -222,7 +222,7 @@ func (s *UnifiedSnapshot) getObject(ctx context.Context) (*apiclient.Snapshot, e
 	return snap, nil
 }
 
-func (s *UnifiedSnapshot) Delete(ctx context.Context) error {
+func (s *Snapshot) Delete(ctx context.Context) error {
 	op := "SnapshotDelete"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -266,7 +266,7 @@ func (s *UnifiedSnapshot) Delete(ctx context.Context) error {
 	return nil
 }
 
-func (s *UnifiedSnapshot) waitForSnapshotDeletion(ctx context.Context, logger zerolog.Logger, retryInterval time.Duration, maxretryInterval time.Duration) (error, bool) {
+func (s *Snapshot) waitForSnapshotDeletion(ctx context.Context, logger zerolog.Logger, retryInterval time.Duration, maxretryInterval time.Duration) (error, bool) {
 	for start := time.Now(); time.Since(start) < MaxSnapshotDeletionDuration; {
 		snap, err := s.getObject(ctx)
 		if err != nil {
@@ -289,7 +289,7 @@ func (s *UnifiedSnapshot) waitForSnapshotDeletion(ctx context.Context, logger ze
 	return nil, false
 }
 
-func (s *UnifiedSnapshot) getFileSystemObject(ctx context.Context) (*apiclient.FileSystem, error) {
+func (s *Snapshot) getFileSystemObject(ctx context.Context) (*apiclient.FileSystem, error) {
 	op := "getFileSystemObject"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()

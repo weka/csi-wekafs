@@ -50,7 +50,7 @@ type Volume struct {
 	mountOptions        MountOptions
 
 	srcVolume   *Volume
-	srcSnapshot *UnifiedSnapshot
+	srcSnapshot *Snapshot
 
 	server AnyServer
 }
@@ -1504,9 +1504,9 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 	return nil
 }
 
-// CreateSnapshot creates a UnifiedSnapshot object which represents a potential CSI snapshot (this is not yet the CSI snapshot)
+// CreateSnapshot creates a Snapshot object which represents a potential CSI snapshot (this is not yet the CSI snapshot)
 // The snapshot object will have a method to convert it to Csi snapshot object
-func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*UnifiedSnapshot, error) {
+func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, error) {
 	op := "VolumeCreateSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -1515,12 +1515,12 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*UnifiedSnaps
 	s, err := NewSnapshotFromVolumeCreate(ctx, name, v, v.apiClient, v.server)
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("snapshot_id", s.GetId()).Logger()
 	if err != nil {
-		return &UnifiedSnapshot{}, err
+		return &Snapshot{}, err
 	}
 	// check if snapshot with this name already exists
 	exists, err := s.Exists(ctx)
 	if err != nil {
-		return &UnifiedSnapshot{}, err
+		return &Snapshot{}, err
 	}
 	if exists {
 		logger.Trace().Msg("Seems that snapshot already exists")
