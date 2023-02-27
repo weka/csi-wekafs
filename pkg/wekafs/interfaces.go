@@ -27,7 +27,6 @@ type Volume interface {
 	CanBeOperated() error
 	// GetFullPath returns a full path on which the volume contents is accessible
 	GetFullPath(ctx context.Context, xattr bool) string
-	getMaxCapacity(ctx context.Context) (int64, error)
 	// Trash starts deletion of the volume. May be synchronous or asynchronous, depends on implementation
 	Trash(ctx context.Context) error
 	isOnSnapshot() bool
@@ -37,7 +36,6 @@ type Volume interface {
 	getCsiContentSource(ctx context.Context) *csi.VolumeContentSource
 	initMountOptions(ctx context.Context)
 	getMountOptions(ctx context.Context) MountOptions
-	setMountOptions(ctx context.Context, mountOptions MountOptions)
 }
 
 // Snapshot represent an interface of single snapshot representation of any type
