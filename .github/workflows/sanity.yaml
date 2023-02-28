@@ -75,7 +75,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
-      - run: docker-compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots  
 
@@ -85,6 +85,6 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
-      - run: docker-compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: filesystem_volumes 
