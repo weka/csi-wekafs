@@ -4,7 +4,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 ![Version: 0.9.0-SNAPSHOT.85.ed3c0a8](https://img.shields.io/badge/Version-0.9.0--SNAPSHOT.85.ed3c0a8-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v0.9.0-SNAPSHOT.85.ed3c0a8](https://img.shields.io/badge/AppVersion-v0.9.0--SNAPSHOT.85.ed3c0a8-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-
+ 
 ## Homepage
 https://github.com/weka/csi-wekafs
 
