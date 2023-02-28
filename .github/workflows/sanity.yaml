@@ -20,7 +20,6 @@ jobs:
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
-
       - run: echo "${{ secrets.WEKAFS_API_SECRET_YAML }}" > tests/csi-sanity/wekafs-api-secret.yaml
 
       - uses: docker/setup-buildx-action@v2
