@@ -3,7 +3,7 @@ on:
   pull_request:
 
 concurrency:
-  group: sanity=${{ github.ref }}
+  group: ${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -40,7 +40,7 @@ jobs:
           SANITY_FUNCTION: legacy_sanity
             
   directory_volume_no_snapshots:
-    if: always()
+    if: success() || failure() # always() can't be canceled 
     needs: legacy_sanity
     runs-on: self-hosted
     steps:
@@ -50,7 +50,7 @@ jobs:
           SANITY_FUNCTION: directory_volume_no_snapshots
 
   fs_volume_no_snapshots:
-    if: always()
+    if: success() || failure()
     needs: directory_volume_no_snapshots
     runs-on: self-hosted
     steps:
@@ -60,7 +60,7 @@ jobs:
           SANITY_FUNCTION: fs_volume_no_snapshots 
 
   directory_volume_and_snapshots:
-    if: always()
+    if: success() || failure()
     needs: fs_volume_no_snapshots
     runs-on: self-hosted
     steps:
@@ -70,7 +70,7 @@ jobs:
           SANITY_FUNCTION: directory_volume_and_snapshots 
 
   snaphot_volumes_with_2nd_level_shapshots:
-    if: always()
+    if: success() || failure()
     needs: directory_volume_and_snapshots
     runs-on: self-hosted
     steps:
@@ -80,7 +80,7 @@ jobs:
           SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots  
 
   filesystem_volumes:
-    if: always()
+    if: success() || failure()
     needs: snaphot_volumes_with_2nd_level_shapshots
     runs-on: self-hosted
     steps:
