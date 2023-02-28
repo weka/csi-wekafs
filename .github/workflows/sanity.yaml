@@ -1,0 +1,90 @@
+name: sanity
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # through 1 to 9
+  PLUGIN_VERBOSITY: ${{ vars.PLUGIN_VERBOSITY }}
+  # - ' '
+  # - '-ginkgo.v'
+  # - '-ginkgo.vv'
+  SANITY_VERBOSITY: ${{ vars.SANITY_VERBOSITY }}
+  COMPOSE_DEFAULTS: '--exit-code-from=sanity --always-recreate-deps --force-recreate'
+
+jobs:
+  build:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - run: echo "${{ secrets.WEKAFS_API_SECRET_YAML }}" > tests/csi-sanity/wekafs-api-secret.yaml
+
+      - uses: docker/setup-buildx-action@v2
+      - uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: tests/csi-sanity/ga-Dockerfile
+          tags: sanity:latest
+          load: true
+
+  legacy_sanity:
+    needs: build
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - run: docker-compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: legacy_sanity
+            
+  directory_volume_no_snapshots:
+    if: success() || failure() # always() can't be canceled 
+    needs: legacy_sanity
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - run: docker-compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: directory_volume_no_snapshots
+
+  fs_volume_no_snapshots:
+    if: success() || failure()
+    needs: directory_volume_no_snapshots
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - run: docker-compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: fs_volume_no_snapshots 
+
+  directory_volume_and_snapshots:
+    if: success() || failure()
+    needs: fs_volume_no_snapshots
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: directory_volume_and_snapshots 
+
+  snaphot_volumes_with_2nd_level_shapshots:
+    if: success() || failure()
+    needs: directory_volume_and_snapshots
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots  
+
+  filesystem_volumes:
+    if: success() || failure()
+    needs: snaphot_volumes_with_2nd_level_shapshots
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: filesystem_volumes 
