@@ -55,8 +55,8 @@ func (ns *NodeServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions))
 }
 
-func (ns *NodeServer) isInDebugMode() bool {
-	return ns.getConfig().isInDebugMode()
+func (ns *NodeServer) isInDevMode() bool {
+	return ns.getConfig().isInDevMode()
 }
 
 func (ns *NodeServer) getConfig() *DriverConfig {
@@ -83,7 +83,7 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeG
 
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter *wekaMounter, config *DriverConfig) *NodeServer {
 	//goland:noinspection GoBoolExpressions
-	if !config.isInDebugMode() && !isWekaInstalled() && crashOnNoWeka {
+	if !config.isInDevMode() && !isWekaInstalled() && crashOnNoWeka {
 		Die("Weka OS driver module not installed, exiting")
 	}
 	return &NodeServer{
@@ -217,7 +217,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
-			if !ns.isInDebugMode() {
+			if !ns.isInDevMode() {
 				if PathIsWekaMount(ctx, targetPath) {
 					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
 					unmount()
@@ -302,7 +302,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 	}
 	// check if this path is a wekafs mount
-	if !ns.isInDebugMode() {
+	if !ns.isInDevMode() {
 		if PathIsWekaMount(ctx, targetPath) {
 			logger.Debug().Msg("Directory exists and is weka mount")
 		} else {

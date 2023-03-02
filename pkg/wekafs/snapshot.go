@@ -94,7 +94,7 @@ func (s *Snapshot) Exists(ctx context.Context) (bool, error) {
 		return true, status.Error(codes.AlreadyExists, "Another snapshot with same name already exists")
 	}
 
-	if s.server != nil && s.server.isInDebugMode() {
+	if s.server != nil && s.server.isInDevMode() {
 		// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure as if it was a real snapshot.
 		// no actual data is copied, only directory structure is created
 		// happens only if the real snapshot indeed exists and is valid
@@ -153,7 +153,7 @@ func (s *Snapshot) Create(ctx context.Context) error {
 		Str("snapshot_uid", snap.Uid.String()).
 		Str("access_point", s.SnapshotIntegrityId).Msg("Snapshot was created successfully")
 
-	if s.server != nil && s.server.isInDebugMode() {
+	if s.server != nil && s.server.isInDevMode() {
 		// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure as if it was a real snapshot.
 		// no actual data is copied, only directory structure is created
 		// happens only if the real snapshot indeed exists and is valid

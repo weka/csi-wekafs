@@ -374,7 +374,7 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 
-	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && !v.server.isInDebugMode() {
+	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && !v.server.isInDevMode() {
 		size, err := v.getSizeFromQuota(ctx)
 		if err == nil {
 			logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
@@ -490,8 +490,8 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 	var fallback = true // whether we should try to use xAttr fallback or not if setting quota was attempted and failed. note that in certain cases a fallbackFunc will be used right away:
 	primaryFunc := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
 	fallbackFunc := func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
-	if v.server.isInDebugMode() {
-		logger.Trace().Msg("Updating quota via API is not possible since running in debug mode")
+	if v.server.isInDevMode() {
+		logger.Trace().Msg("Updating quota via API is not possible since running in DEV mode")
 		primaryFunc = fallbackFunc
 		fallback = false
 	} else if v.apiClient == nil {
@@ -860,7 +860,7 @@ func (v *Volume) Exists(ctx context.Context) (bool, error) {
 			logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist on storage")
 			return false, nil
 		}
-		if v.server.isInDebugMode() {
+		if v.server.isInDevMode() {
 			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
 			// no actual data is copied, only directory structure is created as if it was a real snapshot.
 			// happens only if the real snapshot indeed exists
@@ -1057,7 +1057,7 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 			logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
 			return nil, err
 		}
-		if !empty && !v.server.isInDebugMode() {
+		if !empty && !v.server.isInDevMode() {
 			logger.Error().Err(err).Msg("Cannot create a seed snapshot, filesystem is not empty")
 			return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
 		}
@@ -1070,7 +1070,7 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
 	// no actual data is copied, only directory structure is created as if it was a real snapshot.
 	// happens only if the real snapshot indeed exists
-	if v.server.isInDebugMode() {
+	if v.server.isInDevMode() {
 		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
 		const xattrMount = true
 		err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
@@ -1141,7 +1141,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateSnapshot(ctx, sr, snapObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-		if v.server.isInDebugMode() {
+		if v.server.isInDevMode() {
 			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
 			// no actual data is copied, only directory structure is created as if it was a real snapshot.
 			// happens only if the real snapshot indeed exists
@@ -1538,7 +1538,7 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, er
 // CanBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
 func (v *Volume) CanBeOperated() error {
 	if v.isOnSnapshot() || v.isFilesystem() {
-		if v.apiClient == nil && !v.server.isInDebugMode() {
+		if v.apiClient == nil && !v.server.isInDevMode() {
 			return errors.New("Could not obtain a valid API secret configuration for operation")
 		}
 

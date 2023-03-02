@@ -49,8 +49,8 @@ func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(ControlServerAdditionalMountOptions))
 }
 
-func (cs *ControllerServer) isInDebugMode() bool {
-	return cs.getConfig().isInDebugMode()
+func (cs *ControllerServer) isInDevMode() bool {
+	return cs.getConfig().isInDevMode()
 }
 
 func (cs *ControllerServer) getConfig() *DriverConfig {
