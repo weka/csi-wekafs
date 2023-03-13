@@ -5,14 +5,13 @@ maintainers:
   - name: WekaIO, Inc.
     email: csi@weka.io
     url: https://weka.io
-sources:
-  - https://github.com/weka/csi-wekafs
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
 version: 0.9.0-SNAPSHOT.87.4ecdb2b
 appVersion: v0.9.0-SNAPSHOT.87.4ecdb2b
 kubeVersion: ">=1.18.0"
+keywords: [storage, filesystem, HPC]
 annotations:
   artifacthub.io/category: "storage"
   artifacthub.io/prerelease: "false"
