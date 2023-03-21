@@ -104,7 +104,7 @@ jobs:
         with:
           push: true
           pull: true
-          tags: ${{ secrets.DOCKER_REGISTRY_NAME }}/csi-wekafs:${{ steps.set_version.outputs.version }}
+          tags: quay.io/weka.io/csi-wekafs:${{ steps.set_version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: |
