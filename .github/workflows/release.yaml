@@ -21,6 +21,12 @@ on:
         type: boolean
         description: artifacthub:containsSecurityUpdates
         required: true
+      swear:
+        description: I solemnly swear that the inputs are correct and I run the workflow from the correct branch! 
+        type: choice
+        options: 
+        - "yes"
+        - "yes, I do"
 
 jobs:
   release:

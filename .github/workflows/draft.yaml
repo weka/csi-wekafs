@@ -15,3 +15,7 @@ jobs:
       - uses: softprops/action-gh-release@v1
         with:
           draft: true
+          tag_name: master
+          target_commitish: master
+          generate_release_notes: true
+          name: DRAFT
