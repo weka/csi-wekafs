@@ -23,7 +23,7 @@ type wekaMount struct {
 	lastUsed     time.Time
 }
 
-func (m *wekaMount) isInDebugMode() bool {
+func (m *wekaMount) isInDevMode() bool {
 	return m.debugPath != ""
 }
 
@@ -93,7 +93,7 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
 		return err
 	}
-	if !m.isInDebugMode() {
+	if !m.isInDevMode() {
 		if apiClient == nil {
 			logger.Trace().Msg("No API client for mount, not requesting mount token")
 		} else {

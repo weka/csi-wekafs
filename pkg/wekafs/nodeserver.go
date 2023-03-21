@@ -55,8 +55,8 @@ func (ns *NodeServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions))
 }
 
-func (ns *NodeServer) isInDebugMode() bool {
-	return ns.getConfig().isInDebugMode()
+func (ns *NodeServer) isInDevMode() bool {
+	return ns.getConfig().isInDevMode()
 }
 
 func (ns *NodeServer) getConfig() *DriverConfig {
@@ -83,7 +83,7 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeG
 
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter *wekaMounter, config *DriverConfig) *NodeServer {
 	//goland:noinspection GoBoolExpressions
-	if !config.isInDebugMode() && !isWekaInstalled() && crashOnNoWeka {
+	if !config.isInDevMode() && !isWekaInstalled() && crashOnNoWeka {
 		Die("Weka OS driver module not installed, exiting")
 	}
 	return &NodeServer{
@@ -197,12 +197,12 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		Fields(attrib).
 		Fields(mountFlags).Msg("Performing mount")
 
-	err, unmount := volume.Mount(ctx, false)
+	err, unmount := volume.MountUnderlyingFS(ctx, false)
 	if err != nil {
 		unmount()
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
-	fullPath := volume.getFullPath(ctx, false)
+	fullPath := volume.GetFullPath(ctx, false)
 
 	targetPathDir := filepath.Dir(targetPath)
 	logger.Debug().Str("target_path", targetPathDir).Msg("Checking for path existence")
@@ -217,7 +217,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
-			if !ns.isInDebugMode() {
+			if !ns.isInDevMode() {
 				if PathIsWekaMount(ctx, targetPath) {
 					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
 					unmount()
@@ -302,7 +302,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 	}
 	// check if this path is a wekafs mount
-	if !ns.isInDebugMode() {
+	if !ns.isInDevMode() {
 		if PathIsWekaMount(ctx, targetPath) {
 			logger.Debug().Msg("Directory exists and is weka mount")
 		} else {
@@ -324,7 +324,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	}
 
 	logger.Trace().Str("volume_id", volumeID).Msg("Unmounting")
-	err = volume.Unmount(ctx, false)
+	err = volume.UnmountUnderlyingFS(ctx, false)
 	if err != nil {
 		logger.Error().Str("volume_id", volumeID).Err(err).Msg("Post-unpublish task failed")
 	}

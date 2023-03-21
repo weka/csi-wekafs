@@ -9,19 +9,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.ApiClient, server AnyServer) (Volume, error) {
+func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.ApiClient, server AnyServer) (*Volume, error) {
 	logger := log.Ctx(ctx).With().Str("volume_id", volumeId).Logger()
 	logger.Trace().Msg("Initializating volume object")
 	if err := validateVolumeId(volumeId); err != nil {
 		logger.Debug().Err(err).Msg("Failed to validate volume ID")
-		return &UnifiedVolume{}, err
+		return &Volume{}, err
 	}
 	if apiClient != nil {
 		logger.Trace().Msg("Successfully bound volume to backend API client")
 	}
 	logger = log.Ctx(ctx).With().Str("volume_id", volumeId).Logger()
 
-	v := &UnifiedVolume{
+	v := &Volume{
 		id:                  volumeId,
 		FilesystemName:      sliceFilesystemNameFromVolumeId(volumeId),
 		SnapshotName:        sliceSnapshotNameFromVolumeId(server.getConfig().VolumePrefix, volumeId),
@@ -44,13 +44,13 @@ func sliceSnapshotNameFromVolumeId(prefix, volumeId string) string {
 	return ""
 }
 
-func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVolumeRequest, cs *ControllerServer) (Volume, error) {
+func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVolumeRequest, cs *ControllerServer) (*Volume, error) {
 	// obtain client for volume.
 	// client can be also nil if no API secrets bound for request
 	// Need to calculate volumeID first thing due to possible mapping to multiple FSes
 
 	// Check if volume should be created from source
-	var volume Volume
+	var volume *Volume
 	var err error
 	var cSourceVolume *csi.VolumeContentSource_VolumeSource
 	var cSourceSnapshot *csi.VolumeContentSource_SnapshotSource
@@ -93,16 +93,16 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 	}
 	volume.initMountOptions(ctx)
 	params := req.GetParameters()
-	err = volume.SetParamsFromRequestParams(ctx, params)
+	err = volume.ObtainRequestParams(ctx, params)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not set parameters on volume")
+		return nil, status.Errorf(codes.Internal, "Could not obtain volume parameters from request")
 	}
 	logger.Trace().Object("volume_info", volume).Str("origin", origin).Msg("Successfully initialized object")
 	return volume, nil
 }
 
 // NewVolumeForBlankVolumeRequest can create a new volume of those types: new raw FS, snapshot of empty FS, directory on predefined filesystem
-func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, dynamicVolPath string, cs *ControllerServer) (Volume, error) {
+func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, dynamicVolPath string, cs *ControllerServer) (*Volume, error) {
 	// obtain API client (or no client for legacy)
 	client, err := cs.api.GetClientFromSecrets(ctx, req.GetSecrets())
 	if err != nil {
@@ -149,7 +149,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 
 	}
 	volId := generateVolumeIdFromComponents(volType, filesystemName, snapAccessPoint, innerPath)
-	volume := &UnifiedVolume{
+	volume := &Volume{
 		id:                  volId,
 		FilesystemName:      filesystemName,
 		SnapshotName:        snapName,
@@ -166,7 +166,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 // - DirectorySnapshot (has innePath and source Weka snapshot)
 // - FsSnapshot (has no innerPath and source Weka filesystem)
 // - New volume will be always in new format, any volumeType set in StorageClass will be ignored
-func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (Volume, error) {
+func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (*Volume, error) {
 	// obtain API client
 	client, err := server.(*ControllerServer).api.GetClientFromSecrets(ctx, req.GetSecrets())
 	if err != nil {
@@ -231,7 +231,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 
 	innerPath := sourceSnap.getInnerPath()
 	volId := generateVolumeIdFromComponents(VolumeTypeUnified, sourceFsName, targetWekaSnapAccessPoint, innerPath)
-	vol := &UnifiedVolume{
+	vol := &Volume{
 		id:                  volId,
 		FilesystemName:      sourceSnapObj.Filesystem,
 		filesystemGroupName: "",
@@ -251,7 +251,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 // - DirectoryVolume (has innePath but no Weka snapshot)
 // - FSVolume (has no innerPath and no snapshot)
 // - New volume will be always in new format, any volumeType set in StorageClass will be ignored
-func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (Volume, error) {
+func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (*Volume, error) {
 	logger := log.Ctx(ctx)
 	// obtain API client
 	client, err := server.getApiStore().GetClientFromSecrets(ctx, req.GetSecrets())
@@ -307,7 +307,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 	wekaSnapAccessPoint := generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
 
 	volId := generateVolumeIdFromComponents(volType, filesystemName, wekaSnapAccessPoint, innerPath)
-	vol := &UnifiedVolume{
+	vol := &Volume{
 		id:                  volId,
 		FilesystemName:      filesystemName,
 		SnapshotName:        wekaSnapName,

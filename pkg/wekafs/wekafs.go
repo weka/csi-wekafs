@@ -271,11 +271,10 @@ func (driver *WekaFsDriver) Run() {
 type CsiPluginMode string
 
 const (
-	VolumeTypeDirV1       VolumeType = "dir/v1"      // if specified in storage class, create directory quotas (as in legacy CSI volumes). FS name must be set in SC as well
-	VolumeTypeUnified     VolumeType = "weka/v2"     // no need to specify this in storageClass
-	VolumeTypeUnifiedSnap VolumeType = "wekasnap/v2" // no need to specify this in SnapshotClass
-	VolumeTypeUNKNOWN     VolumeType = "AMBIGUOUS_VOLUME_TYPE"
-	VolumeTypeEmpty       VolumeType = ""
+	VolumeTypeDirV1   VolumeType = "dir/v1"  // if specified in storage class, create directory quotas (as in legacy CSI volumes). FS name must be set in SC as well
+	VolumeTypeUnified VolumeType = "weka/v2" // no need to specify this in storageClass
+	VolumeTypeUNKNOWN VolumeType = "AMBIGUOUS_VOLUME_TYPE"
+	VolumeTypeEmpty   VolumeType = ""
 
 	LegacySecretPath = "/legacy-volume-access"
 

@@ -23,6 +23,8 @@ import (
 	"time"
 )
 
+const SnapshotTypeUnifiedSnap = "wekasnap/v2"
+
 func generateInnerPathForDirBasedVol(dynamicVolPath, csiVolName string) string {
 	requestedNameHash := getStringSha1(csiVolName)
 	asciiPart := getAsciiPart(csiVolName, 64)
@@ -83,14 +85,14 @@ func generateSnapshotNameHash(csiSnapName string) string {
 // generateSnapshotIntegrityID is used to create a unique identifier for snapshot that encodes also source vol ID
 // when CSI snapshot is created:
 // - Weka snapshot name will be based on snapshot name only (for fast lookup),
-// - Weka access point for the snapshot will be set with this integrity ID, that comprises of hash of both of them
+// - Weka access point for the snapshot will be set with this integrity ID, that consists of hash of both of them
 func generateSnapshotIntegrityID(name string, sourceVolumeId string) string {
 	return getStringSha1AsB32(name + ":" + sourceVolumeId)[:MaxHashLengthForObjectNames]
 }
 
-// generateSnapshotIdFromComponents constructs a full-fledged snapshot ID from different components of the Snapshot
-func generateSnapshotIdFromComponents(volumeType VolumeType, filesystemName, snapshotNameHash, snapshotIntegrityId, innerPath string) string {
-	volId := string(volumeType) + "/" + filesystemName + ":" + snapshotNameHash + ":" + snapshotIntegrityId
+// generateSnapshotIdFromComponents constructs a full-fledged snapshot ID from different components of the snapshot
+func generateSnapshotIdFromComponents(snapshotType, filesystemName, snapshotNameHash, snapshotIntegrityId, innerPath string) string {
+	volId := snapshotType + "/" + filesystemName + ":" + snapshotNameHash + ":" + snapshotIntegrityId
 	if innerPath != "" {
 		if !strings.HasPrefix(innerPath, "/") {
 			innerPath = "/" + innerPath
@@ -372,8 +374,8 @@ func validateSnapshotId(snapshotId string) error {
 
 	// length limited to maxVolumeIdLength
 	r := "[^:]+:[^:]+:[A-Za-z0-9]{12}(/.+)*"
-	if strings.HasPrefix(snapshotId, string(VolumeTypeUnifiedSnap)) {
-		r = string(VolumeTypeUnifiedSnap) + r
+	if strings.HasPrefix(snapshotId, SnapshotTypeUnifiedSnap) {
+		r = SnapshotTypeUnifiedSnap + r
 	}
 	re := regexp.MustCompile(r)
 	if re.MatchString(snapshotId) {
@@ -446,4 +448,17 @@ func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 		return false, errors.New("unsupported capacityEnforcement in volume params")
 	}
 	return enforceCapacity, nil
+}
+
+func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int64) (bool, bool, error) {
+	exists, err := v.Exists(ctx)
+	if err != nil || !exists {
+		return exists, false, err
+	}
+	reportedCapacity, err := v.GetCapacity(ctx)
+	if err != nil {
+		return true, false, err
+	}
+	matches := reportedCapacity == capacity
+	return exists, matches, err
 }

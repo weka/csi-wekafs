@@ -49,8 +49,8 @@ func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(ControlServerAdditionalMountOptions))
 }
 
-func (cs *ControllerServer) isInDebugMode() bool {
-	return cs.getConfig().isInDebugMode()
+func (cs *ControllerServer) isInDevMode() bool {
+	return cs.getConfig().isInDevMode()
 }
 
 func (cs *ControllerServer) getConfig() *DriverConfig {
@@ -186,7 +186,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	// check if with current API client state we can modify this volume or not
 	// (basically only legacy dirVolume with xAttr fallback can be operated without API client)
-	if err := volume.canBeOperated(); err != nil {
+	if err := volume.CanBeOperated(); err != nil {
 		return CreateVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
 
@@ -194,7 +194,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	capacity := req.GetCapacityRange().GetRequiredBytes()
 
 	// IDEMPOTENCE FLOW: If directory already exists, return the createResponse if size matches, or error
-	volExists, volMatchesCapacity, err := volume.ExistsAndMatchesCapacity(ctx, capacity)
+	volExists, volMatchesCapacity, err := volumeExistsAndMatchesCapacity(ctx, volume, capacity)
 
 	// set params to have all relevant mount options (default + those received in params) to be passed as part of volumeContext
 	params["mountOptions"] = volume.getMountOptions(ctx).String()
@@ -281,7 +281,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
 
-	err = volume.moveToTrash(ctx)
+	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
 		logger.Debug().Str("volume_id", volume.GetId()).Msg("Volume not found, but returning success for idempotence")
 		result = "SUCCESS"
@@ -371,7 +371,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 
 	if currentSize != capacity {
 		if err := volume.UpdateCapacity(ctx, nil, capacity); err != nil {
-			return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not update volume %s: %v", volume, err))
+			return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not update volume: %s", err.Error()))
 		}
 	}
 	result = "SUCCESS"

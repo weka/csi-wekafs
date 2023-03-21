@@ -5,7 +5,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -38,7 +37,7 @@ func (gc *innerPathVolGc) triggerGc(ctx context.Context, fs string, apiClient *a
 	go gc.purgeLeftovers(ctx, fs, apiClient)
 }
 
-func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume UnifiedVolume) {
+func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *Volume) {
 	fsName := volume.FilesystemName
 	gc.Lock()
 	defer gc.Unlock()
@@ -51,7 +50,7 @@ func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume UnifiedVol
 	go gc.purgeVolume(ctx, volume)
 }
 
-func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume UnifiedVolume) {
+func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume *Volume) {
 	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
 	logger.Debug().Msg("Starting garbage collection of volume")
 	fsName := volume.FilesystemName
@@ -62,7 +61,7 @@ func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume UnifiedVolume)
 	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
 		logger.Error().Err(err).Msg("Failed to create garbage collector directory")
 	}
-	fullPath := volume.getFullPath(ctx, false)
+	fullPath := volume.GetFullPath(ctx, false)
 	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Moving volume contents to trash")
 	if err := os.Rename(fullPath, volumeTrashLoc); err == nil {
 		logger.Error().Err(err).Str("full_path", fullPath).
@@ -94,7 +93,7 @@ func purgeDirectory(ctx context.Context, path string) error {
 		return nil
 	}
 	for !pathIsEmptyDir(path) { // to make sure that if new files still appeared during invocation
-		files, err := ioutil.ReadDir(path)
+		files, err := os.ReadDir(path)
 		if err != nil {
 			logger.Error().Err(err).Msg("GC failed to read directory contents")
 			return err

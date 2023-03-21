@@ -37,6 +37,6 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	}
 }
 
-func (dc *DriverConfig) isInDebugMode() bool {
+func (dc *DriverConfig) isInDevMode() bool {
 	return dc.debugPath != ""
 }
