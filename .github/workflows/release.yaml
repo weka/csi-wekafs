@@ -82,6 +82,7 @@ jobs:
       - name: Update RELEASE.md
         env:
           VERSION: ${{ steps.set_version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release view ${{inputs.draftTag}} --json body | jq -r .body > changelog
 
