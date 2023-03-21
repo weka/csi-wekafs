@@ -431,6 +431,13 @@ func Min[T constraints.Ordered](a, b T) T {
 	return b
 }
 
+func Max[T constraints.Ordered](a, b T) T {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 	qt := ""
 	if val, ok := params["capacityEnforcement"]; ok {
