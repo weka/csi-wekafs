@@ -64,6 +64,7 @@ jobs:
           yq -i '.version = "'$VERSION'"' Chart.yaml
           yq -i '.appVersion = "'$VERSION'"' Chart.yaml
           yq -i '.csiDriverVersion = "'$VERSION'"' values.yaml
+          yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/$VERSION"' Chart.yaml
           yq -i '.annotations."artifacthub.io/prerelease" = "'${{ inputs.preRelease }}'"' Chart.yaml
           yq -i '.annotations."artifacthub.io/containsSecurityUpdates" = "'${{ inputs.containsSecurityUpdates }}'"' Chart.yaml
 
@@ -136,7 +137,7 @@ jobs:
       - uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
-          
+
       - uses: helm/chart-releaser-action@v1.5.0
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"

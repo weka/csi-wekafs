@@ -5,6 +5,8 @@ maintainers:
   - name: WekaIO, Inc.
     email: csi@weka.io
     url: https://weka.io
+sources:
+  - https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/deploy/helm/csi-wekafsplugin
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
