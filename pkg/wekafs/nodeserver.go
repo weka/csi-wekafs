@@ -177,17 +177,20 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if req.GetPublishContext() != nil {
 		deviceId = req.GetPublishContext()[deviceID]
 	}
-	var options []string
-	readOnly := req.GetReadonly()
+	var innerMountOpts = []string{"bind"}
 
+	readOnly := req.GetReadonly()
+	// create a readonly mount
 	if readOnly {
-		options = []string{"ro", "bind"}
-	} else {
-		options = []string{"bind"}
+		roMountOptions := NewMountOptions([]string{"ro"})
+		roMountOptions.excludeOptions = []string{"rw"}
+		volume.mountOptions.Merge(roMountOptions)
+		innerMountOpts = append(innerMountOpts, "ro")
 	}
 
 	attrib := req.GetVolumeContext()
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
+	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")))
 
 	logger.Debug().Str("target_path", targetPath).
 		Str("fs_type", fsType).
@@ -195,7 +198,8 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		Bool("read_only", readOnly).
 		Str("volume_id", volumeID).
 		Fields(attrib).
-		Fields(mountFlags).Msg("Performing mount")
+		Str("mount_options", volume.mountOptions.String()).
+		Msg("Performing underlying filesystem mount")
 
 	err, unmount := volume.MountUnderlyingFS(ctx, false)
 	if err != nil {
@@ -237,10 +241,11 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			return NodePublishVolumeError(ctx, codes.Internal, err.Error())
 		}
 	}
-	logger.Debug().Str("volume_id", volumeID).Str("target_path", targetPath).Str("source_path", fullPath).Fields(options).Msg("Mounting")
+	logger.Debug().Str("volume_id", volumeID).Str("target_path", targetPath).Str("source_path", fullPath).
+		Fields(innerMountOpts).Msg("Performing bind mount")
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
-	if err := mounter.Mount(fullPath, targetPath, "", options); err != nil {
+	if err := mounter.Mount(fullPath, targetPath, "", innerMountOpts); err != nil {
 		var errList strings.Builder
 		errList.WriteString(err.Error())
 		unmount() // unmount only if mount bind failed
