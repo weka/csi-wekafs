@@ -17,11 +17,20 @@ This example introduces automatic provisioning of filesystems. For this function
 .Values.pluginConfig.allowedOperations.autoCreateFilesystems = true  # to allow provisioning of filesystem-backed volumes
 .Values.pluginConfig.allowedOperations.autoExpandFilesystems = true  # to allow resizing of filesystem if snapshot-backed volume is of larger size
 ```
-> **NOTE**: Those values are set by default
+> **NOTE:**: Those values are set by default
 
 ## StorageClass Highlights
 - Storage class specifies the filesystemGroup to provision the filesystems in
 - volumeType set to `weka/v2`. This configuration is becoming default and can be ommitted.
+- Storage class includes a parameter `parameters.initialFilesystemSizeGB` (string) that defines the minimum size of the filesystem to be created
+  > **NOTE:** In Weka software, capacity allocated by any snapshot is always accounted towards the parent filesystem. 
+  > This eventually means that data stored inside snapshots reduces available capacity for both the parent filesystem itself, and all its snapshots. 
+  > In order to be able to use snapshot functionality, the size of the filesystem must be sufficient to include all its snapshots.
+  > The parameter above allows to pre-allocate capacity for snapshot-based volumes and snapshots derived from filesystem.
+  
+  > **WARNING:** Insufficient free capacity on the filesystem would render all volumes originating from the particular filesystem ouf of free capacity
+  > Using the parameter above is not mandatory, although recommended. However, it is crucial to monitor the free capacity on any filesystem that serves
+  > for creation of dynamic volumes, either snapshot-based or directory-based, and expand it if needed using Weka cluster management.  
 
 
 ## Notes regarding object deletion:
