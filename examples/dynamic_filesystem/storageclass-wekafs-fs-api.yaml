@@ -11,6 +11,8 @@ parameters:
 
   # name of the filesystem group to create FS in.
   filesystemGroupName: default
+  # minimum size of filesystem to create (preallocate space for snapshots and derived volumes)
+  initialFilesystemSizeGB: "100"
 
   # name of the secret that stores API credentials for a cluster
   # change the name of secret to match secret of a particular cluster (if you have several Weka clusters)

@@ -34,20 +34,21 @@ var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
 
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)
 type Volume struct {
-	id                  string
-	FilesystemName      string
-	filesystemGroupName string
-	SnapshotName        string
-	SnapshotAccessPoint string
-	SnapshotUuid        *uuid.UUID
-	innerPath           string
-	apiClient           *apiclient.ApiClient
-	permissions         fs.FileMode
-	ownerUid            int
-	ownerGid            int
-	mountPath           map[bool]string
-	enforceCapacity     bool
-	mountOptions        MountOptions
+	id                    string
+	FilesystemName        string
+	filesystemGroupName   string
+	SnapshotName          string
+	SnapshotAccessPoint   string
+	SnapshotUuid          *uuid.UUID
+	innerPath             string
+	apiClient             *apiclient.ApiClient
+	permissions           fs.FileMode
+	ownerUid              int
+	ownerGid              int
+	mountPath             map[bool]string
+	enforceCapacity       bool
+	initialFilesystemSize int64
+	mountOptions          MountOptions
 
 	srcVolume   *Volume
 	srcSnapshot *Snapshot
@@ -1107,9 +1108,15 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		return status.Errorf(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
 	if v.isFilesystem() {
+		// filesystem size might be larger than free space, check it
+		fsSize := Max(int64(capacity), v.initialFilesystemSize)
+		if fsSize > maxStorageCapacity {
+			return status.Errorf(codes.OutOfRange, fmt.Sprintf("Minimum filesystem size %d is set in storageClass, which exceeds total free capacity %d", fsSize, maxStorageCapacity))
+		}
+
 		// this is a new blank volume by definition
 		// create the filesystem actually
-		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, capacity)
+		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize)
 		if err != nil {
 			return status.Errorf(codes.Internal, "Failed to create filesystem %s: %s", v.FilesystemName, err.Error())
 		}
@@ -1501,6 +1508,15 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		return err
 	}
 	v.enforceCapacity = enforceCapacity
+
+	// make sure to set min capacity if comes from request
+	if val, ok := params["initialFilesystemSizeGB"]; ok {
+		raw, err := strconv.Atoi(val)
+		if err != nil {
+			return err
+		}
+		v.initialFilesystemSize = int64(raw)*1024 ^ 3
+	}
 	return nil
 }
 

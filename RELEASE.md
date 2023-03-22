@@ -71,7 +71,7 @@ Weka clusters, e.g. in different availability zones.
 
 In such case, single CSI controller may take care of provisioning all volumes.
 Please remember to utilize PVC annotations to ensure the PVC is bound to correct Kubernetes node.
->**NOTE**: Support for making a single Kubernetes node a member in multiple Weka clusters
+>**NOTE:** Support for making a single Kubernetes node a member in multiple Weka clusters
 > is not available at this time, and will be introduced in future Weka software versions.
 
 ## Improvements
