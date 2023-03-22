@@ -199,6 +199,8 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		Str("volume_id", volumeID).
 		Fields(attrib).
 		Str("mount_options", volume.mountOptions.String()).
+		Str("mount_flags", strings.Join(mountFlags, ",")).
+		Str("inner_mount_options", strings.Join(innerMountOpts, ",")).
 		Msg("Performing underlying filesystem mount")
 
 	err, unmount := volume.MountUnderlyingFS(ctx, false)
