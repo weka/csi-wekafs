@@ -13,3 +13,10 @@ type: application
 version: 1.0.0-SNAPSHOT.91.5dfa56d
 appVersion: v1.0.0-SNAPSHOT.91.5dfa56d
 kubeVersion: ">=1.18.0"
+keywords: [storage, filesystem, HPC]
+annotations:
+  artifacthub.io/category: "storage"
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/license: Apache-2.0
+
