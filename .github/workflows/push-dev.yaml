@@ -1,0 +1,137 @@
+name: Weka CSI Plugin post- PR merge
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  push-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.7.1
+        with:
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Set package version
+        id: version
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      # DOCKER BUILD & PUSH
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to Quay.io
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: quay.io
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          pull: true
+          tags: '${{ secrets.DOCKER_REGISTRY_NAME }}/csi-wekafs:${{ steps.auto_version.outputs.version }}'
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            revision='${{ steps.auto_version.outputs.version }}'
+          build-args: |
+            VERSION='${{ steps.auto_version.outputs.version }}'
+
+      # HELM
+      - name: Get Helm chart version
+        id: helm_version
+        run: |
+          out="$(echo "${{ steps.auto_version.outputs.version }}" | sed 's/^v//1')"
+          echo "helm_version=$out" >> $GITHUB_OUTPUT
+      - name: Update Helm chart version
+        uses: mikefarah/yq@master
+        with:
+          cmd: | 
+            BASEDIR=deploy/helm/csi-wekafsplugin
+            DRIVER_VERSION="$(echo ${{ steps.version.outputs.version }} | sed 's/^v//1')"
+            CHART_VERSION="${{ steps.helm_version.outputs.helm_version }}"
+            APP_VERSION="${{ steps.version.outputs.version }}"
+            
+            yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
+            yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
+            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/deploy/helm/csi-wekafsplugin"' $BASEDIR/Chart.yaml
+            yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
+            echo ------------------ values ------------------
+            cat $BASEDIR/values.yaml
+            echo --------------------chart ------------------
+            cat $BASEDIR/Chart.yaml
+
+      - name: helm-docs
+        uses: addnab/docker-run-action@v3
+        with:
+          image: jnorwood/helm-docs:latest
+          options: -v ${{ github.workspace }}:/data
+          run: |
+            cd /data
+            helm-docs -s file -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl 
+            helm-docs -s file -c deploy/helm
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.10.0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          check-latest: true
+
+      # TEST CHART
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.3.1
+
+      - name: Run chart-testing (list-changed)
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --chart-dirs deploy/helm --target-branch ${{ github.event.repository.default_branch }})
+          if [[ -n "$changed" ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run chart-testing (lint)
+        run: ct lint --chart-dirs deploy/helm --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.4.0
+        if: steps.list-changed.outputs.changed == 'true'
+
+      - name: Run chart-testing (install)
+        id: helm-test
+        run: |
+          ct install --print-config --chart-dirs deploy/helm --all --debug && \
+          echo "passed=true" >> $GITHUB_OUTPUT
+        if: steps.list-changed.outputs.changed == 'true'
+
+      # PUSH CHANGES BACK TO BRANCH
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          author_name: Weka CSI Bot
+          author_email: botty@weka.io
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.event.repository.default_branch }}
+        if: |
+          steps.helm-test.outputs.passed == 'true'
