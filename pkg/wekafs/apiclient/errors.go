@@ -172,16 +172,16 @@ var ObjectNotFoundError = errors.New("object not found")
 var MultipleObjectsFoundError = errors.New("ambiguous filter, multiple objects match")
 var RequestMissingParams = errors.New("request cannot be sent since some required params are missing")
 
-// ApiNonrecoverableError is internally generated when non-transient error is found
-type ApiNonrecoverableError struct {
+// ApiNonTransientError is internally generated when non-transient error is found
+type ApiNonTransientError struct {
 	apiError
 }
 
-func (e ApiNonrecoverableError) Error() string {
+func (e ApiNonTransientError) Error() string {
 	return e.apiError.Error()
 }
-func (e ApiNonrecoverableError) getType() string {
-	return "ApiNonrecoverableError"
+func (e ApiNonTransientError) getType() string {
+	return "ApiNonTransientError"
 }
 
 type transportError struct {

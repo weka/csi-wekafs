@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"hash/fnv"
-	"io/ioutil"
+	"io"
 	"k8s.io/helm/pkg/urlutil"
 	"math/rand"
 	"net"
@@ -33,7 +33,7 @@ const (
 	TracerName                    = "weka-csi"
 )
 
-//ApiClient is a structure that defines Weka API client
+// ApiClient is a structure that defines Weka API client
 // client: http.Client ref
 // Username, Password - obvious
 // HttpScheme: either 'http', 'https'
@@ -118,7 +118,7 @@ func (a *ApiClient) isLoggedIn() bool {
 	return true
 }
 
-//rotateEndpoint returns a random endpoint of the configured ones
+// rotateEndpoint returns a random endpoint of the configured ones
 func (a *ApiClient) rotateEndpoint(ctx context.Context) {
 	logger := log.Ctx(ctx)
 	if a.Credentials.Endpoints == nil || len(a.Credentials.Endpoints) == 0 {
@@ -132,7 +132,7 @@ func (a *ApiClient) rotateEndpoint(ctx context.Context) {
 	logger.Trace().Str("current_endpoint", a.getEndpoint(ctx)).Msg("Switched to new API endpoint")
 }
 
-//getEndpoint returns last known endpoint to work against
+// getEndpoint returns last known endpoint to work against
 func (a *ApiClient) getEndpoint(ctx context.Context) string {
 	if a.currentEndpointId < 0 {
 		a.rotateEndpoint(ctx)
@@ -140,7 +140,7 @@ func (a *ApiClient) getEndpoint(ctx context.Context) string {
 	return a.Credentials.Endpoints[a.currentEndpointId]
 }
 
-//getBaseUrl returns the full HTTP URL of the API endpoint including schema, chosen endpoint and API prefix
+// getBaseUrl returns the full HTTP URL of the API endpoint including schema, chosen endpoint and API prefix
 func (a *ApiClient) getBaseUrl(ctx context.Context) string {
 	scheme := ""
 	switch strings.ToUpper(a.Credentials.HttpScheme) {
@@ -208,7 +208,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		return nil, &transportError{errors.New("received no response")}
 	}
 
-	responseBody, err := ioutil.ReadAll(response.Body)
+	responseBody, err := io.ReadAll(response.Body)
 	logger.Trace().Str("response", string(responseBody)).Msg("")
 	if err != nil {
 		return nil, &ApiInternalError{
@@ -340,7 +340,7 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 			return reqErr
 		}
 		if reqErr != nil {
-			return ApiNonrecoverableError{reqErr}
+			return ApiNonTransientError{reqErr}
 		}
 		s := rawResponse.HttpStatusCode
 		var responseCodes []string
@@ -351,7 +351,7 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 					responseCodes = append(responseCodes, code)
 				}
 			}
-			return ApiNonrecoverableError{
+			return ApiNonTransientError{
 				apiError: reqErr,
 			}
 		}
@@ -367,10 +367,10 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 			_ = a.Init(ctx)
 			return reqErr
 		case http.StatusNotFound, http.StatusConflict, http.StatusBadRequest, http.StatusInternalServerError:
-			return ApiNonrecoverableError{reqErr}
+			return ApiNonTransientError{reqErr}
 		default:
 			logger.Warn().Err(reqErr).Int("http_code", s).Msg("Failed to perform a request, got an unhandled error")
-			return ApiNonrecoverableError{reqErr}
+			return ApiNonTransientError{reqErr}
 		}
 	})
 	if err != nil {
@@ -507,13 +507,13 @@ func marshalRequest(r interface{}) (*[]byte, error) {
 	return &j, nil
 }
 
-// retryBackoff performs operation and retries on transient failures. Does not retry on ApiNonrecoverableError
+// retryBackoff performs operation and retries on transient failures. Does not retry on ApiNonTransientError
 func (a *ApiClient) retryBackoff(ctx context.Context, attempts int, sleep time.Duration, f func() apiError) error {
 	maxAttempts := attempts
 	if err := f(); err != nil {
 		switch s := err.(type) {
-		case ApiNonrecoverableError:
-			log.Ctx(ctx).Debug().Msg("Non-recoverable error occurred, stopping further attempts")
+		case ApiNonTransientError:
+			log.Ctx(ctx).Trace().Msg("Non-transient error returned from API, stopping further attempts")
 			// Return the original error for later checking
 			return s.apiError
 		}

@@ -32,6 +32,8 @@ var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying 
 var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
 var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
 
+var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
+
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)
 type Volume struct {
 	id                    string
@@ -431,6 +433,9 @@ func (v *Volume) resizeFilesystem(ctx context.Context, capacity int64) error {
 		return ErrFilesystemNotFound
 	}
 
+	if fsObj.TotalCapacity > capacity {
+		return ErrFilesystemBiggerThanRequested
+	}
 	capLimit := capacity
 
 	fsu := apiclient.NewFileSystemResizeRequest(fsObj.Uid, &capLimit)
@@ -467,6 +472,9 @@ func (v *Volume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Context, cap
 		logger.Debug().Str("filesystem", v.FilesystemName).Int64("desired_capacity", capacityLimit).Msg("New volume size doesn't fit current filesystem limits, expanding filesystem")
 		err := v.resizeFilesystem(ctx, capacityLimit)
 		if err != nil {
+			if err == ErrFilesystemBiggerThanRequested {
+				logger.Info().Msg("Did not change filesystem size as it is already bigger than requested capacity")
+			}
 			logger.Error().Err(err).Msg("Failed to expand filesystem to support new volume capacity")
 			return status.Errorf(codes.FailedPrecondition, "Could not expand filesystem to support new volume capacity")
 		}
@@ -1112,6 +1120,9 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		fsSize := Max(int64(capacity), v.initialFilesystemSize)
 		if fsSize > maxStorageCapacity {
 			return status.Errorf(codes.OutOfRange, fmt.Sprintf("Minimum filesystem size %d is set in storageClass, which exceeds total free capacity %d", fsSize, maxStorageCapacity))
+		}
+		if fsSize > capacity {
+			logger.Trace().Int64("filesystem_size", fsSize).Msg("Overriding filesystem size to initial capacity set in storageClass")
 		}
 
 		// this is a new blank volume by definition
