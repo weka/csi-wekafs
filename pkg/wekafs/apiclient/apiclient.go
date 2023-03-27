@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"hash/fnv"
-	"io/ioutil"
+	"io"
 	"k8s.io/helm/pkg/urlutil"
 	"math/rand"
 	"net"
@@ -208,7 +208,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		return nil, &transportError{errors.New("received no response")}
 	}
 
-	responseBody, err := ioutil.ReadAll(response.Body)
+	responseBody, err := io.ReadAll(response.Body)
 	logger.Trace().Str("response", string(responseBody)).Msg("")
 	if err != nil {
 		return nil, &ApiInternalError{
