@@ -1113,6 +1113,9 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if fsSize > maxStorageCapacity {
 			return status.Errorf(codes.OutOfRange, fmt.Sprintf("Minimum filesystem size %d is set in storageClass, which exceeds total free capacity %d", fsSize, maxStorageCapacity))
 		}
+		if fsSize > capacity {
+			logger.Trace().Int64("filesystem_size", fsSize).Msg("Overriding filesystem size to initial capacity set in storageClass")
+		}
 
 		// this is a new blank volume by definition
 		// create the filesystem actually
