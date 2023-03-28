@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1117,7 +1118,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	}
 	if v.isFilesystem() {
 		// filesystem size might be larger than free space, check it
-		fsSize := Max(int64(capacity), v.initialFilesystemSize)
+		fsSize := Max(capacity, v.initialFilesystemSize)
 		if fsSize > maxStorageCapacity {
 			return status.Errorf(codes.OutOfRange, fmt.Sprintf("Minimum filesystem size %d is set in storageClass, which exceeds total free capacity %d", fsSize, maxStorageCapacity))
 		}
@@ -1526,7 +1527,7 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		if err != nil {
 			return err
 		}
-		v.initialFilesystemSize = int64(raw)*1024 ^ 3
+		v.initialFilesystemSize = int64(raw) * int64(math.Pow10(9))
 	}
 	return nil
 }
