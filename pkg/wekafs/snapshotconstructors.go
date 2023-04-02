@@ -40,6 +40,7 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 		SourceVolume:        sourceVolume,
 		srcSnapshotUid:      sourceSnapUid,
 		apiClient:           apiClient,
+		server:              server,
 	}
 	logger = log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Logger()
 	logger.Trace().Object("snap_info", s).Msg("Successfully initialized object")
