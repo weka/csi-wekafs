@@ -308,9 +308,11 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	op := "ExpandVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-
 	volumeID := req.GetVolumeId()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).
+		Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).
+		Str("volume_id", volumeID).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	capacity := int64(-1)
@@ -318,8 +320,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if capRange != nil {
 		capacity = capRange.GetRequiredBytes()
 	}
-
-	logger.Info().Str("volume_id", volumeID).Int64("capacity", capacity).Msg(">>>> Received request")
+	logger.Info().Int64("capacity", capacity).Msg(">>>> Received request")
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {

@@ -50,6 +50,7 @@ func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apicli
 	logger := log.Ctx(ctx).With().Str("snapshot_id", snapshotId).Logger()
 	logger.Trace().Msg("Initializating snapshot object")
 	if err := validateSnapshotId(snapshotId); err != nil {
+		logger.Error().Msg("Failed to validate snapshot_id")
 		return &Snapshot{}, err
 	}
 	if apiClient != nil {
