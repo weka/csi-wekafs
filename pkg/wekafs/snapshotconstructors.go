@@ -64,6 +64,7 @@ func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apicli
 		SnapshotName:        server.getConfig().SnapshotPrefix + sliceSnapshotNameHashFromSnapshotId(snapshotId),
 		innerPath:           sliceInnerPathFromSnapshotId(snapshotId),
 		apiClient:           apiClient,
+		server:              server,
 	}
 	logger.Trace().Object("snap_info", s).Msg("Successfully initialized object")
 	return s, nil
