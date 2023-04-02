@@ -56,6 +56,6 @@ This behavior may be adjusted, so snapshot-based volumes will be allowed on olde
    - the file should exist and be accessible
    - the latest timestamp you are expected to see is the timestamp just before creation of snapshot
 9. Create a new volume straight from original volume (e.g. clone volume): `pvc-wekafs-snap-clone`
-10. Create application that tails content of `/data/temp.txt` from volume created from snapshot: `csi-app-on-fs-clone`
+10. Create application that tails content of `/data/temp.txt` from volume created from snapshot: `csi-app-on-snap-clone`
     - the file should exist and be accessible
     - the latest timestamp you are expected to see is the timestamp just before volume cloning
