@@ -40,6 +40,7 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 		SourceVolume:        sourceVolume,
 		srcSnapshotUid:      sourceSnapUid,
 		apiClient:           apiClient,
+		server:              server,
 	}
 	logger = log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Logger()
 	logger.Trace().Object("snap_info", s).Msg("Successfully initialized object")
@@ -50,6 +51,7 @@ func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apicli
 	logger := log.Ctx(ctx).With().Str("snapshot_id", snapshotId).Logger()
 	logger.Trace().Msg("Initializating snapshot object")
 	if err := validateSnapshotId(snapshotId); err != nil {
+		logger.Error().Msg("Failed to validate snapshot_id")
 		return &Snapshot{}, err
 	}
 	if apiClient != nil {
@@ -63,6 +65,7 @@ func NewSnapshotFromId(ctx context.Context, snapshotId string, apiClient *apicli
 		SnapshotName:        server.getConfig().SnapshotPrefix + sliceSnapshotNameHashFromSnapshotId(snapshotId),
 		innerPath:           sliceInnerPathFromSnapshotId(snapshotId),
 		apiClient:           apiClient,
+		server:              server,
 	}
 	logger.Trace().Object("snap_info", s).Msg("Successfully initialized object")
 	return s, nil

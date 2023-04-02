@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -213,6 +214,21 @@ func (s *Snapshot) getObject(ctx context.Context) (*apiclient.Snapshot, error) {
 	snap := &apiclient.Snapshot{}
 	snap, err := s.apiClient.GetSnapshotByName(ctx, s.SnapshotName)
 	if err == apiclient.ObjectNotFoundError {
+		logger.Debug().Err(err).Msg("Failed to fetch snapshot object by name, trying without prefix")
+		possibleName := strings.TrimPrefix(s.SnapshotName, s.server.getConfig().SnapshotPrefix)
+		snap, err2 := s.apiClient.GetSnapshotByName(ctx, possibleName)
+		if err2 != nil && err2 != apiclient.ObjectNotFoundError {
+			return nil, err2
+		}
+		if snap != nil {
+			if s.SnapshotIntegrityId == snap.AccessPoint {
+				logger.Info().Str("snapshot_name", snap.Name).Msg("Found an existing snapshot with different name")
+				s.SnapshotName = snap.Name
+				return snap, nil
+			} else {
+				logger.Error().Msg("Found a snapshot that partially matches by name but having unexpected access point. Conflict.")
+			}
+		}
 		return nil, nil // we know that volume doesn't exist
 	} else if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch snapshot object by name")

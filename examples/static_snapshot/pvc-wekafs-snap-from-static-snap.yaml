@@ -1,0 +1,16 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-snap-from-static-snap
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-snap-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
+  dataSource:
+    kind: VolumeSnapshot
+    name: snapshot-wekafs-static-api
+    apiGroup: snapshot.storage.k8s.io

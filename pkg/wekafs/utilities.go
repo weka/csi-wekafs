@@ -373,7 +373,7 @@ func validateSnapshotId(snapshotId string) error {
 	// "wekasnap/v1/my-filesystem:my-awsome-sn-GUZTQNZTMZSD:GQ4TCMRQMNTD # FS / FS Snap only (without internal path)
 
 	// length limited to maxVolumeIdLength
-	r := "[^:]+:[^:]+:[A-Za-z0-9]{12}(/.+)*"
+	r := "[^:]+:[^:]+:[^/]+(/.+)*"
 	if strings.HasPrefix(snapshotId, SnapshotTypeUnifiedSnap) {
 		r = SnapshotTypeUnifiedSnap + r
 	}

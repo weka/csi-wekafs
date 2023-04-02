@@ -1,0 +1,12 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotContent
+metadata:
+  name: snapshotcontent-wekafs-static-api
+spec:
+  deletionPolicy: Delete
+  driver: csi.weka.io
+  source:
+    snapshotHandle: wekasnap/v2/testfs:testfs-snap:testfs-snap-access-point
+  volumeSnapshotRef:
+    name: snapshot-wekafs-static-api
+    namespace: default
