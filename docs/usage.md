@@ -23,6 +23,48 @@ The logic in dynamic provisioning is as following:
 > **NOTE:** The example above is based on directory-backed CSI volume, but same logic applies also to other volume
 > types.
 
+### Choosing the right volume type for your workload
+Weka CSI plugin now supports multiple types of volumes, which basically differ by their representation on Weka cluster backend.  
+Each volume type has its benefits and limitations. It is crucial to choose the right type of volume to achieve the best 
+manageability and performance.
+
+| Volume type                                 | Directory-backed volume                       | Snapshot-backed volume                                         | Filesystem-backed volume                                                     | Hybrid volume                                                  |
+|---------------------------------------------|-----------------------------------------------|----------------------------------------------------------------|------------------------------------------------------------------------------|----------------------------------------------------------------|
+| Representation on Weka storage              | Directory with attached quota                 | Writable snapshot with attached quota                          | Filesystem with attached quota                                               | Directory inside writable snapshot with attached quota         |
+| `filesystemName` in storageClass            | Must be set                                   | Must be set                                                    |                                                                              | Storageclass is inherited from parent volume                   |
+| `filesystemGroupName` in storageClass       | -                                             | -                                                              | Must be set                                                                  | -                                                              |
+| Requires pre-configured filesystem          | Yes                                           | Yes                                                            | -                                                                            | Located on same filesystem where source content is             |
+| Dynamic provision support                   | Yes                                           | Yes                                                            | Yes                                                                          | Yes                                                            |
+| Static provision support                    | Yes                                           | Yes                                                            | Yes                                                                          | Yes                                                            |
+| Max. number of volumes                      | Unlimited                                     | Limited by max. number of writable snapshots<sup>1</sup>       | Limited by max. number of filesystems<sup>2</sup>                            | Limited by max. number of writable snapshots<sup>1</sup>       |
+| CSI Snapshot Support                        | Supported, Off by default<sup>3</sup>         | Supported                                                      | Supported                                                                    | Supported, Off by default<sup>3</sup>                          |
+| CSI ContentSource: Snapshot                 | Supported                                     | Supported                                                      | Supported                                                                    | Supported                                                      |
+| CSI ContentSource: Volume                   | Supported                                     | Supported                                                      | Supported                                                                    | Supported                                                      |
+| Minimum supported Weka version              | 3.13 and up                                   | 3.14-4.1 with limitations<sup>4</sup>  <br>4.2 fully supported | 3.14 and up                                                                  | 3.14-4.1 with limitations<sup>4</sup>  <br>4.2 fully supported |
+| Custom mountOptions                         | Per storage class                             | Per storage class                                              | Per storage class                                                            | Per storage class                                              |
+| Shared caching (on Kubernetes worker)       | across all volumes on a filesystem            | across all volumes on a filesystem                             | per volume                                                                   | across all volumes on a filesystem                             |
+| SELinux support                             | Yes                                           | Yes                                                            | Yes                                                                          | Yes                                                            |
+| Volume expansion support                    | Yes                                           | Yes                                                            | Yes                                                                          | Yes                                                            |
+| Capacity allocation                         | Shared<sup>5</sup>                            | Shared<sup>5</sup>                                             | Dedicated                                                                    | Shared<sup>5</sup>                                             |
+| Can be backed up externally (E.g. snap2Obj) | Yes (a whole filesystem)                      | No                                                             | Yes<sup>6</sup>                                                              | No                                                             |
+| Can be tiered to OBS (outside CSI)          | Yes (a whole filesystem)                      | No                                                             | Yes<sup>6</sup>                                                              | No                                                             |
+| Snapshot can be uploaded to OBS             | Yes (a whole filesystem)                      | No                                                             | Yes<sup>6</sup>                                                              | No                                                             |
+| Recommended usage pattern                   | Millions of small, thinly provisioned volumes | Thousands of volumes with mostly appended data                 | Hundreds of volumes with performance and consistent backup being key factors | Thousands of volumes created from same contentSource           |
+
+Comments:
+1. Number of writable snapshots differs between different versions of Weka software. Please refer to documentation for your particular installed version for additional information
+2. Number of filesystems differs between different versions of Weka software. Please refer to documentation for your particular installed version for additional information
+3. CSI snapshot of directory-backed volume creates a snapshot of the whole filesystem on which the directory is located.  
+   As a result, the capacity required by such snapshot would significantly depend on data usage pattern of all CSI directory-backed volumes on same filesystem, and much larger than the volume size.  
+   Hence, snapshot creation is prohibited by default, but can be enabled. Refer to Weka CSI Plugin Helm chart documentation for additional information
+4. In Weka versions prior to 4.2, quota is not enforced inside filesystem snapshots. As a result, capacity enforcement is not supported for this type of volume.  
+   If capacity enforcement is crucial for your workload, use directory-backed volumes or upgrade to latest Weka software
+5. Filesystem size and used capacity is not monitoried by CSI plugin. The administrator has to make sure enough capacity is allocated for the filesystem.  
+   Filesystems created dynamically (via filesystem-backed volume) can be set with initial size to accomodate future volumes, refer to Weka CSI Plugin Helm chart documentation for additional information
+6. Weka CSI plugin does not support automatic configuration of tiering for filesystem-backed volumes, but those can be set externally.
+
+#### Directory-based volumes
+Directory-based volumes, also called "legacy", are represented by single directory inside 
 For additional information regarding different volume types and how to use them, refer to the following documentation:
 
 - Dynamic provisioning of [directory-backed volumes](../examples/dynamic_directory/README.md)

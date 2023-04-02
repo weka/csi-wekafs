@@ -13,7 +13,7 @@ parameters:
   filesystemGroupName: default
 
   # comma-separated list of extra mount options to be passed to the mounter. NOTE: No validation whatsoever is performed on those
-  mountOptions: "readcache, noatime"
+  mountOptions: "readcache,noatime"
 
   # name of the secret that stores API credentials for a cluster
   # change the name of secret to match secret of a particular cluster (if you have several Weka clusters)

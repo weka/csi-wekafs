@@ -56,3 +56,4 @@ This example introduces automatic provisioning of filesystems. For this function
 10. Create application that tails content of `/data/temp.txt` from volume created from snapshot: `csi-app-on-fs-clone`
     - the file should exist and be accessible
     - the latest timestamp you are expected to see is the timestamp just before volume cloning
+11. Optionally, create another application that access data in read-only mode: `csi-app-on-fs-api-readonly`
