@@ -63,10 +63,33 @@ Comments:
    Filesystems created dynamically (via filesystem-backed volume) can be set with initial size to accomodate future volumes, refer to Weka CSI Plugin Helm chart documentation for additional information
 6. Weka CSI plugin does not support automatic configuration of tiering for filesystem-backed volumes, but those can be set externally.
 
-#### Directory-based volumes
-Directory-based volumes, also called "legacy", are represented by single directory inside 
+#### Directory-backed volumes
+Directory-backed volumes, also called "legacy", are represented by single directory inside a dedicated filesystem.  
+Since multiple directory-backed volumes may reside on a single filesystem, their maximal number is only limited by max number of directory quotas.
+Snapshots of those volumes, however, are less efficient capacity-wise, since each CSI volume snapshot basically means a snapshot of a whole filesystem
+
+#### Snapshot-backed volumes
+Snapshot-backed volumes utilize Weka writable snapshots mechanism for storage. This basically means that a filesystem must be created, on top of which  
+writable snapshots can be taken and presented as CSI volumes. The advantages of snapshot-backed volumes on top of directory-backed volumes:
+- a new volume is basically a Weka snapshot, hence creating a (CSI) snapshot of it and provisioning as a new (CSI) volume would be very fast and efficient
+- deletion of such volumes is much faster, since it is done by deleting the Weka snapshot immediately and reclaiming space in background (unlike in directory-based volume, where
+  deletion is performed in-band by the CSI plugin)
+
+However, number of snapshot-backed volumes is limited by max number of writable snapshots supported by your current Weka software version
+
+#### Filesystem-backed volumes
+Filesystem-backed volumes stand for entire filesystem provisioned as a CSI volume. 
+This in particular means simpler DR scenarios, better caching, tiering definitions etc.
+> **NOTE:** those settings can be done on the filesystem directly, Weka CSI plugin doesn't support extended configuration.
+> **WARNING:** in current version of Weka CSI plugin, `.snapshots` directory can be accessed from within root of filesystem-backed volume. 
+  Hence, it is not recommended to provision additional snapshot-backed volumes on top of same filesystem 
+
+Although those are limited to max number of filesystems supported by your current Weka software, it is recommended to use
+filesystem-based volumes for critical workflows, where maximum performance and dedicated caching is required.
+
 For additional information regarding different volume types and how to use them, refer to the following documentation:
 
+### Examples of provisioning
 - Dynamic provisioning of [directory-backed volumes](../examples/dynamic_directory/README.md)
 - Dynamic provisioning of [filesystem-backed volumes](../examples/dynamic_filesystem/README.md)
 - Dynamic provisioning of [snapshot-backed volumes](../examples/dynamic_snapshot/README.md)
@@ -309,8 +332,6 @@ weka/v2/my_awesome_filesystem:snap02/another/awsome/path
 ## Expanding a PersistentVolumeClaim
 
 Weka supports online or offline expansion of PersistentVolumeClaim.
-> **NOTE:** Currently, Weka CSI plugin does not enforce actual capacity limits for PersistentVolumes
-
 Assuming that there is a PersistentVolumeClaim named `pvc-wekafs-dir`, which was defined to use a 1Gi capacity,
 and we would like to expand it to 4Gi.
 
