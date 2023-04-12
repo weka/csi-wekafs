@@ -223,7 +223,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 	// Hence:
 	// - sourceVolumeID is not participating in generation of names
 	// - accessPoint must be calculated as usual, from volume name
-	// - snapshot name must be calculated as as usual too
+	// - snapshot name must be calculated as usual too
 
 	targetWekaSnapName := generateWekaSnapNameForSnapBasedVol(server.getConfig().VolumePrefix, requestedVolumeName)
 	targetWekaSnapAccessPoint := generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)

@@ -229,21 +229,18 @@ The following steps confirms that csi-wekafs is working properly.
 ### General Information
 
 In some cases, e.g. when user wants to populate pre-existing data to Kubernetes pods, it is convenient to use static
-provisioning of an existing directory as PeristentVolume
+provisioning of an existing directory as PersistentVolume
 
 The static provisioning logic, if so, is slightly different from dynamic provisioning:
 
-1. User creates a generic [storageclass](../examples/static_volume/storageclass-wekafs-dir-static-api.yaml), which
-   doesn't need to
-   specify filesystem
-2. User creates a [PersistentVolume](../examples/static_volume/pvc-wekafs-dir-static-api.yaml), which provides a
-   specially crafted
-   volumeHandle (see below)
-3. User creates a [PersistentVolumeClaim](../examples/static_volume/pvc-wekafs-dir-static-api.yaml) that refers to
-   volume name
-   directly
-4. Kubernetes configures an existing path as a pre-existing PersistentVolume.
-5. User can utilize produced PersistentVolumeClaim as in previous example
+1. User creates a generic [storageclass](../examples/static_volume/static_directory/storageclass-wekafs-dir-static-api.yaml), 
+   which doesn't need to specify filesystem name
+2. User creates a [PersistentVolume](../examples/static_volume/static_directory/pv-wekafs-dir-static-api.yaml), which provides a
+   specially crafted volumeHandle (see below)
+3. User creates a [PersistentVolumeClaim](../examples/static_volume/static_directory/pvc-wekafs-dir-static-api.yaml) that refers to
+   volume name directly
+4. Kubernetes automatically binds the PersistentVolumeClaim to the PersistentVolume representation
+5. User can attach the bound PersistentVolumeClaim to pod 
 
 > **NOTE:** in static provisioning, since an existing volume is implied, Kuberenetes does not request creating
 > a new volume from CSI driver; it would be called only later, when the PersistentVolumeClaim has to be published on a
