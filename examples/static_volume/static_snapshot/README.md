@@ -25,7 +25,7 @@ The example assumes the following operations were performed on Weka storage prio
    - Make sure to set `filesystemName` to valid existing Weka filesystem
    - Make sure `volumeType` is set to `weka/v2`
 2. Create CSI secret `csi-wekafs-api-secret`  (Located in [../../common/csi-wekafs-api-secret.yaml](../../common/csi-wekafs-api-secret.yaml))
-3. Create a static snapshot-based PersistentVolume entry `pv-wekafs-fssnap-static-api`
+3. Create a static snapshot-backed PersistentVolume entry `pv-wekafs-fssnap-static-api`
 4. Create a PersistentVolumeClaim that binds the volume above `pvc-wekafs-fssnap-static-api`
 5. Create application that writes timestamp every 10 seconds into `/data/temp.txt`: `csi-app-on-fssnap-static-api`
 6. Mount filesystem externally and ensure that file called `temp.txt` was created under its root directory

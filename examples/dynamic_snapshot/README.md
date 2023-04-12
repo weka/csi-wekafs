@@ -21,12 +21,12 @@ This example introduces automatic provisioning of filesystems. For this function
 
 ### Special Consideration for Weka Software Versions Below v4.1
 Weka software of version below 4.1 does not support enforcement of quotas on filesystem snapshots.
-Hence, CSI plugin forbids creation of snapshot-based volumes on clusters having an older version by default.
-As a result, provisioning a snapshot-based volume on such cluster will fail with a message similar to this:
+Hence, CSI plugin forbids creation of snapshot-backed volumes on clusters having an older version by default.
+As a result, provisioning a snapshot-backed volume on such cluster will fail with a message similar to this:
 ```text
-failed to provision volume with StorageClass "storageclass-wekafs-snap-api": rpc error: code = FailedPrecondition desc = Quota enforcement is not supported for snapshot-based volumes by current Weka software version, please upgrade Weka cluster
+failed to provision volume with StorageClass "storageclass-wekafs-snap-api": rpc error: code = FailedPrecondition desc = Quota enforcement is not supported for snapshot-backed volumes by current Weka software version, please upgrade Weka cluster
 ```
-This behavior may be adjusted, so snapshot-based volumes will be allowed on older versions of Weka as well, by setting
+This behavior may be adjusted, so snapshot-backed volumes will be allowed on older versions of Weka as well, by setting
 ```
 .Values.pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement=true
 ```
@@ -39,7 +39,7 @@ This behavior may be adjusted, so snapshot-based volumes will be allowed on olde
 - Storage class specifies the filesystemName to provision the filesystems in
 - volumeType set to `weka/v2` or is unset at all
 
-> **NOTE:** It is important to mention that the difference from [directory-based storageClass](../dynamic_directory/storageclass-wekafs-dir-api.yaml) 
+> **NOTE:** It is important to mention that the difference from [directory-backed storageClass](../dynamic_directory/storageclass-wekafs-dir-api.yaml) 
 > is only the volumeType
 
 

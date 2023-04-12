@@ -80,7 +80,7 @@ var (
 	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
 	tracingUrl                    = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
 	allowInsecureHttps            = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
-	alwaysAllowSnapshotVolumes    = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-based volumes even when Weka cluster doesn't support capacity enforcement")
+	alwaysAllowSnapshotVolumes    = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-backed volumes even when Weka cluster doesn't support capacity enforcement")
 	usejsonlogging                = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
 
 	// Set by the build process

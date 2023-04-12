@@ -72,7 +72,7 @@ Snapshots of those volumes, however, are less efficient capacity-wise, since eac
 Snapshot-backed volumes utilize Weka writable snapshots mechanism for storage. This basically means that a filesystem must be created, on top of which  
 writable snapshots can be taken and presented as CSI volumes. The advantages of snapshot-backed volumes on top of directory-backed volumes:
 - a new volume is basically a Weka snapshot, hence creating a (CSI) snapshot of it and provisioning as a new (CSI) volume would be very fast and efficient
-- deletion of such volumes is much faster, since it is done by deleting the Weka snapshot immediately and reclaiming space in background (unlike in directory-based volume, where
+- deletion of such volumes is much faster, since it is done by deleting the Weka snapshot immediately and reclaiming space in background (unlike in directory-backed volume, where
   deletion is performed in-band by the CSI plugin)
 
 However, number of snapshot-backed volumes is limited by max number of writable snapshots supported by your current Weka software version
@@ -85,7 +85,7 @@ This in particular means simpler DR scenarios, better caching, tiering definitio
   Hence, it is not recommended to provision additional snapshot-backed volumes on top of same filesystem 
 
 Although those are limited to max number of filesystems supported by your current Weka software, it is recommended to use
-filesystem-based volumes for critical workflows, where maximum performance and dedicated caching is required.
+filesystem-backed volumes for critical workflows, where maximum performance and dedicated caching is required.
 
 For additional information regarding different volume types and how to use them, refer to the following documentation:
 

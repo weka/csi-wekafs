@@ -3,7 +3,7 @@
 1. This example concentrates on Weka Filesystem-backed volume and its derivatives
 2. Filesystem is provisioned automatically when volume is created
 3. On filesystem, a "seed snapshot", which is basically a snapshot of the empty filesystem, is created
-4. From here, basically, a new snapshot-based volumes may be created on same filesystem (described in [dynamic_snapshot](../dynamic_snapshot))
+4. From here, basically, a new snapshot-backed volumes may be created on same filesystem (described in [dynamic_snapshot](../dynamic_snapshot))
 5. When a CSI snapshot is created from filesystem-backed volume, it is a read-only snapshot of the filesystem
 6. When a new volume is created sourced from the CSI snapshot, this is basically another snapshot of the same filesystem, 
    but this time the snapshot is writable and contains all information that is preserved in the original Weka snapshot
@@ -26,11 +26,11 @@ This example introduces automatic provisioning of filesystems. For this function
   > **NOTE:** In Weka software, capacity allocated by any snapshot is always accounted towards the parent filesystem. 
   > This eventually means that data stored inside snapshots reduces available capacity for both the parent filesystem itself, and all its snapshots. 
   > In order to be able to use snapshot functionality, the size of the filesystem must be sufficient to include all its snapshots.
-  > The parameter above allows to pre-allocate capacity for snapshot-based volumes and snapshots derived from filesystem.
+  > The parameter above allows to pre-allocate capacity for snapshot-backed volumes and snapshots derived from filesystem.
   
   > **WARNING:** Insufficient free capacity on the filesystem would render all volumes originating from the particular filesystem ouf of free capacity
   > Using the parameter above is not mandatory, although recommended. However, it is crucial to monitor the free capacity on any filesystem that serves
-  > for creation of dynamic volumes, either snapshot-based or directory-based, and expand it if needed using Weka cluster management.  
+  > for creation of dynamic volumes, either snapshot-backed or directory-backed, and expand it if needed using Weka cluster management.  
 
 
 ## Notes regarding object deletion:
