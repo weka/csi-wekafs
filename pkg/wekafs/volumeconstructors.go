@@ -141,7 +141,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 			volType = VolumeTypeUnified
 
 			if !client.SupportsQuotaOnSnapshots() && !cs.config.alwaysAllowSnapshotVolumes {
-				return nil, status.Error(codes.FailedPrecondition, "Quota enforcement is not supported for snapshot-based volumes by current Weka software version, please upgrade Weka cluster")
+				return nil, status.Error(codes.FailedPrecondition, "Quota enforcement is not supported for snapshot-backed volumes by current Weka software version, please upgrade Weka cluster")
 			}
 			snapName = generateWekaSnapNameForSnapBasedVol(cs.getConfig().VolumePrefix, requestedVolumeName)
 			snapAccessPoint = generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)
@@ -193,8 +193,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 
 	if sourceSnap.hasInnerPath() && !server.getConfig().allowSnapshotsOfLegacyVolumes {
 		// block creation of snapshots from legacy volumes, as it wastes space
-		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is prohibited on directory-based CSI volumes. "+
-			"Refer to Weka CSI plugin documentation")
+		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is prohibited on directory-backed CSI volumes. Refer to Weka CSI plugin documentation")
 	}
 
 	sourceSnapObj, err := sourceSnap.getObject(ctx)
@@ -224,7 +223,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 	// Hence:
 	// - sourceVolumeID is not participating in generation of names
 	// - accessPoint must be calculated as usual, from volume name
-	// - snapshot name must be calculated as as usual too
+	// - snapshot name must be calculated as usual too
 
 	targetWekaSnapName := generateWekaSnapNameForSnapBasedVol(server.getConfig().VolumePrefix, requestedVolumeName)
 	targetWekaSnapAccessPoint := generateWekaSnapAccessPointForSnapBasedVol(requestedVolumeName)

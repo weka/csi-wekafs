@@ -24,13 +24,13 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	FilesystemAsVolume:             "v3.13", // can create CSI volume from filesystem
 	QuotaDirectoryAsVolume:         "v3.13", // can create CSI volume from directory with quota support
 	QuotaOnNonEmptyDirs:            "v9.99", // can enable quota on legacy CSI volume (directory) without quota support
-	QuotaOnSnapshot:                "v4.1",  // can create a valid quota on snapshot
+	QuotaOnSnapshot:                "v4.2",  // can create a valid quota on snapshot
 	MountFilesystemsUsingAuthToken: "v3.14", // can mount filesystems that require authentication (and non-root orgID)
 	RestApiFiltering:               "v9.99", // can filter API objects by query
 	NewFilesystemFromSnapshot:      "v9.99", // can create new filesystem from snapshot on storage side
 	CloneFilesystem:                "v9.99", // can clone a volume directly on storage side
 	UrlQueryParams:                 "v4.1",  // can perform URL query by fields
-	SyncOnCloseMountOption:         "v4.2",  // can perform sync_on_close_mount_option
+	SyncOnCloseMountOption:         "v4.2",  // can perform sync_on_close mount option
 }
 
 type WekaCompatibilityMap struct {

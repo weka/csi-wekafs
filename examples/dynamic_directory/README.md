@@ -18,12 +18,12 @@ This example extends the example provided in previous version of the Weka CSI Pl
 
 
 ## Configuration Requirements
-This example introduces dynamic provisioning of directory-based CSI volumes using Weka CSI plugin, and subsequent creation of child objects.
-Creating of snapshots from directory-based volumes basically means creation of a full filesystem snapshot.
+This example introduces dynamic provisioning of directory-backed CSI volumes using Weka CSI plugin, and subsequent creation of child objects.
+Creating of snapshots from directory-backed volumes basically means creation of a full filesystem snapshot.
 This means, in particular, that creating a snapshot of a small volume or unfrequently changed volume that shares a filesystem with
 another large / frequently might produce a snapshot of size much bigger than the original volume actual capacity.
 
-This behavior may be adjusted by explicitly allowing creation of directory-based volume snapshots by the following configuration:
+This behavior may be adjusted by explicitly allowing creation of directory-backed volume snapshots by the following configuration:
 ```
 .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes = true
 ```
@@ -34,7 +34,7 @@ This behavior may be adjusted by explicitly allowing creation of directory-based
 - volumeType set to `dir/v1`
 > **NOTE:** For provisioning CSI volumes on multiple Weka filesystems, a separate storage class is required for each filesystem
 
-> **NOTE:** If volumeType is unset or set to `weka/v2`, instead of directory-based, a [snapshot-based](../dynamic_snapshot) volumes 
+> **NOTE:** If volumeType is unset or set to `weka/v2`, instead of directory-backed, a [snapshot-backed](../dynamic_snapshot) volumes 
   will be provisioned
 
 # Workflow
@@ -44,7 +44,7 @@ This behavior may be adjusted by explicitly allowing creation of directory-based
    - Make sure `volumeType` is set to `dir/v1`
 2. Create CSI secret `csi-wekafs-api-secret`  (Located in [../common/csi-wekafs-api-secret.yaml](../common/csi-wekafs-api-secret.yaml)) 
 3. Create snapshotclass `snapshotclass-csi-wekafs` (Located in [../common/snapshotclass-csi-wekafs.yaml](../common/snapshotclass-csi-wekafs.yaml))
-4. Provision a new directory-based volume `pvc-wekafs-dir-api`
+4. Provision a new directory-backed volume `pvc-wekafs-dir-api`
 5. Create application that writes timestamp every 10 seconds into `/data/temp.txt`: `csi-app-on-dir-api`
 6. Create a snapshot of the PVC: `snapshot-pvc-wekafs-dir-api`
 7. Create a new volume from snapshot: `pvc-wekafs-dir-snapshot`

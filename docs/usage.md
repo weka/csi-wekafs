@@ -20,9 +20,6 @@ The logic in dynamic provisioning is as following:
    PersistentVolumeClaim
 7. Optionally, user could create snapshots of volumes and restore them to new volumes, or clone volumes directly
 
-> **NOTE:** The example above is based on directory-backed CSI volume, but same logic applies also to other volume
-> types.
-
 ### Choosing the right volume type for your workload
 Weka CSI plugin now supports multiple types of volumes, which basically differ by their representation on Weka cluster backend.  
 Each volume type has its benefits and limitations. It is crucial to choose the right type of volume to achieve the best 
@@ -63,10 +60,38 @@ Comments:
    Filesystems created dynamically (via filesystem-backed volume) can be set with initial size to accomodate future volumes, refer to Weka CSI Plugin Helm chart documentation for additional information
 6. Weka CSI plugin does not support automatic configuration of tiering for filesystem-backed volumes, but those can be set externally.
 
-#### Directory-based volumes
-Directory-based volumes, also called "legacy", are represented by single directory inside 
+#### Directory-backed volumes
+Directory-backed volumes, also called "legacy", are represented by single directory inside a dedicated filesystem.  
+Since multiple directory-backed volumes may reside on a single filesystem, their maximal number is only limited by max number of directory quotas.
+Snapshots of those volumes, however, are less efficient capacity-wise, since each CSI volume snapshot basically means a snapshot of a whole filesystem
+
+#### Snapshot-backed volumes
+Snapshot-backed volumes utilize Weka writable snapshots mechanism for storage. This basically means that a filesystem must be created, on top of which  
+writable snapshots can be taken and presented as CSI volumes. The advantages of snapshot-backed volumes on top of directory-backed volumes:
+- a new volume is basically a Weka snapshot, hence creating a (CSI) snapshot of it and provisioning as a new (CSI) volume would be very fast and efficient
+- deletion of such volumes is much faster, since it is done by deleting the Weka snapshot immediately and reclaiming space in background (unlike in directory-backed volume, where
+  deletion is performed in-band by the CSI plugin)
+
+However, number of snapshot-backed volumes is limited by max number of writable snapshots supported by your current Weka software version
+
+#### Filesystem-backed volumes
+Filesystem-backed volumes stand for entire filesystem provisioned as a CSI volume. 
+This in particular means simpler DR scenarios, better caching, tiering definitions etc.
+> **NOTE:** those settings can be done on the filesystem directly, Weka CSI plugin doesn't support extended configuration.
+
+> **WARNING:** in current version of Weka CSI plugin, `.snapshots` directory can be accessed from within root of filesystem-backed volume. 
+> 
+> This, basically, allows the pod attached to the filesystem-backed volume to access the snapshots of the filesystem - and any other 
+> snapshot-backed volumes made on top of same filesystem.
+> 
+> Hence, it is not recommended to provision additional snapshot-backed volumes on top of same filesystem if strict data isolation is required between workloads
+
+Although those are limited to max number of filesystems supported by your current Weka software, it is recommended to use
+filesystem-backed volumes for critical workflows, where maximum performance and dedicated caching is required.
+
 For additional information regarding different volume types and how to use them, refer to the following documentation:
 
+### Examples of provisioning
 - Dynamic provisioning of [directory-backed volumes](../examples/dynamic_directory/README.md)
 - Dynamic provisioning of [filesystem-backed volumes](../examples/dynamic_filesystem/README.md)
 - Dynamic provisioning of [snapshot-backed volumes](../examples/dynamic_snapshot/README.md)
@@ -206,25 +231,22 @@ The following steps confirms that csi-wekafs is working properly.
 ### General Information
 
 In some cases, e.g. when user wants to populate pre-existing data to Kubernetes pods, it is convenient to use static
-provisioning of an existing directory as PeristentVolume
+provisioning of an existing directory as PersistentVolume
 
 The static provisioning logic, if so, is slightly different from dynamic provisioning:
 
-1. User creates a generic [storageclass](../examples/static_volume/storageclass-wekafs-dir-static-api.yaml), which
-   doesn't need to
-   specify filesystem
-2. User creates a [PersistentVolume](../examples/static_volume/pvc-wekafs-dir-static-api.yaml), which provides a
-   specially crafted
-   volumeHandle (see below)
-3. User creates a [PersistentVolumeClaim](../examples/static_volume/pvc-wekafs-dir-static-api.yaml) that refers to
-   volume name
-   directly
-4. Kubernetes configures an existing path as a pre-existing PersistentVolume.
-5. User can utilize produced PersistentVolumeClaim as in previous example
+1. User creates a generic [storageclass](../examples/static_volume/static_directory/storageclass-wekafs-dir-static-api.yaml), 
+   which doesn't need to specify filesystem name
+2. User creates a [PersistentVolume](../examples/static_volume/static_directory/pv-wekafs-dir-static-api.yaml), which provides a
+   specially crafted volumeHandle (see below)
+3. User creates a [PersistentVolumeClaim](../examples/static_volume/static_directory/pvc-wekafs-dir-static-api.yaml) that refers to
+   volume name directly
+4. Kubernetes automatically binds the PersistentVolumeClaim to the PersistentVolume representation
+5. User can attach the bound PersistentVolumeClaim to pod 
 
 > **NOTE:** in static provisioning, since an existing volume is implied, Kuberenetes does not request creating
 > a new volume from CSI driver; it would be called only later, when the PersistentVolumeClaim has to be published on a
-> node.
+> node. Hence, quota objects cannot be created for such volumes and as a result, capacity cannot be enforced.
 
 For additional information regarding different volume types and how to use them, refer to the following documentation:
 
@@ -309,8 +331,6 @@ weka/v2/my_awesome_filesystem:snap02/another/awsome/path
 ## Expanding a PersistentVolumeClaim
 
 Weka supports online or offline expansion of PersistentVolumeClaim.
-> **NOTE:** Currently, Weka CSI plugin does not enforce actual capacity limits for PersistentVolumes
-
 Assuming that there is a PersistentVolumeClaim named `pvc-wekafs-dir`, which was defined to use a 1Gi capacity,
 and we would like to expand it to 4Gi.
 

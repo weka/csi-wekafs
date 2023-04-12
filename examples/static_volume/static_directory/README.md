@@ -17,9 +17,9 @@ The example assumes the following operations were performed on Weka storage prio
 1. Filesystem `testfs` was created
 2. A directory `testdir` was created inside the filesystem
 3. A quota was set on directory using Weka GUI or CLI
-   > **NOTE:** When statically provisioning volumes, their capacity is not set via CSI. Hence, if quota is not created, volume capacity enforcement will not operate.
-   > **NOTE:** After setting the quota for the first time, you will be able to resize volume via CSI
-
+> **NOTE:** When statically provisioning volumes, their capacity is not set via CSI. Hence, if quota is not created, volume capacity enforcement will not operate.
+> 
+> After setting the quota externally on the directory which is the root of provisioned static volume, capacity enforcement will be enabled and CSI volume resizing will be allowed
 
 # Workflow
 > All commands below may be executed by `kubectl apply -f <FILE>.yaml`
@@ -27,7 +27,7 @@ The example assumes the following operations were performed on Weka storage prio
    - Make sure to set `filesystemName` to valid existing Weka filesystem
    - Make sure `volumeType` is set to `dir/v1`
 2. Create CSI secret `csi-wekafs-api-secret`  (Located in [../../common/csi-wekafs-api-secret.yaml](../../common/csi-wekafs-api-secret.yaml))
-3. Create a static directory-based PersistentVolume entry `pv-wekafs-dir-static-api`
+3. Create a static directory-backed PersistentVolume entry `pv-wekafs-dir-static-api`
 4. Create a PersistentVolumeClaim that binds the volume above `pvc-wekafs-dir-static-api`
 5. Create application that writes timestamp every 10 seconds into `/data/temp.txt`: `csi-app-on-dir-static-api`
 6. Mount filesystem externally and ensure that file called `temp.txt` was created inside the directory

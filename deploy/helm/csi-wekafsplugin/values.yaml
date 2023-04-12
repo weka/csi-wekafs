@@ -78,9 +78,9 @@ pluginConfig:
   allowedOperations:
     # -- Allow automatic provisioning of CSI volumes based on distinct Weka filesystem
     autoCreateFilesystems: true
-    # -- Allow automatic expansion of filesystem on which Weka snapshot-based CSI volumes,
+    # -- Allow automatic expansion of filesystem on which Weka snapshot-backed CSI volumes,
     # e.g. in case a required volume capacity exceeds the size of filesystem.
-    # Note: the filesystem is not expanded automatically when a new directory-based volume is provisioned
+    # Note: the filesystem is not expanded automatically when a new directory-backed volume is provisioned
     autoExpandFilesystems: true
     # -- Allow automatic creation of "empty" snapshots for any provisioned filesystem,
     # such snapshots could allow creation of additional empty CSI volumes to originate from the snapshot
@@ -88,6 +88,6 @@ pluginConfig:
     # -- Create snapshots of legacy (dir/v1) volumes. By default disabled.
     # Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful)
     snapshotDirectoryVolumes: false
-    # -- Allow creation of snapshot-based volumes even on unsupported Weka cluster versions, off by default
-    # Note: On versions of Weka < v4.2 snapshot-based volume capacity cannot be enforced
+    # -- Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default
+    # Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced
     snapshotVolumesWithoutQuotaEnforcement: false
