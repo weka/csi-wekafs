@@ -17,9 +17,9 @@ The example assumes the following operations were performed on Weka storage prio
 1. Filesystem `testfs` was created
 2. A directory `testdir` was created inside the filesystem
 3. A quota was set on directory using Weka GUI or CLI
-   > **NOTE:** When statically provisioning volumes, their capacity is not set via CSI. Hence, if quota is not created, volume capacity enforcement will not operate.
-   > **NOTE:** After setting the quota for the first time, you will be able to resize volume via CSI
-
+> **NOTE:** When statically provisioning volumes, their capacity is not set via CSI. Hence, if quota is not created, volume capacity enforcement will not operate.
+> 
+> After setting the quota externally on the directory which is the root of provisioned static volume, capacity enforcement will be enabled and CSI volume resizing will be allowed
 
 # Workflow
 > All commands below may be executed by `kubectl apply -f <FILE>.yaml`

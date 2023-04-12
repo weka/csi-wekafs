@@ -20,9 +20,6 @@ The logic in dynamic provisioning is as following:
    PersistentVolumeClaim
 7. Optionally, user could create snapshots of volumes and restore them to new volumes, or clone volumes directly
 
-> **NOTE:** The example above is based on directory-backed CSI volume, but same logic applies also to other volume
-> types.
-
 ### Choosing the right volume type for your workload
 Weka CSI plugin now supports multiple types of volumes, which basically differ by their representation on Weka cluster backend.  
 Each volume type has its benefits and limitations. It is crucial to choose the right type of volume to achieve the best 
@@ -81,8 +78,13 @@ However, number of snapshot-backed volumes is limited by max number of writable 
 Filesystem-backed volumes stand for entire filesystem provisioned as a CSI volume. 
 This in particular means simpler DR scenarios, better caching, tiering definitions etc.
 > **NOTE:** those settings can be done on the filesystem directly, Weka CSI plugin doesn't support extended configuration.
+
 > **WARNING:** in current version of Weka CSI plugin, `.snapshots` directory can be accessed from within root of filesystem-backed volume. 
-  Hence, it is not recommended to provision additional snapshot-backed volumes on top of same filesystem 
+> 
+> This, basically, allows the pod attached to the filesystem-backed volume to access the snapshots of the filesystem - and any other 
+> snapshot-backed volumes made on top of same filesystem.
+> 
+> Hence, it is not recommended to provision additional snapshot-backed volumes on top of same filesystem if strict data isolation is required between workloads
 
 Although those are limited to max number of filesystems supported by your current Weka software, it is recommended to use
 filesystem-backed volumes for critical workflows, where maximum performance and dedicated caching is required.
@@ -244,7 +246,7 @@ The static provisioning logic, if so, is slightly different from dynamic provisi
 
 > **NOTE:** in static provisioning, since an existing volume is implied, Kuberenetes does not request creating
 > a new volume from CSI driver; it would be called only later, when the PersistentVolumeClaim has to be published on a
-> node.
+> node. Hence, quota objects cannot be created for such volumes and as a result, capacity cannot be enforced.
 
 For additional information regarding different volume types and how to use them, refer to the following documentation:
 

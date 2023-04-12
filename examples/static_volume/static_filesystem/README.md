@@ -16,8 +16,9 @@ This example covers a way to provision a Weka filesystem as a static PersistentV
 The example assumes the following operations were performed on Weka storage prior to execution:
 1. Filesystem `testfs` was created
 2. A quota was set on root directory of the filesystem using Weka GUI or CLI
-   > **NOTE:** When statically provisioning volumes, their capacity is not set via CSI. Hence, if quota is not created, volume capacity enforcement will not operate.
-   > **NOTE:** After setting the quota for the first time, you will be able to resize volume via CSI
+> **NOTE:** When statically provisioning volumes, their capacity is not set via CSI. Hence, if quota is not created, volume capacity enforcement will not operate.
+> 
+> After setting the quota externally on the ROOT directory of the filesystem, capacity enforcement will be enabled and CSI volume resizing will be allowed
 
 # Workflow
 > All commands below may be executed by `kubectl apply -f <FILE>.yaml`
@@ -29,5 +30,3 @@ The example assumes the following operations were performed on Weka storage prio
 4. Create a PersistentVolumeClaim that binds the volume above `pvc-wekafs-fs-static-api`
 5. Create application that writes timestamp every 10 seconds into `/data/temp.txt`: `csi-app-on-fs-static-api`
 6. Mount filesystem externally and ensure that file called `temp.txt` was created under its root directory
-
-> **NOTE:** When statically provisioning volumes, their capacity is not set via CSI. Hence, quota should be created manually  
