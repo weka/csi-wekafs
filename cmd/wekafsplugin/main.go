@@ -82,6 +82,7 @@ var (
 	allowInsecureHttps            = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
 	alwaysAllowSnapshotVolumes    = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-backed volumes even when Weka cluster doesn't support capacity enforcement")
 	usejsonlogging                = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
+	maxRandomWaitIntervalSecs     = flag.Int("maxrandomwaitintervalsecs", 0, "Use random wait on prolonged controller operations to minimize risk of races. Used only if number of replicas is >=2")
 
 	// Set by the build process
 	version = ""
@@ -190,7 +191,7 @@ func handle() {
 		*allowAutoFsCreation, *allowAutoFsExpansion,
 		*allowAutoSeedSnapshotCreation, *allowSnapshotsOfLegacyVolumes,
 		*suppressSnapshotsCapability, *suppressVolumeCloneCapability,
-		*allowInsecureHttps, *alwaysAllowSnapshotVolumes)
+		*allowInsecureHttps, *alwaysAllowSnapshotVolumes, *maxRandomWaitIntervalSecs)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
