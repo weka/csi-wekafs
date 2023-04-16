@@ -12,7 +12,7 @@ spec:
     matchLabels:
       app: {{ .Release.Name }}-controller
   serviceName: {{ .Release.Name }}-controller
-  replicas: 1
+  replicas: {{ .Values.controller.replicas | default 1 }}
   template:
     metadata:
       labels:
