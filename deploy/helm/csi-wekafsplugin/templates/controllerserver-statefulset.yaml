@@ -124,9 +124,9 @@ spec:
           {{- if .Values.useJsonLogging }}
             - "--usejsonlogging"
           {{- end }}
-          {{- if gt (default 0 .Values.controller.maxRandomWaitIntervalSecs) 0 }}
-           - "--maxRandomWaitIntervalSecs {{ default 0 .Values.controller.maxRandomWaitIntervalSecs }}"
-          {{- end }}
+          {{- if ge (int (default 1 .Values.controller.replicas)) 2 }}
+            - "--maxrandomwaitintervalsecs={{ .Values.controller.maxRandomWaitIntervalSecs | default 0 }}"
+          {{- end}}
           ports:
             - containerPort: 9898
               name: healthz
