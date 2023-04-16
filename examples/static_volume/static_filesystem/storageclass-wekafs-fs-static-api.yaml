@@ -19,9 +19,8 @@ parameters:
   # permissions in Unix octal format, default "0750"
   #permissions: "0775"
 
-  # if the values below are not set, quota will not be enforced for this storage class
   # capacity enforcement mode (either SOFT or HARD)
-  # - HARD: pod will not be able to write above quota
+  # - HARD or unspecified: pod will not be able to write above quota
   # - SOFT: warning will be issued on Weka cluster, but writing will not be blocked
   capacityEnforcement: HARD
   # name of the secret that stores API credentials for a cluster
