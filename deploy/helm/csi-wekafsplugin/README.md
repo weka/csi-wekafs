@@ -3,7 +3,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-![Version: 1.0.0-SNAPSHOT.109.bc8d4db](https://img.shields.io/badge/Version-1.0.0--SNAPSHOT.109.bc8d4db-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.0-SNAPSHOT.109.bc8d4db](https://img.shields.io/badge/AppVersion-v1.0.0--SNAPSHOT.109.bc8d4db-informational?style=flat-square)
+![Version: 1.0.0-SNAPSHOT.111.8b4e410](https://img.shields.io/badge/Version-1.0.0--SNAPSHOT.111.8b4e410-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.0-SNAPSHOT.111.8b4e410](https://img.shields.io/badge/AppVersion-v1.0.0--SNAPSHOT.111.8b4e410-informational?style=flat-square)
 
 ## Homepage
 https://github.com/weka/csi-wekafs
@@ -56,7 +56,7 @@ Kubernetes: `>=1.18.0`
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"1.0.0-SNAPSHOT.109.bc8d4db"` | CSI driver version |
+| csiDriverVersion | string | `"1.0.0-SNAPSHOT.111.8b4e410"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.9.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.2.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v3.4.0"` | CSI provisioner sidecar image URL |
@@ -64,11 +64,14 @@ Kubernetes: `>=1.18.0`
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.7.0"` | CSI resizer sidecar image URL |
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v6.2.1"` | CSI snapshotter sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"1.0.0-SNAPSHOT.109.bc8d4db"` | CSI driver tag |
+| images.csidriverTag | string | `"1.0.0-SNAPSHOT.111.8b4e410"` | CSI driver tag |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
 | nodeSelector | object | `{}` | Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only |
+| controller | object | `{"maxRandomWaitIntervalSecs":5,"replicas":2}` | Controller specific parameters |
+| controller.replicas | int | `2` | Controller number of replicas |
+| controller.maxRandomWaitIntervalSecs | int | `5` | when multiple controller replicas are triggered in parallel, each controller will issue a random wait of up to    `maxRandomWaitIntervalSecs` to avoid multiple API calls. Can be increased on very busy / large Weka clusters |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
 | legacyVolumeSecretName | string | `""` | for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin |
