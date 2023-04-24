@@ -193,6 +193,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// Check for maximum available capacity
 	capacity := req.GetCapacityRange().GetRequiredBytes()
 
+	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
+	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
+
 	// IDEMPOTENCE FLOW: If directory already exists, return the createResponse if size matches, or error
 	volExists, volMatchesCapacity, err := volumeExistsAndMatchesCapacity(ctx, volume, capacity)
 
@@ -281,6 +284,9 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
 
+	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
+	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
+
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
 		logger.Debug().Str("volume_id", volume.GetId()).Msg("Volume not found, but returning success for idempotence")
@@ -347,6 +353,9 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if err != nil {
 		return ExpandVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
 	}
+
+	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
+	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
 
 	maxStorageCapacity, err := volume.getMaxCapacity(ctx)
 	if err != nil {
@@ -434,6 +443,9 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		return CreateSnapshotError(ctx, codes.FailedPrecondition, fmt.Sprintf("Could not find source volume %s", srcVolume.GetId()))
 	}
 
+	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
+	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
+
 	s, err := srcVolume.CreateSnapshot(ctx, snapName)
 	if err != nil {
 		return &csi.CreateSnapshotResponse{}, err
@@ -490,6 +502,10 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	if err != nil {
 		return DeleteSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize snapshot from ID", snapshotID, err.Error()))
 	}
+
+	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
+	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
+
 	err = existingSnap.Delete(ctx)
 	if err != nil {
 		return DeleteSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to delete snapshot", snapshotID, err))

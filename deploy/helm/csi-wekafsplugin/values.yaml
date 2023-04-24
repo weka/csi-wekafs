@@ -34,6 +34,13 @@ controllerPluginTolerations: *globalPluginTolerations
 nodePluginTolerations: *globalPluginTolerations
 # -- Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only
 nodeSelector: {}
+# -- Controller specific parameters
+controller:
+  # -- Controller number of replicas
+  replicas: 2
+  # -- when multiple controller replicas are triggered in parallel, each controller will issue a random wait of up to
+  #    `maxRandomWaitIntervalSecs` to avoid multiple API calls. Can be increased on very busy / large Weka clusters
+  maxRandomWaitIntervalSecs: 5
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)

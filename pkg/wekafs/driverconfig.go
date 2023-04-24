@@ -14,12 +14,13 @@ type DriverConfig struct {
 	debugPath                     string
 	allowInsecureHttps            bool
 	alwaysAllowSnapshotVolumes    bool
+	maxRandomWaitIntervalSecs     int
 }
 
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowAutoSeedSnapshotCreation, allowSnapshotsOfLegacyVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport,
-	allowInsecureHttps, alwaysAllowSnapshotVolumes bool) *DriverConfig {
+	allowInsecureHttps, alwaysAllowSnapshotVolumes bool, maxRandomWaitIntervalSecs int) *DriverConfig {
 	return &DriverConfig{
 		DynamicVolPath:                dynamicVolPath,
 		VolumePrefix:                  VolumePrefix,
@@ -34,6 +35,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		debugPath:                     debugPath,
 		allowInsecureHttps:            allowInsecureHttps,
 		alwaysAllowSnapshotVolumes:    alwaysAllowSnapshotVolumes,
+		maxRandomWaitIntervalSecs:     maxRandomWaitIntervalSecs,
 	}
 }
 
