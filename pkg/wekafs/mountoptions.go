@@ -11,11 +11,20 @@ const (
 	selinuxContext         = "wekafs_csi_volume"
 	MountOptionSyncOnClose = "sync_on_close"
 	MountOptionReadOnly    = "ro"
+	MountOptionWriteCache  = "writecache"
+	MountOptionCoherent    = "coherent"
+	MountOptionReadCache   = "readcache"
 )
 
 type mountOption struct {
 	option string
 	value  string
+}
+
+type mutuallyExclusiveMountOptionSet []string
+
+var MutuallyExclusiveMountOptions = []mutuallyExclusiveMountOptionSet{
+	[]string{MountOptionWriteCache, MountOptionCoherent, MountOptionReadCache},
 }
 
 func (o *mountOption) String() string {
@@ -48,6 +57,15 @@ type MountOptions struct {
 func (opts MountOptions) Merge(other MountOptions) {
 	for _, otherOpt := range other.customOptions {
 		opts.customOptions[otherOpt.option] = otherOpt
+		for _, exclusiveOpts := range MutuallyExclusiveMountOptions {
+			for _, opt := range exclusiveOpts {
+				if otherOpt.option == opt {
+					for _, optionToDrop := range exclusiveOpts {
+						delete(opts.customOptions, optionToDrop)
+					}
+				}
+			}
+		}
 	}
 
 	for _, otherOpt := range other.excludeOptions {
