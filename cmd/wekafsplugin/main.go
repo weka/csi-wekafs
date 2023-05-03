@@ -53,10 +53,11 @@ func init() {
 }
 
 var (
-	csiMode    = wekafs.CsiPluginMode("all")
-	endpoint   = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
-	driverName = flag.String("drivername", "csi.weka.io", "name of the driver")
-	debugPath  = flag.String("debugpath", "",
+	mutuallyExclusiveMountOptionsStrings wekafs.MutuallyExclusiveMountOptsStrings
+	csiMode                              = wekafs.CsiPluginMode("all")
+	endpoint                             = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
+	driverName                           = flag.String("drivername", "csi.weka.io", "name of the driver")
+	debugPath                            = flag.String("debugpath", "",
 		"Debug path to use instead of actually mounting weka, can be local fs or wekafs,"+
 			" virtual FS will be created in this path instead of actual mounting")
 	nodeID            = flag.String("nodeid", "", "node id")
@@ -107,6 +108,9 @@ func mapVerbosity(verbosity int) zerolog.Level {
 }
 
 func main() {
+	// set mountOptions
+	flag.Var(&mutuallyExclusiveMountOptionsStrings, "mutuallyexclusivemountoptions", "Set list of mount options that cannot be set together")
+
 	flag.Parse()
 	if !*usejsonlogging {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).With().Caller().Logger()
@@ -191,7 +195,7 @@ func handle() {
 		*allowAutoFsCreation, *allowAutoFsExpansion,
 		*allowAutoSeedSnapshotCreation, *allowSnapshotsOfLegacyVolumes,
 		*suppressSnapshotsCapability, *suppressVolumeCloneCapability,
-		*allowInsecureHttps, *alwaysAllowSnapshotVolumes, *maxRandomWaitIntervalSecs)
+		*allowInsecureHttps, *alwaysAllowSnapshotVolumes, *maxRandomWaitIntervalSecs, mutuallyExclusiveMountOptionsStrings)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

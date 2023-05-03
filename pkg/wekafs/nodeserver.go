@@ -52,7 +52,7 @@ type NodeServer struct {
 }
 
 func (ns *NodeServer) getDefaultMountOptions() MountOptions {
-	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions))
+	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ns.getConfig().mutuallyExclusiveOptions)
 }
 
 func (ns *NodeServer) isInDevMode() bool {
@@ -184,13 +184,13 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if readOnly {
 		roMountOptions := NewMountOptions([]string{"ro"})
 		roMountOptions.excludeOptions = []string{"rw"}
-		volume.mountOptions.Merge(roMountOptions)
+		volume.mountOptions.Merge(roMountOptions, ns.getConfig().mutuallyExclusiveOptions)
 		innerMountOpts = append(innerMountOpts, "ro")
 	}
 
 	attrib := req.GetVolumeContext()
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
-	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")))
+	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
 
 	logger.Debug().Str("target_path", targetPath).
 		Str("fs_type", fsType).

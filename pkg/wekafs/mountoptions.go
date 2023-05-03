@@ -23,10 +23,6 @@ type mountOption struct {
 
 type mutuallyExclusiveMountOptionSet []string
 
-var MutuallyExclusiveMountOptions = []mutuallyExclusiveMountOptionSet{
-	[]string{MountOptionWriteCache, MountOptionCoherent, MountOptionReadCache},
-}
-
 func (o *mountOption) String() string {
 	ret := o.option
 	if o.value != "" {
@@ -54,10 +50,10 @@ type MountOptions struct {
 }
 
 // Merge merges mount options. The other object always take precedence over the original
-func (opts MountOptions) Merge(other MountOptions) {
+func (opts MountOptions) Merge(other MountOptions, exclusives []mutuallyExclusiveMountOptionSet) {
 	for _, otherOpt := range other.customOptions {
 		opts.customOptions[otherOpt.option] = otherOpt
-		for _, exclusiveOpts := range MutuallyExclusiveMountOptions {
+		for _, exclusiveOpts := range exclusives {
 			for _, opt := range exclusiveOpts {
 				if otherOpt.option == opt {
 					for _, optionToDrop := range exclusiveOpts {
@@ -74,12 +70,12 @@ func (opts MountOptions) Merge(other MountOptions) {
 }
 
 // MergedWith returns a new object merged with other object
-func (opts MountOptions) MergedWith(other MountOptions) MountOptions {
+func (opts MountOptions) MergedWith(other MountOptions, exclusives []mutuallyExclusiveMountOptionSet) MountOptions {
 	ret := MountOptions{
 		customOptions:  opts.customOptions,
 		excludeOptions: opts.excludeOptions,
 	}
-	ret.Merge(other)
+	ret.Merge(other, exclusives)
 	return ret
 }
 
