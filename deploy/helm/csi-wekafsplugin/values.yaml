@@ -98,3 +98,5 @@ pluginConfig:
     # -- Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default
     # Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced
     snapshotVolumesWithoutQuotaEnforcement: false
+  mutuallyExclusiveMountOptions:
+    - "readcache,writecache,coherent"
