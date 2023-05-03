@@ -34,7 +34,7 @@ const (
 	deviceID                            = "deviceID"
 	maxVolumeIdLength                   = 1920
 	TracerName                          = "weka-csi"
-	ControlServerAdditionalMountOptions = ""
+	ControlServerAdditionalMountOptions = "writecache"
 )
 
 type ControllerServer struct {
