@@ -87,10 +87,14 @@ func (v *Volume) initMountOptions(ctx context.Context) {
 }
 
 func (v *Volume) pruneUnsupportedMountOptions(ctx context.Context) {
+	logger := log.Ctx(ctx)
 	if v.mountOptions.hasOption(MountOptionSyncOnClose) && (v.apiClient == nil || !v.apiClient.SupportsSyncOnCloseMountOption()) {
-		logger := log.Ctx(ctx)
 		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
 		v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
+	}
+	if v.mountOptions.hasOption(MountOptionReadOnly) {
+		logger.Error().Str("mount_option", MountOptionReadOnly).Msg("Mount option is not supported via custom mount options, use readOnly volume attachments instead")
+		v.mountOptions = v.mountOptions.RemoveOption(MountOptionReadOnly)
 	}
 }
 

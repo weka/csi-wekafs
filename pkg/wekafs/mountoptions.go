@@ -10,6 +10,7 @@ import (
 const (
 	selinuxContext         = "wekafs_csi_volume"
 	MountOptionSyncOnClose = "sync_on_close"
+	MountOptionReadOnly    = "ro"
 )
 
 type mountOption struct {
