@@ -1,6 +1,9 @@
 package wekafs
 
-import "strings"
+import (
+	"github.com/rs/zerolog/log"
+	"strings"
+)
 
 type MutuallyExclusiveMountOptsStrings []string
 
@@ -30,6 +33,15 @@ type DriverConfig struct {
 	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
 }
 
+func (dc *DriverConfig) Log() {
+	log.Info().Str("dynamic_vol_path", dc.DynamicVolPath).
+		Str("volume_prefix", dc.VolumePrefix).Str("snapshot_prefix", dc.SnapshotPrefix).Str("seed_snapshot_prefix", dc.SnapshotPrefix).
+		Bool("allow_auto_fs_creation", dc.allowAutoFsCreation).Bool("allow_auto_fs_expansion", dc.allowAutoFsExpansion).
+		Bool("allow_auto_seed_snapshot_creation", dc.allowAutoSeedSnapshotCreation).Bool("allow_snapshots_of_legacy_volumes", dc.allowSnapshotsOfLegacyVolumes).
+		Bool("advertise_snapshot_support", dc.advertiseSnapshotSupport).Bool("advertise_volume_clone_support", dc.advertiseVolumeCloneSupport).
+		Bool("allow_insecure_https", dc.allowInsecureHttps).Bool("always_allow_snapshot_volumes", dc.alwaysAllowSnapshotVolumes).
+		Interface("mutually_exclusive_mount_options", dc.mutuallyExclusiveOptions).Msg("Starting driver with the following configuration")
+}
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowAutoSeedSnapshotCreation, allowSnapshotsOfLegacyVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport,
