@@ -148,7 +148,7 @@ jobs:
           export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY}}"
           export AWS_REGION="${{ secrets.AWS_REGION }}"
           aws s3 cp ${{ steps.helm-package.outputs.filename }} "s3://$AWS_BUCKET/"
-          echo "link=s3://$AWS_BUCKET/${{ steps.helm-package.outputs.filename }}" >> $GITHUB_OUTPUT 
+          echo "link=s3://${{ vars.AWS_BUCKET }}/${{ steps.helm-package.outputs.filename }}" >> $GITHUB_OUTPUT 
         if: steps.helm-test.outputs.passed == 'true'
 
       - uses: rtCamp/action-slack-notify@v2
