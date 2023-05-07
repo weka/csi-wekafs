@@ -53,12 +53,18 @@ type MountOptions struct {
 func (opts MountOptions) Merge(other MountOptions, exclusives []mutuallyExclusiveMountOptionSet) {
 	for _, otherOpt := range other.customOptions {
 		opts.customOptions[otherOpt.option] = otherOpt
-		for _, exclusiveOpts := range exclusives {
-			for _, opt := range exclusiveOpts {
+		// iterate on all sets of mutually exclusive options
+		for _, exclusiveOptsSet := range exclusives {
+			// iterate on all options in one exclusive set
+			for _, opt := range exclusiveOptsSet {
 				if otherOpt.option == opt {
-					for _, optionToDrop := range exclusiveOpts {
-						delete(opts.customOptions, optionToDrop)
+					// if the option exists in exclusiveOptsSet, we need to drop all its alternatives from original options
+					for _, optionToDrop := range exclusiveOptsSet {
+						if optionToDrop != opt {
+							delete(opts.customOptions, optionToDrop)
+						}
 					}
+					break // stop iterating on the rest
 				}
 			}
 		}
