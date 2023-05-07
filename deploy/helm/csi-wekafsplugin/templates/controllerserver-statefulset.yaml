@@ -121,6 +121,11 @@ spec:
           {{- if .Values.pluginConfig.allowInsecureHttps }}
             - "--allowinsecurehttps"
           {{- end }}
+          {{- if .Values.pluginConfig.mutuallyExclusiveMountOptions }}
+            {{- range  .Values.pluginConfig.mutuallyExclusiveMountOptions }}
+            - "--mutuallyexclusivemountoptions={{ . }}"
+            {{- end }}
+          {{- end}}
           {{- if .Values.useJsonLogging }}
             - "--usejsonlogging"
           {{- end }}

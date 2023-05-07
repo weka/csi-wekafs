@@ -34,7 +34,7 @@ const (
 	deviceID                            = "deviceID"
 	maxVolumeIdLength                   = 1920
 	TracerName                          = "weka-csi"
-	ControlServerAdditionalMountOptions = ""
+	ControlServerAdditionalMountOptions = "writecache"
 )
 
 type ControllerServer struct {
@@ -46,7 +46,7 @@ type ControllerServer struct {
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
-	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(ControlServerAdditionalMountOptions))
+	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(ControlServerAdditionalMountOptions), cs.getConfig().mutuallyExclusiveOptions)
 }
 
 func (cs *ControllerServer) isInDevMode() bool {

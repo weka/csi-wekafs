@@ -10,12 +10,18 @@ import (
 const (
 	selinuxContext         = "wekafs_csi_volume"
 	MountOptionSyncOnClose = "sync_on_close"
+	MountOptionReadOnly    = "ro"
+	MountOptionWriteCache  = "writecache"
+	MountOptionCoherent    = "coherent"
+	MountOptionReadCache   = "readcache"
 )
 
 type mountOption struct {
 	option string
 	value  string
 }
+
+type mutuallyExclusiveMountOptionSet []string
 
 func (o *mountOption) String() string {
 	ret := o.option
@@ -44,9 +50,18 @@ type MountOptions struct {
 }
 
 // Merge merges mount options. The other object always take precedence over the original
-func (opts MountOptions) Merge(other MountOptions) {
+func (opts MountOptions) Merge(other MountOptions, exclusives []mutuallyExclusiveMountOptionSet) {
 	for _, otherOpt := range other.customOptions {
 		opts.customOptions[otherOpt.option] = otherOpt
+		for _, exclusiveOpts := range exclusives {
+			for _, opt := range exclusiveOpts {
+				if otherOpt.option == opt {
+					for _, optionToDrop := range exclusiveOpts {
+						delete(opts.customOptions, optionToDrop)
+					}
+				}
+			}
+		}
 	}
 
 	for _, otherOpt := range other.excludeOptions {
@@ -55,12 +70,12 @@ func (opts MountOptions) Merge(other MountOptions) {
 }
 
 // MergedWith returns a new object merged with other object
-func (opts MountOptions) MergedWith(other MountOptions) MountOptions {
+func (opts MountOptions) MergedWith(other MountOptions, exclusives []mutuallyExclusiveMountOptionSet) MountOptions {
 	ret := MountOptions{
 		customOptions:  opts.customOptions,
 		excludeOptions: opts.excludeOptions,
 	}
-	ret.Merge(other)
+	ret.Merge(other, exclusives)
 	return ret
 }
 

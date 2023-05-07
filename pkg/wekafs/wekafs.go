@@ -223,6 +223,7 @@ func NewWekaFsDriver(
 	log.Info().Msg(fmt.Sprintf("Version: %s", vendorVersion))
 
 	log.Info().Msg(fmt.Sprintf("csiMode: %s", csiMode))
+	config.Log()
 
 	return &WekaFsDriver{
 		name:              driverName,

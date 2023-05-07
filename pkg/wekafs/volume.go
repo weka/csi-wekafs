@@ -87,15 +87,19 @@ func (v *Volume) initMountOptions(ctx context.Context) {
 }
 
 func (v *Volume) pruneUnsupportedMountOptions(ctx context.Context) {
+	logger := log.Ctx(ctx)
 	if v.mountOptions.hasOption(MountOptionSyncOnClose) && (v.apiClient == nil || !v.apiClient.SupportsSyncOnCloseMountOption()) {
-		logger := log.Ctx(ctx)
 		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
 		v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
+	}
+	if v.mountOptions.hasOption(MountOptionReadOnly) {
+		logger.Error().Str("mount_option", MountOptionReadOnly).Msg("Mount option is not supported via custom mount options, use readOnly volume attachments instead")
+		v.mountOptions = v.mountOptions.RemoveOption(MountOptionReadOnly)
 	}
 }
 
 func (v *Volume) setMountOptions(ctx context.Context, mountOptions MountOptions) {
-	v.mountOptions.Merge(mountOptions)
+	v.mountOptions.Merge(mountOptions, v.server.getConfig().mutuallyExclusiveOptions)
 }
 
 func (v *Volume) getMountOptions(ctx context.Context) MountOptions {
@@ -1479,7 +1483,7 @@ func (v *Volume) waitForSnapshotDeletion(ctx context.Context, logger zerolog.Log
 func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]string) error {
 	// set explicit mount options if were passed in storageclass
 	if val, ok := params["mountOptions"]; ok {
-		v.mountOptions.Merge(NewMountOptionsFromString(val))
+		v.mountOptions.Merge(NewMountOptionsFromString(val), v.server.getConfig().mutuallyExclusiveOptions)
 	}
 
 	// filesystem group name, required for actually creating a raw FS
