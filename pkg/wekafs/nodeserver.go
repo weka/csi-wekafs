@@ -24,6 +24,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/utils/mount"
@@ -31,6 +32,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -49,6 +51,7 @@ type NodeServer struct {
 	mounter           *wekaMounter
 	api               *ApiStore
 	config            *DriverConfig
+	semaphores        map[string]*semaphore.Weighted
 }
 
 func (ns *NodeServer) getDefaultMountOptions() MountOptions {
@@ -97,6 +100,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 		mounter:           mounter,
 		api:               api,
 		config:            config,
+		semaphores:        make(map[string]*semaphore.Weighted),
 	}
 }
 
@@ -105,6 +109,22 @@ func isWekaInstalled() bool {
 	cmd := fmt.Sprintf("lsmod | grep -w %s", WekaKernelModuleName)
 	res, _ := exec.Command("sh", "-c", cmd).Output()
 	return strings.Contains(string(res), WekaKernelModuleName)
+}
+
+func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+	var sem *semaphore.Weighted
+	sem, ok := ns.semaphores[op]
+	if !ok {
+		sem = semaphore.NewWeighted(MaxConcurrentOperations)
+		ns.semaphores[op] = sem
+	}
+	err := sem.Acquire(ctx, 1)
+	if err == nil {
+		return nil, func() {
+			sem.Release(1)
+		}
+	}
+	return err, func() {}
 }
 
 func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodePublishVolumeResponse, error) {
@@ -131,6 +151,15 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+
+	logger.Trace().Msg("Acquiring semaphore")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	err, dec := ns.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return NodePublishVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
 
 	client, err := ns.api.GetClientFromSecrets(ctx, req.Secrets)
 	if err != nil {
@@ -282,8 +311,17 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
-	// Check arguments
 
+	logger.Trace().Msg("Acquiring semaphore")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	err, dec := ns.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return NodeUnpublishVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
+	// Check arguments
 	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns)
 	if err != nil {
 		return &csi.NodeUnpublishVolumeResponse{}, err
