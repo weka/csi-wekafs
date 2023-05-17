@@ -115,7 +115,7 @@ func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, r
 	var sem *semaphore.Weighted
 	sem, ok := ns.semaphores[op]
 	if !ok {
-		sem = semaphore.NewWeighted(MaxConcurrentOperations)
+		sem = semaphore.NewWeighted(ns.config.maxConcurrentRequestsPerOperation)
 		ns.semaphores[op] = sem
 	}
 	err := sem.Acquire(ctx, 1)

@@ -38,7 +38,6 @@ const (
 	TracerName                          = "weka-csi"
 	ControlServerAdditionalMountOptions = "writecache"
 	MaxOperationWaitDuration            = 30
-	MaxConcurrentOperations             = 10
 )
 
 type ControllerServer struct {
@@ -163,7 +162,7 @@ func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (er
 	var sem *semaphore.Weighted
 	sem, ok := cs.semaphores[op]
 	if !ok {
-		sem = semaphore.NewWeighted(MaxConcurrentOperations)
+		sem = semaphore.NewWeighted(cs.config.maxConcurrentRequestsPerOperation)
 		cs.semaphores[op] = sem
 	}
 	err := sem.Acquire(ctx, 1)

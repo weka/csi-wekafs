@@ -16,21 +16,22 @@ func (i *MutuallyExclusiveMountOptsStrings) Set(value string) error {
 }
 
 type DriverConfig struct {
-	DynamicVolPath                string
-	VolumePrefix                  string
-	SnapshotPrefix                string
-	SeedSnapshotPrefix            string
-	allowAutoFsCreation           bool
-	allowAutoFsExpansion          bool
-	allowAutoSeedSnapshotCreation bool
-	allowSnapshotsOfLegacyVolumes bool
-	advertiseSnapshotSupport      bool
-	advertiseVolumeCloneSupport   bool
-	debugPath                     string
-	allowInsecureHttps            bool
-	alwaysAllowSnapshotVolumes    bool
-	maxRandomWaitIntervalSecs     int
-	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
+	DynamicVolPath                    string
+	VolumePrefix                      string
+	SnapshotPrefix                    string
+	SeedSnapshotPrefix                string
+	allowAutoFsCreation               bool
+	allowAutoFsExpansion              bool
+	allowAutoSeedSnapshotCreation     bool
+	allowSnapshotsOfLegacyVolumes     bool
+	advertiseSnapshotSupport          bool
+	advertiseVolumeCloneSupport       bool
+	debugPath                         string
+	allowInsecureHttps                bool
+	alwaysAllowSnapshotVolumes        bool
+	maxRandomWaitIntervalSecs         int
+	mutuallyExclusiveOptions          []mutuallyExclusiveMountOptionSet
+	maxConcurrentRequestsPerOperation int64
 }
 
 func (dc *DriverConfig) Log() {
@@ -46,7 +47,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowAutoFsCreation, allowAutoFsExpansion, allowAutoSeedSnapshotCreation, allowSnapshotsOfLegacyVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport,
 	allowInsecureHttps, alwaysAllowSnapshotVolumes bool, maxRandomWaitIntervalSecs int,
-	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings) *DriverConfig {
+	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings, maxConcurrentRequestsPerOperation int64) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
 	for _, exclusiveSet := range mutuallyExclusiveMountOptions {
@@ -58,21 +59,22 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	}
 
 	return &DriverConfig{
-		DynamicVolPath:                dynamicVolPath,
-		VolumePrefix:                  VolumePrefix,
-		SnapshotPrefix:                SnapshotPrefix,
-		SeedSnapshotPrefix:            SeedSnapshotPrefix,
-		allowAutoFsCreation:           allowAutoFsCreation,
-		allowAutoFsExpansion:          allowAutoFsExpansion,
-		allowAutoSeedSnapshotCreation: allowAutoSeedSnapshotCreation,
-		allowSnapshotsOfLegacyVolumes: allowSnapshotsOfLegacyVolumes,
-		advertiseSnapshotSupport:      !suppressnapshotSupport,
-		advertiseVolumeCloneSupport:   !suppressVolumeCloneSupport,
-		debugPath:                     debugPath,
-		allowInsecureHttps:            allowInsecureHttps,
-		alwaysAllowSnapshotVolumes:    alwaysAllowSnapshotVolumes,
-		maxRandomWaitIntervalSecs:     maxRandomWaitIntervalSecs,
-		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
+		DynamicVolPath:                    dynamicVolPath,
+		VolumePrefix:                      VolumePrefix,
+		SnapshotPrefix:                    SnapshotPrefix,
+		SeedSnapshotPrefix:                SeedSnapshotPrefix,
+		allowAutoFsCreation:               allowAutoFsCreation,
+		allowAutoFsExpansion:              allowAutoFsExpansion,
+		allowAutoSeedSnapshotCreation:     allowAutoSeedSnapshotCreation,
+		allowSnapshotsOfLegacyVolumes:     allowSnapshotsOfLegacyVolumes,
+		advertiseSnapshotSupport:          !suppressnapshotSupport,
+		advertiseVolumeCloneSupport:       !suppressVolumeCloneSupport,
+		debugPath:                         debugPath,
+		allowInsecureHttps:                allowInsecureHttps,
+		alwaysAllowSnapshotVolumes:        alwaysAllowSnapshotVolumes,
+		maxRandomWaitIntervalSecs:         maxRandomWaitIntervalSecs,
+		mutuallyExclusiveOptions:          MutuallyExclusiveMountOptions,
+		maxConcurrentRequestsPerOperation: maxConcurrentRequestsPerOperation,
 	}
 }
 

@@ -65,26 +65,26 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csimodetext                   = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
-	selinuxSupport                = flag.Bool("selinux-support", false, "Enable support for SELinux")
-	newVolumePrefix               = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
-	newSnapshotPrefix             = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
-	seedSnapshotPrefix            = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
-	allowAutoFsExpansion          = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
-	allowAutoFsCreation           = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
-	allowSnapshotsOfLegacyVolumes = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
-	allowAutoSeedSnapshotCreation = flag.Bool("allowautoseedsnapshotcreation", false, "Allow automatic creation of empty snapshot on new filesystem")
-	suppressSnapshotsCapability   = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
-	suppressVolumeCloneCapability = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
-	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
-	metricsPort                   = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
-	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
-	tracingUrl                    = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
-	allowInsecureHttps            = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
-	alwaysAllowSnapshotVolumes    = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-backed volumes even when Weka cluster doesn't support capacity enforcement")
-	usejsonlogging                = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
-	maxRandomWaitIntervalSecs     = flag.Int("maxrandomwaitintervalsecs", 0, "Use random wait on prolonged controller operations to minimize risk of races. Used only if number of replicas is >=2")
-
+	csimodetext                       = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
+	selinuxSupport                    = flag.Bool("selinux-support", false, "Enable support for SELinux")
+	newVolumePrefix                   = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
+	newSnapshotPrefix                 = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
+	seedSnapshotPrefix                = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
+	allowAutoFsExpansion              = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
+	allowAutoFsCreation               = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
+	allowSnapshotsOfLegacyVolumes     = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
+	allowAutoSeedSnapshotCreation     = flag.Bool("allowautoseedsnapshotcreation", false, "Allow automatic creation of empty snapshot on new filesystem")
+	suppressSnapshotsCapability       = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
+	suppressVolumeCloneCapability     = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
+	enableMetrics                     = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
+	metricsPort                       = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
+	verbosity                         = flag.Int("v", 1, "sets log verbosity level")
+	tracingUrl                        = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
+	allowInsecureHttps                = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
+	alwaysAllowSnapshotVolumes        = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-backed volumes even when Weka cluster doesn't support capacity enforcement")
+	usejsonlogging                    = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
+	maxRandomWaitIntervalSecs         = flag.Int("maxrandomwaitintervalsecs", 0, "Use random wait on prolonged controller operations to minimize risk of races. Used only if number of replicas is >=2")
+	maxConcurrentRequestsPerOperation = flag.Int64("maxconcurrentrequestsperoperation", 10, "Do not allow more than X requests in parallel")
 	// Set by the build process
 	version = ""
 )
@@ -195,7 +195,8 @@ func handle() {
 		*allowAutoFsCreation, *allowAutoFsExpansion,
 		*allowAutoSeedSnapshotCreation, *allowSnapshotsOfLegacyVolumes,
 		*suppressSnapshotsCapability, *suppressVolumeCloneCapability,
-		*allowInsecureHttps, *alwaysAllowSnapshotVolumes, *maxRandomWaitIntervalSecs, mutuallyExclusiveMountOptionsStrings)
+		*allowInsecureHttps, *alwaysAllowSnapshotVolumes, *maxRandomWaitIntervalSecs, mutuallyExclusiveMountOptionsStrings,
+		*maxConcurrentRequestsPerOperation)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
