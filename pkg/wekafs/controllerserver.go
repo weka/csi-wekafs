@@ -24,10 +24,12 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -35,14 +37,17 @@ const (
 	maxVolumeIdLength                   = 1920
 	TracerName                          = "weka-csi"
 	ControlServerAdditionalMountOptions = "writecache"
+	MaxOperationWaitDuration            = 30
+	MaxConcurrentOperations             = 10
 )
 
 type ControllerServer struct {
-	caps    []*csi.ControllerServiceCapability
-	nodeID  string
-	mounter *wekaMounter
-	api     *ApiStore
-	config  *DriverConfig
+	caps       []*csi.ControllerServiceCapability
+	nodeID     string
+	mounter    *wekaMounter
+	api        *ApiStore
+	config     *DriverConfig
+	semaphores map[string]*semaphore.Weighted
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
@@ -105,11 +110,12 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, con
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
 	return &ControllerServer{
-		caps:    capabilities,
-		nodeID:  nodeID,
-		mounter: mounter,
-		api:     api,
-		config:  config,
+		caps:       capabilities,
+		nodeID:     nodeID,
+		mounter:    mounter,
+		api:        api,
+		config:     config,
+		semaphores: make(map[string]*semaphore.Weighted),
 	}
 }
 
@@ -151,6 +157,24 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 	return nil
 }
 
+type releaseSempahore func()
+
+func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+	var sem *semaphore.Weighted
+	sem, ok := cs.semaphores[op]
+	if !ok {
+		sem = semaphore.NewWeighted(MaxConcurrentOperations)
+		cs.semaphores[op] = sem
+	}
+	err := sem.Acquire(ctx, 1)
+	if err == nil {
+		return nil, func() {
+			sem.Release(1)
+		}
+	}
+	return err, func() {}
+}
+
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	op := "CreateVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
@@ -161,6 +185,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	result := "FAILURE"
 	logger := log.Ctx(ctx)
 	logger.Info().Str("name", req.GetName()).Fields(params).Msg(">>>> Received request")
+
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
@@ -168,6 +193,15 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+
+	logger.Trace().Msg("Acquiring semaphore")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return CreateVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
 
 	// First, validate that basic request validation passes
 	if err := cs.CheckCreateVolumeRequestSanity(ctx, req); err != nil {
@@ -283,6 +317,15 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	logger.Trace().Msg("Acquiring semaphore")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
@@ -354,6 +397,15 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+
+	logger.Trace().Msg("Acquiring semaphore")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return ExpandVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
 
 	if capacity == -1 {
 		return ExpandVolumeError(ctx, codes.InvalidArgument, "Capacity range not provided")
@@ -437,6 +489,15 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	logger.Trace().Msg("Acquiring semaphore")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return CreateSnapshotError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	if srcVolumeId == "" {
 		return CreateSnapshotError(ctx, codes.InvalidArgument, "Cannot create snapshot without specifying SourceVolumeId")
 	}
@@ -504,10 +565,19 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	logger.Trace().Msg("Acquiring semaphore")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return DeleteSnapshotError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	if snapshotID == "" {
 		return DeleteSnapshotError(ctx, codes.InvalidArgument, "Failed to delete snapshot, no ID specified")
 	}
-	err := validateSnapshotId(snapshotID)
+	err = validateSnapshotId(snapshotID)
 	if err != nil {
 		//according to CSI specs must return OK on invalid ID
 		result = "SUCCESS"
