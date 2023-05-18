@@ -32,7 +32,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
@@ -153,7 +152,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}()
 
 	logger.Trace().Msg("Acquiring semaphore")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), ns.config.grpcRequestTimeout)
 	err, dec := ns.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -313,7 +312,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	}()
 
 	logger.Trace().Msg("Acquiring semaphore")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), ns.config.grpcRequestTimeout)
 	err, dec := ns.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()

@@ -43,10 +43,14 @@ controller:
   maxRandomWaitIntervalSecs: 5
   # -- maximum concurrent operations per operation type (to avoid API starvation)
   maxConcurrentRequestsPerOperation: 10
+  # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
+  grpcRequestTimeoutSeconds: 30
 # -- Node specific parameters
 node:
   # -- maximum concurrent operations per operation type (to avoid API starvation)
   maxConcurrentRequestsPerOperation: 5
+  # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
+  grpcRequestTimeoutSeconds: 30
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
