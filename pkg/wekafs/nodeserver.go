@@ -158,7 +158,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), ns.config.grpcRequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, ns.config.grpcRequestTimeout)
 	err, dec := ns.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -317,7 +317,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), ns.config.grpcRequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, ns.config.grpcRequestTimeout)
 	err, dec := ns.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
