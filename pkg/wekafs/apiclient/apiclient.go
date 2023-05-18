@@ -419,7 +419,6 @@ func (a *ApiClient) getUrl(ctx context.Context, path string) string {
 
 // Login logs into API, updates refresh token expiry
 func (a *ApiClient) Login(ctx context.Context) error {
-	oldCtx := ctx
 	logger := log.Ctx(ctx)
 	if a.isLoggedIn() {
 		return nil
@@ -449,7 +448,6 @@ func (a *ApiClient) Login(ctx context.Context) error {
 	if a.refreshTokenExpiryInterval < 1 {
 		_ = a.updateTokensExpiryInterval(ctx)
 	}
-	ctx = oldCtx
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
 	_ = a.fetchClusterInfo(ctx)
 	logger.Debug().Msg("Successfully connected to cluster API")
