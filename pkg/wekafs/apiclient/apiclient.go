@@ -70,7 +70,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
-			Timeout:       0,
+			Timeout:       time.Duration(ApiHttpTimeOutSeconds) * time.Second,
 		},
 		ClusterGuid:       uuid.UUID{},
 		Credentials:       credentials,
@@ -452,8 +452,8 @@ func (a *ApiClient) Login(ctx context.Context) error {
 	if a.refreshTokenExpiryInterval < 1 {
 		_ = a.updateTokensExpiryInterval(ctx)
 	}
-	ctx = oldCtx
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
+	ctx = oldCtx
 	_ = a.fetchClusterInfo(ctx)
 	logger.Debug().Msg("Successfully connected to cluster API")
 	return nil
