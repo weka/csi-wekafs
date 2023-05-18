@@ -198,7 +198,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -320,7 +320,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -400,7 +400,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -490,7 +490,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -565,7 +565,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
