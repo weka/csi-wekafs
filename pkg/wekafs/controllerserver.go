@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/status"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -158,17 +159,23 @@ type releaseSempahore func()
 
 func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
 	var sem *semaphore.Weighted
+	logger := log.Ctx(ctx)
 	sem, ok := cs.semaphores[op]
 	if !ok {
 		sem = semaphore.NewWeighted(cs.config.maxConcurrentRequestsPerOperation)
 		cs.semaphores[op] = sem
 	}
+	logger.Trace().Msg("Acquiring semaphore")
+	start := time.Now()
 	err := sem.Acquire(ctx, 1)
+	elapsed := time.Since(start)
 	if err == nil {
 		return nil, func() {
+			logger.Trace().Dur("total_operation_time", elapsed).Msg("Releasing semaphore")
 			sem.Release(1)
 		}
 	}
+	logger.Trace().Dur("acquire_duration", elapsed).Msg("Failed to acquire semaphore")
 	return err, func() {}
 }
 
@@ -191,7 +198,6 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	logger.Trace().Msg("Acquiring semaphore")
 	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
@@ -294,7 +300,6 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	logger.Trace().Msg("Acquiring semaphore")
 	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
@@ -375,7 +380,6 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	logger.Trace().Msg("Acquiring semaphore")
 	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
@@ -466,7 +470,6 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	logger.Trace().Msg("Acquiring semaphore")
 	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
@@ -542,7 +545,6 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	logger.Trace().Msg("Acquiring semaphore")
 	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()

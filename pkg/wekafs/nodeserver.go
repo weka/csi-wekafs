@@ -32,6 +32,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -112,17 +113,23 @@ func isWekaInstalled() bool {
 
 func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
 	var sem *semaphore.Weighted
+	logger := log.Ctx(ctx)
 	sem, ok := ns.semaphores[op]
 	if !ok {
 		sem = semaphore.NewWeighted(ns.config.maxConcurrentRequestsPerOperation)
 		ns.semaphores[op] = sem
 	}
+	logger.Trace().Msg("Acquiring semaphore")
+	start := time.Now()
 	err := sem.Acquire(ctx, 1)
+	elapsed := time.Since(start)
 	if err == nil {
 		return nil, func() {
+			logger.Trace().Msg("Releasing semaphore")
 			sem.Release(1)
 		}
 	}
+	logger.Trace().Dur("acquire_duration", elapsed).Msg("Failed to acquire semaphore")
 	return err, func() {}
 }
 
@@ -151,7 +158,6 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	logger.Trace().Msg("Acquiring semaphore")
 	ctx, cancel := context.WithTimeout(context.Background(), ns.config.grpcRequestTimeout)
 	err, dec := ns.acquireSemaphore(ctx, op)
 	defer dec()
@@ -311,7 +317,6 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	logger.Trace().Msg("Acquiring semaphore")
 	ctx, cancel := context.WithTimeout(context.Background(), ns.config.grpcRequestTimeout)
 	err, dec := ns.acquireSemaphore(ctx, op)
 	defer dec()
