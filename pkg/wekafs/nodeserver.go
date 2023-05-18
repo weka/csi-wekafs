@@ -123,9 +123,12 @@ func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, r
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
+
 	if err == nil {
+		logger.Trace().Dur("acquire_duration", elapsed).Msg("Successfully acquired semaphore")
 		return nil, func() {
-			logger.Trace().Msg("Releasing semaphore")
+			elapsed = time.Since(start)
+			logger.Trace().Dur("total_operation_time", elapsed).Msg("Releasing semaphore")
 			sem.Release(1)
 		}
 	}

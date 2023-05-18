@@ -170,7 +170,9 @@ func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (er
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
 	if err == nil {
+		logger.Trace().Dur("acquire_duration", elapsed).Msg("Successfully acquired semaphore")
 		return nil, func() {
+			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Msg("Releasing semaphore")
 			sem.Release(1)
 		}
