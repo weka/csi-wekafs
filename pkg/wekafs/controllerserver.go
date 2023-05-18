@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/status"
 	"os"
 	"strings"
-	"time"
 )
 
 const (
@@ -37,7 +36,6 @@ const (
 	maxVolumeIdLength                   = 1920
 	TracerName                          = "weka-csi"
 	ControlServerAdditionalMountOptions = "writecache"
-	MaxOperationWaitDuration            = 30
 )
 
 type ControllerServer struct {
@@ -194,7 +192,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}()
 
 	logger.Trace().Msg("Acquiring semaphore")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -297,7 +295,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}()
 
 	logger.Trace().Msg("Acquiring semaphore")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -378,7 +376,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}()
 
 	logger.Trace().Msg("Acquiring semaphore")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -469,7 +467,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	}()
 
 	logger.Trace().Msg("Acquiring semaphore")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
@@ -545,7 +543,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	}()
 
 	logger.Trace().Msg("Acquiring semaphore")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(MaxOperationWaitDuration)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cs.config.grpcRequestTimeout)
 	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()

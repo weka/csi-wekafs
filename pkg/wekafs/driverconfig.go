@@ -3,6 +3,7 @@ package wekafs
 import (
 	"github.com/rs/zerolog/log"
 	"strings"
+	"time"
 )
 
 type MutuallyExclusiveMountOptsStrings []string
@@ -32,6 +33,7 @@ type DriverConfig struct {
 	maxRandomWaitIntervalSecs         int
 	mutuallyExclusiveOptions          []mutuallyExclusiveMountOptionSet
 	maxConcurrentRequestsPerOperation int64
+	grpcRequestTimeout                time.Duration
 }
 
 func (dc *DriverConfig) Log() {
@@ -47,7 +49,8 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowAutoFsCreation, allowAutoFsExpansion, allowAutoSeedSnapshotCreation, allowSnapshotsOfLegacyVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport,
 	allowInsecureHttps, alwaysAllowSnapshotVolumes bool, maxRandomWaitIntervalSecs int,
-	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings, maxConcurrentRequestsPerOperation int64) *DriverConfig {
+	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings, maxConcurrentRequestsPerOperation int64,
+	grpcRequestTimeoutSeconds int) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
 	for _, exclusiveSet := range mutuallyExclusiveMountOptions {
@@ -57,6 +60,8 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	if len(MutuallyExclusiveMountOptions) == 0 {
 		MutuallyExclusiveMountOptions = append(MutuallyExclusiveMountOptions, []string{MountOptionWriteCache, MountOptionCoherent, MountOptionReadCache})
 	}
+
+	grpcRequestTimeout := time.Duration(grpcRequestTimeoutSeconds) * time.Second
 
 	return &DriverConfig{
 		DynamicVolPath:                    dynamicVolPath,
@@ -75,6 +80,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		maxRandomWaitIntervalSecs:         maxRandomWaitIntervalSecs,
 		mutuallyExclusiveOptions:          MutuallyExclusiveMountOptions,
 		maxConcurrentRequestsPerOperation: maxConcurrentRequestsPerOperation,
+		grpcRequestTimeout:                grpcRequestTimeout,
 	}
 }
 

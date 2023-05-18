@@ -85,6 +85,7 @@ var (
 	usejsonlogging                    = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
 	maxRandomWaitIntervalSecs         = flag.Int("maxrandomwaitintervalsecs", 0, "Use random wait on prolonged controller operations to minimize risk of races. Used only if number of replicas is >=2")
 	maxConcurrentRequestsPerOperation = flag.Int64("maxconcurrentrequestsperoperation", 10, "Do not allow more than X requests in parallel")
+	grpcRequestTimeoutSeconds         = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
 	// Set by the build process
 	version = ""
 )
@@ -196,7 +197,7 @@ func handle() {
 		*allowAutoSeedSnapshotCreation, *allowSnapshotsOfLegacyVolumes,
 		*suppressSnapshotsCapability, *suppressVolumeCloneCapability,
 		*allowInsecureHttps, *alwaysAllowSnapshotVolumes, *maxRandomWaitIntervalSecs, mutuallyExclusiveMountOptionsStrings,
-		*maxConcurrentRequestsPerOperation)
+		*maxConcurrentRequestsPerOperation, *grpcRequestTimeoutSeconds)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

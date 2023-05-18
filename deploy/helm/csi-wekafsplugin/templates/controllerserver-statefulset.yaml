@@ -132,6 +132,9 @@ spec:
           {{- if ge (int (default 1 .Values.controller.replicas)) 2 }}
             - "--maxrandomwaitintervalsecs={{ .Values.controller.maxRandomWaitIntervalSecs | default 0 }}"
           {{- end}}
+          {{- if .Values.controller.grpcRequestTimeoutSeconds }}
+            - "--grpcrequesttimeoutseconds={{ .Values.controller.grpcRequestTimeoutSeconds | default "5" }}"
+          {{- end }}
           {{- if .Values.controller.maxConcurrentRequestsPerOperation }}
             - "--maxconcurrentrequestsperoperation={{ .Values.controller.maxConcurrentRequestsPerOperation | default "10" }}"
           {{- end }}

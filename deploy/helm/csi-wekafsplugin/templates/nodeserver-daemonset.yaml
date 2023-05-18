@@ -72,9 +72,13 @@ spec:
             - "--mutuallyexclusivemountoptions={{ . }}"
             {{- end }}
           {{- end}}
+          {{- if .Values.node.grpcRequestTimeoutSeconds }}
+            - "--grpcrequesttimeoutseconds={{ .Values.node.grpcRequestTimeoutSeconds | default "5" }}"
+          {{- end }}
           {{- if .Values.node.maxConcurrentRequestsPerOperation }}
             - "--maxconcurrentrequestsperoperation={{ .Values.node.maxConcurrentRequestsPerOperation | default "5" }}"
           {{- end }}
+
           ports:
             - containerPort: 9898
               name: healthz
