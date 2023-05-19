@@ -78,7 +78,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		CompatibilityMap:  &WekaCompatibilityMap{},
 		Timeout:           ApiHttpTimeOutSeconds * time.Second,
 		currentEndpointId: -1,
-		sem:               make(chan int, 15),
+		sem:               make(chan int, 5),
 	}
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
