@@ -58,6 +58,7 @@ type ApiClient struct {
 	Timeout                    time.Duration
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
+	sem                        chan int
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool) (*ApiClient, error) {
@@ -70,13 +71,14 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
-			Timeout:       0,
+			Timeout:       ApiHttpTimeOutSeconds,
 		},
 		ClusterGuid:       uuid.UUID{},
 		Credentials:       credentials,
 		CompatibilityMap:  &WekaCompatibilityMap{},
-		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
+		Timeout:           ApiHttpTimeOutSeconds,
 		currentEndpointId: -1,
+		sem:               make(chan int, 15),
 	}
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
@@ -385,7 +387,9 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to re-authenticate on repeating request")
 		return err
 	}
+	a.sem <- 1
 	err := a.request(ctx, Method, Path, Payload, Query, Response)
+	<-a.sem
 	if err != nil {
 		return err
 	}
