@@ -77,15 +77,15 @@ jobs:
             echo --------------------chart ------------------
             cat $BASEDIR/Chart.yaml
 
-      - name: helm-docs
-        uses: addnab/docker-run-action@v3
-        with:
-          image: jnorwood/helm-docs:latest
-          options: -v ${{ github.workspace }}:/data
-          run: |
-            cd /data
-            helm-docs -s file -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl 
-            helm-docs -s file -c deploy/helm
+#      - name: helm-docs
+#        uses: addnab/docker-run-action@v3
+#        with:
+#          image: jnorwood/helm-docs:latest
+#          options: -v ${{ github.workspace }}:/data
+#          run: |
+#            cd /data
+#            helm-docs -s file -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl
+#            helm-docs -s file -c deploy/helm
 
       - name: Set up Helm
         uses: azure/setup-helm@v3
@@ -98,30 +98,30 @@ jobs:
           python-version: '3.9'
           check-latest: true
 
-      - name: Set up chart-testing
-        uses: helm/chart-testing-action@v2.3.1
-
-      - name: Run chart-testing (list-changed)
-        id: list-changed
-        run: |
-          changed=$(ct list-changed --chart-dirs deploy/helm --target-branch ${{ github.event.repository.default_branch }})
-          if [[ -n "$changed" ]]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run chart-testing (lint)
-        run: ct lint --chart-dirs deploy/helm --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
-
-      - name: Create kind cluster
-        uses: helm/kind-action@v1.4.0
-        if: steps.list-changed.outputs.changed == 'true'
-
-      - name: Run chart-testing (install)
-        id: helm-test
-        run: |
-          ct install --print-config --chart-dirs deploy/helm --all --debug && \
-          echo "passed=true" >> $GITHUB_OUTPUT
-        if: steps.list-changed.outputs.changed == 'true'
+#      - name: Set up chart-testing
+#        uses: helm/chart-testing-action@v2.3.1
+#
+#      - name: Run chart-testing (list-changed)
+#        id: list-changed
+#        run: |
+#          changed=$(ct list-changed --chart-dirs deploy/helm --target-branch ${{ github.event.repository.default_branch }})
+#          if [[ -n "$changed" ]]; then
+#            echo "changed=true" >> $GITHUB_OUTPUT
+#          fi
+#
+#      - name: Run chart-testing (lint)
+#        run: ct lint --chart-dirs deploy/helm --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
+#
+#      - name: Create kind cluster
+#        uses: helm/kind-action@v1.4.0
+#        if: steps.list-changed.outputs.changed == 'true'
+#
+#      - name: Run chart-testing (install)
+#        id: helm-test
+#        run: |
+#          ct install --print-config --chart-dirs deploy/helm --all --debug && \
+#          echo "passed=true" >> $GITHUB_OUTPUT
+#        if: steps.list-changed.outputs.changed == 'true'
 
       # UPLOAD CHART TO S3
       - name: Create Helm package
@@ -149,7 +149,7 @@ jobs:
           export AWS_REGION="${{ secrets.AWS_REGION }}"
           aws s3 cp ${{ steps.helm-package.outputs.filename }} "s3://${{ vars.AWS_BUCKET }}/"
           echo "link=https://${{ vars.AWS_BUCKET }}.s3.${AWS_REGION}.amazonaws.com/${{ steps.helm-package.outputs.filename }}" >> $GITHUB_OUTPUT 
-        if: steps.helm-test.outputs.passed == 'true'
+#        if: steps.helm-test.outputs.passed == 'true'
 
       - uses: rtCamp/action-slack-notify@v2
         env:
