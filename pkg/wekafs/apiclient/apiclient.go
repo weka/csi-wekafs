@@ -385,6 +385,7 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to re-authenticate on repeating request")
 		return err
 	}
+	a.rotateEndpoint(ctx)
 	err := a.request(ctx, Method, Path, Payload, Query, Response)
 	if err != nil {
 		return err
