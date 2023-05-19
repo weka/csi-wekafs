@@ -31,6 +31,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -49,6 +50,22 @@ type NodeServer struct {
 	mounter           *wekaMounter
 	api               *ApiStore
 	config            *DriverConfig
+	sem               chan int
+}
+
+func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) func() {
+
+	logger := log.Ctx(ctx)
+	logger.Trace().Msg("Acquiring semaphore")
+	start := time.Now()
+	ns.sem <- 1
+
+	logger.Trace().Dur("acquire_duration", time.Since(start)).Msg("Successfully acquired semaphore")
+
+	return func() {
+		logger.Trace().Dur("total_operation_time", time.Since(start)).Msg("Releasing semaphore")
+		<-ns.sem
+	}
 }
 
 func (ns *NodeServer) getDefaultMountOptions() MountOptions {
@@ -97,6 +114,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 		mounter:           mounter,
 		api:               api,
 		config:            config,
+		sem:               make(chan int, 10),
 	}
 }
 
@@ -132,6 +150,8 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	releaseSemaphore := ns.acquireSemaphore(ctx, op)
+	defer releaseSemaphore()
 	client, err := ns.api.GetClientFromSecrets(ctx, req.Secrets)
 	if err != nil {
 		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
@@ -283,6 +303,9 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 	// Check arguments
+
+	releaseSemaphore := ns.acquireSemaphore(ctx, op)
+	defer releaseSemaphore()
 
 	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns)
 	if err != nil {

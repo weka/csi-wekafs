@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/status"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -43,6 +44,7 @@ type ControllerServer struct {
 	mounter *wekaMounter
 	api     *ApiStore
 	config  *DriverConfig
+	sem     chan int
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
@@ -110,6 +112,7 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, con
 		mounter: mounter,
 		api:     api,
 		config:  config,
+		sem:     make(chan int, 10),
 	}
 }
 
@@ -151,6 +154,21 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 	return nil
 }
 
+func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) func() {
+
+	logger := log.Ctx(ctx)
+	logger.Trace().Msg("Acquiring semaphore")
+	start := time.Now()
+	cs.sem <- 1
+
+	logger.Trace().Dur("acquire_duration", time.Since(start)).Msg("Successfully acquired semaphore")
+
+	return func() {
+		logger.Trace().Dur("total_operation_time", time.Since(start)).Msg("Releasing semaphore")
+		<-cs.sem
+	}
+}
+
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	op := "CreateVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
@@ -168,6 +186,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+
+	releaseSemaphore := cs.acquireSemaphore(ctx, op)
+	defer releaseSemaphore()
 
 	// First, validate that basic request validation passes
 	if err := cs.CheckCreateVolumeRequestSanity(ctx, req); err != nil {
@@ -263,6 +284,9 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	releaseSemaphore := cs.acquireSemaphore(ctx, op)
+	defer releaseSemaphore()
+
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
@@ -334,6 +358,9 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+
+	releaseSemaphore := cs.acquireSemaphore(ctx, op)
+	defer releaseSemaphore()
 
 	if capacity == -1 {
 		return ExpandVolumeError(ctx, codes.InvalidArgument, "Capacity range not provided")
