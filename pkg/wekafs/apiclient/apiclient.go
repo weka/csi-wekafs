@@ -341,12 +341,12 @@ func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 // request wraps do with retries and some more error handling
 func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
 	if _, ok := a.sem[Method]; ok {
-		a.sem[Method] <- struct{}{}
+		a.sem[Path] <- struct{}{}
 		defer func() {
-			<-a.sem[Method]
+			<-a.sem[Path]
 		}()
 	} else {
-		log.Ctx(ctx).Error().Msg("NOT FOUND" + Method)
+		log.Ctx(ctx).Error().Msg("NOT FOUND " + Path)
 	}
 
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
