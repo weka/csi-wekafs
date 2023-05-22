@@ -58,13 +58,20 @@ type ApiClient struct {
 	Timeout                    time.Duration
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
-	sem                        chan int
+	sem                        map[string]chan struct{}
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool) (*ApiClient, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
 	}
+
+	sem := make(map[string]chan struct{})
+	sem[ApiPathRefresh] = make(chan struct{}, 5)
+	sem[ApiPathLogin] = make(chan struct{}, 5)
+	sem[ApiPathTokenExpiry] = make(chan struct{}, 5)
+	sem[ApiPathClusterInfo] = make(chan struct{}, 5)
+
 	a := &ApiClient{
 		Mutex: sync.Mutex{},
 		client: &http.Client{
@@ -78,7 +85,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		CompatibilityMap:  &WekaCompatibilityMap{},
 		Timeout:           ApiHttpTimeOutSeconds * time.Second,
 		currentEndpointId: -1,
-		sem:               make(chan int, 5),
+		sem:               sem,
 	}
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
@@ -333,6 +340,15 @@ func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 
 // request wraps do with retries and some more error handling
 func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
+	if _, ok := a.sem[Method]; ok {
+		a.sem[Method] <- struct{}{}
+		defer func() {
+			<-a.sem[Method]
+		}()
+	} else {
+		log.Ctx(ctx).Error().Msg("NOT FOUND")
+	}
+
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
 		logger := log.Ctx(ctx)
@@ -387,9 +403,7 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to re-authenticate on repeating request")
 		return err
 	}
-	a.sem <- 1
 	err := a.request(ctx, Method, Path, Payload, Query, Response)
-	<-a.sem
 	if err != nil {
 		return err
 	}
