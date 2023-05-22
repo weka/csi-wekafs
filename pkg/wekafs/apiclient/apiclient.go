@@ -346,7 +346,7 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 			<-a.sem[Method]
 		}()
 	} else {
-		log.Ctx(ctx).Error().Msg("NOT FOUND")
+		log.Ctx(ctx).Error().Msg("NOT FOUND" + Method)
 	}
 
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
