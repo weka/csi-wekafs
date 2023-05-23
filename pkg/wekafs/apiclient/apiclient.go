@@ -467,7 +467,7 @@ func (a *ApiClient) Login(ctx context.Context) error {
 	}
 	responseData := &LoginResponse{}
 	logger.Debug().Msg("Logging in. For safety, API logging is suppressed")
-	ctx = log.Ctx(ctx).Level(zerolog.Disabled).With().Str("credentials", a.Credentials.String()).Logger().WithContext(ctx)
+	ctx = log.Ctx(ctx).Level(zerolog.InfoLevel).With().Str("credentials", a.Credentials.String()).Logger().WithContext(ctx)
 	if err := a.request(ctx, "POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
 			logger.Error().Err(err).Str("endpoint", a.getEndpoint(ctx)).Msg("Could not log in to endpoint")
