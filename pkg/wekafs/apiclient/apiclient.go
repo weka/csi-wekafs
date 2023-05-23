@@ -68,9 +68,9 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 
 	sem := make(map[string]chan struct{})
 
-	sem[ApiPathRefresh] = make(chan struct{}, 10)
-	sem[ApiPathLogin] = make(chan struct{}, 10)
-	sem[ApiPathTokenExpiry] = make(chan struct{}, 10)
+	sem[ApiPathRefresh] = make(chan struct{}, 7)
+	sem[ApiPathLogin] = make(chan struct{}, 7)
+	sem[ApiPathTokenExpiry] = make(chan struct{}, 7)
 	sem["other"] = make(chan struct{}, 15)
 
 	a := &ApiClient{
