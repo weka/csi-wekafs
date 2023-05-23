@@ -70,7 +70,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
-			Timeout:       time.Duration(ApiHttpTimeOutSeconds) * time.Second,
+			Timeout:       0,
 		},
 		ClusterGuid:       uuid.UUID{},
 		Credentials:       credentials,
@@ -330,7 +330,10 @@ func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 }
 
 // request wraps do with retries and some more error handling
-func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
+func (a *ApiClient) request(ctx context.Context, Method, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
+
+	a.rotateEndpoint(ctx)
+
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
 		logger := log.Ctx(ctx)
@@ -385,7 +388,7 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to re-authenticate on repeating request")
 		return err
 	}
-	a.rotateEndpoint(ctx)
+
 	err := a.request(ctx, Method, Path, Payload, Query, Response)
 	if err != nil {
 		return err
