@@ -70,7 +70,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 	sem[ApiPathRefresh] = make(chan struct{}, 5)
 	sem[ApiPathLogin] = make(chan struct{}, 5)
 	sem[ApiPathTokenExpiry] = make(chan struct{}, 5)
-	sem[ApiPathClusterInfo] = make(chan struct{}, 5)
+	sem["other"] = make(chan struct{}, 5)
 
 	a := &ApiClient{
 		Mutex: sync.Mutex{},
@@ -349,6 +349,11 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 		}()
 	} else {
 		log.Ctx(ctx).Info().Msg("NOT FOUND " + Path)
+		a.sem["other"] <- struct{}{}
+		defer func() {
+			log.Ctx(ctx).Info().Msg("CLOSING " + Path)
+			<-a.sem["other"]
+		}()
 	}
 
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
@@ -405,6 +410,7 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to re-authenticate on repeating request")
 		return err
 	}
+	a.rotateEndpoint(ctx)
 	err := a.request(ctx, Method, Path, Payload, Query, Response)
 	if err != nil {
 		return err
