@@ -107,6 +107,7 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string)
 		Endpoints:    endpoints,
 		HttpScheme:   strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
 	}
+
 	return api.fromCredentials(ctx, credentials)
 }
 
