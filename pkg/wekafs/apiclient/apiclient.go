@@ -342,7 +342,7 @@ func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 // request wraps do with retries and some more error handling
 func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
 	if _, ok := a.sem[Path]; ok {
-		log.Ctx(ctx).Info().Msg("FOUND " + Path)
+		log.Ctx(ctx).Info().Msg("YES_FOUND " + Path)
 		a.sem[Path] <- struct{}{}
 		defer func() {
 			log.Ctx(ctx).Info().Msg("CLOSING " + Path)
