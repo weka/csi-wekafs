@@ -235,6 +235,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				},
 			}, nil
 
+		} else {
+			logger.Error().Err(err).Msg("Failed to fetch OR set capacity for a volume")
+			return CreateVolumeError(ctx, codes.Internal, "failed to fetch or set capacity for volume")
 		}
 	}
 
