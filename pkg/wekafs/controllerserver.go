@@ -206,7 +206,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		if !volExists {
 			return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check if volume %s exists: %s", volume.GetId(), err.Error()))
 		} else {
-			return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check for capacity of existing volume %s: %s", volume.GetId(), err.Error()))
+
+			//return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check for capacity of existing volume %s: %s", volume.GetId(), err.Error()))
+			logger.Error().Msg("Failed to fetch volume capacity, assuming it was not set")
 		}
 	}
 	if volExists && volMatchesCapacity {
@@ -218,9 +220,22 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				ContentSource: volume.getCsiContentSource(ctx),
 			},
 		}, nil
-	} else if volExists {
-		// current capacity differs from requested, this is another volume request
+	} else if volExists && err == nil {
+		// current capacity explicitly differs from requested, this is another volume request
 		return CreateVolumeError(ctx, codes.AlreadyExists, "Volume with same name and different capacity already exists")
+	} else {
+		// can happen if volume is half-made (object was created but capacity was not set on it on previous run)
+		if err := volume.UpdateCapacity(ctx, &volume.enforceCapacity, capacity); err == nil {
+			return &csi.CreateVolumeResponse{
+				Volume: &csi.Volume{
+					VolumeId:      volume.GetId(),
+					CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
+					VolumeContext: params,
+					ContentSource: volume.getCsiContentSource(ctx),
+				},
+			}, nil
+
+		}
 	}
 
 	// Actually try to create the volume here
