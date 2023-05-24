@@ -1,6 +1,9 @@
 #!/usr/bin/env sh
 
 mkdir -p  /tmp/weka-csi-test/filesystems/default/test/my/path
+rm -rf /tmp/weka-csi-test/sanity-workspace/
+rm -rf /tmp/weka-csi-test/filesystems
+rm -rf /tmp/csi-test-staging
 
 # ---------------------- LEGACY DIR VOLUME NO API BINDING (NO SNAPSHOT SUPPORT) ----------------------
 legacy_sanity() {
