@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"hash/fnv"
 	"io"
@@ -437,8 +436,6 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		return err
 	}
 	responseData := &LoginResponse{}
-	logger.Debug().Msg("Logging in. For safety, API logging is suppressed")
-	ctx = log.Ctx(ctx).Level(zerolog.Disabled).With().Str("credentials", a.Credentials.String()).Logger().WithContext(ctx)
 	if err := a.request(ctx, "POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
 			logger.Error().Err(err).Str("endpoint", a.getEndpoint(ctx)).Msg("Could not log in to endpoint")
