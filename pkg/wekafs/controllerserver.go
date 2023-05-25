@@ -212,6 +212,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}
 	}
 	if volExists && volMatchesCapacity {
+		result = "SUCCESS"
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
 				VolumeId:      volume.GetId(),
@@ -226,6 +227,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	} else if volExists && err != nil {
 		// can happen if volume is half-made (object was created but capacity was not set on it on previous run)
 		if err := volume.UpdateCapacity(ctx, &volume.enforceCapacity, capacity); err == nil {
+			result = "SUCCESS"
 			return &csi.CreateVolumeResponse{
 				Volume: &csi.Volume{
 					VolumeId:      volume.GetId(),

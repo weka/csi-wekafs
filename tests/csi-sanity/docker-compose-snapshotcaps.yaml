@@ -23,7 +23,7 @@ services:
       - test-volume:/tmp/weka-csi-test
     healthcheck:
       test: test -f /tmp/weka-csi-test/controller.sock && test -f /tmp/weka-csi-test/node.sock
-      start_period: 5s
+      start_period: 10s
       timeout: 1s
       retries: 5
       interval: 3s

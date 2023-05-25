@@ -155,7 +155,7 @@ func (v *Volume) isFilesystem() bool {
 
 // hasUnderlyingSnapshots returns True if volume is a FS (not its snapshot) and has any weka snapshots beneath it
 func (v *Volume) hasUnderlyingSnapshots(ctx context.Context) (bool, error) {
-	op := "getFilesystemFreeSpace"
+	op := "hasUnderlyingSnapshots"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)

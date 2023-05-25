@@ -16,8 +16,8 @@ import (
 type Snapshot struct {
 	IsWritable    bool      `json:"isWritable" url:"-"`
 	FilesystemId  string    `json:"filesystemId" url:"-"`
-	FileSystemUid uuid.UUID `json:"fileSystemUid" url:"-"`
-	Filesystem    string    `json:"filesystem,omitempty" url:"-"`
+	FileSystemUid uuid.UUID `json:"filesystemUid" url:"-"`
+	Filesystem    string    `json:"filesystem,omitempty" url:"filesystem,omitempty"`
 	Locator       string    `json:"locator" url:"-"`
 	IsRemoving    bool      `json:"isRemoving" url:"-"`
 	Name          string    `json:"name" url:"name,omitempty"`
@@ -37,6 +37,10 @@ func (snap *Snapshot) String() string {
 
 // FindSnapshotsByFilter returns result set of 0-many objects matching filter
 func (a *ApiClient) FindSnapshotsByFilter(ctx context.Context, query *Snapshot, resultSet *[]Snapshot) error {
+	op := "FindSnapshotsByFilter"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	ret := &[]Snapshot{}
 	q, _ := qs.Values(query)
 	err := a.Get(ctx, query.GetBasePath(), q, ret)
