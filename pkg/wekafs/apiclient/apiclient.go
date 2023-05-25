@@ -58,6 +58,7 @@ type ApiClient struct {
 	Timeout                    time.Duration
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
+	sem                        chan struct{}
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool) (*ApiClient, error) {
@@ -77,6 +78,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		CompatibilityMap:  &WekaCompatibilityMap{},
 		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
 		currentEndpointId: -1,
+		sem:               make(chan struct{}, 5),
 	}
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
@@ -331,6 +333,12 @@ func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 
 // request wraps do with retries and some more error handling
 func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
+
+	a.sem <- struct{}{}
+	defer func() {
+		<-a.sem
+	}()
+
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
 		logger := log.Ctx(ctx)
