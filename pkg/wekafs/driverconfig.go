@@ -30,7 +30,6 @@ type DriverConfig struct {
 	debugPath                     string
 	allowInsecureHttps            bool
 	alwaysAllowSnapshotVolumes    bool
-	maxRandomWaitIntervalSecs     int
 	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
 	maxConcurrentRequests         int64
 	grpcRequestTimeout            time.Duration
@@ -48,7 +47,7 @@ func (dc *DriverConfig) Log() {
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowAutoSeedSnapshotCreation, allowSnapshotsOfLegacyVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport,
-	allowInsecureHttps, alwaysAllowSnapshotVolumes bool, maxRandomWaitIntervalSecs int,
+	allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings, maxConcurrentRequests int64,
 	grpcRequestTimeoutSeconds int) *DriverConfig {
 
@@ -77,7 +76,6 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		debugPath:                     debugPath,
 		allowInsecureHttps:            allowInsecureHttps,
 		alwaysAllowSnapshotVolumes:    alwaysAllowSnapshotVolumes,
-		maxRandomWaitIntervalSecs:     maxRandomWaitIntervalSecs,
 		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
 		maxConcurrentRequests:         maxConcurrentRequests,
 		grpcRequestTimeout:            grpcRequestTimeout,
