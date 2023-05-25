@@ -1208,8 +1208,19 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	}
 
 	// Update volume capacity
-	if err := v.UpdateCapacity(ctx, &(v.enforceCapacity), capacity); err != nil {
+
+	err = nil
+	for range []int{1, 2, 3} {
+		err = v.UpdateCapacity(ctx, &(v.enforceCapacity), capacity)
+
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
 		logger.Error().Err(err).Msg("Failed to update capacity on newly created volume, reverting volume creation")
+
 		err2 := v.Delete(ctx)
 		if err2 != nil {
 			logger.Warn().Err(err2).Str("inner_path", v.innerPath).Msg("Failed to clean up directory")
