@@ -149,6 +149,8 @@ spec:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
+            - "--timeout=60s"
+
           securityContext:
             privileged: true
           env:
