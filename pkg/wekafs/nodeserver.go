@@ -51,7 +51,7 @@ type NodeServer struct {
 	mounter           *wekaMounter
 	api               *ApiStore
 	config            *DriverConfig
-	semaphores        map[string]*semaphore.Weighted
+	semaphore         *semaphore.Weighted
 }
 
 func (ns *NodeServer) getDefaultMountOptions() MountOptions {
@@ -100,7 +100,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 		mounter:           mounter,
 		api:               api,
 		config:            config,
-		semaphores:        make(map[string]*semaphore.Weighted),
+		semaphore:         semaphore.NewWeighted(config.maxConcurrentRequestsPerOperation),
 	}
 }
 
@@ -111,14 +111,9 @@ func isWekaInstalled() bool {
 	return strings.Contains(string(res), WekaKernelModuleName)
 }
 
-func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
-	var sem *semaphore.Weighted
+func (ns *NodeServer) acquireSemaphore(ctx context.Context) (error, releaseSempahore) {
 	logger := log.Ctx(ctx)
-	sem, ok := ns.semaphores[op]
-	if !ok {
-		sem = semaphore.NewWeighted(ns.config.maxConcurrentRequestsPerOperation)
-		ns.semaphores[op] = sem
-	}
+	sem := ns.semaphore
 	logger.Trace().Msg("Acquiring semaphore")
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
@@ -162,7 +157,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, ns.config.grpcRequestTimeout)
-	err, dec := ns.acquireSemaphore(ctx, op)
+	err, dec := ns.acquireSemaphore(ctx)
 	defer dec()
 	defer cancel()
 	if err != nil {
@@ -321,7 +316,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, ns.config.grpcRequestTimeout)
-	err, dec := ns.acquireSemaphore(ctx, op)
+	err, dec := ns.acquireSemaphore(ctx)
 	defer dec()
 	defer cancel()
 	if err != nil {
