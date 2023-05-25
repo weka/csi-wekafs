@@ -113,7 +113,7 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, con
 		mounter:   mounter,
 		api:       api,
 		config:    config,
-		semaphore: semaphore.NewWeighted(config.maxConcurrentRequestsPerOperation),
+		semaphore: semaphore.NewWeighted(config.maxConcurrentRequests),
 	}
 }
 

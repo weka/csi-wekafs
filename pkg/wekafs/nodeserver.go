@@ -100,7 +100,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 		mounter:           mounter,
 		api:               api,
 		config:            config,
-		semaphore:         semaphore.NewWeighted(config.maxConcurrentRequestsPerOperation),
+		semaphore:         semaphore.NewWeighted(config.maxConcurrentRequests),
 	}
 }
 

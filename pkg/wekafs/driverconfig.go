@@ -17,23 +17,23 @@ func (i *MutuallyExclusiveMountOptsStrings) Set(value string) error {
 }
 
 type DriverConfig struct {
-	DynamicVolPath                    string
-	VolumePrefix                      string
-	SnapshotPrefix                    string
-	SeedSnapshotPrefix                string
-	allowAutoFsCreation               bool
-	allowAutoFsExpansion              bool
-	allowAutoSeedSnapshotCreation     bool
-	allowSnapshotsOfLegacyVolumes     bool
-	advertiseSnapshotSupport          bool
-	advertiseVolumeCloneSupport       bool
-	debugPath                         string
-	allowInsecureHttps                bool
-	alwaysAllowSnapshotVolumes        bool
-	maxRandomWaitIntervalSecs         int
-	mutuallyExclusiveOptions          []mutuallyExclusiveMountOptionSet
-	maxConcurrentRequestsPerOperation int64
-	grpcRequestTimeout                time.Duration
+	DynamicVolPath                string
+	VolumePrefix                  string
+	SnapshotPrefix                string
+	SeedSnapshotPrefix            string
+	allowAutoFsCreation           bool
+	allowAutoFsExpansion          bool
+	allowAutoSeedSnapshotCreation bool
+	allowSnapshotsOfLegacyVolumes bool
+	advertiseSnapshotSupport      bool
+	advertiseVolumeCloneSupport   bool
+	debugPath                     string
+	allowInsecureHttps            bool
+	alwaysAllowSnapshotVolumes    bool
+	maxRandomWaitIntervalSecs     int
+	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
+	maxConcurrentRequests         int64
+	grpcRequestTimeout            time.Duration
 }
 
 func (dc *DriverConfig) Log() {
@@ -49,7 +49,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowAutoFsCreation, allowAutoFsExpansion, allowAutoSeedSnapshotCreation, allowSnapshotsOfLegacyVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport,
 	allowInsecureHttps, alwaysAllowSnapshotVolumes bool, maxRandomWaitIntervalSecs int,
-	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings, maxConcurrentRequestsPerOperation int64,
+	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings, maxConcurrentRequests int64,
 	grpcRequestTimeoutSeconds int) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -64,23 +64,23 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	grpcRequestTimeout := time.Duration(grpcRequestTimeoutSeconds) * time.Second
 
 	return &DriverConfig{
-		DynamicVolPath:                    dynamicVolPath,
-		VolumePrefix:                      VolumePrefix,
-		SnapshotPrefix:                    SnapshotPrefix,
-		SeedSnapshotPrefix:                SeedSnapshotPrefix,
-		allowAutoFsCreation:               allowAutoFsCreation,
-		allowAutoFsExpansion:              allowAutoFsExpansion,
-		allowAutoSeedSnapshotCreation:     allowAutoSeedSnapshotCreation,
-		allowSnapshotsOfLegacyVolumes:     allowSnapshotsOfLegacyVolumes,
-		advertiseSnapshotSupport:          !suppressnapshotSupport,
-		advertiseVolumeCloneSupport:       !suppressVolumeCloneSupport,
-		debugPath:                         debugPath,
-		allowInsecureHttps:                allowInsecureHttps,
-		alwaysAllowSnapshotVolumes:        alwaysAllowSnapshotVolumes,
-		maxRandomWaitIntervalSecs:         maxRandomWaitIntervalSecs,
-		mutuallyExclusiveOptions:          MutuallyExclusiveMountOptions,
-		maxConcurrentRequestsPerOperation: maxConcurrentRequestsPerOperation,
-		grpcRequestTimeout:                grpcRequestTimeout,
+		DynamicVolPath:                dynamicVolPath,
+		VolumePrefix:                  VolumePrefix,
+		SnapshotPrefix:                SnapshotPrefix,
+		SeedSnapshotPrefix:            SeedSnapshotPrefix,
+		allowAutoFsCreation:           allowAutoFsCreation,
+		allowAutoFsExpansion:          allowAutoFsExpansion,
+		allowAutoSeedSnapshotCreation: allowAutoSeedSnapshotCreation,
+		allowSnapshotsOfLegacyVolumes: allowSnapshotsOfLegacyVolumes,
+		advertiseSnapshotSupport:      !suppressnapshotSupport,
+		advertiseVolumeCloneSupport:   !suppressVolumeCloneSupport,
+		debugPath:                     debugPath,
+		allowInsecureHttps:            allowInsecureHttps,
+		alwaysAllowSnapshotVolumes:    alwaysAllowSnapshotVolumes,
+		maxRandomWaitIntervalSecs:     maxRandomWaitIntervalSecs,
+		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
+		maxConcurrentRequests:         maxConcurrentRequests,
+		grpcRequestTimeout:            grpcRequestTimeout,
 	}
 }
 

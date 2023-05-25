@@ -135,8 +135,8 @@ spec:
           {{- if .Values.controller.grpcRequestTimeoutSeconds }}
             - "--grpcrequesttimeoutseconds={{ .Values.controller.grpcRequestTimeoutSeconds | default "5" }}"
           {{- end }}
-          {{- if .Values.controller.maxConcurrentRequestsPerOperation }}
-            - "--maxconcurrentrequestsperoperation={{ .Values.controller.maxConcurrentRequestsPerOperation | default "10" }}"
+          {{- if .Values.controller.maxConcurrentRequests }}
+            - "--maxconcurrentrequests={{ .Values.controller.maxConcurrentRequests | default "10" }}"
           {{- end }}
           ports:
             - containerPort: 9898
