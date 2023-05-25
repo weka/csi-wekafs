@@ -16,8 +16,8 @@ import (
 type Snapshot struct {
 	IsWritable    bool      `json:"isWritable" url:"-"`
 	FilesystemId  string    `json:"filesystemId" url:"-"`
-	FileSystemUid uuid.UUID `json:"fileSystemUid" url:"-"`
-	Filesystem    string    `json:"filesystem,omitempty" url:"-"`
+	FileSystemUid uuid.UUID `json:"filesystemUid" url:"-"`
+	Filesystem    string    `json:"filesystem,omitempty" url:"filesystem,omitempty"`
 	Locator       string    `json:"locator" url:"-"`
 	IsRemoving    bool      `json:"isRemoving" url:"-"`
 	Name          string    `json:"name" url:"name,omitempty"`
