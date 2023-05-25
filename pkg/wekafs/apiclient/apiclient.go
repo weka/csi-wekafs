@@ -55,7 +55,6 @@ type ApiClient struct {
 	apiTokenExpiryInterval     int64
 	refreshTokenExpiryInterval int64
 	refreshTokenExpiryDate     time.Time
-	Timeout                    time.Duration
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
 }
@@ -70,12 +69,11 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
-			Timeout:       0,
+			Timeout:       ApiHttpTimeOutSeconds * time.Second,
 		},
 		ClusterGuid:       uuid.UUID{},
 		Credentials:       credentials,
 		CompatibilityMap:  &WekaCompatibilityMap{},
-		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
 		currentEndpointId: -1,
 	}
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
