@@ -1038,6 +1038,11 @@ func (v *Volume) deleteSeedSnapshot(ctx context.Context) {
 }
 
 func (v *Volume) getSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
+	op := "ensureSeedSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+
 	snapObj, err := v.apiClient.GetSnapshotByName(ctx, v.getSeedSnapshotName())
 	if err != nil {
 		if err == apiclient.ObjectNotFoundError {
@@ -1058,6 +1063,11 @@ func (v *Volume) getSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, erro
 }
 
 func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
+	op := "ensureSeedSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx)
 	logger.Debug().Str("seed_snapshot_name", v.getSeedSnapshotName()).Str("filesystem", v.FilesystemName).Msg("Ensuring seed snapshot exists for filesystem")
 	snap, err := v.getSeedSnapshot(ctx)
