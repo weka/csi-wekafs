@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 
 services:
   plugin_controller:
@@ -23,9 +23,9 @@ services:
       - test-volume:/tmp/weka-csi-test
     healthcheck:
       test: test -f /tmp/weka-csi-test/controller.sock && test -f /tmp/weka-csi-test/node.sock
-      start_period: 10s
+      start_period: 15s
       timeout: 1s
-      retries: 5
+      retries: 10
       interval: 3s
 volumes:
   test-volume:
