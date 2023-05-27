@@ -58,6 +58,7 @@ spec:
             - "--leader-election"
             - "--leader-election-namespace={{ .Release.Namespace }}"
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -73,6 +74,7 @@ spec:
             - "--leader-election"
             - "--leader-election-namespace={{ .Release.Namespace }}"
             - "--workers={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -89,6 +91,7 @@ spec:
             - "--leader-election"
             - "--leader-election-namespace={{ .Release.Namespace }}"
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
