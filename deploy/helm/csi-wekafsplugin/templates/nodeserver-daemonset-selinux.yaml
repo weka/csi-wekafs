@@ -150,7 +150,15 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
             - "--timeout=60s"
-
+          ports:
+            - containerPort: 9809
+              name: healthz
+          livenessProbe:
+            httpGet:
+              port: healthz
+              path: /healthz
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
           securityContext:
             privileged: true
           env:
