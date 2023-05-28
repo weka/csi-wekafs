@@ -34,7 +34,7 @@ controllerPluginTolerations: *globalPluginTolerations
 nodePluginTolerations: *globalPluginTolerations
 # -- Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only
 nodeSelector: {}
-# -- Controller specific parameters
+# -- Controller-specific parameters, please do not change unless explicitly guided
 controller:
   # -- Controller number of replicas
   replicas: 2
@@ -42,7 +42,11 @@ controller:
   maxConcurrentRequests: 5
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
   grpcRequestTimeoutSeconds: 30
-# -- Node specific parameters
+  # -- Configure provisioner sidecar for leadership
+  configureProvisionerLeadership: true
+  # -- Configure resizer sidecar for leadership
+  configureResizerLeadership: true
+# -- Node-specific parameters, please do not change unless explicitly guided
 node:
   # -- maximum concurrent operations per operation type (to avoid API starvation)
   maxConcurrentRequests: 5
