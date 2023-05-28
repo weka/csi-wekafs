@@ -67,7 +67,7 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
           {{- if or .Values.metrics.enabled .Values.controller.configureResizerLeaderElection }}
-            - "--http-endpoint={{ .Values.metrics.provisionerPort | default 9092 }}"
+            - "--http-endpoint={{ .Values.metrics.resizerPort | default 9092 }}"
           {{- end }}
           {{- if .Values.controller.configureResizerLeaderElection | default true }}
             - "--leader-election"
