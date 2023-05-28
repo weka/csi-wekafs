@@ -62,6 +62,15 @@ spec:
           {{- end }}
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureProvisionerLeaderElection }}
+            - "--http-endpoint={{ .Values.metrics.provisionerPort | default 9091 }}"
+          {{- end }}
+          {{- if .Values.controller.configureProvisionerLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.provisionerPort | default 9091 }}
+              path: /healthz/leader-election
+          {{- end }}
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -74,12 +83,21 @@ spec:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureResizerLeaderElection }}
+            - "--http-endpoint={{ .Values.metrics.provisionerPort | default 9092 }}"
+          {{- end }}
           {{- if .Values.controller.configureResizerLeaderElection | default true }}
             - "--leader-election"
             - "--leader-election-namespace={{ .Release.Namespace }}"
           {{- end }}
             - "--workers={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
+          {{- if .Values.controller.configureResizerLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.resizerPort | default 9092 }}
+              path: /healthz/leader-election
+          {{- end }}
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -91,7 +109,6 @@ spec:
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            - "--leader-election=false"
             - "--timeout=60s"
           {{- if .Values.controller.configureSnapshotterLeaderElection | default true }}
             - "--leader-election"
@@ -99,6 +116,15 @@ spec:
           {{- end }}
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureSnapshotterLeaderElection }}
+            - "--http-endpoint={{ .Values.metrics.snapshotterPort | default 9093 }}"
+          {{- end }}
+          {{- if .Values.controller.configureSnapshotterLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.snapshotterPort | default 9093 }}
+              path: /healthz/leader-election
+          {{- end }}
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock

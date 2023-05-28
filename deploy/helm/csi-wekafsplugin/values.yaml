@@ -79,6 +79,12 @@ metrics:
   enabled: true
   # -- Metrics port
   port: 9090
+  # -- Provisioner metrics port
+  provisionerPort: 9091
+  # -- Resizer metrics port
+  resizerPort: 9092
+  # -- Snapshotter metrics port
+  snapshotterPort: 9093
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
