@@ -1222,22 +1222,21 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 	// Update volume capacity
 	if err := v.UpdateCapacity(ctx, &(v.enforceCapacity), capacity); err != nil {
-		logger.Error().Err(err).Msg("Failed to update capacity on newly created volume, reverting volume creation")
-		err2 := v.Delete(ctx)
-		if err2 != nil {
-			logger.Warn().Err(err2).Str("inner_path", v.innerPath).Msg("Failed to clean up directory")
-		}
+		logger.Error().Str("volume_type", string(v.GetType())).
+			Str("filesystem_name", v.FilesystemName).
+			Str("snapshot_name", v.SnapshotName).
+			Str("inner_path", v.innerPath).
+			Err(err).Msg("Failed to update capacity on fresh created volume. Volume remains intact for troubleshooting. Contact support.")
 		return err
 	}
 
 	// Update volume parameters
 	if err := v.UpdateParams(ctx); err != nil {
-		defer func() {
-			err := v.Delete(ctx)
-			if err != nil {
-				logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")
-			}
-		}()
+		logger.Error().Str("volume_type", string(v.GetType())).
+			Str("filesystem_name", v.FilesystemName).
+			Str("snapshot_name", v.SnapshotName).
+			Str("inner_path", v.innerPath).
+			Err(err).Msg("Failed to update volume parameters on freshly created volume. Volume remains intact for troubleshooting. Contact support.")
 		return err
 	}
 	logger.Info().Str("filesystem", v.FilesystemName).Msg("Created volume successfully")
