@@ -93,8 +93,10 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--leader-election=false"
             - "--timeout=60s"
+          {{- if .Values.controller.configureSnapshotterLeaderElection | default true }}
             - "--leader-election"
             - "--leader-election-namespace={{ .Release.Namespace }}"
+          {{- end }}
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
           env:

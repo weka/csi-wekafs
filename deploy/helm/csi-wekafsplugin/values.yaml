@@ -46,6 +46,8 @@ controller:
   configureProvisionerLeaderElection: true
   # -- Configure resizer sidecar for leader election
   configureResizerLeaderElection: true
+  # -- Configure snapshotter sidecar for leader election
+  configureSnapshotterLeaderElection: true
 # -- Node-specific parameters, please do not change unless explicitly guided
 node:
   # -- maximum concurrent operations per operation type (to avoid API starvation)
