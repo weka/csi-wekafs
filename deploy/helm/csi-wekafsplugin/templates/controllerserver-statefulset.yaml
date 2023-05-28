@@ -46,7 +46,7 @@ spec:
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
           {{- if or .Values.metrics.enabled .Values.controller.configureProvisionerLeaderElection }}
-            - "--http-endpoint={{ .Values.metrics.provisionerPort | default 9091 }}"
+            - "--http-endpoint=:{{ .Values.metrics.provisionerPort | default 9091 }}"
           {{- end }}
           {{- if .Values.controller.configureProvisionerLeaderElection }}
           livenessProbe:
@@ -71,7 +71,7 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
           {{- if or .Values.metrics.enabled .Values.controller.configureResizerLeaderElection }}
-            - "--http-endpoint={{ .Values.metrics.resizerPort | default 9092 }}"
+            - "--http-endpoint=:{{ .Values.metrics.resizerPort | default 9092 }}"
           {{- end }}
           {{- if .Values.controller.configureResizerLeaderElection | default true }}
             - "--leader-election"
@@ -108,7 +108,7 @@ spec:
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
           {{- if or .Values.metrics.enabled .Values.controller.configureSnapshotterLeaderElection }}
-            - "--http-endpoint={{ .Values.metrics.snapshotterPort | default 9093 }}"
+            - "--http-endpoint=:{{ .Values.metrics.snapshotterPort | default 9093 }}"
           {{- end }}
           {{- if .Values.controller.configureSnapshotterLeaderElection }}
           livenessProbe:
