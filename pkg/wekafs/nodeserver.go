@@ -19,6 +19,7 @@ package wekafs
 import (
 	"context"
 	"fmt"
+	"github.com/Djarvur/go-lsmod"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -29,7 +30,6 @@ import (
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -112,9 +112,8 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 
 func isWekaInstalled() bool {
 	log.Info().Msg("Checking if wekafs is installed on host")
-	cmd := fmt.Sprintf("lsmod | grep -w %s", WekaKernelModuleName)
-	res, _ := exec.Command("sh", "-c", cmd).Output()
-	return strings.Contains(string(res), WekaKernelModuleName)
+	ok, err := lsmod.IsLoaded(WekaKernelModuleName)
+	return err != nil && ok
 }
 
 func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
