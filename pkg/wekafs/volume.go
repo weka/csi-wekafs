@@ -1150,10 +1150,6 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateFileSystem(ctx, cr, fsObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-		// create the seed snapshot
-		if _, err := v.ensureSeedSnapshot(ctx); err != nil {
-			logger.Error().Err(err).Msg("Failed to create seed snapshot, new snapshot volumes cannot be created from this filesystem!")
-		}
 	} else if v.isOnSnapshot() { // running on real CSI system and not in docker sanity
 		// this might be either blank or copy content volume
 		snapSrcUid, err := v.getUidOfSourceSnap(ctx)
@@ -1215,6 +1211,13 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 			return err
 		}
 		logger.Debug().Msg("Successully created directory")
+	}
+
+	// create the seed snapshot for the filesystem if needed
+	if v.isFilesystem() && v.server.getConfig().allowAutoSeedSnapshotCreation {
+		if _, err := v.ensureSeedSnapshot(ctx); err != nil {
+			logger.Error().Err(err).Msg("Failed to create seed snapshot, new snapshot volumes cannot be created from this filesystem!")
+		}
 	}
 
 	// Update volume capacity
