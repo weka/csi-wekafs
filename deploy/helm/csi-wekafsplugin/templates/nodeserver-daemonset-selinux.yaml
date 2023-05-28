@@ -150,6 +150,7 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
             - "--timeout=60s"
+            - "--health-port=9809"
           ports:
             - containerPort: 9809
               name: healthz

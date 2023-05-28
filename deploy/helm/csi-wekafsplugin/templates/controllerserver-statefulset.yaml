@@ -178,6 +178,15 @@ spec:
             - containerPort: {{ .Values.metrics.port }}
               name: metrics
               protocol: TCP
+            - containerPort: {{ .Values.metrics.resizerPort }}
+              name: resizerMetrics
+              protocol: TCP
+            - containerPort: {{ .Values.metrics.provisionerPort }}
+              name: provisionerMetrics
+              protocol: TCP
+            - containerPort: {{ .Values.metrics.snapshotterPort }}
+              name: snapshotterMetrics
+              protocol: TCP
           {{- end }}
           livenessProbe:
             failureThreshold: 5
