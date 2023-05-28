@@ -42,10 +42,10 @@ controller:
   maxConcurrentRequests: 5
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
   grpcRequestTimeoutSeconds: 30
-  # -- Configure provisioner sidecar for leadership
-  configureProvisionerLeadership: true
-  # -- Configure resizer sidecar for leadership
-  configureResizerLeadership: true
+  # -- Configure provisioner sidecar for leader election
+  configureProvisionerLeaderElection: true
+  # -- Configure resizer sidecar for leader election
+  configureResizerLeaderElection: true
 # -- Node-specific parameters, please do not change unless explicitly guided
 node:
   # -- maximum concurrent operations per operation type (to avoid API starvation)

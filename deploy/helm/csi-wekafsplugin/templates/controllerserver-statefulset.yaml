@@ -55,7 +55,7 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
             - "--timeout=60s"
-          {{- if .Values.controller.configureProvisionerLeadership | default true }}
+          {{- if .Values.controller.configureProvisionerLeaderElection | default true }}
             - "--leader-election"
             - "--leader-election-namespace={{ .Release.Namespace }}"
           {{- end }}
@@ -73,7 +73,7 @@ spec:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
-          {{- if .Values.controller.configureResizerLeadership | default true }}
+          {{- if .Values.controller.configureResizerLeaderElection | default true }}
             - "--leader-election"
             - "--leader-election-namespace={{ .Release.Namespace }}"
           {{- end }}
