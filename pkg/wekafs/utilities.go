@@ -15,7 +15,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -469,16 +468,4 @@ func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int
 	}
 	matches := reportedCapacity == capacity
 	return exists, matches, err
-}
-
-func waitRandomTime(ctx context.Context, maxInterval int) {
-	if maxInterval == 0 {
-		return
-	}
-	logger := log.Ctx(ctx)
-	interval := rand.Intn(maxInterval)
-	if interval > 0 {
-		logger.Trace().Int("wait_seconds", interval).Msg("Issuing a random backoff before performing operation")
-		time.Sleep(time.Second * time.Duration(interval))
-	}
 }

@@ -155,7 +155,7 @@ func (v *Volume) isFilesystem() bool {
 
 // hasUnderlyingSnapshots returns True if volume is a FS (not its snapshot) and has any weka snapshots beneath it
 func (v *Volume) hasUnderlyingSnapshots(ctx context.Context) (bool, error) {
-	op := "getFilesystemFreeSpace"
+	op := "hasUnderlyingSnapshots"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
@@ -1038,6 +1038,11 @@ func (v *Volume) deleteSeedSnapshot(ctx context.Context) {
 }
 
 func (v *Volume) getSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
+	op := "ensureSeedSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+
 	snapObj, err := v.apiClient.GetSnapshotByName(ctx, v.getSeedSnapshotName())
 	if err != nil {
 		if err == apiclient.ObjectNotFoundError {
@@ -1058,6 +1063,11 @@ func (v *Volume) getSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, erro
 }
 
 func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
+	op := "ensureSeedSnapshot"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+
 	logger := log.Ctx(ctx)
 	logger.Debug().Str("seed_snapshot_name", v.getSeedSnapshotName()).Str("filesystem", v.FilesystemName).Msg("Ensuring seed snapshot exists for filesystem")
 	snap, err := v.getSeedSnapshot(ctx)
@@ -1140,10 +1150,6 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateFileSystem(ctx, cr, fsObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-		// create the seed snapshot
-		if _, err := v.ensureSeedSnapshot(ctx); err != nil {
-			logger.Error().Err(err).Msg("Failed to create seed snapshot, new snapshot volumes cannot be created from this filesystem!")
-		}
 	} else if v.isOnSnapshot() { // running on real CSI system and not in docker sanity
 		// this might be either blank or copy content volume
 		snapSrcUid, err := v.getUidOfSourceSnap(ctx)
@@ -1207,24 +1213,30 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		logger.Debug().Msg("Successully created directory")
 	}
 
+	// create the seed snapshot for the filesystem if needed
+	if v.isFilesystem() && v.server.getConfig().allowAutoSeedSnapshotCreation {
+		if _, err := v.ensureSeedSnapshot(ctx); err != nil {
+			logger.Error().Err(err).Msg("Failed to create seed snapshot, new snapshot volumes cannot be created from this filesystem!")
+		}
+	}
+
 	// Update volume capacity
 	if err := v.UpdateCapacity(ctx, &(v.enforceCapacity), capacity); err != nil {
-		logger.Error().Err(err).Msg("Failed to update capacity on newly created volume, reverting volume creation")
-		err2 := v.Delete(ctx)
-		if err2 != nil {
-			logger.Warn().Err(err2).Str("inner_path", v.innerPath).Msg("Failed to clean up directory")
-		}
+		logger.Error().Str("volume_type", string(v.GetType())).
+			Str("filesystem_name", v.FilesystemName).
+			Str("snapshot_name", v.SnapshotName).
+			Str("inner_path", v.innerPath).
+			Err(err).Msg("Failed to update capacity on fresh created volume. Volume remains intact for troubleshooting. Contact support.")
 		return err
 	}
 
 	// Update volume parameters
 	if err := v.UpdateParams(ctx); err != nil {
-		defer func() {
-			err := v.Delete(ctx)
-			if err != nil {
-				logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")
-			}
-		}()
+		logger.Error().Str("volume_type", string(v.GetType())).
+			Str("filesystem_name", v.FilesystemName).
+			Str("snapshot_name", v.SnapshotName).
+			Str("inner_path", v.innerPath).
+			Err(err).Msg("Failed to update volume parameters on freshly created volume. Volume remains intact for troubleshooting. Contact support.")
 		return err
 	}
 	logger.Info().Str("filesystem", v.FilesystemName).Msg("Created volume successfully")

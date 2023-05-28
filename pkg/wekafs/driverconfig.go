@@ -3,6 +3,7 @@ package wekafs
 import (
 	"github.com/rs/zerolog/log"
 	"strings"
+	"time"
 )
 
 type MutuallyExclusiveMountOptsStrings []string
@@ -29,8 +30,9 @@ type DriverConfig struct {
 	debugPath                     string
 	allowInsecureHttps            bool
 	alwaysAllowSnapshotVolumes    bool
-	maxRandomWaitIntervalSecs     int
 	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
+	maxConcurrentRequests         int64
+	grpcRequestTimeout            time.Duration
 }
 
 func (dc *DriverConfig) Log() {
@@ -45,8 +47,9 @@ func (dc *DriverConfig) Log() {
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowAutoSeedSnapshotCreation, allowSnapshotsOfLegacyVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport,
-	allowInsecureHttps, alwaysAllowSnapshotVolumes bool, maxRandomWaitIntervalSecs int,
-	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings) *DriverConfig {
+	allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
+	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings, maxConcurrentRequests int64,
+	grpcRequestTimeoutSeconds int) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
 	for _, exclusiveSet := range mutuallyExclusiveMountOptions {
@@ -56,6 +59,8 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	if len(MutuallyExclusiveMountOptions) == 0 {
 		MutuallyExclusiveMountOptions = append(MutuallyExclusiveMountOptions, []string{MountOptionWriteCache, MountOptionCoherent, MountOptionReadCache})
 	}
+
+	grpcRequestTimeout := time.Duration(grpcRequestTimeoutSeconds) * time.Second
 
 	return &DriverConfig{
 		DynamicVolPath:                dynamicVolPath,
@@ -71,8 +76,9 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		debugPath:                     debugPath,
 		allowInsecureHttps:            allowInsecureHttps,
 		alwaysAllowSnapshotVolumes:    alwaysAllowSnapshotVolumes,
-		maxRandomWaitIntervalSecs:     maxRandomWaitIntervalSecs,
 		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
+		maxConcurrentRequests:         maxConcurrentRequests,
+		grpcRequestTimeout:            grpcRequestTimeout,
 	}
 }
 

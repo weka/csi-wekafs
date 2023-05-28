@@ -24,10 +24,12 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -38,11 +40,12 @@ const (
 )
 
 type ControllerServer struct {
-	caps    []*csi.ControllerServiceCapability
-	nodeID  string
-	mounter *wekaMounter
-	api     *ApiStore
-	config  *DriverConfig
+	caps      []*csi.ControllerServiceCapability
+	nodeID    string
+	mounter   *wekaMounter
+	api       *ApiStore
+	config    *DriverConfig
+	semaphore *semaphore.Weighted
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
@@ -105,11 +108,12 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, con
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
 	return &ControllerServer{
-		caps:    capabilities,
-		nodeID:  nodeID,
-		mounter: mounter,
-		api:     api,
-		config:  config,
+		caps:      capabilities,
+		nodeID:    nodeID,
+		mounter:   mounter,
+		api:       api,
+		config:    config,
+		semaphore: semaphore.NewWeighted(config.maxConcurrentRequests),
 	}
 }
 
@@ -151,6 +155,27 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 	return nil
 }
 
+type releaseSempahore func()
+
+func (cs *ControllerServer) acquireSemaphore(ctx context.Context) (error, releaseSempahore) {
+	logger := log.Ctx(ctx)
+	sem := cs.semaphore
+	logger.Trace().Msg("Acquiring semaphore")
+	start := time.Now()
+	err := sem.Acquire(ctx, 1)
+	elapsed := time.Since(start)
+	if err == nil {
+		logger.Trace().Dur("acquire_duration", elapsed).Msg("Successfully acquired semaphore")
+		return nil, func() {
+			elapsed = time.Since(start)
+			logger.Trace().Dur("total_operation_time", elapsed).Msg("Releasing semaphore")
+			sem.Release(1)
+		}
+	}
+	logger.Trace().Dur("acquire_duration", elapsed).Msg("Failed to acquire semaphore")
+	return err, func() {}
+}
+
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	op := "CreateVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
@@ -161,6 +186,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	result := "FAILURE"
 	logger := log.Ctx(ctx)
 	logger.Info().Str("name", req.GetName()).Fields(params).Msg(">>>> Received request")
+
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
@@ -168,6 +194,14 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return CreateVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
 
 	// First, validate that basic request validation passes
 	if err := cs.CheckCreateVolumeRequestSanity(ctx, req); err != nil {
@@ -193,9 +227,6 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// Check for maximum available capacity
 	capacity := req.GetCapacityRange().GetRequiredBytes()
 
-	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
-	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
-
 	// IDEMPOTENCE FLOW: If directory already exists, return the createResponse if size matches, or error
 	volExists, volMatchesCapacity, err := volumeExistsAndMatchesCapacity(ctx, volume, capacity)
 
@@ -206,10 +237,13 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		if !volExists {
 			return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check if volume %s exists: %s", volume.GetId(), err.Error()))
 		} else {
-			return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check for capacity of existing volume %s: %s", volume.GetId(), err.Error()))
+
+			//return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check for capacity of existing volume %s: %s", volume.GetId(), err.Error()))
+			logger.Error().Msg("Failed to fetch volume capacity, assuming it was not set")
 		}
 	}
 	if volExists && volMatchesCapacity {
+		result = "SUCCESS"
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
 				VolumeId:      volume.GetId(),
@@ -218,9 +252,26 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				ContentSource: volume.getCsiContentSource(ctx),
 			},
 		}, nil
-	} else if volExists {
-		// current capacity differs from requested, this is another volume request
+	} else if volExists && err == nil {
+		// current capacity explicitly differs from requested, this is another volume request
 		return CreateVolumeError(ctx, codes.AlreadyExists, "Volume with same name and different capacity already exists")
+	} else if volExists && err != nil {
+		// can happen if volume is half-made (object was created but capacity was not set on it on previous run)
+		if err := volume.UpdateCapacity(ctx, &volume.enforceCapacity, capacity); err == nil {
+			result = "SUCCESS"
+			return &csi.CreateVolumeResponse{
+				Volume: &csi.Volume{
+					VolumeId:      volume.GetId(),
+					CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
+					VolumeContext: params,
+					ContentSource: volume.getCsiContentSource(ctx),
+				},
+			}, nil
+
+		} else {
+			logger.Error().Err(err).Msg("Failed to fetch OR set capacity for a volume")
+			return CreateVolumeError(ctx, codes.Internal, "failed to fetch or set capacity for volume")
+		}
 	}
 
 	// Actually try to create the volume here
@@ -263,6 +314,14 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
@@ -283,9 +342,6 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		logger.Warn().Err(err).Msg("invalid delete volume request")
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
-
-	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
-	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
 
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
@@ -335,6 +391,14 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return ExpandVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	if capacity == -1 {
 		return ExpandVolumeError(ctx, codes.InvalidArgument, "Capacity range not provided")
 	}
@@ -353,9 +417,6 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if err != nil {
 		return ExpandVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
 	}
-
-	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
-	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
 
 	maxStorageCapacity, err := volume.getMaxCapacity(ctx)
 	if err != nil {
@@ -417,6 +478,14 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return CreateSnapshotError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	if srcVolumeId == "" {
 		return CreateSnapshotError(ctx, codes.InvalidArgument, "Cannot create snapshot without specifying SourceVolumeId")
 	}
@@ -442,9 +511,6 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	if !srcVolExists {
 		return CreateSnapshotError(ctx, codes.FailedPrecondition, fmt.Sprintf("Could not find source volume %s", srcVolume.GetId()))
 	}
-
-	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
-	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
 
 	s, err := srcVolume.CreateSnapshot(ctx, snapName)
 	if err != nil {
@@ -484,10 +550,18 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return DeleteSnapshotError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	if snapshotID == "" {
 		return DeleteSnapshotError(ctx, codes.InvalidArgument, "Failed to delete snapshot, no ID specified")
 	}
-	err := validateSnapshotId(snapshotID)
+	err = validateSnapshotId(snapshotID)
 	if err != nil {
 		//according to CSI specs must return OK on invalid ID
 		result = "SUCCESS"
@@ -502,10 +576,6 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	if err != nil {
 		return DeleteSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize snapshot from ID", snapshotID, err.Error()))
 	}
-
-	// randomBackoff to minimize race conditions when multiple CSI controllers are run in parallel
-	waitRandomTime(ctx, cs.config.maxRandomWaitIntervalSecs)
-
 	err = existingSnap.Delete(ctx)
 	if err != nil {
 		return DeleteSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to delete snapshot", snapshotID, err))

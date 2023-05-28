@@ -8,15 +8,13 @@ csiDriverName: "csi.weka.io"
 csiDriverVersion: &csiDriverVersion 1.0.0-SNAPSHOT.117.6a9abcb
 images:
   # -- CSI liveness probe sidecar image URL
-  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.9.0
-  # -- CSI attacher sidecar image URL
-  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.2.0
+  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.10.0
   # -- CSI provisioner sidecar image URL
-  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v3.4.0
+  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
   # -- CSI registrar sidercar
-  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.7.0
+  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
   # -- CSI resizer sidecar image URL
-  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.7.0
+  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.8.0
   # -- CSI snapshotter sidecar image URL
   snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v6.2.1
   # -- CSI driver main image URL
@@ -34,13 +32,26 @@ controllerPluginTolerations: *globalPluginTolerations
 nodePluginTolerations: *globalPluginTolerations
 # -- Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only
 nodeSelector: {}
-# -- Controller specific parameters
+# -- Controller-specific parameters, please do not change unless explicitly guided
 controller:
   # -- Controller number of replicas
   replicas: 2
-  # -- when multiple controller replicas are triggered in parallel, each controller will issue a random wait of up to
-  #    `maxRandomWaitIntervalSecs` to avoid multiple API calls. Can be increased on very busy / large Weka clusters
-  maxRandomWaitIntervalSecs: 5
+  # -- maximum concurrent operations per operation type (to avoid API starvation)
+  maxConcurrentRequests: 5
+  # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
+  grpcRequestTimeoutSeconds: 30
+  # -- Configure provisioner sidecar for leader election
+  configureProvisionerLeaderElection: true
+  # -- Configure resizer sidecar for leader election
+  configureResizerLeaderElection: true
+  # -- Configure snapshotter sidecar for leader election
+  configureSnapshotterLeaderElection: true
+# -- Node-specific parameters, please do not change unless explicitly guided
+node:
+  # -- maximum concurrent operations per operation type (to avoid API starvation)
+  maxConcurrentRequests: 5
+  # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
+  grpcRequestTimeoutSeconds: 30
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
@@ -54,7 +65,7 @@ priorityClassName: ""
 #    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts
 #    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.
 #    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!
-selinuxSupport: off
+selinuxSupport: "off"
 # -- This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,
 #    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label
 #    `csi.weka.io/selinux_enabled="true"`
@@ -66,6 +77,12 @@ metrics:
   enabled: true
   # -- Metrics port
   port: 9090
+  # -- Provisioner metrics port
+  provisionerPort: 9091
+  # -- Resizer metrics port
+  resizerPort: 9092
+  # -- Snapshotter metrics port
+  snapshotterPort: 9093
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""

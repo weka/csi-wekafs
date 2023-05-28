@@ -121,7 +121,7 @@ jobs:
       - name: Run chart-testing (install)
         id: helm-test
         run: |
-          ct install --print-config --chart-dirs deploy/helm --all --debug && \
+          ct install --print-config --chart-dirs deploy/helm --all --debug --helm-extra-args "--timeout 60s" && \
           echo "passed=true" >> $GITHUB_OUTPUT
         if: steps.list-changed.outputs.changed == 'true'
 

@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/showa-93/go-mask"
 	"hash/fnv"
 	"io"
 	"k8s.io/helm/pkg/urlutil"
@@ -55,7 +55,6 @@ type ApiClient struct {
 	apiTokenExpiryInterval     int64
 	refreshTokenExpiryInterval int64
 	refreshTokenExpiryDate     time.Time
-	Timeout                    time.Duration
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
 }
@@ -70,12 +69,11 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
-			Timeout:       0,
+			Timeout:       ApiHttpTimeOutSeconds * time.Second,
 		},
 		ClusterGuid:       uuid.UUID{},
 		Credentials:       credentials,
 		CompatibilityMap:  &WekaCompatibilityMap{},
-		Timeout:           time.Duration(ApiHttpTimeOutSeconds) * time.Second,
 		currentEndpointId: -1,
 	}
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
@@ -197,7 +195,8 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		payload = string(*Payload)
 	}
 	logger := log.Ctx(ctx)
-	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", payload).Msg("")
+
+	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
 
 	response, err := a.client.Do(r)
 	if err != nil {
@@ -209,7 +208,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	}
 
 	responseBody, err := io.ReadAll(response.Body)
-	logger.Trace().Str("response", string(responseBody)).Msg("")
+	logger.Trace().Str("response", maskPayload(string(responseBody))).Msg("")
 	if err != nil {
 		return nil, &ApiInternalError{
 			Err:         err,
@@ -420,7 +419,6 @@ func (a *ApiClient) getUrl(ctx context.Context, path string) string {
 
 // Login logs into API, updates refresh token expiry
 func (a *ApiClient) Login(ctx context.Context) error {
-	oldCtx := ctx
 	logger := log.Ctx(ctx)
 	if a.isLoggedIn() {
 		return nil
@@ -437,8 +435,6 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		return err
 	}
 	responseData := &LoginResponse{}
-	logger.Debug().Msg("Logging in. For safety, API logging is suppressed")
-	ctx = log.Ctx(ctx).Level(zerolog.Disabled).With().Str("credentials", a.Credentials.String()).Logger().WithContext(ctx)
 	if err := a.request(ctx, "POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
 			logger.Error().Err(err).Str("endpoint", a.getEndpoint(ctx)).Msg("Could not log in to endpoint")
@@ -452,7 +448,6 @@ func (a *ApiClient) Login(ctx context.Context) error {
 	if a.refreshTokenExpiryInterval < 1 {
 		_ = a.updateTokensExpiryInterval(ctx)
 	}
-	ctx = oldCtx
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
 	_ = a.fetchClusterInfo(ctx)
 	logger.Debug().Msg("Successfully connected to cluster API")
@@ -578,4 +573,22 @@ type Credentials struct {
 func (c *Credentials) String() string {
 	return fmt.Sprintf("%s://%s:%s@%s",
 		c.HttpScheme, c.Username, c.Organization, c.Endpoints)
+}
+
+func maskPayload(payload string) string {
+	masker := mask.NewMasker()
+	masker.RegisterMaskStringFunc(mask.MaskTypeFilled, masker.MaskFilledString)
+	masker.RegisterMaskField("username", "filled4")
+	masker.RegisterMaskField("password", "filled4")
+	masker.RegisterMaskField("access_token", "filled4")
+	masker.RegisterMaskField("mount_token", "filled4")
+	masker.RegisterMaskField("refresh_token", "filled4")
+	var target any
+	err := json.Unmarshal([]byte(payload), &target)
+	if err != nil {
+		return payload
+	}
+	masked, _ := masker.Mask(target)
+	ret, _ := json.Marshal(masked)
+	return string(ret)
 }

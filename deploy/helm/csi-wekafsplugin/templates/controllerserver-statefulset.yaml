@@ -31,48 +31,95 @@ spec:
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
       containers:
-        - name: csi-attacher
-          image: {{ required "csi attacher sidercar image." .Values.images.attachersidecar }}
-          securityContext:
-            privileged: true
-          args:
-            - "--csi-address=$(ADDRESS)"
-            - "--v={{ .Values.logLevel | default 5 }}"
-          env:
-            - name: ADDRESS
-              value: unix:///csi/csi.sock
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
         - name: csi-provisioner
           image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
+            - "--timeout=60s"
+            - "--prevent-volume-mode-conversion"
+          {{- if .Values.controller.configureProvisionerLeaderElection | default true }}
+            - "--leader-election"
+            - "--leader-election-namespace={{ .Release.Namespace }}"
+          {{- end }}
+            - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureProvisionerLeaderElection }}
+            - "--http-endpoint=:{{ .Values.metrics.provisionerPort | default 9091 }}"
+          {{- end }}
+          {{- if .Values.controller.configureProvisionerLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.provisionerPort | default 9091 }}
+              path: /healthz/leader-election
+          {{- end }}
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
           volumeMounts:
             - name: socket-dir
               mountPath: "/csi"
+          ports:
+            - containerPort: {{ .Values.metrics.provisionerPort }}
+              name: pr-metrics
+              protocol: TCP
         - name: csi-resizer
           image: {{ required "csi attacher sidercar image." .Values.images.resizersidecar }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
+            - "--timeout=60s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureResizerLeaderElection }}
+            - "--http-endpoint=:{{ .Values.metrics.resizerPort | default 9092 }}"
+          {{- end }}
+          {{- if .Values.controller.configureResizerLeaderElection | default true }}
+            - "--leader-election"
+            - "--leader-election-namespace={{ .Release.Namespace }}"
+          {{- end }}
+            - "--workers={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
+          {{- if .Values.controller.configureResizerLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.resizerPort | default 9092 }}
+              path: /healthz/leader-election
+          {{- end }}
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
+          ports:
+            - containerPort: {{ .Values.metrics.resizerPort }}
+              name: rs-metrics
+              protocol: TCP
         - name: csi-snapshotter
           image: {{ required "csi snapshotter sidecar image." .Values.images.snapshottersidecar }}
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
-            - "--leader-election=false"
+            - "--timeout=60s"
+          {{- if .Values.controller.configureSnapshotterLeaderElection | default true }}
+            - "--leader-election"
+            - "--leader-election-namespace={{ .Release.Namespace }}"
+          {{- end }}
+            - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureSnapshotterLeaderElection }}
+            - "--http-endpoint=:{{ .Values.metrics.snapshotterPort | default 9093 }}"
+          {{- end }}
+          {{- if .Values.controller.configureSnapshotterLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.snapshotterPort | default 9093 }}
+              path: /healthz/leader-election
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.metrics.snapshotterPort }}
+              name: sn-metrics
+              protocol: TCP
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -129,9 +176,12 @@ spec:
           {{- if .Values.useJsonLogging }}
             - "--usejsonlogging"
           {{- end }}
-          {{- if ge (int (default 1 .Values.controller.replicas)) 2 }}
-            - "--maxrandomwaitintervalsecs={{ .Values.controller.maxRandomWaitIntervalSecs | default 0 }}"
-          {{- end}}
+          {{- if .Values.controller.grpcRequestTimeoutSeconds }}
+            - "--grpcrequesttimeoutseconds={{ .Values.controller.grpcRequestTimeoutSeconds | default "5" }}"
+          {{- end }}
+          {{- if .Values.controller.maxConcurrentRequests }}
+            - "--maxconcurrentrequests={{ .Values.controller.maxConcurrentRequests | default "10" }}"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
