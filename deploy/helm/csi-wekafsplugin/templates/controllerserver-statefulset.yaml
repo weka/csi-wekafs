@@ -60,6 +60,10 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: "/csi"
+          ports:
+            - containerPort: {{ .Values.metrics.provisionerPort }}
+              name: pr-metrics
+              protocol: TCP
         - name: csi-resizer
           image: {{ required "csi attacher sidercar image." .Values.images.resizersidecar }}
           args:
@@ -87,6 +91,10 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
+          ports:
+            - containerPort: {{ .Values.metrics.resizerPort }}
+              name: rs-metrics
+              protocol: TCP
         - name: csi-snapshotter
           image: {{ required "csi snapshotter sidecar image." .Values.images.snapshottersidecar }}
           args:
@@ -108,6 +116,10 @@ spec:
               port: {{ .Values.metrics.snapshotterPort | default 9093 }}
               path: /healthz/leader-election
           {{- end }}
+          ports:
+            - containerPort: {{ .Values.metrics.snapshotterPort }}
+              name: sn-metrics
+              protocol: TCP
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -177,15 +189,6 @@ spec:
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.port }}
               name: metrics
-              protocol: TCP
-            - containerPort: {{ .Values.metrics.resizerPort }}
-              name: resizerMetrics
-              protocol: TCP
-            - containerPort: {{ .Values.metrics.provisionerPort }}
-              name: provisionerMetrics
-              protocol: TCP
-            - containerPort: {{ .Values.metrics.snapshotterPort }}
-              name: snapshotterMetrics
               protocol: TCP
           {{- end }}
           livenessProbe:
