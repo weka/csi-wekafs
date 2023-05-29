@@ -227,7 +227,7 @@ func (a *ApiClient) CreateQuota(ctx context.Context, qr *QuotaCreateRequest, q *
 	op := "CreateQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	if !qr.hasRequiredFields() {
 		return RequestMissingParams
 	}
@@ -286,7 +286,7 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 	op := "GetQuotaByFileSystemAndInode"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("filesystem", fs.Name).Uint64("inode_id", inodeId).Logger()
 	if fs == nil || inodeId == 0 {
 		return nil, RequestMissingParams
@@ -350,7 +350,7 @@ func (a *ApiClient) UpdateQuota(ctx context.Context, r *QuotaUpdateRequest, q *Q
 	op := "UpdateQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	//if !r.hasRequiredFields() {
 	//	return RequestMissingParams
 	//}
@@ -370,7 +370,7 @@ func (a *ApiClient) DeleteQuota(ctx context.Context, r *QuotaDeleteRequest) erro
 	op := "DeleteQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
