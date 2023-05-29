@@ -73,7 +73,7 @@ func (s *Snapshot) Exists(ctx context.Context) (bool, error) {
 	op := "SnapshotExists"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Str("snapshot", s.SnapshotName).Logger()
 	logger.Trace().Msg("Checking if snapshot exists")
@@ -114,7 +114,7 @@ func (s *Snapshot) Create(ctx context.Context) error {
 	op := "SnapshotCreate"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Logger()
 
 	// check if already exists and return OK right away
@@ -205,7 +205,7 @@ func (s *Snapshot) getObject(ctx context.Context) (*apiclient.Snapshot, error) {
 	op := "SnapshotGetObject"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Str("snapshot", s.SnapshotName).Logger()
 	if s.apiClient == nil {
@@ -242,7 +242,7 @@ func (s *Snapshot) Delete(ctx context.Context) error {
 	op := "SnapshotDelete"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Str("snapshot", s.SnapshotName).Logger()
 	obj, err := s.getObject(ctx)
@@ -309,7 +309,7 @@ func (s *Snapshot) getFileSystemObject(ctx context.Context) (*apiclient.FileSyst
 	op := "getFileSystemObject"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("snapshot_id", s.GetId()).Str("filesystem", s.FilesystemName).Logger()
 	if s.apiClient == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "Could not bind snapshot %s to API endpoint", s.GetId())
