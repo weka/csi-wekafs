@@ -106,9 +106,6 @@ pluginConfig:
     # e.g. in case a required volume capacity exceeds the size of filesystem.
     # Note: the filesystem is not expanded automatically when a new directory-backed volume is provisioned
     autoExpandFilesystems: true
-    # -- Allow automatic creation of "empty" snapshots for any provisioned filesystem,
-    # such snapshots could allow creation of additional empty CSI volumes to originate from the snapshot
-    autoCreateSeedSnapshot: true
     # -- Create snapshots of legacy (dir/v1) volumes. By default disabled.
     # Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful)
     snapshotDirectoryVolumes: false

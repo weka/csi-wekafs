@@ -1213,13 +1213,6 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		logger.Debug().Msg("Successully created directory")
 	}
 
-	// create the seed snapshot for the filesystem if needed
-	if v.isFilesystem() && v.server.getConfig().allowAutoSeedSnapshotCreation {
-		if _, err := v.ensureSeedSnapshot(ctx); err != nil {
-			logger.Error().Err(err).Msg("Failed to create seed snapshot, new snapshot volumes cannot be created from this filesystem!")
-		}
-	}
-
 	// Update volume capacity
 	if err := v.UpdateCapacity(ctx, &(v.enforceCapacity), capacity); err != nil {
 		logger.Error().Str("volume_type", string(v.GetType())).

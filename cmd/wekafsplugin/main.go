@@ -73,7 +73,6 @@ var (
 	allowAutoFsExpansion          = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
 	allowAutoFsCreation           = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
 	allowSnapshotsOfLegacyVolumes = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
-	allowAutoSeedSnapshotCreation = flag.Bool("allowautoseedsnapshotcreation", false, "Allow automatic creation of empty snapshot on new filesystem")
 	suppressSnapshotsCapability   = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
 	suppressVolumeCloneCapability = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
 	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
@@ -190,13 +189,20 @@ func main() {
 
 func handle() {
 	config := wekafs.NewDriverConfig(*dynamicSubPath,
-		*newVolumePrefix, *newSnapshotPrefix,
-		*seedSnapshotPrefix, *debugPath,
-		*allowAutoFsCreation, *allowAutoFsExpansion,
-		*allowAutoSeedSnapshotCreation, *allowSnapshotsOfLegacyVolumes,
-		*suppressSnapshotsCapability, *suppressVolumeCloneCapability,
-		*allowInsecureHttps, *alwaysAllowSnapshotVolumes, mutuallyExclusiveMountOptionsStrings,
-		*maxConcurrentRequests, *grpcRequestTimeoutSeconds)
+		*newVolumePrefix,
+		*newSnapshotPrefix,
+		*seedSnapshotPrefix,
+		*debugPath,
+		*allowAutoFsCreation,
+		*allowAutoFsExpansion,
+		*allowSnapshotsOfLegacyVolumes,
+		*suppressSnapshotsCapability,
+		*suppressVolumeCloneCapability,
+		*allowInsecureHttps,
+		*alwaysAllowSnapshotVolumes,
+		mutuallyExclusiveMountOptionsStrings,
+		*maxConcurrentRequests,
+		*grpcRequestTimeoutSeconds)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

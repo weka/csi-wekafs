@@ -149,9 +149,6 @@ spec:
           {{- if .Values.pluginConfig.allowedOperations.autoExpandFilesystems | default true }}
             - "--allowautofsexpansion"
           {{- end }}
-          {{- if .Values.pluginConfig.allowedOperations.autoCreateSeedSnapshot | default true }}
-            - "--allowautoseedsnapshotcreation"
-          {{- end }}
           {{- if .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes }}
             - "--allowsnapshotsoflegacyvolumes"
           {{- end }}

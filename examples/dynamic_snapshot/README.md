@@ -14,7 +14,6 @@
 ## Configuration Requirements
 This example introduces automatic provisioning of filesystems. For this functionality to work, the following configuration must be set:
 ```
-.Values.pluginConfig.allowedOperations.autoCreateSeedSnapshot = true  # to allow creation of the initial empty snapshot
 .Values.pluginConfig.allowedOperations.autoExpandFilesystems = true  # to allow resizing of filesystem if snapshot-backed volume is of a larger size
 ```
 > **NOTE:** Those values are set by default
