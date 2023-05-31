@@ -92,6 +92,10 @@ jobs:
         with:
           version: v3.10.0
 
+      - name: update Helm schema
+        run: |
+          helm schema-gen deploy/helm/csi-wekafsplugin/values.yaml >| deploy/helm/csi-wekafsplugin/values.schema.json 
+
       # TEST CHART
       - uses: actions/setup-python@v4
         with:

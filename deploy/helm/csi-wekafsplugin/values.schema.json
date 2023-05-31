@@ -5,6 +5,26 @@
         "controller": {
             "type": "object",
             "properties": {
+                "concurrency": {
+                    "type": "object",
+                    "properties": {
+                        "createSnapshot": {
+                            "type": "integer"
+                        },
+                        "createVolume": {
+                            "type": "integer"
+                        },
+                        "deleteSnapshot": {
+                            "type": "integer"
+                        },
+                        "deleteVolume": {
+                            "type": "integer"
+                        },
+                        "expandVolume": {
+                            "type": "integer"
+                        }
+                    }
+                },
                 "configureProvisionerLeaderElection": {
                     "type": "boolean"
                 },
@@ -126,6 +146,17 @@
         "node": {
             "type": "object",
             "properties": {
+                "concurrency": {
+                    "type": "object",
+                    "properties": {
+                        "nodePublishVolume": {
+                            "type": "integer"
+                        },
+                        "nodeUnpublishVolume": {
+                            "type": "integer"
+                        }
+                    }
+                },
                 "grpcRequestTimeoutSeconds": {
                     "type": "integer"
                 },
