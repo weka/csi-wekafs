@@ -3,10 +3,15 @@ changelog:
   categories:
     - title: New features
       labels:
-        - breaking
+        - feature
     - title: Improvements
       labels:
-        - feature
+        - enhancement
     - title: Bug Fixes
       labels:
         - fix
+    - title: Miscellaneous
+      labels:
+        - dependencies
+        - ci
+        - documentation
