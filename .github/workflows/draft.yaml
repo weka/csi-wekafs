@@ -1,0 +1,21 @@
+name: draft
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: master
+          target_commitish: master
+          generate_release_notes: true
+          name: DRAFT

@@ -1,0 +1,16 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-fs-snapshot
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-fs-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
+  dataSource:
+    kind: VolumeSnapshot
+    name: snapshot-pvc-wekafs-fs-api
+    apiGroup: snapshot.storage.k8s.io

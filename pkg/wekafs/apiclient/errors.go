@@ -171,3 +171,27 @@ func (e ApiRetriesExceeded) Error() string {
 var ObjectNotFoundError = errors.New("object not found")
 var MultipleObjectsFoundError = errors.New("ambiguous filter, multiple objects match")
 var RequestMissingParams = errors.New("request cannot be sent since some required params are missing")
+
+// ApiNonTransientError is internally generated when non-transient error is found
+type ApiNonTransientError struct {
+	apiError
+}
+
+func (e ApiNonTransientError) Error() string {
+	return e.apiError.Error()
+}
+func (e ApiNonTransientError) getType() string {
+	return "ApiNonTransientError"
+}
+
+type transportError struct {
+	Err error
+}
+
+func (e transportError) Error() string {
+	return e.Err.Error()
+}
+
+func (e transportError) getType() string {
+	return "transportError"
+}

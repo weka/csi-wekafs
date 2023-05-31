@@ -17,16 +17,15 @@ limitations under the License.
 package wekafs
 
 import (
+	"context"
 	"fmt"
 	"github.com/kubernetes-csi/csi-lib-utils/protosanitizer"
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
 	"net"
 	"os"
 	"strings"
 	"sync"
-
-	"github.com/golang/glog"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
@@ -74,7 +73,7 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 
 	proto, addr, err := parseEndpoint(endpoint)
 	if err != nil {
-		glog.Fatal(err.Error())
+		log.Fatal().Err(err)
 	}
 
 	if proto == "unix" {
@@ -96,23 +95,23 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 	s.server = server
 
 	if ids != nil {
-		glog.V(5).Infoln("Registering GRPC IdentityServer")
+		log.Info().Msg("Registering GRPC IdentityServer")
 		csi.RegisterIdentityServer(server, ids)
 	}
 	if s.csiMmode == CsiModeController || s.csiMmode == CsiModeAll {
 		if cs != nil {
-			glog.V(5).Infoln("Registering GRPC ControllerServer")
+			log.Info().Msg("Registering GRPC ControllerServer")
 			csi.RegisterControllerServer(server, cs)
 		}
 	}
 	if s.csiMmode == CsiModeNode || s.csiMmode == CsiModeAll {
 		if ns != nil {
-			glog.V(5).Infoln("Registering GRPC NodeServer")
+			log.Info().Msg("Registering GRPC NodeServer")
 			csi.RegisterNodeServer(server, ns)
 		}
 	}
 
-	glog.Infof("Listening for connections on address: %#v", listener.Addr())
+	log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
 
 	if err := server.Serve(listener); err != nil {
 		Die(err.Error())
@@ -131,13 +130,19 @@ func parseEndpoint(ep string) (string, string, error) {
 }
 
 func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	glog.V(6).Infof("GRPC call: %s", info.FullMethod)
-	glog.V(6).Infof("GRPC request: %+v", protosanitizer.StripSecrets(req))
+	ctx = log.With().Logger().WithContext(ctx)
+	if info.FullMethod != "/csi.v1.Identity/Probe" {
+		// suppress annoying probe messages
+		log.Ctx(ctx).Trace().Str("method", info.FullMethod).Str("request", protosanitizer.StripSecrets(req).String()).Msg("GRPC request")
+	}
 	resp, err := handler(ctx, req)
 	if err != nil {
-		glog.Errorf("GRPC error: %v", err)
+		log.Ctx(ctx).Trace().Err(err).Msg("GRPC error")
 	} else {
-		glog.V(6).Infof("GRPC response: %+v", protosanitizer.StripSecrets(resp))
+		if info.FullMethod != "/csi.v1.Identity/Probe" {
+			// suppress annoying probe messages
+			log.Ctx(ctx).Trace().Str("response", protosanitizer.StripSecrets(resp).String()).Msg("GRPC response")
+		}
 	}
 	return resp, err
 }

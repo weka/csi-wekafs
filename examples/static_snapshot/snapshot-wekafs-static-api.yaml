@@ -1,0 +1,7 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: snapshot-wekafs-static-api
+spec:
+  source:
+    volumeSnapshotContentName: snapshotcontent-wekafs-static-api

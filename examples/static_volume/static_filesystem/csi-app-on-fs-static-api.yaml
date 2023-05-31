@@ -1,0 +1,17 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: csi-app-on-fs-static-api
+spec:
+  containers:
+    - name: my-frontend
+      image: busybox
+      volumeMounts:
+      - mountPath: "/data"
+        name: my-csi-volume
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do echo `date` hello >> /data/temp.txt; sleep 10;done"]
+  volumes:
+    - name: my-csi-volume
+      persistentVolumeClaim:
+        claimName: pvc-wekafs-fs-static-api # defined in pvc-wekafs-dir.yaml

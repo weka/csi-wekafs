@@ -1,0 +1,158 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      releaseTag:
+        description: releaseTag to set 1.2.3, 1.2.3-dev, 1.2.3-beta, etc. or auto version will be set
+        required: false
+      draftTag:
+        description: draftTag with the release notes. Can be found at the release page. E.g. untagged-777fe0c3b1edc8bd78f6
+        required: true
+      makeLatestRelease:
+        type: boolean
+        description: github:latestRelease
+        required: true
+      preRelease:
+        type: boolean
+        description: artifacthub:preRelease
+        required: true
+      containsSecurityUpdates:
+        type: boolean
+        description: artifacthub:containsSecurityUpdates
+        required: true
+      swear:
+        description: I solemnly swear that the inputs are correct and I run the workflow from the correct branch! 
+        type: choice
+        options: 
+        - "yes"
+        - "yes, I do"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - run: gh release view ${{inputs.draftTag}}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Get version
+        id: version
+        uses: codacy/git-version@2.7.1
+        with:
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Set package version
+        id: set_version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          INPUT_VERSION: ${{ inputs.releaseTag }}
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            VERSION=$INPUT_VERSION
+          fi
+
+          VERSION=`echo $VERSION | sed "s|SNAPSHOT|$GITHUB_REF_NAME|"`
+          echo "version=$VERSION" >> $GITHUB_OUTPUT 
+
+          cd deploy/helm/csi-wekafsplugin
+          
+          yq -i '.version = "'$VERSION'"' Chart.yaml
+          yq -i '.appVersion = "'$VERSION'"' Chart.yaml
+          yq -i '.csiDriverVersion = "'$VERSION'"' values.yaml
+          yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/$VERSION"' Chart.yaml
+          yq -i '.annotations."artifacthub.io/prerelease" = "'${{ inputs.preRelease }}'"' Chart.yaml
+          yq -i '.annotations."artifacthub.io/containsSecurityUpdates" = "'${{ inputs.containsSecurityUpdates }}'"' Chart.yaml
+
+          echo ------------------ values ------------------
+          cat values.yaml
+          echo --------------------chart ------------------
+          cat Chart.yaml
+
+      - name: Update RELEASE.md
+        env:
+          VERSION: ${{ steps.set_version.outputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view ${{inputs.draftTag}} --json body | jq -r .body > changelog
+
+          sed '$d' changelog > changelog1 # delete last line
+
+          # insert release note at the beginning
+          # sed doesn't work well here
+
+          echo "# Release $VERSION" >> CHANGELOG.md
+          cat changelog1 >> CHANGELOG.md
+          cat RELEASE.md >> CHANGELOG.md
+
+          # release note will taken from here by helm/chart-releaser-action
+          cat changelog1 > deploy/helm/csi-wekafsplugin/CHANGELOG.md
+          mv CHANGELOG.md RELEASE.md
+
+      - uses: docker/setup-buildx-action@v2
+      - uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: quay.io
+
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          pull: true
+          tags: quay.io/weka.io/csi-wekafs:${{ steps.set_version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            revision='${{ steps.set_version.outputs.version }}'
+          build-args: |
+            VERSION='${{ steps.set_version.outputs.version }}'
+
+      - name: helm-docs
+        uses: addnab/docker-run-action@v3
+        with:
+          image: jnorwood/helm-docs:latest
+          options: -v ${{ github.workspace }}:/data
+          run: |
+            cd /data
+            helm-docs -s file -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl 
+            helm-docs -s file -c deploy/helm
+
+      - uses: azure/setup-helm@v3
+        with:
+          version: 3.11.1
+    
+      - name: Helm package
+        run: |
+          helm package deploy/helm/csi-wekafsplugin --destination .cr-release-packages
+
+      - run: gh release delete ${{inputs.draftTag}} --yes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Release ${{ steps.set_version.outputs.version }}
+
+      - uses: helm/chart-releaser-action@v1.5.0
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CR_RELEASE_NAME_TEMPLATE: "{{ .Version }}"
+          CR_GENERATE_RELEASE_NOTES: true
+          CR_MAKE_RELEASE_LATEST: ${{ inputs.makeLatestRelease }}
+          CR_RELEASE_NOTES_FILE: CHANGELOG.md
+        with:
+          charts_dir: deploy/helm
+          skip_packaging: true
+

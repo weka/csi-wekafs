@@ -1,0 +1,9 @@
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshotClass
+metadata:
+  name: snapshotclass-csi-wekafs
+driver: csi.weka.io
+deletionPolicy: Delete
+parameters:
+  csi.storage.k8s.io/snapshotter-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/snapshotter-secret-namespace: csi-wekafs

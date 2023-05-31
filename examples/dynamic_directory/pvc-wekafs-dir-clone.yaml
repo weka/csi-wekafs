@@ -1,0 +1,16 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-dir-clone
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-dir-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
+  dataSource:
+    kind: PersistentVolumeClaim
+    name: pvc-wekafs-dir-api
+    apiGroup: ""

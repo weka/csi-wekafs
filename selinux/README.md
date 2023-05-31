@@ -41,7 +41,7 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    $ make -f /usr/share/selinux/devel/Makefile csi-wekafs.pp
    $ semodule -i csi-wekafs.pp
    ```
-   > **NOTE**: for this purpose, `policycoreutils-devel` package 
+   > **NOTE:** for this purpose, `policycoreutils-devel` package 
    > (or its alternative in case of Linux distribution different from RedHat family) is required
 
    Check that the policy was applied correctly:
@@ -91,10 +91,10 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    
 ## Checking Plugin Operation & Troubleshooting
  
-1. Make sure you have configured a valid CSI API [`secret`](../examples/dynamic_api/csi-wekafs-api-secret.yaml),Create a valid Weka CSI Plugin [`storageClass`](../examples/dynamic_api)  
-   > **NOTE**: If using an example `storageClass`, make sure to update endpoints and credentials prior to apply 
-2. Provision a [`PersistentVolumeClaim`](../examples/dynamic_api/pvc-wekafs-dir-api.yaml)
-3. Provision a [`DaemonSet`](../examples/dynamic_api/csi-daemonset.app-on-dir-api.yaml), in order to be able access of all pods on all nodes
+1. Make sure you have configured a valid CSI API [`secret`](../examples/common/csi-wekafs-api-secret.yaml),Create a valid Weka CSI Plugin [`storageClass`](../examples/dynamic_api)  
+   > **NOTE:** If using an example `storageClass`, make sure to update endpoints and credentials prior to apply 
+2. Provision a [`PersistentVolumeClaim`](../examples/dynamic_directory/pvc-wekafs-dir-api.yaml)
+3. Provision a [`DaemonSet`](../examples/dynamic_directory/csi-daemonset.app-on-dir-api.yaml), in order to be able access of all pods on all nodes
 4. Monitor the pod logs using a command below, nothing should be printed in log files:
    ```shell
    $ kubectl logs -f -lapp=csi-daemonset-app-on-dir-api
@@ -117,7 +117,7 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    container_use_wekafs --> on
    ```
    * If the output matches example, proceed to next step. 
-   * If no output, policy is not installed, proceed to [Custom SELinux Policy Installation](#Custom SELinux Policy Installation)
+   * If no output, policy is not installed, proceed to [Custom SELinux Policy Installation](#custom-selinux-policy-installation)
    * If the policy is off, enable it and check output of the pod again by issuing
      ```shell
      $ setsebool container_use_wekafs=on
@@ -127,7 +127,7 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    $ kubectl describe node don-kube-8 | grep csi.weka.io/selinux_enabled
                 csi.weka.io/selinux_enabled=true
    ``` 
-   * If the output is empty, proceed to [CSI Plugin Installation and Configuration](#CSI Plugin Installation and Configuration)
+   * If the output is empty, proceed to [CSI Plugin Installation and Configuration](#csi-plugin-installation-and-configuration)
      > **NOTE:** If the label was missing and added by you during troubleshooting, the CSI node server component must be restarted on the node.  
      Perform the following command to terminate the relevant pod and another instance will start automatically:
      > ```shell

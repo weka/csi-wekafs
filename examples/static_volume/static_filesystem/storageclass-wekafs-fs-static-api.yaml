@@ -1,0 +1,39 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: storageclass-wekafs-fs-static-api
+provisioner: csi.weka.io
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+parameters:
+  volumeType: weka/v2
+
+  # optional parameters setting UID, GID and permissions on volume
+  # UID of the volume owner, default 0 (root)
+  #ownerUid: "1000"
+
+  # GID of the volume owner, default 0 (root)
+  #ownerGid: "1000"
+
+  # permissions in Unix octal format, default "0750"
+  #permissions: "0775"
+
+  # capacity enforcement mode (either SOFT or HARD)
+  # - HARD or unspecified: pod will not be able to write above quota
+  # - SOFT: warning will be issued on Weka cluster, but writing will not be blocked
+  capacityEnforcement: HARD
+  # name of the secret that stores API credentials for a cluster
+  # change the name of secret to match secret of a particular cluster (if you have several Weka clusters)
+  csi.storage.k8s.io/provisioner-secret-name: &secretName csi-wekafs-api-secret
+  # change the name of the namespace in which the cluster API credentials
+  csi.storage.k8s.io/provisioner-secret-namespace: &secretNamespace csi-wekafs
+  # do not change anything below this line, or set to same parameters as above
+  csi.storage.k8s.io/controller-publish-secret-name: *secretName
+  csi.storage.k8s.io/controller-publish-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/controller-expand-secret-name: *secretName
+  csi.storage.k8s.io/controller-expand-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/node-stage-secret-name: *secretName
+  csi.storage.k8s.io/node-stage-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/node-publish-secret-name: *secretName
+  csi.storage.k8s.io/node-publish-secret-namespace: *secretNamespace

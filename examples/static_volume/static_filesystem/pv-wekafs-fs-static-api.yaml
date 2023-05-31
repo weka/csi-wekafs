@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-wekafs-fs-static-api
+spec:
+  storageClassName: storageclass-wekafs-fs-static-api
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  capacity:
+    storage: 1Gi
+  csi:
+    driver: csi.weka.io
+    # volumeHandle must be formatted as following:
+    # weka/v2/<FILE_SYSTEM_NAME>
+    # The path must exist, otherwise publish request will fail
+    volumeHandle: weka/v2/testfs
+    nodePublishSecretRef:
+      name: csi-wekafs-api-secret
+      namespace: csi-wekafs
+    controllerExpandSecretRef:
+      name: csi-wekafs-api-secret
+      namespace: csi-wekafs

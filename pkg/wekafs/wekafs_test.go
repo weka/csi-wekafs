@@ -19,17 +19,21 @@ func TestAsciiFilter(t *testing.T) {
 }
 
 func TestVolumeType(t *testing.T) {
-	testPattern := func(s string) {
-		str := GetVolumeType(s)
-		if str != string(VolumeTypeDirV1) {
+	testPattern := func(s string, vt VolumeType) {
+		str := sliceVolumeTypeFromVolumeId(s)
+		if str != vt {
 			t.Errorf("VolumeID: %s, FAILED: %s", s, str)
 			return
 		}
-		t.Logf("PASS: VolumeId:%s", s)
+		t.Logf("PASS: VolumeId:%s (%s)", s, vt)
 	}
 
-	testPattern("dir/v1/filesystem/4e1243bd22c66e76c2ba9eddc1f91394e57f9f83-some_dirName")
-	testPattern("dir/v1/filesystem/4e1243bd22c66e76c2ba9eddc1f91394e57f9f83/some_dirName")
+	testPattern("dir/v1/filesystem/4e1243bd22c66e76c2ba9eddc1f91394e57f9f83-some_dirName", VolumeTypeDirV1)
+	testPattern("dir/v1/filesystem/4e1243bd22c66e76c2ba9eddc1f91394e57f9f83/some_dirName", VolumeTypeDirV1)
+	testPattern("weka/v1/filesystem", VolumeTypeUnified)
+	testPattern("weka/v1/filesystem:snapshotname", VolumeTypeUnified)
+	testPattern("weka/v1/filesystem:snapshotname/dirascii-some_dirName", VolumeTypeUnified)
+	testPattern("weka/v1/filesystem/dirascii-some_dirName", VolumeTypeUnified)
 }
 
 func TestVolumeId(t *testing.T) {
@@ -39,20 +43,33 @@ func TestVolumeId(t *testing.T) {
 			t.Errorf("VolumeID: %s, FAILED: %s", s, err)
 			return
 		}
-		t.Logf("PASS: VolumeId:%s", s)
+		t.Logf("PASS: VolumeId:%s (%s)", s, sliceVolumeTypeFromVolumeId(s))
 	}
 
 	testBadPattern := func(s string) {
 		err := validateVolumeId(s)
 		if err == nil {
-			t.Errorf("VolumeID: %s, FALSE PASS", s)
+			t.Errorf("VolumeID: %s (%s), FALSE PASS", s, sliceVolumeTypeFromVolumeId(s))
 			return
 		}
 		t.Logf("PASS: VolumeId:%s, did not validate, err: %s", s, err)
 	}
+	// DirVolume
 	testPattern("dir/v1/filesystem/4e1243bd22c66e76c2ba9eddc1f91394e57f9f83-some_dirName")
-	testBadPattern("dir/v1/filesystem")
-	testBadPattern("dir/v1")
-	testBadPattern("dir")
-	testBadPattern("/var/log/messages")
+	testBadPattern("dir/v1/filesystem") // only filesystem name, no internal path
+	testBadPattern("dir/v1")            // no filesystem name, only volumeType
+	testBadPattern("/var/log/messages") // volumeType starts with / - bad path
+
+	// FsVolume
+	testPattern("fs/v1/filesystem") // OK
+	testBadPattern("fs/v1")         // no filesystem name, only volumeType
+	testBadPattern("fs/filesystem") // no version
+
+	// FsSnap
+	testBadPattern("fssnap/v1") // no filesystem and no snapshot
+
+	testPattern("weka/v1/filesystem")
+	testPattern("weka/v1/filesystem:snapshotname")
+	testPattern("weka/v1/filesystem:snapshotname/dirascii-some_dirName")
+	testPattern("weka/v1/filesystem/dirascii-some_dirName")
 }
