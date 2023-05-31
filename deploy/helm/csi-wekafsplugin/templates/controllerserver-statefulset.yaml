@@ -149,9 +149,6 @@ spec:
           {{- if .Values.pluginConfig.allowedOperations.autoExpandFilesystems | default true }}
             - "--allowautofsexpansion"
           {{- end }}
-          {{- if .Values.pluginConfig.allowedOperations.autoCreateSeedSnapshot | default true }}
-            - "--allowautoseedsnapshotcreation"
-          {{- end }}
           {{- if .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes }}
             - "--allowsnapshotsoflegacyvolumes"
           {{- end }}
@@ -179,8 +176,12 @@ spec:
           {{- if .Values.controller.grpcRequestTimeoutSeconds }}
             - "--grpcrequesttimeoutseconds={{ .Values.controller.grpcRequestTimeoutSeconds | default "5" }}"
           {{- end }}
-          {{- if .Values.controller.maxConcurrentRequests }}
-            - "--maxconcurrentrequests={{ .Values.controller.maxConcurrentRequests | default "10" }}"
+          {{- if .Values.controller.concurrency }}
+            - "--concurrency.createVolume={{ .Values.controller.concurrency.createVolume | default "1" }}"
+            - "--concurrency.deleteVolume={{ .Values.controller.concurrency.deleteVolume | default "1" }}"
+            - "--concurrency.expandVolume={{ .Values.controller.concurrency.expandVolume | default "1" }}"
+            - "--concurrency.createSnapshot={{ .Values.controller.concurrency.createSnapshot | default "1" }}"
+            - "--concurrency.deleteSnapshot={{ .Values.controller.concurrency.deleteSnapshot | default "1" }}"
           {{- end }}
           ports:
             - containerPort: 9898

@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/status"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -40,12 +41,13 @@ const (
 )
 
 type ControllerServer struct {
-	caps      []*csi.ControllerServiceCapability
-	nodeID    string
-	mounter   *wekaMounter
-	api       *ApiStore
-	config    *DriverConfig
-	semaphore *semaphore.Weighted
+	caps       []*csi.ControllerServiceCapability
+	nodeID     string
+	mounter    *wekaMounter
+	api        *ApiStore
+	config     *DriverConfig
+	semaphores map[string]*semaphore.Weighted
+	sync.Mutex
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
@@ -108,12 +110,12 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, con
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
 	return &ControllerServer{
-		caps:      capabilities,
-		nodeID:    nodeID,
-		mounter:   mounter,
-		api:       api,
-		config:    config,
-		semaphore: semaphore.NewWeighted(config.maxConcurrentRequests),
+		caps:       capabilities,
+		nodeID:     nodeID,
+		mounter:    mounter,
+		api:        api,
+		config:     config,
+		semaphores: make(map[string]*semaphore.Weighted),
 	}
 }
 
@@ -157,23 +159,42 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 
 type releaseSempahore func()
 
-func (cs *ControllerServer) acquireSemaphore(ctx context.Context) (error, releaseSempahore) {
+func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
 	logger := log.Ctx(ctx)
-	sem := cs.semaphore
+	cs.initializeSemaphore(ctx, op)
+	sem := cs.semaphores[op]
+
 	logger.Trace().Msg("Acquiring semaphore")
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
 	if err == nil {
-		logger.Trace().Dur("acquire_duration", elapsed).Msg("Successfully acquired semaphore")
+		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
 		return nil, func() {
 			elapsed = time.Since(start)
-			logger.Trace().Dur("total_operation_time", elapsed).Msg("Releasing semaphore")
+			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
 		}
 	}
-	logger.Trace().Dur("acquire_duration", elapsed).Msg("Failed to acquire semaphore")
+	logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Failed to acquire semaphore")
 	return err, func() {}
+}
+
+func (cs *ControllerServer) initializeSemaphore(ctx context.Context, op string) {
+	if _, ok := cs.semaphores[op]; ok {
+		return
+	}
+	cs.Lock()
+	defer cs.Unlock()
+
+	if _, ok := cs.semaphores[op]; ok {
+		return
+	}
+	max := cs.getConfig().maxConcurrencyPerOp[op]
+	logger := log.Ctx(ctx)
+	logger.Info().Str("op", op).Int64("max_concurrency", max).Msg("Initializing semaphore")
+	sem := semaphore.NewWeighted(max)
+	cs.semaphores[op] = sem
 }
 
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
@@ -196,7 +217,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx)
+	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
 	if err != nil {
@@ -315,7 +336,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx)
+	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
 	if err != nil {
@@ -392,7 +413,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx)
+	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
 	if err != nil {
@@ -479,7 +500,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx)
+	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
 	if err != nil {
@@ -551,7 +572,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx)
+	err, dec := cs.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
 	if err != nil {

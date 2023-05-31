@@ -73,12 +73,13 @@ spec:
             {{- range  .Values.pluginConfig.mutuallyExclusiveMountOptions }}
             - "--mutuallyexclusivemountoptions={{ . }}"
             {{- end }}
-          {{- end}}
+          {{- end }}
           {{- if .Values.node.grpcRequestTimeoutSeconds }}
             - "--grpcrequesttimeoutseconds={{ .Values.node.grpcRequestTimeoutSeconds | default "5" }}"
           {{- end }}
-          {{- if .Values.node.maxConcurrentRequests }}
-            - "--maxconcurrentrequests={{ .Values.node.maxConcurrentRequests | default "5" }}"
+          {{- if .Values.node.concurrency }}
+            - "--concurrency.nodePublishVolume={{ .Values.node.concurrency.nodePublishVolume | default "1" }}"
+            - "--concurrency.nodeUnpublishVolume={{ .Values.node.concurrency.nodeUnpublishVolume | default "1" }}"
           {{- end }}
           ports:
             - containerPort: 9898

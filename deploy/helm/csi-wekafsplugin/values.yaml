@@ -36,8 +36,15 @@ nodeSelector: {}
 controller:
   # -- Controller number of replicas
   replicas: 2
-  # -- maximum concurrent operations per operation type (to avoid API starvation)
+  # -- Maximum concurrent requests from sidecars (global)
   maxConcurrentRequests: 5
+  # -- maximum concurrent operations per operation type (to avoid API starvation)
+  concurrency:
+    createVolume: 5
+    deleteVolume: 1
+    expandVolume: 5
+    createSnapshot: 5
+    deleteSnapshot: 5
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
   grpcRequestTimeoutSeconds: 30
   # -- Configure provisioner sidecar for leader election
@@ -48,8 +55,12 @@ controller:
   configureSnapshotterLeaderElection: true
 # -- Node-specific parameters, please do not change unless explicitly guided
 node:
-  # -- maximum concurrent operations per operation type (to avoid API starvation)
+  # -- Maximum concurrent requests from sidecars (global)
   maxConcurrentRequests: 5
+  # -- maximum concurrent operations per operation type (to avoid API starvation)
+  concurrency:
+    nodePublishVolume: 5
+    nodeUnpublishVolume: 5
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
   grpcRequestTimeoutSeconds: 30
 # -- Log level of CSI plugin
@@ -106,9 +117,6 @@ pluginConfig:
     # e.g. in case a required volume capacity exceeds the size of filesystem.
     # Note: the filesystem is not expanded automatically when a new directory-backed volume is provisioned
     autoExpandFilesystems: true
-    # -- Allow automatic creation of "empty" snapshots for any provisioned filesystem,
-    # such snapshots could allow creation of additional empty CSI volumes to originate from the snapshot
-    autoCreateSeedSnapshot: true
     # -- Create snapshots of legacy (dir/v1) volumes. By default disabled.
     # Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful)
     snapshotDirectoryVolumes: false
