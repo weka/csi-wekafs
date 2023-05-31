@@ -32,6 +32,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -51,7 +52,8 @@ type NodeServer struct {
 	mounter           *wekaMounter
 	api               *ApiStore
 	config            *DriverConfig
-	semaphore         *semaphore.Weighted
+	semaphores        map[string]*semaphore.Weighted
+	sync.Mutex
 }
 
 func (ns *NodeServer) getDefaultMountOptions() MountOptions {
@@ -100,7 +102,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 		mounter:           mounter,
 		api:               api,
 		config:            config,
-		semaphore:         semaphore.NewWeighted(config.maxConcurrentRequests),
+		semaphores:        make(map[string]*semaphore.Weighted),
 	}
 }
 
@@ -111,24 +113,43 @@ func isWekaInstalled() bool {
 	return strings.Contains(string(res), WekaKernelModuleName)
 }
 
-func (ns *NodeServer) acquireSemaphore(ctx context.Context) (error, releaseSempahore) {
+func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
 	logger := log.Ctx(ctx)
-	sem := ns.semaphore
+	ns.initializeSemaphore(ctx, op)
+	sem := ns.semaphores[op]
+
 	logger.Trace().Msg("Acquiring semaphore")
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
-
 	if err == nil {
-		logger.Trace().Dur("acquire_duration", elapsed).Msg("Successfully acquired semaphore")
+		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
 		return nil, func() {
 			elapsed = time.Since(start)
-			logger.Trace().Dur("total_operation_time", elapsed).Msg("Releasing semaphore")
+			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
 		}
 	}
-	logger.Trace().Dur("acquire_duration", elapsed).Msg("Failed to acquire semaphore")
+	logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Failed to acquire semaphore")
 	return err, func() {}
+}
+
+func (ns *NodeServer) initializeSemaphore(ctx context.Context, op string) {
+	if _, ok := ns.semaphores[op]; ok {
+		return
+	}
+	ns.Lock()
+	defer ns.Unlock()
+
+	if _, ok := ns.semaphores[op]; ok {
+		return
+	}
+
+	max := ns.getConfig().maxConcurrencyPerOp[op]
+	logger := log.Ctx(ctx)
+	logger.Info().Str("op", op).Int64("max_concurrency", max).Msg("Initializing semaphore")
+	sem := semaphore.NewWeighted(max)
+	ns.semaphores[op] = sem
 }
 
 func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodePublishVolumeResponse, error) {
@@ -157,7 +178,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, ns.config.grpcRequestTimeout)
-	err, dec := ns.acquireSemaphore(ctx)
+	err, dec := ns.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
 	if err != nil {
@@ -316,7 +337,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	}()
 
 	ctx, cancel := context.WithTimeout(ctx, ns.config.grpcRequestTimeout)
-	err, dec := ns.acquireSemaphore(ctx)
+	err, dec := ns.acquireSemaphore(ctx, op)
 	defer dec()
 	defer cancel()
 	if err != nil {

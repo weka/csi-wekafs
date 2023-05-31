@@ -65,25 +65,31 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csimodetext                   = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
-	selinuxSupport                = flag.Bool("selinux-support", false, "Enable support for SELinux")
-	newVolumePrefix               = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
-	newSnapshotPrefix             = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
-	seedSnapshotPrefix            = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
-	allowAutoFsExpansion          = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
-	allowAutoFsCreation           = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
-	allowSnapshotsOfLegacyVolumes = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
-	suppressSnapshotsCapability   = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
-	suppressVolumeCloneCapability = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
-	enableMetrics                 = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
-	metricsPort                   = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
-	verbosity                     = flag.Int("v", 1, "sets log verbosity level")
-	tracingUrl                    = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
-	allowInsecureHttps            = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
-	alwaysAllowSnapshotVolumes    = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-backed volumes even when Weka cluster doesn't support capacity enforcement")
-	usejsonlogging                = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
-	maxConcurrentRequests         = flag.Int64("maxconcurrentrequests", 10, "Do not allow more than X requests in parallel")
-	grpcRequestTimeoutSeconds     = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
+	csimodetext                          = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
+	selinuxSupport                       = flag.Bool("selinux-support", false, "Enable support for SELinux")
+	newVolumePrefix                      = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
+	newSnapshotPrefix                    = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
+	seedSnapshotPrefix                   = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
+	allowAutoFsExpansion                 = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
+	allowAutoFsCreation                  = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
+	allowSnapshotsOfLegacyVolumes        = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
+	suppressSnapshotsCapability          = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
+	suppressVolumeCloneCapability        = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
+	enableMetrics                        = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
+	metricsPort                          = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
+	verbosity                            = flag.Int("v", 1, "sets log verbosity level")
+	tracingUrl                           = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
+	allowInsecureHttps                   = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
+	alwaysAllowSnapshotVolumes           = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-backed volumes even when Weka cluster doesn't support capacity enforcement")
+	usejsonlogging                       = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
+	maxConcurrentCreateVolumeReqs        = flag.Int64("concurrency.createVolume", 1, "Maximum concurrent CreateVolume requests")
+	maxConcurrentExpandVolumeReqs        = flag.Int64("concurrency.expandVolume", 1, "Maximum concurrent CreateVolume requests")
+	maxConcurrentDeleteVolumeReqs        = flag.Int64("concurrency.deleteVolume", 1, "Maximum concurrent CreateVolume requests")
+	maxConcurrentCreateSnapshotReqs      = flag.Int64("concurrency.createSnapshot", 1, "Maximum concurrent CreateVolume requests")
+	maxConcurrentDeleteSnapshotReqs      = flag.Int64("concurrency.deleteSnapshot", 1, "Maximum concurrent CreateVolume requests")
+	maxConcurrentNodePublishVolumeReqs   = flag.Int64("concurrency.nodePublishVolume", 1, "Maximum concurrent CreateVolume requests")
+	maxConcurrentNodeUnpublishVolumeReqs = flag.Int64("concurrency.nodeUnpublishVolume", 1, "Maximum concurrent CreateVolume requests")
+	grpcRequestTimeoutSeconds            = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
 	// Set by the build process
 	version = ""
 )
@@ -201,7 +207,13 @@ func handle() {
 		*allowInsecureHttps,
 		*alwaysAllowSnapshotVolumes,
 		mutuallyExclusiveMountOptionsStrings,
-		*maxConcurrentRequests,
+		*maxConcurrentCreateVolumeReqs,
+		*maxConcurrentDeleteVolumeReqs,
+		*maxConcurrentExpandVolumeReqs,
+		*maxConcurrentCreateSnapshotReqs,
+		*maxConcurrentDeleteSnapshotReqs,
+		*maxConcurrentNodePublishVolumeReqs,
+		*maxConcurrentNodeUnpublishVolumeReqs,
 		*grpcRequestTimeoutSeconds)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)

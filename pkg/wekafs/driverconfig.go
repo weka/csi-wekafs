@@ -30,7 +30,7 @@ type DriverConfig struct {
 	allowInsecureHttps            bool
 	alwaysAllowSnapshotVolumes    bool
 	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
-	maxConcurrentRequests         int64
+	maxConcurrencyPerOp           map[string]int64
 	grpcRequestTimeout            time.Duration
 }
 
@@ -46,7 +46,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfLegacyVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
-	maxConcurrentRequests int64,
+	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
 	grpcRequestTimeoutSeconds int) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -59,6 +59,15 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	}
 
 	grpcRequestTimeout := time.Duration(grpcRequestTimeoutSeconds) * time.Second
+
+	concurrency := make(map[string]int64)
+	concurrency["CreateVolume"] = maxCreateVolumeReqs
+	concurrency["DeleteVolume"] = maxDeleteVolumeReqs
+	concurrency["ExpandVolume"] = maxExpandVolumeReqs
+	concurrency["CreateSnapshot"] = maxCreateSnapshotReqs
+	concurrency["DeleteSnapshot"] = maxDeleteSnapshotReqs
+	concurrency["NodePublishVolume"] = maxNodePublishVolumeReqs
+	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
 
 	return &DriverConfig{
 		DynamicVolPath:                dynamicVolPath,
@@ -74,7 +83,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowInsecureHttps:            allowInsecureHttps,
 		alwaysAllowSnapshotVolumes:    alwaysAllowSnapshotVolumes,
 		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
-		maxConcurrentRequests:         maxConcurrentRequests,
+		maxConcurrencyPerOp:           concurrency,
 		grpcRequestTimeout:            grpcRequestTimeout,
 	}
 }
