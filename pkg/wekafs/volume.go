@@ -162,9 +162,10 @@ func (v *Volume) hasUnderlyingSnapshots(ctx context.Context) (bool, error) {
 	logger := log.Ctx(ctx)
 	has := false
 
-	if v.isOnSnapshot() {
+	if !v.isFilesystem() {
 		return false, nil
 	}
+
 	snapshots, err := v.getUnderlyingSnapshots(ctx)
 	if err != nil {
 		return true, err
@@ -204,7 +205,7 @@ func (v *Volume) isAllowedForDeletion(ctx context.Context) bool {
 	logger.Trace().Msg("Checking if deletion of volume is allowed")
 	hasSnaps, err := v.hasUnderlyingSnapshots(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch underlying snapshots")
+		logger.Error().Err(err).Msg("Failed to fetch underlying snapshots, filesystem deletion not allowed")
 		return false // we want to be on the safe side. If we fail to get snapshots, just block the FS from deletion
 	}
 	return !hasSnaps
@@ -222,13 +223,14 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 	if v.apiClient == nil {
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}
+
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
-		logger.Warn().Msg("Filesystem not exists")
 		return nil, err
 	}
 	if fsObj == nil {
 		// filesystem is already deleted or not exists
+		logger.Warn().Msg("Filesystem not exists")
 		return snapshots, nil
 	}
 
