@@ -25,7 +25,7 @@ entries:
       url: https://weka.io
     name: csi-wekafsplugin
     sources:
-    - https://github.com/weka/csi-wekafs/tree/$VERSION
+    - https://github.com/weka/csi-wekafs/tree/2.0.0
     type: application
     urls:
     - https://github.com/weka/csi-wekafs/releases/download/2.0.0/csi-wekafsplugin-2.0.0.tgz
