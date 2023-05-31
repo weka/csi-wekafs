@@ -71,7 +71,7 @@ spec:
             {{- range  .Values.pluginConfig.mutuallyExclusiveMountOptions }}
             - "--mutuallyexclusivemountoptions={{ . }}"
             {{- end }}
-          {{- end}}
+          {{- end }}
           {{- if .Values.node.grpcRequestTimeoutSeconds }}
             - "--grpcrequesttimeoutseconds={{ .Values.node.grpcRequestTimeoutSeconds | default "5" }}"
           {{- end }}
