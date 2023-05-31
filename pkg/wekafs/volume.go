@@ -195,16 +195,19 @@ func (v *Volume) hasUnderlyingSnapshots(ctx context.Context) (bool, error) {
 func (v *Volume) isAllowedForDeletion(ctx context.Context) bool {
 	if !v.isFilesystem() {
 		return true
-	} else {
-		hasSnaps, err := v.hasUnderlyingSnapshots(ctx)
-		if err != nil {
-			return true // we want to be on the safe side. If we fail to get snapshots, just block the FS from deletion
-		}
-		if hasSnaps {
-			return false
-		}
 	}
-	return true
+	op := "isAllowedForDeletion"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("filesystem", v.FilesystemName).Logger()
+	logger.Trace().Msg("Checking if deletion of volume is allowed")
+	hasSnaps, err := v.hasUnderlyingSnapshots(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch underlying snapshots")
+		return false // we want to be on the safe side. If we fail to get snapshots, just block the FS from deletion
+	}
+	return !hasSnaps
 }
 
 // getUnderlyingSnapshots intended to return list of Weka snapshots that exist for filesystem
@@ -219,6 +222,10 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 	}
 	if fsObj == nil {
 		return nil, errors.New("could not fetch volume snapshots")
+	}
+
+	if fsObj.IsRemoving { // assume snapshots are not relevant in such case
+		return snapshots, nil
 	}
 
 	err = v.apiClient.FindSnapshotsByFilesystem(ctx, fsObj, snapshots)
@@ -1307,7 +1314,6 @@ func (v *Volume) Delete(ctx context.Context) error {
 		if !v.isAllowedForDeletion(ctx) {
 			return ErrFilesystemHasUnderlyingSnapshots
 		}
-		v.deleteSeedSnapshot(ctx)
 		err = v.deleteFilesystem(ctx)
 	} else if v.isOnSnapshot() {
 		err = v.deleteSnapshot(ctx)
@@ -1355,26 +1361,29 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		// FS doesn't exist already, return OK for idempotence
 		return nil
 	}
-	fsUid := fsObj.Uid
-	logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")
-	fsd := &apiclient.FileSystemDeleteRequest{Uid: fsObj.Uid}
-	err = v.apiClient.DeleteFileSystem(ctx, fsd)
-	if err != nil {
-		if err == apiclient.ObjectNotFoundError {
-			logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
-			return nil
+	if !fsObj.IsRemoving { // if filesystem is already removing, just wait
+		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")
+		fsd := &apiclient.FileSystemDeleteRequest{Uid: fsObj.Uid}
+		err = v.apiClient.DeleteFileSystem(ctx, fsd)
+		if err != nil {
+			if err == apiclient.ObjectNotFoundError {
+				logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
+				return nil
+			}
+			if _, ok := err.(*apiclient.ApiNotFoundError); ok {
+				logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
+				return nil
+			}
+			if _, ok := err.(*apiclient.ApiBadRequestError); ok {
+				logger.Trace().Err(err).Msg("Bad request during filesystem deletion, probably already removed")
+				return nil
+			}
+			logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")
+			return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
+
 		}
-		if _, ok := err.(*apiclient.ApiNotFoundError); ok {
-			logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
-			return nil
-		}
-		if _, ok := err.(*apiclient.ApiBadRequestError); ok {
-			logger.Trace().Err(err).Msg("Bad request during filesystem deletion, probably already removed")
-			return nil
-		}
-		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")
-		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 	}
+	fsUid := fsObj.Uid
 	err, done := v.waitForFilesystemDeletion(ctx, logger, fsUid)
 	if done {
 		return err
