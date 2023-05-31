@@ -212,19 +212,28 @@ func (v *Volume) isAllowedForDeletion(ctx context.Context) bool {
 
 // getUnderlyingSnapshots intended to return list of Weka snapshots that exist for filesystem
 func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snapshot, error) {
+	op := "getUnderlyingSnapshots"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("filesystem", v.FilesystemName).Logger()
+
 	snapshots := &[]apiclient.Snapshot{}
 	if v.apiClient == nil {
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
+		logger.Warn().Msg("Filesystem not exists")
 		return nil, err
 	}
 	if fsObj == nil {
-		return nil, errors.New("could not fetch volume snapshots")
+		// filesystem is already deleted or not exists
+		return snapshots, nil
 	}
 
-	if fsObj.IsRemoving { // assume snapshots are not relevant in such case
+	if fsObj.IsRemoving {
+		// assume snapshots are not relevant in such case
 		return snapshots, nil
 	}
 
