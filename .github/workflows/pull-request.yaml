@@ -94,6 +94,7 @@ jobs:
 
       - name: update Helm schema
         run: |
+          helm plugin install https://github.com/karuppiah7890/helm-schema-gen.git
           helm schema-gen deploy/helm/csi-wekafsplugin/values.yaml >| deploy/helm/csi-wekafsplugin/values.schema.json 
 
       # TEST CHART
