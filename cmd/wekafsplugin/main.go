@@ -112,7 +112,7 @@ func main() {
 
 	flag.Parse()
 	if !*usejsonlogging {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).With().Caller().Logger()
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339Nano}).With().Caller().Logger()
 	}
 	zerolog.SetGlobalLevel(mapVerbosity(*verbosity))
 
