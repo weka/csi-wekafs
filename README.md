@@ -1,7 +1,7 @@
 # CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-![Version: 1.0.0-SNAPSHOT.123.84eee12](https://img.shields.io/badge/Version-1.0.0--SNAPSHOT.123.84eee12-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.0-SNAPSHOT.123.84eee12](https://img.shields.io/badge/AppVersion-v1.0.0--SNAPSHOT.123.84eee12-informational?style=flat-square)
+![Version: 1.0.0-SNAPSHOT.125.5647618](https://img.shields.io/badge/Version-1.0.0--SNAPSHOT.125.5647618-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.0-SNAPSHOT.125.5647618](https://img.shields.io/badge/AppVersion-v1.0.0--SNAPSHOT.125.5647618-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
 
@@ -47,27 +47,29 @@ Kubernetes: `>=1.18.0`
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"1.0.0-SNAPSHOT.123.84eee12"` | CSI driver version |
+| csiDriverVersion | string | `"1.0.0-SNAPSHOT.125.5647618"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.10.0"` | CSI liveness probe sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v3.5.0"` | CSI provisioner sidecar image URL |
 | images.registrarsidecar | string | `"registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0"` | CSI registrar sidercar |
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.8.0"` | CSI resizer sidecar image URL |
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v6.2.1"` | CSI snapshotter sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"1.0.0-SNAPSHOT.123.84eee12"` | CSI driver tag |
+| images.csidriverTag | string | `"1.0.0-SNAPSHOT.125.5647618"` | CSI driver tag |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
 | nodeSelector | object | `{}` | Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only |
-| controller | object | `{"configureProvisionerLeaderElection":true,"configureResizerLeaderElection":true,"configureSnapshotterLeaderElection":true,"grpcRequestTimeoutSeconds":30,"maxConcurrentRequests":5,"replicas":2}` | Controller-specific parameters, please do not change unless explicitly guided |
+| controller | object | `{"concurrency":{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":1,"expandVolume":5},"configureProvisionerLeaderElection":true,"configureResizerLeaderElection":true,"configureSnapshotterLeaderElection":true,"grpcRequestTimeoutSeconds":30,"maxConcurrentRequests":5,"replicas":2}` | Controller-specific parameters, please do not change unless explicitly guided |
 | controller.replicas | int | `2` | Controller number of replicas |
-| controller.maxConcurrentRequests | int | `5` | maximum concurrent operations per operation type (to avoid API starvation) |
+| controller.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
+| controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":1,"expandVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
 | controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | controller.configureProvisionerLeaderElection | bool | `true` | Configure provisioner sidecar for leader election |
 | controller.configureResizerLeaderElection | bool | `true` | Configure resizer sidecar for leader election |
 | controller.configureSnapshotterLeaderElection | bool | `true` | Configure snapshotter sidecar for leader election |
-| node | object | `{"grpcRequestTimeoutSeconds":30,"maxConcurrentRequests":5}` | Node-specific parameters, please do not change unless explicitly guided |
-| node.maxConcurrentRequests | int | `5` | maximum concurrent operations per operation type (to avoid API starvation) |
+| node | object | `{"concurrency":{"nodePublishVolume":5,"nodeUnpublishVolume":5},"grpcRequestTimeoutSeconds":30,"maxConcurrentRequests":5}` | Node-specific parameters, please do not change unless explicitly guided |
+| node.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
+| node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
 | node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
