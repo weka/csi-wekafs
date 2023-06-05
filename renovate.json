@@ -7,5 +7,6 @@
   ],
   "helm-values": {
     "fileMatch": ["^deploy\\/helm\\/csi-wekafsplugin\\/values\\.yaml$"]
-  }
+  },
+   "reviewers": ["sergeyberezansky", "dontbreakit"]
 }
