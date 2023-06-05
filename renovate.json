@@ -1,0 +1,65 @@
+// Renovate applies labels only at creation time and do not change them later
+  
+// The labels field is non-mergeable, meaning that any config setting a list of PR labels will replace any existing list.",
+// If you want to append labels for matched rules, then define an addLabels array with one (or more) label strings.",
+// All matched addLabels strings will be attached to the PR."
+
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "prHourlyLimit": 10,
+  "baseBranches": ["dev"],
+  "reviewers": ["sergeyberezansky", "dontbreakit"],
+  "labels": ["dependencies"],
+  "extends": [
+    "config:base"
+  ],
+  "regexManagers": [
+    {
+      "fileMatch": ["^deploy\\/helm\\/csi-wekafsplugin\\/values\\.yaml$"],
+      "matchStrings": ["\\s\\slivenessprobesidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/livenessprobe:(?<currentValue>.*?)\\n"],
+      "depNameTemplate": "registry.k8s.io/sig-storage/livenessprobe",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "fileMatch": ["^deploy\\/helm\\/csi-wekafsplugin\\/values\\.yaml$"],
+      "matchStrings": ["\\s\\sprovisionersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-provisioner:(?<currentValue>.*?)\\n"],
+      "depNameTemplate": "registry.k8s.io/sig-storage/csi-provisioner",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "fileMatch": ["^deploy\\/helm\\/csi-wekafsplugin\\/values\\.yaml$"],
+      "matchStrings": ["\\s\\sregistrarsidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-node-driver-registrar:(?<currentValue>.*?)\\n"],
+      "depNameTemplate": "registry.k8s.io/sig-storage/csi-node-driver-registrar",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "fileMatch": ["^deploy\\/helm\\/csi-wekafsplugin\\/values\\.yaml$"],
+      "matchStrings": ["\\s\\sresizersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-resizer:(?<currentValue>.*?)\\n"],
+      "depNameTemplate": "registry.k8s.io/sig-storage/csi-resizer",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "fileMatch": ["^deploy\\/helm\\/csi-wekafsplugin\\/values\\.yaml$"],
+      "matchStrings": ["\\s\\ssnapshottersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-snapshotter:(?<currentValue>.*?)\\n"],
+      "depNameTemplate": "registry.k8s.io/sig-storage/csi-snapshotter",
+      "datasourceTemplate": "docker"
+    }
+  ],
+  "packageRules": [
+    {
+      "datasources": ["docker"],
+      "addLabels": ["docker"],
+      "commitMessageTopic": "{{{depName}}}"
+    },
+    {
+      "datasources": ["go"],
+      "addLabels": ["go"]
+    },
+    {
+      "matchPackagePatterns": [".*sig-storage.*"],
+      "addLabels": ["sidecar"]
+    }
+   ]
+
+}
+
