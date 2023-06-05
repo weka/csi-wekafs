@@ -39,10 +39,12 @@ spec:
       {{- end }}
       hostNetwork: true
       containers:
+        {{ $images := .Values.images }}
         - name: wekafs
           securityContext:
             privileged: true
-          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
+          {{ $i := $images.csidriverImage }}
+          image: {{ $i.registry }}/{{ $i.repository }}:v{{ $i.tag }}
           imagePullPolicy: Always
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
@@ -131,7 +133,8 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-          image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
+          {{ $i := $images.livenessprobeImage }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
@@ -143,7 +146,8 @@ spec:
               value: "9898"
 
         - name: csi-registrar
-          image: {{ required "Provide the csi node registrar sidecar container image." .Values.images.registrarsidecar }}
+          {{ $i := $images.registrarImage }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
