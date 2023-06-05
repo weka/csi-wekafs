@@ -34,7 +34,7 @@ spec:
         {{ $images := .Values.images }}
         - name: csi-provisioner
           {{ $i := $images.provisionerImage }}
-          image: {{ $i.registry }}/{{ $i.repository }}/{{ $i.tag }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
@@ -68,7 +68,7 @@ spec:
               protocol: TCP
         - name: csi-resizer
           {{ $i := $images.resizerImage }}
-          image: {{ $i.registry }}/{{ $i.repository }}/{{ $i.tag }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
@@ -100,7 +100,7 @@ spec:
               protocol: TCP
         - name: csi-snapshotter
           {{ $i := $images.snapshotterImage }}
-          image: {{ $i.registry }}/{{ $i.repository }}/{{ $i.tag }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -136,7 +136,7 @@ spec:
           securityContext:
             privileged: true
           {{ $i := $images.csidriverImage }}
-          image: {{ $i.registry }}/{{ $i.repository }}/v{{ $i.tag }}
+          image: {{ $i.registry }}/{{ $i.repository }}:v{{ $i.tag }}
           imagePullPolicy: Always
           args:
             - "--drivername=$(CSI_DRIVER_NAME)"
@@ -245,7 +245,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
           {{ $i := $images.livenessprobeImage }}
-          image: {{ $i.registry }}/{{ $i.repository }}/{{ $i.tag }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"

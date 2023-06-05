@@ -44,7 +44,7 @@ spec:
           securityContext:
             privileged: true
           {{ $i := $images.csidriverImage }}
-          image: {{ $i.registry }}/{{ $i.repository }}/v{{ $i.tag }}
+          image: {{ $i.registry }}/{{ $i.repository }}:v{{ $i.tag }}
           imagePullPolicy: Always
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
@@ -134,7 +134,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
           {{ $i := $images.livenessprobeImage }}
-          image: {{ $i.registry }}/{{ $i.repository }}/{{ $i.tag }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
@@ -147,7 +147,7 @@ spec:
 
         - name: csi-registrar
           {{ $i := $images.registrarImage }}
-          image: {{ $i.registry }}/{{ $i.repository }}/{{ $i.tag }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
