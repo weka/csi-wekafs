@@ -31,8 +31,10 @@ spec:
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
       containers:
+        {{ $images := .Values.images }}
         - name: csi-provisioner
-          image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
+          {{ $i := $images.provisionerImage }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
@@ -65,7 +67,8 @@ spec:
               name: pr-metrics
               protocol: TCP
         - name: csi-resizer
-          image: {{ required "csi attacher sidercar image." .Values.images.resizersidecar }}
+          {{ $i := $images.resizerImage }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
@@ -96,7 +99,8 @@ spec:
               name: rs-metrics
               protocol: TCP
         - name: csi-snapshotter
-          image: {{ required "csi snapshotter sidecar image." .Values.images.snapshottersidecar }}
+          {{ $i := $images.snapshotterImage }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -131,7 +135,8 @@ spec:
         - name: wekafs
           securityContext:
             privileged: true
-          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
+          {{ $i := $images.csidriverImage }}
+          image: {{ $i.registry }}/{{ $i.repository }}:v{{ $i.tag }}
           imagePullPolicy: Always
           args:
             - "--drivername=$(CSI_DRIVER_NAME)"
@@ -239,7 +244,8 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-          image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
+          {{ $i := $images.livenessprobeImage }}
+          image: {{ $i.registry }}/{{ $i.repository }}:{{ $i.tag }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"

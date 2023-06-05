@@ -6,21 +6,41 @@ dynamicProvisionPath: "csi-volumes"
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
 csiDriverVersion: &csiDriverVersion 2.0.0
+
+
 images:
-  # -- CSI liveness probe sidecar image URL
-  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.10.0
-  # -- CSI provisioner sidecar image URL
-  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
+  # -- CSI liveness probe sidecar
+  livenessprobeImage:
+    registry: registry.k8s.io
+    repository: sig-storage/livenessprobe
+    tag: v2.9.0
+  # -- CSI provisioner sidecar
+  provisionerImage:
+    registry: registry.k8s.io
+    repository: sig-storage/csi-provisioner
+    tag: v3.5.0
   # -- CSI registrar sidercar
-  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
-  # -- CSI resizer sidecar image URL
-  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.8.0
-  # -- CSI snapshotter sidecar image URL
-  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v6.2.1
-  # -- CSI driver main image URL
-  csidriver: quay.io/weka.io/csi-wekafs
-  # -- CSI driver tag
-  csidriverTag: *csiDriverVersion
+  registrarImage:
+    registry: registry.k8s.io
+    repository: sig-storage/csi-node-driver-registrar
+    tag: v2.8.0
+  # -- CSI resizer sidecar
+  resizerImage:
+    registry: registry.k8s.io
+    repository: sig-storage/csi-resizer
+    tag: v1.7.0
+  # -- CSI snapshotter sidecar
+  snapshotterImage:
+    registry: registry.k8s.io
+    repository: sig-storage/csi-snapshotter
+    tag: v6.1.0
+  # -- CSI driver
+  csidriverImage:
+    registry: quay.io
+    repository: weka.io/csi-wekafs
+    tag: *csiDriverVersion
+
+  
 # -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master
