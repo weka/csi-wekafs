@@ -13,7 +13,7 @@ images:
   livenessprobeImage:
     registry: registry.k8s.io
     repository: sig-storage/livenessprobe
-    tag: v2.9.0
+    tag: v2.10.0
   # -- CSI provisioner sidecar
   provisionerImage:
     registry: registry.k8s.io
