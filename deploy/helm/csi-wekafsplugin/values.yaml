@@ -5,9 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.0.0
-
-
+csiDriverVersion: &csiDriverVersion 1.0.0-SNAPSHOT.135.fe54c09
 images:
   # -- CSI liveness probe sidecar
   livenessprobeImage:
@@ -39,8 +37,6 @@ images:
     registry: quay.io
     repository: weka.io/csi-wekafs
     tag: *csiDriverVersion
-
-  
 # -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master

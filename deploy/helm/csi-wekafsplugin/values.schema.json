@@ -91,26 +91,89 @@
         "images": {
             "type": "object",
             "properties": {
-                "csidriver": {
-                    "type": "string"
+                "csidriverImage": {
+                    "type": "object",
+                    "properties": {
+                        "registry": {
+                            "type": "string"
+                        },
+                        "repository": {
+                            "type": "string"
+                        },
+                        "tag": {
+                            "type": "string"
+                        }
+                    }
                 },
-                "csidriverTag": {
-                    "type": "string"
+                "livenessprobeImage": {
+                    "type": "object",
+                    "properties": {
+                        "registry": {
+                            "type": "string"
+                        },
+                        "repository": {
+                            "type": "string"
+                        },
+                        "tag": {
+                            "type": "string"
+                        }
+                    }
                 },
-                "livenessprobesidecar": {
-                    "type": "string"
+                "provisionerImage": {
+                    "type": "object",
+                    "properties": {
+                        "registry": {
+                            "type": "string"
+                        },
+                        "repository": {
+                            "type": "string"
+                        },
+                        "tag": {
+                            "type": "string"
+                        }
+                    }
                 },
-                "provisionersidecar": {
-                    "type": "string"
+                "registrarImage": {
+                    "type": "object",
+                    "properties": {
+                        "registry": {
+                            "type": "string"
+                        },
+                        "repository": {
+                            "type": "string"
+                        },
+                        "tag": {
+                            "type": "string"
+                        }
+                    }
                 },
-                "registrarsidecar": {
-                    "type": "string"
+                "resizerImage": {
+                    "type": "object",
+                    "properties": {
+                        "registry": {
+                            "type": "string"
+                        },
+                        "repository": {
+                            "type": "string"
+                        },
+                        "tag": {
+                            "type": "string"
+                        }
+                    }
                 },
-                "resizersidecar": {
-                    "type": "string"
-                },
-                "snapshottersidecar": {
-                    "type": "string"
+                "snapshotterImage": {
+                    "type": "object",
+                    "properties": {
+                        "registry": {
+                            "type": "string"
+                        },
+                        "repository": {
+                            "type": "string"
+                        },
+                        "tag": {
+                            "type": "string"
+                        }
+                    }
                 }
             }
         },
