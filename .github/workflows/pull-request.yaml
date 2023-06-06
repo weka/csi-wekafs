@@ -14,7 +14,7 @@ jobs:
 
       - name: Git Version
         id: auto_version
-        uses: codacy/git-version@2.7.1
+        uses: codacy/git-version@2.8.0
         with:
           prefix: v
           minor-identifier: /feat(ure)*:/
@@ -39,7 +39,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           registry: quay.io
       - name: Build and push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           context: .
           file: Dockerfile
@@ -104,7 +104,7 @@ jobs:
           check-latest: true
 
       - name: Set up chart-testing
-        uses: helm/chart-testing-action@v2.3.1
+        uses: helm/chart-testing-action@v2.4.0
 
       - name: Run chart-testing (list-changed)
         id: list-changed
@@ -118,7 +118,7 @@ jobs:
         run: ct lint --chart-dirs deploy/helm --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
 
       - name: Create kind cluster
-        uses: helm/kind-action@v1.4.0
+        uses: helm/kind-action@v1.7.0
         if: steps.list-changed.outputs.changed == 'true'
 
       - name: Run chart-testing (install)
