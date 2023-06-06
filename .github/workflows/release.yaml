@@ -47,7 +47,7 @@ jobs:
 
       - name: Get version
         id: version
-        uses: codacy/git-version@2.7.1
+        uses: codacy/git-version@2.8.0
         with:
           minor-identifier: /feat(ure)*:/
           major-identifier: /breaking:/
@@ -107,7 +107,7 @@ jobs:
           registry: quay.io
 
       - name: Build and push
-        uses: docker/build-push-action@v3
+        uses: docker/build-push-action@v4
         with:
           push: true
           pull: true
