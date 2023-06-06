@@ -28,7 +28,7 @@ images:
   resizerImage:
     registry: registry.k8s.io
     repository: sig-storage/csi-resizer
-    tag: v1.7.0
+    tag: v1.8.0
   # -- CSI snapshotter sidecar
   snapshotterImage:
     registry: registry.k8s.io
