@@ -6,12 +6,12 @@ maintainers:
     email: csi@weka.io
     url: https://weka.io
 sources:
-  - https://github.com/weka/csi-wekafs/tree/$VERSION
+  - https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/deploy/helm/csi-wekafsplugin
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
-version: 2.0.0
-appVersion: 2.0.0
+version: 1.0.0-SNAPSHOT.135.fe54c09
+appVersion: v1.0.0-SNAPSHOT.135.fe54c09
 kubeVersion: ">=1.18.0"
 keywords: [storage, filesystem, HPC]
 annotations:
