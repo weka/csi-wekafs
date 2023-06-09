@@ -1,7 +1,7 @@
 # CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-![Version: 1.0.0-SNAPSHOT.140.3a11c24](https://img.shields.io/badge/Version-1.0.0--SNAPSHOT.140.3a11c24-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.0-SNAPSHOT.140.3a11c24](https://img.shields.io/badge/AppVersion-v1.0.0--SNAPSHOT.140.3a11c24-informational?style=flat-square)
+![Version: 1.0.0-SNAPSHOT.140.f3cee04](https://img.shields.io/badge/Version-1.0.0--SNAPSHOT.140.f3cee04-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.0-SNAPSHOT.140.f3cee04](https://img.shields.io/badge/AppVersion-v1.0.0--SNAPSHOT.140.f3cee04-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
 
@@ -47,13 +47,14 @@ Kubernetes: `>=1.18.0`
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"1.0.0-SNAPSHOT.140.3a11c24"` | CSI driver version |
-| images.livenessprobeImage | object | `{"registry":"registry.k8s.io","repository":"sig-storage/livenessprobe","tag":"v2.9.0"}` | CSI liveness probe sidecar |
-| images.provisionerImage | object | `{"registry":"registry.k8s.io","repository":"sig-storage/csi-provisioner","tag":"v3.5.0"}` | CSI provisioner sidecar |
-| images.registrarImage | object | `{"registry":"registry.k8s.io","repository":"sig-storage/csi-node-driver-registrar","tag":"v2.8.0"}` | CSI registrar sidercar |
-| images.resizerImage | object | `{"registry":"registry.k8s.io","repository":"sig-storage/csi-resizer","tag":"v1.7.0"}` | CSI resizer sidecar |
-| images.snapshotterImage | object | `{"registry":"registry.k8s.io","repository":"sig-storage/csi-snapshotter","tag":"v6.1.0"}` | CSI snapshotter sidecar |
-| images.csidriverImage | object | `{"registry":"quay.io","repository":"weka.io/csi-wekafs","tag":"1.0.0-SNAPSHOT.140.3a11c24"}` | CSI driver |
+| csiDriverVersion | string | `"1.0.0-SNAPSHOT.140.f3cee04"` | CSI driver version |
+| images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.10.0"` | CSI liveness probe sidecar image URL |
+| images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v3.5.0"` | CSI provisioner sidecar image URL |
+| images.registrarsidecar | string | `"registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0"` | CSI registrar sidercar |
+| images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.8.0"` | CSI resizer sidecar image URL |
+| images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v6.2.1"` | CSI snapshotter sidecar image URL |
+| images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
+| images.csidriverTag | string | `"1.0.0-SNAPSHOT.140.f3cee04"` | CSI driver tag |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
