@@ -1,4 +1,4 @@
-# CSI WekaFS Driver
+# CSI WekaFS Driver 
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
 ![Version: 1.0.0-SNAPSHOT.140.3a11c24](https://img.shields.io/badge/Version-1.0.0--SNAPSHOT.140.3a11c24-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v1.0.0-SNAPSHOT.140.3a11c24](https://img.shields.io/badge/AppVersion-v1.0.0--SNAPSHOT.140.3a11c24-informational?style=flat-square)
