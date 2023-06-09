@@ -86,7 +86,7 @@ jobs:
     needs: [main]
     runs-on: ubuntu-latest
     steps:
-      - run: sleep 15
+      - run: sleep 25
       # renovate initially creates a PR, and only after some short period of time add the label. This job will be executed only the first time
 
 
