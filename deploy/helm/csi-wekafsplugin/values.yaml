@@ -9,6 +9,8 @@ csiDriverVersion: &csiDriverVersion 2.0.0
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.10.0
+  # -- CSI attacher sidecar image URL
+  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.3.0
   # -- CSI provisioner sidecar image URL
   provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
   # -- CSI registrar sidercar
