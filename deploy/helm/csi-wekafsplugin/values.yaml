@@ -7,6 +7,8 @@ csiDriverName: "csi.weka.io"
 # -- CSI driver version
 csiDriverVersion: &csiDriverVersion 1.0.0-SNAPSHOT.140.3a11c24
 images:
+  # -- CSI attacher sidecar image URL
+  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.3.0
   # -- CSI liveness probe sidecar
   livenessprobeImage:
     registry: registry.k8s.io
