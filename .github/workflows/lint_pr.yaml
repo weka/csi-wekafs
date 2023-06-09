@@ -80,9 +80,15 @@ jobs:
           # See: https://github.com/conventional-changelog/conventional-changelog/tree/master/packages/conventional-commits-parser#headerpattern
           #headerPattern: '^(\w*)(?:\(([\w$.\-*/ ]*)\))?: (.*)$'
           #headerPatternCorrespondence: type, scope, subject
+  one:
+    needs: [main]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ${{ !contains(github.event.pull_request.labels.*.name, 'linted') }}
+      # renovate initially cre
 
   sleep:
-    if: "github.event.pull_request.user.login == 'renovate[bot]' && contains(github.event.pull_request.labels.*.name, 'sidecar') && !contains(github.event.pull_request.labels.*.name, 'linted')"
+    if: github.event.pull_request.user.login == 'renovate[bot]' && contains(github.event.pull_request.labels.*.name, 'sidecar') && ${{ !contains(github.event.pull_request.labels.*.name, 'linted') }}
     needs: [main]
     runs-on: ubuntu-latest
     steps:
