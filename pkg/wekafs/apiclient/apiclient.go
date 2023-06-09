@@ -449,7 +449,10 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		_ = a.updateTokensExpiryInterval(ctx)
 	}
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
-	_ = a.fetchClusterInfo(ctx)
+	if err := a.fetchClusterInfo(ctx); err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch information from Weka cluster on login")
+		return err
+	}
 	logger.Debug().Msg("Successfully connected to cluster API")
 	return nil
 }

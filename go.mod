@@ -11,7 +11,7 @@ require (
 	github.com/pkg/xattr v0.4.9
 	github.com/prometheus/client_golang v1.15.1
 	github.com/rs/zerolog v1.29.1
-	github.com/showa-93/go-mask v0.5.0
+	github.com/showa-93/go-mask v0.6.0
 	go.opentelemetry.io/otel v1.16.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.16.0
 	go.opentelemetry.io/otel/sdk v1.16.0
@@ -30,7 +30,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/goccy/go-reflect v1.2.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
