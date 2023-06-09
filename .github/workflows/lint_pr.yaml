@@ -7,8 +7,10 @@ on:
       - edited
       - synchronize
 
-permissions:
-  pull-requests: read
+env:
+  PR_TITLE: ${{ toJson(github.event.pull_request.title) }}
+  PR_NUMBER: ${{ toJson(github.event.pull_request.number) }}
+  REPO: "github.com/weka/csi-wekafs"
 
 jobs:
   main:
@@ -78,3 +80,53 @@ jobs:
           # See: https://github.com/conventional-changelog/conventional-changelog/tree/master/packages/conventional-commits-parser#headerpattern
           #headerPattern: '^(\w*)(?:\(([\w$.\-*/ ]*)\))?: (.*)$'
           #headerPatternCorrespondence: type, scope, subject
+
+  renovate:
+    needs: [main]
+    if: "github.event.pull_request.user.login == 'renovate[bot]' && contains(github.event.pull_request.labels.*.name, 'sidecar') && !contains(github.event.pull_request.labels.*.name, 'linted')"
+    runs-on: ubuntu-latest
+    steps:
+        
+      - name: get-title
+        id: title
+        run: |
+          gh pr view $PR_NUMBER --json=title --repo=$REPO | jq -r .title > title
+          echo title=`cat title | cut -d ":" -f 2 | awk '{$1=$1;print}'` >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: atlassian/gajira-login@v3
+        env:
+          JIRA_BASE_URL: https://wekaio.atlassian.net/
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - uses: atlassian/gajira-find-issue-key@v3
+        id: find
+        with:
+          string: ${{ env.PR_TITLE }}
+          from: ""
+
+      - uses: atlassian/gajira-create@v3
+        id: create
+        if: steps.find.outputs.issue == null
+        with:
+          project: CSI
+          issuetype: Task
+          summary: ${{ steps.title.outputs.title }}
+          #fields: '{"customfield_10171": "test"}'
+          # https://confluence.atlassian.com/jirakb/how-to-find-any-custom-field-s-ids-744522503.html
+          
+      - name: update-title
+        if: steps.create.outcome == 'success'
+        run: |
+          gh pr view $PR_NUMBER --json=title --repo=$REPO | jq -r .title > title
+          sed -i "s/deps/$CSI/g" title
+          echo title=`cat title | cut -d ":" -f 2 | awk '{$1=$1;print}'` >> $GITHUB_OUTPUT
+          gh pr edit $PR_NUMBER --repo=$REPO --title "`cat title`"
+
+          gh pr comment $PR_NUMBER --body "Jira item was created [${CSI}](https://wekaio.atlassian.net/browse/${CSI})" --repo=$REPO
+          gh pr edit $PR_NUMBER --add-label "linted" --repo=$REPO
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSI: ${{ steps.create.outputs.issue }}
