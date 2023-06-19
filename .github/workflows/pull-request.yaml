@@ -1,6 +1,8 @@
 name: Weka CSI Plugin workflow
 on:
   pull_request:
+    paths-ignore:
+      - '.github/**'
 
 jobs:
   pr-test:
