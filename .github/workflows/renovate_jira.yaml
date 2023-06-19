@@ -1,0 +1,76 @@
+name: renovate_jira
+
+on:
+  pull_request_target:
+    types:
+      - labeled
+# renovate initially opens a PR, then it labels the PR a couple of times
+# before it, we don't know whether it's a PR for a sidecar or anything else
+
+env:
+  PR_TITLE: ${{ toJson(github.event.pull_request.title) }}
+  PR_NUMBER: ${{ toJson(github.event.pull_request.number) }}
+  REPO: "github.com/weka/csi-wekafs"
+
+jobs:
+
+  renovate:
+    # do the job only once upon the PR creation
+    if: ${{ github.event.pull_request.user.login == 'renovate[bot]' && github.event.label.name == 'sidecar' }}
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: get-title
+        id: title
+        run: |
+          gh pr view $PR_NUMBER --json=title --repo=$REPO | jq -r .title > title
+          echo title=`cat title | cut -d ":" -f 2 | awk '{$1=$1;print}'` >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: atlassian/gajira-login@v3
+        env:
+          JIRA_BASE_URL: https://wekaio.atlassian.net/
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          
+      # might be useful    
+      # - uses: atlassian/gajira-find-issue-key@v3
+      #   id: find
+      #   with:
+      #     string: ${{ env.PR_TITLE }}
+      #     from: ""
+
+      - uses: atlassian/gajira-create@v3
+        id: create
+        with:
+          project: CSI
+          issuetype: Task
+          summary: ${{ steps.title.outputs.title }}
+          description: "https://github.com/weka/csi-wekafs/pull/${{ env.PR_NUMBER }}"
+          #fields: '{"customfield_10171": "test"}'
+          # https://confluence.atlassian.com/jirakb/how-to-find-any-custom-field-s-ids-744522503.html
+          
+      - name: commend-and-label
+        if: steps.create.outcome == 'success'
+        run: |
+
+          gh pr comment $PR_NUMBER --body "Jira item was created [${CSI}](https://wekaio.atlassian.net/browse/${CSI})" --repo=$REPO
+          gh pr edit $PR_NUMBER --add-label "linted" --repo=$REPO
+        env:
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+          CSI: ${{ steps.create.outputs.issue }}
+
+      # this workflow is triggered a number of times(depends on num of labels for PR), where we are interested only in one
+      # the rest will be skipped based on if above, however, they still put check on PR, which we don't need
+      - name: delete-skipped
+        if: steps.create.outcome == 'success'
+        run: |
+          sleep 10
+          gh api repos/weka/csi-wekafs/actions/runs --paginate \
+            -q '.workflow_runs[] | select(.name == "renovate_jira" and .conclusion == "skipped") | .id ' \
+            | xargs -n1 -I % gh api repos/weka/csi-wekafs/actions/runs/% -X DELETE
+        env:
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+
+
