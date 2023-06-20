@@ -34,6 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
+          token: ${{ secrets.PAT }} # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
           fetch-depth: 0
 
       - run: gh release view ${{inputs.draftTag}}
@@ -145,7 +146,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: stefanzweifel/git-auto-commit-action@v4
+      - uses: stefanzweifel/git-auto-commit-action@v4 # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
 
