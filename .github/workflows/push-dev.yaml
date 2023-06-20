@@ -1,4 +1,4 @@
-name: Weka CSI Plugin post- PR merge
+name: push-dev
 on:
   push:
     branches:
@@ -54,6 +54,7 @@ jobs:
           cache-to: type=gha,mode=max
           labels: |
             revision='${{ steps.auto_version.outputs.version }}'
+            quay.expires-after=14d
           build-args: |
             VERSION='${{ steps.auto_version.outputs.version }}'
 
