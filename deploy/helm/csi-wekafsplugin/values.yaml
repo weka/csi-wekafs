@@ -18,7 +18,7 @@ images:
   # -- CSI resizer sidecar image URL
   resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.8.0
   # -- CSI snapshotter sidecar image URL
-  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v6.2.1
+  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v6.2.2
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
