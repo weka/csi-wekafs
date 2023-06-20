@@ -1,4 +1,4 @@
-name: Weka CSI Plugin workflow
+name: pull-request
 on:
   pull_request:
     paths-ignore:
