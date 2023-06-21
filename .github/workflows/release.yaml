@@ -138,7 +138,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-        uses: stefanzweifel/git-auto-commit-action@v4 # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
+      - uses: stefanzweifel/git-auto-commit-action@v4 # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
 
