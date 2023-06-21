@@ -34,7 +34,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.PAT }} # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
           fetch-depth: 0
 
       - run: gh release view ${{inputs.draftTag}}
@@ -70,7 +69,7 @@ jobs:
           VERSION_WITHOUT=`echo $VERSION | sed 's/^v//1'`
           out="$(echo "${{ steps.auto_version.outputs.version }}" | sed 's/^v//1')"
 
-          cd deploy/helm/csi-wekafsplugin
+          cd charts/csi-wekafsplugin
           
           yq -i '.version = "'$VERSION_WITHOUT'"' Chart.yaml
           yq -i '.appVersion = "'$VERSION'"' Chart.yaml
@@ -101,28 +100,9 @@ jobs:
           cat RELEASE.md >> CHANGELOG.md
 
           # release note will taken from here by helm/chart-releaser-action
-          cat changelog1 > deploy/helm/csi-wekafsplugin/CHANGELOG.md
+          cat changelog1 > charts/csi-wekafsplugin/CHANGELOG.md
           mv CHANGELOG.md RELEASE.md
 
-      - uses: docker/setup-buildx-action@v2
-      - uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-          registry: quay.io
-
-      - name: Build and push
-        uses: docker/build-push-action@v4
-        with:
-          push: true
-          pull: true
-          tags: quay.io/weka.io/csi-wekafs:${{ steps.set_version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          labels: |
-            revision='${{ steps.set_version.outputs.version }}'
-          build-args: |
-            VERSION='${{ steps.set_version.outputs.version }}'
 
       - name: helm-docs
         uses: addnab/docker-run-action@v3
@@ -131,33 +111,37 @@ jobs:
           options: -v ${{ github.workspace }}:/data
           run: |
             cd /data
-            helm-docs -s file -c deploy/helm -o ../../../README.md -t ../../README.md.gotmpl 
-            helm-docs -s file -c deploy/helm
-
-      - uses: azure/setup-helm@v3
-        with:
-          version: 3.11.1
-    
-      - name: Helm package
-        run: |
-          helm package deploy/helm/csi-wekafsplugin --destination .cr-release-packages
+            helm-docs -s file -c charts -o ../../../README.md -t ../../README.md.gotmpl 
+            helm-docs -s file -c charts
 
       - run: gh release delete ${{inputs.draftTag}} --yes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: stefanzweifel/git-auto-commit-action@v4 # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
+      - uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
+
+      - name: Prepare GPG key
+        run: |
+          gpg_dir=.cr-gpg
+          mkdir "$gpg_dir"
+          keyring="$gpg_dir/secring.gpg"
+          base64 -d <<< "$GPG_KEYRING_BASE64" > "$keyring"
+          passphrase_file="$gpg_dir/passphrase"
+          echo "$GPG_PASSPHRASE" > "$passphrase_file"
+          echo "CR_PASSPHRASE_FILE=$passphrase_file" >> "$GITHUB_ENV"
+          echo "CR_KEYRING=$keyring" >> "$GITHUB_ENV"
+        env:
+          GPG_KEYRING_BASE64: "${{ secrets.GPG_KEYRING_BASE64 }}"
+          GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
 
       - uses: helm/chart-releaser-action@v1.5.0
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          CR_RELEASE_NAME_TEMPLATE: "{{ .Version }}"
+          CR_RELEASE_NAME_TEMPLATE: "v{{ .Version }}"
           CR_GENERATE_RELEASE_NOTES: true
           CR_MAKE_RELEASE_LATEST: ${{ inputs.makeLatestRelease }}
           CR_RELEASE_NOTES_FILE: CHANGELOG.md
-        with:
-          charts_dir: deploy/helm
-          skip_packaging: true
-
+          CR_SIGN: true
+          CR_KEY: "WEKA CSI"
