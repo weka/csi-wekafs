@@ -40,6 +40,10 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
           registry: quay.io
+
+      - name: quay-workaround
+        run: echo "LABEL quay.expires-after=14d" >> Dockerfile
+
       - name: Build and push
         uses: docker/build-push-action@v4
         with:
@@ -52,7 +56,6 @@ jobs:
           cache-to: type=gha,mode=max
           labels: |
             revision='${{ steps.auto_version.outputs.version }}'
-            quay.expires-after=14d
           build-args: |
             VERSION='${{ steps.auto_version.outputs.version }}'
 
