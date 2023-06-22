@@ -6,18 +6,18 @@ maintainers:
     email: csi@weka.io
     url: https://weka.io
 sources:
-  - https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin
+  - https://github.com/weka/csi-wekafs/tree/v2.1.0
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
-version: 2.0.2-SNAPSHOT.25.b170aa4
-appVersion: v2.0.2-SNAPSHOT.25.b170aa4
+version: 2.1.0
+appVersion: v2.1.0
 kubeVersion: ">=1.18.0"
 keywords: [storage, filesystem, HPC]
 annotations:
   artifacthub.io/category: "storage"
   artifacthub.io/prerelease: "false"
-  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/license: Apache-2.0
   artifacthub.io/signKey: |
     fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
