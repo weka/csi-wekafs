@@ -1,6 +1,7 @@
 # CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
+![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/weka/csi-wekafs/release.yaml?label=Tests)
 ![Version: 2.0.1](https://img.shields.io/badge/Version-2.0.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.0.1](https://img.shields.io/badge/AppVersion-v2.0.1-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
@@ -21,7 +22,7 @@ https://github.com/weka/csi-wekafs
 
 ## Deployment
 - [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
-- [Helm-based local deployment](deploy/helm/csi-wekafsplugin/LOCAL.md)
+- [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
 
 ## Usage
 - [Deploy an Example application](docs/usage.md)
@@ -53,7 +54,7 @@ Kubernetes: `>=1.18.0`
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v3.5.0"` | CSI provisioner sidecar image URL |
 | images.registrarsidecar | string | `"registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0"` | CSI registrar sidercar |
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.8.0"` | CSI resizer sidecar image URL |
-| images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v6.2.1"` | CSI snapshotter sidecar image URL |
+| images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v6.2.2"` | CSI snapshotter sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
 | images.csidriverTag | string | `"2.0.1"` | CSI driver tag |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |

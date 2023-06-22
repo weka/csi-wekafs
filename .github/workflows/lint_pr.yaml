@@ -6,9 +6,12 @@ on:
       - opened
       - edited
       - synchronize
+      - labeled
 
-permissions:
-  pull-requests: read
+env:
+  PR_TITLE: ${{ toJson(github.event.pull_request.title) }}
+  PR_NUMBER: ${{ toJson(github.event.pull_request.number) }}
+  REPO: "github.com/weka/csi-wekafs"
 
 jobs:
   main:

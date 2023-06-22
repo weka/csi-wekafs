@@ -1,6 +1,8 @@
 name: sanity
 on:
   pull_request:
+    paths-ignore:
+      - '.github/**'
 
 concurrency:
   group: ${{ github.ref }}
