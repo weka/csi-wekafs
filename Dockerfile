@@ -26,6 +26,7 @@ RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.vers
 FROM alpine:3.18
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
+LABEL quay.expires-after="14d"
 # Add util-linux to get a new version of losetup.
 RUN apk add util-linux libselinux libselinux-utils util-linux pciutils usbutils coreutils binutils findutils grep bash
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
