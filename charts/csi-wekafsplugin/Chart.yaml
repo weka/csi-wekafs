@@ -20,5 +20,5 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/license: Apache-2.0
   artifacthub.io/signKey: |
-    fingerprint: D1A264B.... TODO
-    url: https://.... TODO
+    fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
+    url: https://weka.github.io/csi-wekafs/csi-public.gpg

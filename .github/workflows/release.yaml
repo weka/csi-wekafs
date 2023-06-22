@@ -138,10 +138,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: stefanzweifel/git-auto-commit-action@v4 # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
+      # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
+      - uses: stefanzweifel/git-auto-commit-action@v4 
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
 
+      # https://colinwilson.uk/2022/01/27/how-to-sign-helm-charts-using-chart-releaser-action/
       - name: Prepare GPG key
         run: |
           gpg_dir=.cr-gpg
