@@ -6,7 +6,7 @@ maintainers:
     email: csi@weka.io
     url: https://weka.io
 sources:
-  - https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/deploy/helm/csi-wekafsplugin
+  - https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
@@ -19,3 +19,6 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/license: Apache-2.0
+  artifacthub.io/signKey: |
+    fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
+    url: https://weka.github.io/csi-wekafs/csi-public.gpg

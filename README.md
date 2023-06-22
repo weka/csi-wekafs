@@ -21,7 +21,7 @@ https://github.com/weka/csi-wekafs
 
 ## Deployment
 - [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
-- [Helm-based local deployment](deploy/helm/csi-wekafsplugin/LOCAL.md)
+- [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
 
 ## Usage
 - [Deploy an Example application](docs/usage.md)
