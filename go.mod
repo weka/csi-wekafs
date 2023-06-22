@@ -7,7 +7,7 @@ require (
 	github.com/google/go-querystring v1.1.0
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-version v1.6.0
-	github.com/kubernetes-csi/csi-lib-utils v0.13.0
+	github.com/kubernetes-csi/csi-lib-utils v0.14.0
 	github.com/pkg/xattr v0.4.9
 	github.com/prometheus/client_golang v1.16.0
 	github.com/rs/zerolog v1.29.1
