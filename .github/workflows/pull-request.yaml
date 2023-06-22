@@ -43,6 +43,19 @@ jobs:
 
       - name: quay-workaround
         run: echo "LABEL quay.expires-after=14d" >> Dockerfile
+        
+      -
+        name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: name/app
+          labels: |
+            maintainer=CrazyMax
+            org.opencontainers.image.title=MyCustomTitle
+            org.opencontainers.image.description=Another description
+            org.opencontainers.image.vendor=MyCompany
+            quay.expires-after=14d
 
       - name: Build and push
         uses: docker/build-push-action@v4
@@ -54,119 +67,9 @@ jobs:
           tags: '${{ secrets.DOCKER_REGISTRY_NAME }}/csi-wekafs:${{ steps.auto_version.outputs.version }}'
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          labels: |
-            revision='${{ steps.auto_version.outputs.version }}'
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION='${{ steps.auto_version.outputs.version }}'
 
-      # HELM
-      - name: Get Helm chart version
-        id: helm_version
-        run: |
-          out="$(echo "${{ steps.auto_version.outputs.version }}" | sed 's/^v//1')"
-          echo "helm_version=$out" >> $GITHUB_OUTPUT
-      - name: Update Helm chart version
-        uses: mikefarah/yq@master
-        with:
-          cmd: | 
-            BASEDIR=charts/csi-wekafsplugin
-            DRIVER_VERSION="$(echo ${{ steps.version.outputs.version }} | sed 's/^v//1')"
-            CHART_VERSION="${{ steps.helm_version.outputs.helm_version }}"
-            APP_VERSION="${{ steps.version.outputs.version }}"
-            
-            yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
-            yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
-            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
-            yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
-            echo ------------------ values ------------------
-            cat $BASEDIR/values.yaml
-            echo --------------------chart ------------------
-            cat $BASEDIR/Chart.yaml
 
-      - name: helm-docs
-        uses: addnab/docker-run-action@v3
-        with:
-          image: jnorwood/helm-docs:latest
-          options: -v ${{ github.workspace }}:/data
-          run: |
-            cd /data
-            helm-docs -s file -c charts -o ../../../README.md -t ../../README.md.gotmpl 
-            helm-docs -s file -c charts
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: v3.10.0
-
-      - name: update Helm schema
-        run: |
-          helm plugin install https://github.com/karuppiah7890/helm-schema-gen.git
-          helm schema-gen charts/csi-wekafsplugin/values.yaml >| charts/csi-wekafsplugin/values.schema.json 
-
-      # TEST CHART
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          check-latest: true
-
-      - name: Set up chart-testing
-        uses: helm/chart-testing-action@v2.4.0
-
-      - name: Run chart-testing (list-changed)
-        id: list-changed
-        run: |
-          changed=$(ct list-changed --chart-dirs charts --target-branch ${{ github.event.repository.default_branch }})
-          if [[ -n "$changed" ]]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run chart-testing (lint)
-        run: ct lint --chart-dirs charts --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
-
-      - name: Create kind cluster
-        uses: helm/kind-action@v1.7.0
-        if: steps.list-changed.outputs.changed == 'true'
-
-      - name: Run chart-testing (install)
-        id: helm-test
-        run: |
-          ct install --print-config --chart-dirs charts --all --debug && \
-          echo "passed=true" >> $GITHUB_OUTPUT
-        if: steps.list-changed.outputs.changed == 'true'
-
-      # UPLOAD CHART TO S3
-      - name: Create Helm package
-        id: helm-package
-        run: |
-          helm package charts/csi-wekafsplugin
-          FILENAME="csi-wekafsplugin-${{ steps.helm_version.outputs.helm_version }}.tgz"
-          AWS_REGION=${{ secrets.AWS_ACCESS_SECRET_KEY }}
-          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
-          URL="https://$S3_BUCKET_NAME.s3.$AWS_REGION.amazonaws.com"
-          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
-          echo "url=$URL" >> $GITHUB_OUTPUT          
-
-      - name: Install AWS CLI
-        id: install-aws-cli
-        uses: unfor19/install-aws-cli-action@v1
-        with:
-          version: 2
-
-      - name: Upload Helm package to S3
-        id: helm-s3-upload
-        run: |
-          export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
-          export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY}}"
-          export AWS_REGION="${{ secrets.AWS_REGION }}"
-          aws s3 cp ${{ steps.helm-package.outputs.filename }} "s3://${{ vars.AWS_BUCKET }}/"
-          echo "link=https://${{ vars.AWS_BUCKET }}.s3.${AWS_REGION}.amazonaws.com/${{ steps.helm-package.outputs.filename }}" >> $GITHUB_OUTPUT 
-        if: steps.helm-test.outputs.passed == 'true'
-
-      - uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_USERNAME: csiBot
-          SLACK_ICON_EMOJI: ":robot_face:"
-          SLACK_TITLE: "New build was pushed"
-          SLACK_MESSAGE: "helm upgrade csi-wekafs -n csi-wekafs --create-namespace -i  ${{ steps.helm-s3-upload.outputs.link }} --set logLevel=6"
-          SLACK_FOOTER: ""
