@@ -139,7 +139,9 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 			innerPath = generateInnerPathForDirBasedVol(dynamicVolPath, requestedVolumeName)
 		} else {
 			volType = VolumeTypeUnified
-
+			if client == nil && !cs.config.alwaysAllowSnapshotVolumes {
+				return nil, status.Error(codes.FailedPrecondition, "Quota enforcement is supported only with API-bound volumes")
+			}
 			if !client.SupportsQuotaOnSnapshots() && !cs.config.alwaysAllowSnapshotVolumes {
 				return nil, status.Error(codes.FailedPrecondition, "Quota enforcement is not supported for snapshot-backed volumes by current Weka software version, please upgrade Weka cluster")
 			}
