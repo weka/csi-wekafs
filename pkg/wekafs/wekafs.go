@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -68,7 +67,7 @@ type ApiStore struct {
 
 // Die used to intentionally panic and exit, while updating termination log
 func Die(exitMsg string) {
-	_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
 	panic(exitMsg)
 }
 
@@ -152,7 +151,7 @@ func (api *ApiStore) GetDefaultSecrets() (*map[string]string, error) {
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return nil, errors.New(fmt.Sprintf("Missing key %s in legacy secret configuration", k))
 		}
-		contents, err := ioutil.ReadFile(filePath)
+		contents, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("Could not read key %s from legacy secret configuration", k))
 		}
