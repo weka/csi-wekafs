@@ -173,7 +173,11 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 		}
 	}
 	client, err := api.fromSecrets(ctx, secrets)
-	if err != nil || client == nil {
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize API client from secret, cannot proceed")
+		return nil, err
+	}
+	if client == nil {
 		logger.Trace().Msg("API service was not found for request, switching to legacy mode")
 		return nil, nil
 	}
