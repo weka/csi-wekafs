@@ -3,6 +3,38 @@ entries:
   csi-wekafsplugin:
   - annotations:
       artifacthub.io/category: storage
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/signKey: |
+        fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
+        url: https://weka.github.io/csi-wekafs/csi-public.gpg
+    apiVersion: v2
+    appVersion: 2.1.1
+    created: "2023-06-24T08:20:16.375473438Z"
+    description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI)
+      plugin for WekaFS - the world fastest filesystem
+    digest: a2bfb0134398527e22d7e74105ab39b6ef60fddab8541a6bb614e271b21937d5
+    home: https://github.com/weka/csi-wekafs
+    icon: https://weka.github.io/csi-wekafs/logo.png
+    keywords:
+    - storage
+    - filesystem
+    - HPC
+    kubeVersion: '>=1.18.0'
+    maintainers:
+    - email: csi@weka.io
+      name: WekaIO, Inc.
+      url: https://weka.io
+    name: csi-wekafsplugin
+    sources:
+    - https://github.com/weka/csi-wekafs/tree/2.1.1
+    type: application
+    urls:
+    - https://github.com/weka/csi-wekafs/releases/download/v2.1.1/csi-wekafsplugin-2.1.1.tgz
+    version: 2.1.1
+  - annotations:
+      artifacthub.io/category: storage
       artifacthub.io/containsSecurityUpdates: "true"
       artifacthub.io/license: Apache-2.0
       artifacthub.io/prerelease: "false"
@@ -312,4 +344,4 @@ entries:
     urls:
     - https://weka.github.io/csi-wekafs/csi-wekafsplugin-0.6.2-0.tgz
     version: 0.6.2-0
-generated: "2023-06-22T12:35:46.664029518Z"
+generated: "2023-06-24T08:20:16.375595733Z"
