@@ -19,7 +19,7 @@ This example introduces automatic provisioning of filesystems. For this function
 > **NOTE:** Those values are set by default
 
 ### Special Consideration for Weka Software Versions Below v4.1
-Weka software of version below 4.1 does not support enforcement of quotas on filesystem snapshots.
+Weka software of version below 4.2 does not support enforcement of quotas on filesystem snapshots.
 Hence, CSI plugin forbids creation of snapshot-backed volumes on clusters having an older version by default.
 As a result, provisioning a snapshot-backed volume on such cluster will fail with a message similar to this:
 ```text
