@@ -91,10 +91,10 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 
 // fromSecrets returns a pointer to API by secret contents
 func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
-	endpointsRaw := strings.TrimSpace(secrets["endpoints"])
+	endpointsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["endpoints"], "\n"), "\n", ","))
 	endpoints := func() []string {
 		var ret []string
-		for _, s := range strings.Split(string(endpointsRaw), ",") {
+		for _, s := range strings.Split(endpointsRaw, ",") {
 			ret = append(ret, strings.TrimSpace(strings.TrimSuffix(s, "\n")))
 		}
 		return ret
