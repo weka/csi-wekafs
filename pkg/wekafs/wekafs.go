@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
@@ -68,7 +67,7 @@ type ApiStore struct {
 
 // Die used to intentionally panic and exit, while updating termination log
 func Die(exitMsg string) {
-	_ = ioutil.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
 	panic(exitMsg)
 }
 
@@ -92,10 +91,10 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 
 // fromSecrets returns a pointer to API by secret contents
 func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
-	endpointsRaw := strings.TrimSpace(secrets["endpoints"])
+	endpointsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["endpoints"], "\n"), "\n", ","))
 	endpoints := func() []string {
 		var ret []string
-		for _, s := range strings.Split(string(endpointsRaw), ",") {
+		for _, s := range strings.Split(endpointsRaw, ",") {
 			ret = append(ret, strings.TrimSpace(strings.TrimSuffix(s, "\n")))
 		}
 		return ret
@@ -152,7 +151,7 @@ func (api *ApiStore) GetDefaultSecrets() (*map[string]string, error) {
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return nil, errors.New(fmt.Sprintf("Missing key %s in legacy secret configuration", k))
 		}
-		contents, err := ioutil.ReadFile(filePath)
+		contents, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("Could not read key %s from legacy secret configuration", k))
 		}
@@ -173,7 +172,11 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 		}
 	}
 	client, err := api.fromSecrets(ctx, secrets)
-	if err != nil || client == nil {
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize API client from secret, cannot proceed")
+		return nil, err
+	}
+	if client == nil {
 		logger.Trace().Msg("API service was not found for request, switching to legacy mode")
 		return nil, nil
 	}

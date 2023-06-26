@@ -89,7 +89,7 @@ jobs:
           options: -v ${{ github.workspace }}:/data
           run: |
             cd /data
-            helm-docs -s file -c charts -o ../../../README.md -t ../../README.md.gotmpl 
+            helm-docs -s file -c charts -o ../../README.md -t ../README.md.gotmpl 
             helm-docs -s file -c charts
 
       - name: Set up Helm

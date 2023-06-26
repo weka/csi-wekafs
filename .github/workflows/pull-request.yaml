@@ -71,6 +71,3 @@ jobs:
           provenance: false
           build-args: |
             VERSION='${{ steps.auto_version.outputs.version }}'
-
-
-
