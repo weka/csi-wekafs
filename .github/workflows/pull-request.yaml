@@ -68,6 +68,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
           build-args: |
             VERSION='${{ steps.auto_version.outputs.version }}'
 
