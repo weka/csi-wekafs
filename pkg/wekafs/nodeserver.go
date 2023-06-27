@@ -27,7 +27,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/utils/mount"
+	"k8s.io/mount-utils"
 	"os"
 	"os/exec"
 	"path/filepath"

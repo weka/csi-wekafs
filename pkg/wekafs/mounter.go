@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"k8s.io/utils/mount"
+	"k8s.io/mount-utils"
 	"sync"
 	"time"
 )
