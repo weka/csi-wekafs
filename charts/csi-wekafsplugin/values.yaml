@@ -126,4 +126,4 @@ pluginConfig:
     #    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced
     snapshotVolumesWithoutQuotaEnforcement: false
   mutuallyExclusiveMountOptions:
-    - "readcache,writecache,coherent"
+    - "readcache,writecache,coherent,forcedirect"
