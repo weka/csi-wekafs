@@ -61,7 +61,7 @@ func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume *Volume) {
 	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
 		logger.Error().Err(err).Msg("Failed to create garbage collector directory")
 	}
-	fullPath := volume.GetFullPath(ctx, false)
+	fullPath := volume.GetFullPath(ctx)
 	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Moving volume contents to trash")
 	if err := os.Rename(fullPath, volumeTrashLoc); err == nil {
 		logger.Error().Err(err).Str("full_path", fullPath).

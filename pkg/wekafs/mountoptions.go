@@ -145,15 +145,6 @@ func (opts MountOptions) Hash() uint32 {
 	return h.Sum32()
 }
 
-func (opts MountOptions) setXattr(xattr bool) {
-	if xattr {
-		o := newMountOptionFromString("acl")
-		opts.customOptions[o.option] = o
-	} else {
-		delete(opts.customOptions, "acl")
-	}
-}
-
 func (opts MountOptions) setSelinux(selinuxSupport bool) {
 	if selinuxSupport {
 		o := newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s_t:s0\"", selinuxContext))
