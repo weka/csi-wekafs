@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseTag:
-        description: releaseTag to set 1.2.3, 1.2.3-dev, 1.2.3-beta, etc. or auto version will be set
+        description: releaseTag to set v1.2.3, v1.2.3-beta, etc. or auto version will be set
         required: false
       draftTag:
         description: draftTag with the release notes. Can be found at the release page. E.g. untagged-777fe0c3b1edc8bd78f6
@@ -32,6 +32,35 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+
+      - name: log inputs
+        run: |
+          echo releaseTag=${{inputs.draftTag}}
+          echo draftTag=${{inputs.draftTag}}
+          echo makeLatestRelease=${{inputs.makeLatestRelease}}
+          echo preRelease=${{inputs.preRelease}}
+          echo containsSecurityUpdates=${{inputs.containsSecurityUpdates}}
+          echo swear=${{inputs.swear}}
+
+      - name: validate inputs
+        run: |
+
+          string=${{inputs.releaseTag}}
+          if [[ ${string:0:1} != "v" ]]; then
+              echo "The first character is not 'v'"
+              echo "Make sure that releaseTag has a form of 'v1.2.3'"
+              exit 2
+          fi
+
+          string=${{inputs.draftTag}}
+          if [[ $string != untagged-* ]]; then
+            echo "draftTag does not start with 'untagged-'"
+            echo "Make sure to copy the id from a draft at https://github.com/weka/csi-wekafs/releases"
+            echo "It should have a form of 'untagged-286bdd99389b598e48c4'"
+            exit 2
+          fi
+
+
       - uses: actions/checkout@v3
         with:
           token: ${{ secrets.PAT }} # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
