@@ -170,14 +170,14 @@ func (s *Snapshot) Create(ctx context.Context) error {
 func (s *Snapshot) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
 	logger := log.Ctx(ctx)
 	logger.Warn().Bool("debug_mode", true).Msg("Creating directory mimicPath inside filesystem .snapshots to mimic Weka snapshot behavior")
-	const xattrMount = true // no need to have xattr mount to do that
+
 	v := s.SourceVolume
-	err, unmount := v.MountUnderlyingFS(ctx, xattrMount)
+	err, unmount := v.MountUnderlyingFS(ctx)
 	defer unmount()
 	if err != nil {
 		return err
 	}
-	basePath := v.getMountPath(xattrMount)
+	basePath := v.getMountPath()
 	mimicPath := filepath.Join(basePath, SnapshotsSubDirectory, s.SnapshotIntegrityId)
 	log.Info().Str("mimic_path", mimicPath).Msg("Creating mimicPath")
 	// make sure we don't hit umask upon creating directory
@@ -188,9 +188,8 @@ func (s *Snapshot) mimicDirectoryStructureForDebugMode(ctx context.Context) erro
 		logger.Error().Err(err).Str("volume_path", mimicPath).Msg("Failed to create volume directory")
 		return err
 	}
-	logger.Debug().Str("mimic_path", v.GetFullPath(ctx, true)).Msg("Successully created directory")
+	logger.Debug().Str("mimic_path", v.GetFullPath(ctx)).Msg("Successully created directory")
 	return nil
-
 }
 
 func (s *Snapshot) getInnerPath() string {

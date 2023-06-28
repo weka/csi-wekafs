@@ -27,7 +27,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/utils/mount"
+	"k8s.io/mount-utils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -256,12 +256,12 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		Str("inner_mount_options", strings.Join(innerMountOpts, ",")).
 		Msg("Performing underlying filesystem mount")
 
-	err, unmount := volume.MountUnderlyingFS(ctx, false)
+	err, unmount := volume.MountUnderlyingFS(ctx)
 	if err != nil {
 		unmount()
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
-	fullPath := volume.GetFullPath(ctx, false)
+	fullPath := volume.GetFullPath(ctx)
 
 	targetPathDir := filepath.Dir(targetPath)
 	logger.Debug().Str("target_path", targetPathDir).Msg("Checking for path existence")
@@ -392,7 +392,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	}
 
 	logger.Trace().Str("volume_id", volumeID).Msg("Unmounting")
-	err = volume.UnmountUnderlyingFS(ctx, false)
+	err = volume.UnmountUnderlyingFS(ctx)
 	if err != nil {
 		logger.Error().Str("volume_id", volumeID).Err(err).Msg("Post-unpublish task failed")
 	}
