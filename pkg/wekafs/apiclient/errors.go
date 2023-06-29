@@ -1,6 +1,7 @@
 package apiclient
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
@@ -130,7 +131,13 @@ func (e ApiInternalError) Error() string {
 			}
 			return ""
 		}(),
-		e.ApiResponse.Data)
+		func() json.RawMessage {
+			if e.ApiResponse != nil {
+				return e.ApiResponse.Data
+			}
+			return json.RawMessage{}
+		}(),
+	)
 }
 func (e ApiInternalError) getType() string {
 	return "ApiInternalError"
