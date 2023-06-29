@@ -29,7 +29,7 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 		innerPath:           sliceInnerPathFromVolumeId(volumeId),
 		apiClient:           apiClient,
 		permissions:         DefaultVolumePermissions,
-		mountPath:           make(map[bool]string),
+		mountPath:           "",
 		server:              server,
 	}
 	v.initMountOptions(ctx)
@@ -112,10 +112,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 	requestedVolumeName := req.GetName()
 	volType := VolumeType(req.GetParameters()["volumeType"])
 
-	var innerPath string
-	var snapName string
-	var snapAccessPoint string
-	mountPath := make(map[bool]string)
+	var innerPath, snapName, snapAccessPoint, mountPath string
 
 	filesystemName := GetFSNameFromRequest(req)
 
@@ -184,7 +181,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 	if sourceSnapId == "" {
 		return nil, status.Error(codes.InvalidArgument, "Source snapshot ID is empty")
 	}
-	mountPath := make(map[bool]string)
+	var mountPath string
 	sourceSnap, err := NewSnapshotFromId(ctx, sourceSnapId, client, server)
 	if err != nil {
 		// although we failed to create snapshot from ID because it is invalid, still return NOT_EXISTS
@@ -265,8 +262,8 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 
 	requestedVolumeName := req.GetName()
 
-	mountPath := make(map[bool]string)
-
+	var mountPath string
+	
 	filesystemName := GetFSNameFromRequest(req)
 	sourceVolId := req.GetVolumeContentSource().GetVolume().GetVolumeId() // we can assume no nil pointer as the function is called only if it happens
 	if sourceVolId == "" {

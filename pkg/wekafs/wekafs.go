@@ -112,6 +112,8 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string)
 // fromCredentials returns a pointer to API by credentials and endpoints
 // If this is a new API, it will be created and put in hashmap
 func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.Credentials) (*apiclient.ApiClient, error) {
+	logger := log.Ctx(ctx)
+	logger.Trace().Str("api_client", credentials.String()).Msg("Creating new Weka API client")
 	// doing this to fetch a client hash
 	newClient, err := apiclient.NewApiClient(ctx, credentials, api.allowInsecureHttps)
 	if err != nil {
@@ -120,16 +122,19 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	hash := newClient.Hash()
 
 	if existingApi := api.getByHash(hash); existingApi != nil {
-		log.Trace().Str("api_client", credentials.String()).Msg("Found an existing Weka API client")
+		logger.Trace().Str("api_client", credentials.String()).Msg("Found an existing Weka API client")
 		return existingApi, nil
 	}
 	api.Lock()
 	defer api.Unlock()
-	log.Trace().Str("api_client", credentials.String()).Msg("Creating new Weka API client")
 	if api.getByHash(hash) != nil {
 		return api.getByHash(hash), nil
 	}
 	api.apis[hash] = newClient
+	if err := newClient.Init(ctx); err != nil {
+		logger.Error().Err(err).Msg("Failed to initialize API client")
+		return nil, err
+	}
 	if !newClient.SupportsAuthenticatedMounts() && credentials.Organization != apiclient.RootOrganizationName {
 		return nil, errors.New(fmt.Sprintf(
 			"Using Organization %s is not supported on Weka cluster \"%s\".\n"+
@@ -179,10 +184,6 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 	if client == nil {
 		logger.Trace().Msg("API service was not found for request, switching to legacy mode")
 		return nil, nil
-	}
-	if err := client.Init(ctx); err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize API client")
-		return nil, err
 	}
 	logger.Trace().Msg("Successfully initialized API backend for request")
 	return client, nil
