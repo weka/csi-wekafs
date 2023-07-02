@@ -130,7 +130,6 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	if api.getByHash(hash) != nil {
 		return api.getByHash(hash), nil
 	}
-	api.apis[hash] = newClient
 	if err := newClient.Init(ctx); err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize API client")
 		return nil, err
@@ -141,6 +140,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 				"To support organization other than Root please upgrade to version %s or higher",
 			credentials.Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
 	}
+	api.apis[hash] = newClient
 	return newClient, nil
 }
 
