@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/showa-93/go-mask"
+	"go.opentelemetry.io/otel"
 	"hash/fnv"
 	"io"
 	"k8s.io/helm/pkg/urlutil"
@@ -330,9 +331,14 @@ func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 
 // request wraps do with retries and some more error handling
 func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
+	op := "ApiClientRequest"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
-		logger := log.Ctx(ctx)
 		if a.handleNetworkErrors(ctx, reqErr) != nil { // transient network errors
 			a.rotateEndpoint(ctx)
 			logger.Error().Err(reqErr).Msg("")
