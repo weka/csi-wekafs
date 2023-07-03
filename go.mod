@@ -23,7 +23,6 @@ require (
 	k8s.io/apimachinery v0.27.3
 	k8s.io/helm v2.17.0+incompatible
 	k8s.io/mount-utils v0.27.3
-	k8s.io/utils v0.0.0-20230505201702-9f6742963106
 )
 
 require (
@@ -45,4 +44,5 @@ require (
 	golang.org/x/text v0.10.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230530153820-e85fd2cbaebc // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
+	k8s.io/utils v0.0.0-20230505201702-9f6742963106 // indirect
 )
