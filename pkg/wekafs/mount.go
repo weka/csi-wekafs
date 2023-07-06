@@ -102,6 +102,18 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 				return err
 			}
 			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
+			if apiClient.SupportsMultipleClusters() {
+				container, err := apiClient.GetLocalContainer(ctx)
+				if err != nil || container == nil {
+					logger.Warn().Err(err).Msg("Failed to determine local container, assuming default")
+				} else {
+					mountOptions.customOptions["container_name"] = mountOption{
+						option: "container_name",
+						value:  container.ContainerName,
+					}
+				}
+			}
+
 		}
 		logger.Trace().Strs("mount_options", m.mountOptions.Strings()).
 			Fields(mountOptions).Msg("Performing mount")
