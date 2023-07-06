@@ -56,6 +56,10 @@ type NodeServer struct {
 	sync.Mutex
 }
 
+func (ns *NodeServer) getNodeId() string {
+	return ns.nodeID
+}
+
 func (ns *NodeServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ns.getConfig().mutuallyExclusiveOptions)
 }

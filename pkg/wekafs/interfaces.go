@@ -6,4 +6,5 @@ type AnyServer interface {
 	getConfig() *DriverConfig
 	isInDevMode() bool // TODO: Rename to isInDevMode
 	getDefaultMountOptions() MountOptions
+	getNodeId() string
 }
