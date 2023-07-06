@@ -32,6 +32,7 @@ type DriverConfig struct {
 	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
 	maxConcurrencyPerOp           map[string]int64
 	grpcRequestTimeout            time.Duration
+	supportMultipleClusters       bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -40,11 +41,12 @@ func (dc *DriverConfig) Log() {
 		Bool("allow_auto_fs_creation", dc.allowAutoFsCreation).Bool("allow_auto_fs_expansion", dc.allowAutoFsExpansion).
 		Bool("advertise_snapshot_support", dc.advertiseSnapshotSupport).Bool("advertise_volume_clone_support", dc.advertiseVolumeCloneSupport).
 		Bool("allow_insecure_https", dc.allowInsecureHttps).Bool("always_allow_snapshot_volumes", dc.alwaysAllowSnapshotVolumes).
+		Bool("support_multiple_clusters", dc.supportMultipleClusters).
 		Interface("mutually_exclusive_mount_options", dc.mutuallyExclusiveOptions).Msg("Starting driver with the following configuration")
 }
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfLegacyVolumes bool,
-	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
+	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes, supportMultipleClusters bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
 	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
 	grpcRequestTimeoutSeconds int) *DriverConfig {
@@ -85,6 +87,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
 		maxConcurrencyPerOp:           concurrency,
 		grpcRequestTimeout:            grpcRequestTimeout,
+		supportMultipleClusters:       supportMultipleClusters,
 	}
 }
 

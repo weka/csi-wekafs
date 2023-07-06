@@ -15,7 +15,7 @@ const ApiPathRefresh = "login/refresh"
 
 const ApiPathClusterInfo = "cluster"
 
-//updateTokensExpiryInterval fetches the refresh token expiry from API
+// updateTokensExpiryInterval fetches the refresh token expiry from API
 func (a *ApiClient) updateTokensExpiryInterval(ctx context.Context) error {
 	responseData := &TokenExpiryResponse{}
 	if err := a.Get(ctx, ApiPathTokenExpiry, nil, responseData); err != nil {
@@ -47,6 +47,7 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for authenticated filesystem mounts: %t", a.SupportsAuthenticatedMounts()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for new filesystem from snapshot: %t", a.SupportsNewFileSystemFromSnapshot()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for cloning filesystems: %t", a.SupportsFilesystemCloning()))
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for supporting multiple connections: %t", a.SupportsMultipleClusters()))
 	return nil
 }
 
