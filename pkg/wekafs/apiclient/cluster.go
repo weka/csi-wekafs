@@ -2,9 +2,11 @@ package apiclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"time"
 )
 
 const ApiPathLogin = "login"
@@ -14,6 +16,8 @@ const ApiPathTokenExpiry = "security/defaultTokensExpiry"
 const ApiPathRefresh = "login/refresh"
 
 const ApiPathClusterInfo = "cluster"
+
+const ApiContainersInfo = "containers"
 
 // updateTokensExpiryInterval fetches the refresh token expiry from API
 func (a *ApiClient) updateTokensExpiryInterval(ctx context.Context) error {
@@ -102,4 +106,110 @@ type ClusterInfoResponse struct {
 	Release     string    `json:"release"`
 	Guid        uuid.UUID `json:"guid"`
 	Capacity    Capacity  `json:"capacity,omitempty"`
+}
+
+type Container struct {
+	Id                   string    `json:"id,omitempty"`
+	SwReleaseString      string    `json:"sw_release_string,omitempty"`
+	Mode                 string    `json:"mode,omitempty"`
+	ContainerName        string    `json:"container_name,omitempty"`
+	FailureDomain        string    `json:"failure_domain,omitempty"`
+	AddedTime            time.Time `json:"added_time,omitempty"`
+	Uid                  string    `json:"uid,omitempty"`
+	DrivesDedicatedCores int       `json:"drives_dedicated_cores,omitempty"`
+	Hostname             string    `json:"hostname,omitempty"`
+	Ips                  []string  `json:"ips,omitempty"`
+	MemberOfLeadership   bool      `json:"member_of_leadership,omitempty"`
+	Cloud                struct {
+		InstanceType     string `json:"instance_type,omitempty"`
+		Provider         string `json:"provider,omitempty"`
+		AvailabilityZone string `json:"availability_zone,omitempty"`
+		InstanceId       string `json:"instance_id,omitempty"`
+	} `json:"cloud,omitempty"`
+	LastFailureTime interface{} `json:"last_failure_time,omitempty"`
+	State           string      `json:"state,omitempty"`
+	StartTime       time.Time   `json:"start_time,omitempty"`
+	Aws             struct {
+		InstanceType     string `json:"instance_type,omitempty"`
+		Provider         string `json:"provider,omitempty"`
+		AvailabilityZone string `json:"availability_zone,omitempty"`
+		InstanceId       string `json:"instance_id,omitempty"`
+	} `json:"aws,omitempty"`
+	SwVersion string `json:"sw_version,omitempty"`
+	OsInfo    struct {
+		KernelName    string `json:"kernel_name,omitempty"`
+		Platform      string `json:"platform,omitempty"`
+		KernelVersion string `json:"kernel_version,omitempty"`
+		OsName        string `json:"os_name,omitempty"`
+		KernelRelease string `json:"kernel_release,omitempty"`
+		Drivers       struct {
+			Ixgbe         string `json:"ixgbe,omitempty"`
+			Ixgbevf       string `json:"ixgbevf,omitempty"`
+			Mlx5Core      string `json:"mlx5_core,omitempty"`
+			IbUverbs      string `json:"ib_uverbs,omitempty"`
+			UioPciGeneric string `json:"uio_pci_generic,omitempty"`
+		} `json:"drivers,omitempty"`
+	} `json:"os_info,omitempty"`
+	LastFailureCode        interface{} `json:"last_failure_code,omitempty"`
+	CoresIds               []int       `json:"cores_ids,omitempty"`
+	Memory                 int         `json:"memory,omitempty"`
+	FrontendDedicatedCores int         `json:"frontend_dedicated_cores,omitempty"`
+	FailureDomainType      string      `json:"failure_domain_type,omitempty"`
+	LeadershipRole         interface{} `json:"leadership_role,omitempty"`
+	StateChangedTime       time.Time   `json:"state_changed_time,omitempty"`
+	Status                 string      `json:"status,omitempty"`
+	Cores                  int         `json:"cores,omitempty"`
+	HwMachineIdentifier    string      `json:"hw_machine_identifier,omitempty"`
+	IsDedicated            bool        `json:"is_dedicated,omitempty"`
+	LastFailure            interface{} `json:"last_failure,omitempty"`
+	MgmtPort               int         `json:"mgmt_port,omitempty"`
+	AutoRemoveTimeout      interface{} `json:"auto_remove_timeout,omitempty"`
+	TotalScrubberLimit     int         `json:"total_scrubber_limit,omitempty"`
+	ServerIdentifier       string      `json:"server_identifier,omitempty"`
+	IoProcesses            int         `json:"io_processes,omitempty"`
+	ContainerIp            string      `json:"container_ip,omitempty"`
+}
+
+type ContainersResponse []Container
+
+func (a *ApiClient) getContainers(ctx context.Context) (*ContainersResponse, error) {
+	responseData := &ContainersResponse{}
+	err := a.Get(ctx, ApiContainersInfo, nil, responseData)
+	return responseData, err
+}
+
+func (a *ApiClient) GetLocalContainer(ctx context.Context) (*Container, error) {
+	logger := log.Ctx(ctx)
+	logger.Info().Str("hostname", a.hostname).Msg("Fetching client containers on host")
+	allContainers, err := a.getContainers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var ret []Container
+	for _, container := range *allContainers {
+		if container.Hostname == a.hostname {
+			if container.Mode == "backend" {
+				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping a backend container")
+				continue
+			}
+			if container.State != "ACTIVE" {
+				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping an INACTIVE container")
+				continue
+			}
+			logger.Debug().Str("container_hostname", container.Hostname).Msg("Found a valid container")
+			ret = append(ret, container)
+		}
+	}
+	if len(ret) == 1 {
+		return &ret[0], nil
+	} else if len(ret) > 1 {
+		err := errors.New("could not determine local client containers, ambiguous hostname")
+		logger.Error().Err(err).Msg("Cannot fetch local container")
+		return nil, err
+	} else {
+		err := errors.New("could not find any local client container")
+		logger.Error().Err(err).Msg("Cannot fetch local container")
+		return nil, err
+	}
 }
