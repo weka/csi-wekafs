@@ -2,6 +2,7 @@ package wekafs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -90,41 +91,63 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
 	mountToken := ""
 	var mountOptionsSensitive []string
+	var localContainerName string
 	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
 		return err
 	}
 	if !m.isInDevMode() {
+		pattern := "/proc/wekafs/*/queue"
+		containerPaths, err := filepath.Glob(pattern)
+		if err != nil || len(containerPaths) == 0 {
+			logger.Error().Err(err).Msg("Failed to fetch WekaFS containers on host, cannot mount filesystem without Weka container")
+			return err
+		} else if len(containerPaths) == 0 {
+			logger.Error().Err(err).Msg("Failed to find active Weka container, cannot mount filesystem")
+			return err
+		}
+
 		if apiClient == nil {
 			logger.Trace().Msg("No API client for mount, not requesting mount token")
 		} else {
-			var err error
-			if mountToken, err = apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
-				return err
-			}
-			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
-			localContainerName := apiClient.Credentials.LocalContainerName
-			if apiClient.SupportsMultipleClusters() {
-				if localContainerName != "" {
-					logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secrets")
-				} else {
-					container, err := apiClient.GetLocalContainer(ctx)
-					if err != nil || container == nil {
-						logger.Warn().Err(err).Msg("Failed to determine local container, assuming default")
+			if len(containerPaths) > 1 {
+				localContainerName = apiClient.Credentials.LocalContainerName
+				var err error
+				if mountToken, err = apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
+					return err
+				}
+				mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
+				if apiClient.SupportsMultipleClusters() {
+					if localContainerName != "" {
+						logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secrets")
 					} else {
-						localContainerName = container.ContainerName
-					}
+						container, err := apiClient.GetLocalContainer(ctx)
+						if err != nil || container == nil {
+							logger.Warn().Err(err).Msg("Failed to determine local container, assuming default")
+						} else {
+							localContainerName = container.ContainerName
+						}
 
-				}
-				if localContainerName != "" {
-					mountOptions.customOptions["container_name"] = mountOption{
-						option: "container_name",
-						value:  localContainerName,
 					}
+					if localContainerName != "" {
+						for _, p := range containerPaths {
+							containerName := filepath.Base(filepath.Dir(p))
+							if localContainerName == containerName {
+								mountOptions.customOptions["container_name"] = mountOption{
+									option: "container_name",
+									value:  localContainerName,
+								}
 
+								break
+							}
+						}
+
+					} else {
+						logger.Error().Err(errors.New("Could not determine container name, refer to documentation on handling multiple clusters clients with Kubernetes")).Msg("Failed to mount")
+					}
 				}
 			}
-
 		}
+
 		logger.Trace().Strs("mount_options", m.mountOptions.Strings()).
 			Fields(mountOptions).Msg("Performing mount")
 		return m.kMounter.MountSensitive(m.fsName, m.mountPoint, "wekafs", mountOptions.Strings(), mountOptionsSensitive)
