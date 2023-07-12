@@ -574,11 +574,12 @@ type ApiObjectRequest interface {
 }
 
 type Credentials struct {
-	Username     string
-	Password     string
-	Organization string
-	HttpScheme   string
-	Endpoints    []string
+	Username           string
+	Password           string
+	Organization       string
+	HttpScheme         string
+	Endpoints          []string
+	LocalContainerName string
 }
 
 func (c *Credentials) String() string {

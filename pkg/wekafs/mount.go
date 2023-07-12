@@ -102,15 +102,25 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 				return err
 			}
 			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
+			localContainerName := apiClient.Credentials.LocalContainerName
 			if apiClient.SupportsMultipleClusters() {
-				container, err := apiClient.GetLocalContainer(ctx)
-				if err != nil || container == nil {
-					logger.Warn().Err(err).Msg("Failed to determine local container, assuming default")
+				if localContainerName != "" {
+					logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secrets")
 				} else {
+					container, err := apiClient.GetLocalContainer(ctx)
+					if err != nil || container == nil {
+						logger.Warn().Err(err).Msg("Failed to determine local container, assuming default")
+					} else {
+						localContainerName = container.ContainerName
+					}
+
+				}
+				if localContainerName != "" {
 					mountOptions.customOptions["container_name"] = mountOption{
 						option: "container_name",
-						value:  container.ContainerName,
+						value:  localContainerName,
 					}
+
 				}
 			}
 

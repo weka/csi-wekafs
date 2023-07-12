@@ -100,12 +100,19 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		}
 		return ret
 	}()
+
+	localContainerName, ok := secrets["localContainerName"]
+	if !ok {
+		localContainerName = ""
+	}
+
 	credentials := apiclient.Credentials{
-		Username:     strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
-		Password:     strings.TrimSuffix(secrets["password"], "\n"),
-		Organization: strings.TrimSpace(strings.TrimSuffix(secrets["organization"], "\n")),
-		Endpoints:    endpoints,
-		HttpScheme:   strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
+		Username:           strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
+		Password:           strings.TrimSuffix(secrets["password"], "\n"),
+		Organization:       strings.TrimSpace(strings.TrimSuffix(secrets["organization"], "\n")),
+		Endpoints:          endpoints,
+		HttpScheme:         strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
+		LocalContainerName: localContainerName,
 	}
 	return api.fromCredentials(ctx, credentials, hostname)
 }
