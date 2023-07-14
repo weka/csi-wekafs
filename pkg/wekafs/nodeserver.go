@@ -56,8 +56,12 @@ type NodeServer struct {
 	sync.Mutex
 }
 
+func (ns *NodeServer) getNodeId() string {
+	return ns.nodeID
+}
+
 func (ns *NodeServer) getDefaultMountOptions() MountOptions {
-	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ns.getConfig().mutuallyExclusiveOptions)
+	return getDefaultMountOptions().RemoveOption("acl").MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ns.getConfig().mutuallyExclusiveOptions)
 }
 
 func (ns *NodeServer) isInDevMode() bool {
@@ -243,7 +247,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	attrib := req.GetVolumeContext()
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
-	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
+	volume.mountOptions.RemoveOption("acl").Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
 
 	logger.Debug().Str("target_path", targetPath).
 		Str("fs_type", fsType).

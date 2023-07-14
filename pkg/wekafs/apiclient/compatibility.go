@@ -16,6 +16,7 @@ type WekaCompatibilityRequiredVersions struct {
 	CloneFilesystem                string
 	UrlQueryParams                 string
 	SyncOnCloseMountOption         string
+	SingleClientMultipleClusters   string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
@@ -29,6 +30,7 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	CloneFilesystem:                "v9.99", // can clone a volume directly on storage side
 	UrlQueryParams:                 "v4.0",  // can perform URL query by fields
 	SyncOnCloseMountOption:         "v4.2",  // can perform sync_on_close mount option
+	SingleClientMultipleClusters:   "v4.2",  // single client can have multiple Weka cluster connections
 }
 
 type WekaCompatibilityMap struct {
@@ -42,6 +44,7 @@ type WekaCompatibilityMap struct {
 	CloneFilesystem                 bool
 	UrlQueryParams                  bool
 	SyncOnCloseMountOption          bool
+	SingleClientMultipleClusters    bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -58,6 +61,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.QuotaOnSnapshot = false
 		cm.UrlQueryParams = false
 		cm.SyncOnCloseMountOption = false
+		cm.SingleClientMultipleClusters = false
 		return
 	}
 	d, _ := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
@@ -70,6 +74,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	qs, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnSnapshot)
 	u, _ := version.NewVersion(MinimumSupportedWekaVersions.UrlQueryParams)
 	sc, _ := version.NewVersion(MinimumSupportedWekaVersions.SyncOnCloseMountOption)
+	mc, _ := version.NewVersion(MinimumSupportedWekaVersions.SingleClientMultipleClusters)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
@@ -81,6 +86,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.QuotaOnSnapshot = v.GreaterThanOrEqual(qs)
 	cm.UrlQueryParams = v.GreaterThanOrEqual(u)
 	cm.SyncOnCloseMountOption = v.GreaterThanOrEqual(sc)
+	cm.SingleClientMultipleClusters = v.GreaterThanOrEqual(mc)
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
@@ -121,4 +127,8 @@ func (a *ApiClient) SupportsUrlQueryParams() bool {
 
 func (a *ApiClient) SupportsSyncOnCloseMountOption() bool {
 	return a.CompatibilityMap.SyncOnCloseMountOption
+}
+
+func (a *ApiClient) SupportsMultipleClusters() bool {
+	return a.CompatibilityMap.SingleClientMultipleClusters
 }

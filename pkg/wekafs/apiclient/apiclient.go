@@ -58,9 +58,10 @@ type ApiClient struct {
 	refreshTokenExpiryDate     time.Time
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
+	hostname                   string
 }
 
-func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool) (*ApiClient, error) {
+func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
 	}
@@ -76,6 +77,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		Credentials:       credentials,
 		CompatibilityMap:  &WekaCompatibilityMap{},
 		currentEndpointId: -1,
+		hostname:          hostname,
 	}
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
@@ -572,11 +574,12 @@ type ApiObjectRequest interface {
 }
 
 type Credentials struct {
-	Username     string
-	Password     string
-	Organization string
-	HttpScheme   string
-	Endpoints    []string
+	Username           string
+	Password           string
+	Organization       string
+	HttpScheme         string
+	Endpoints          []string
+	LocalContainerName string
 }
 
 func (c *Credentials) String() string {
