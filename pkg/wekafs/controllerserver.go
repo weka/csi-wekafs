@@ -54,6 +54,10 @@ func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(ControlServerAdditionalMountOptions), cs.getConfig().mutuallyExclusiveOptions)
 }
 
+func (cs *ControllerServer) getNodeId() string {
+	return cs.nodeID
+}
+
 func (cs *ControllerServer) isInDevMode() bool {
 	return cs.getConfig().isInDevMode()
 }

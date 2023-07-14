@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/showa-93/go-mask"
+	"go.opentelemetry.io/otel"
 	"hash/fnv"
 	"io"
 	"k8s.io/helm/pkg/urlutil"
@@ -57,9 +58,10 @@ type ApiClient struct {
 	refreshTokenExpiryDate     time.Time
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
+	hostname                   string
 }
 
-func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool) (*ApiClient, error) {
+func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
 	}
@@ -75,6 +77,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		Credentials:       credentials,
 		CompatibilityMap:  &WekaCompatibilityMap{},
 		currentEndpointId: -1,
+		hostname:          hostname,
 	}
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
@@ -330,9 +333,14 @@ func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 
 // request wraps do with retries and some more error handling
 func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
+	op := "ApiClientRequest"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
-		logger := log.Ctx(ctx)
 		if a.handleNetworkErrors(ctx, reqErr) != nil { // transient network errors
 			a.rotateEndpoint(ctx)
 			logger.Error().Err(reqErr).Msg("")
@@ -566,11 +574,12 @@ type ApiObjectRequest interface {
 }
 
 type Credentials struct {
-	Username     string
-	Password     string
-	Organization string
-	HttpScheme   string
-	Endpoints    []string
+	Username           string
+	Password           string
+	Organization       string
+	HttpScheme         string
+	Endpoints          []string
+	LocalContainerName string
 }
 
 func (c *Credentials) String() string {

@@ -63,6 +63,7 @@ type ApiStore struct {
 	apis               map[uint32]*apiclient.ApiClient
 	legacySecrets      *map[string]string
 	allowInsecureHttps bool
+	Hostname           string
 }
 
 // Die used to intentionally panic and exit, while updating termination log
@@ -90,7 +91,7 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 }
 
 // fromSecrets returns a pointer to API by secret contents
-func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
+func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string, hostname string) (*apiclient.ApiClient, error) {
 	endpointsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["endpoints"], "\n"), "\n", ","))
 	endpoints := func() []string {
 		var ret []string
@@ -99,23 +100,30 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string)
 		}
 		return ret
 	}()
-	credentials := apiclient.Credentials{
-		Username:     strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
-		Password:     strings.TrimSuffix(secrets["password"], "\n"),
-		Organization: strings.TrimSpace(strings.TrimSuffix(secrets["organization"], "\n")),
-		Endpoints:    endpoints,
-		HttpScheme:   strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
+
+	localContainerName, ok := secrets["localContainerName"]
+	if !ok {
+		localContainerName = ""
 	}
-	return api.fromCredentials(ctx, credentials)
+
+	credentials := apiclient.Credentials{
+		Username:           strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
+		Password:           strings.TrimSuffix(secrets["password"], "\n"),
+		Organization:       strings.TrimSpace(strings.TrimSuffix(secrets["organization"], "\n")),
+		Endpoints:          endpoints,
+		HttpScheme:         strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
+		LocalContainerName: localContainerName,
+	}
+	return api.fromCredentials(ctx, credentials, hostname)
 }
 
 // fromCredentials returns a pointer to API by credentials and endpoints
 // If this is a new API, it will be created and put in hashmap
-func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.Credentials) (*apiclient.ApiClient, error) {
+func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.Credentials, hostname string) (*apiclient.ApiClient, error) {
 	logger := log.Ctx(ctx)
 	logger.Trace().Str("api_client", credentials.String()).Msg("Creating new Weka API client")
 	// doing this to fetch a client hash
-	newClient, err := apiclient.NewApiClient(ctx, credentials, api.allowInsecureHttps)
+	newClient, err := apiclient.NewApiClient(ctx, credentials, api.allowInsecureHttps, hostname)
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
 	}
@@ -130,7 +138,6 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	if api.getByHash(hash) != nil {
 		return api.getByHash(hash), nil
 	}
-	api.apis[hash] = newClient
 	if err := newClient.Init(ctx); err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize API client")
 		return nil, err
@@ -141,6 +148,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 				"To support organization other than Root please upgrade to version %s or higher",
 			credentials.Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
 	}
+	api.apis[hash] = newClient
 	return newClient, nil
 }
 
@@ -176,7 +184,7 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 			return nil, nil
 		}
 	}
-	client, err := api.fromSecrets(ctx, secrets)
+	client, err := api.fromSecrets(ctx, secrets, api.Hostname)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize API client from secret, cannot proceed")
 		return nil, err
@@ -189,11 +197,12 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 	return client, nil
 }
 
-func NewApiStore(allowInsecureHttps bool) *ApiStore {
+func NewApiStore(allowInsecureHttps bool, hostname string) *ApiStore {
 	s := &ApiStore{
 		Mutex:              sync.Mutex{},
 		apis:               make(map[uint32]*apiclient.ApiClient),
 		allowInsecureHttps: allowInsecureHttps,
+		Hostname:           hostname,
 	}
 	secrets, err := s.GetDefaultSecrets()
 	if err != nil {
@@ -235,7 +244,7 @@ func NewWekaFsDriver(
 		version:           vendorVersion,
 		endpoint:          endpoint,
 		maxVolumesPerNode: maxVolumesPerNode,
-		api:               NewApiStore(config.allowInsecureHttps),
+		api:               NewApiStore(config.allowInsecureHttps, nodeID),
 		debugPath:         debugPath,
 		csiMode:           csiMode, // either "controller", "node", "all"
 		selinuxSupport:    selinuxSupport,
