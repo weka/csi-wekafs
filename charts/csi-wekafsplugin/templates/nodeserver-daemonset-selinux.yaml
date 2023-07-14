@@ -81,9 +81,6 @@ spec:
             - "--concurrency.nodePublishVolume={{ .Values.node.concurrency.nodePublishVolume | default "1" }}"
             - "--concurrency.nodeUnpublishVolume={{ .Values.node.concurrency.nodeUnpublishVolume | default "1" }}"
           {{- end }}
-          {{- if .Values.pluginConfig.supportMultipleClusters }}
-            - "--supportmultipleclusters"
-          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz

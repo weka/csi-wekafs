@@ -102,8 +102,6 @@ tracingUrl: ""
 pluginConfig:
   # -- Allow insecure HTTPS (skip TLS certificate verification)
   allowInsecureHttps: false
-  # -- Support connection to multiple Weka clusters from same node. Might affect performance
-  supportMultipleClusters: true
   objectNaming:
     # -- Prefix that will be added to names of Weka cluster filesystems / snapshots assocciated with CSI volume,
     #    must not exceed 7 symbols.

@@ -200,9 +200,6 @@ spec:
             - "--concurrency.createSnapshot={{ .Values.controller.concurrency.createSnapshot | default "1" }}"
             - "--concurrency.deleteSnapshot={{ .Values.controller.concurrency.deleteSnapshot | default "1" }}"
           {{- end }}
-          {{- if .Values.pluginConfig.supportMultipleClusters }}
-            - "--supportmultipleclusters"
-          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz

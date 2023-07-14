@@ -90,7 +90,6 @@ var (
 	maxConcurrentNodePublishVolumeReqs   = flag.Int64("concurrency.nodePublishVolume", 1, "Maximum concurrent NodePublishVolume requests")
 	maxConcurrentNodeUnpublishVolumeReqs = flag.Int64("concurrency.nodeUnpublishVolume", 1, "Maximum concurrent NodeUnpublishVolume requests")
 	grpcRequestTimeoutSeconds            = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
-	supportMultipleClusters              = flag.Bool("supportmultipleclusters", false, "Allow support of multiple Weka clusters")
 	// Set by the build process
 	version = ""
 )
@@ -207,7 +206,6 @@ func handle() {
 		*suppressVolumeCloneCapability,
 		*allowInsecureHttps,
 		*alwaysAllowSnapshotVolumes,
-		*supportMultipleClusters,
 		mutuallyExclusiveMountOptionsStrings,
 		*maxConcurrentCreateVolumeReqs,
 		*maxConcurrentDeleteVolumeReqs,
