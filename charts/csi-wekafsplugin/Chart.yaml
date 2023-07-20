@@ -10,8 +10,8 @@ sources:
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
-version: 2.2.1-SNAPSHOT.0.4311004
-appVersion: v2.2.1-SNAPSHOT.0.4311004
+version: 2.2.1-SNAPSHOT.4.c49d975
+appVersion: v2.2.1-SNAPSHOT.4.c49d975
 kubeVersion: ">=1.18.0"
 keywords: [storage, filesystem, HPC]
 annotations:
