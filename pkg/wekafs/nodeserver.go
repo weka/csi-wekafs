@@ -378,8 +378,10 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		if PathIsWekaMount(ctx, targetPath) {
 			logger.Debug().Msg("Directory exists and is weka mount")
 		} else {
-			msg := fmt.Sprintf("Directory %s exists, but not a weka mount", targetPath)
-			return NodeUnpublishVolumeError(ctx, codes.Internal, msg)
+			msg := fmt.Sprintf("Directory %s exists, but not a weka mount, assuming already unpublished", targetPath)
+			logger.Warn().Msg(msg)
+			result = "SUCCESS_WITH_WARNING"
+			return &csi.NodeUnpublishVolumeResponse{}, nil
 		}
 	}
 
