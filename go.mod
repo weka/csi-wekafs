@@ -20,9 +20,9 @@ require (
 	golang.org/x/sync v0.3.0
 	google.golang.org/grpc v1.56.2
 	google.golang.org/protobuf v1.31.0
-	k8s.io/apimachinery v0.27.3
+	k8s.io/apimachinery v0.28.1
 	k8s.io/helm v2.17.0+incompatible
-	k8s.io/mount-utils v0.27.3
+	k8s.io/mount-utils v0.28.1
 )
 
 require (
@@ -39,7 +39,7 @@ require (
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
-	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/net v0.13.0 // indirect
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230711160842-782d3b101e98 // indirect
