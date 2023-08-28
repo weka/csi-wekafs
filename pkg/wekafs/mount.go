@@ -103,7 +103,7 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 			return err
 		} else if len(containerPaths) == 0 {
 			logger.Error().Err(err).Msg("Failed to find active Weka container, cannot mount filesystem")
-			return err
+			return errors.New("could not perform a mount since active Weka container was not found on host")
 		}
 
 		if apiClient == nil {
