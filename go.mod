@@ -3,7 +3,6 @@ module github.com/wekafs/csi-wekafs
 go 1.20
 
 require (
-	github.com/Djarvur/go-lsmod v0.0.0-20190124055245-f58e2c8a3519
 	github.com/container-storage-interface/spec v1.8.0
 	github.com/google/go-querystring v1.1.0
 	github.com/google/uuid v1.3.1
@@ -36,7 +35,6 @@ require (
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/moby/sys/mountinfo v0.6.2 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.1 // indirect
