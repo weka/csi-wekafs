@@ -40,7 +40,6 @@ const (
 	TopologyLabelNode                = "topology.csi.weka.io/node"
 	TopologyLabelWeka                = "topology.csi.weka.io/global"
 	WekaKernelModuleName             = "wekafsgw"
-	crashOnNoWeka                    = false
 	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
 )
 
@@ -91,9 +90,6 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeG
 
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter *wekaMounter, config *DriverConfig) *NodeServer {
 	//goland:noinspection GoBoolExpressions
-	if !config.isInDevMode() && !isWekaInstalled() && crashOnNoWeka {
-		Die("Weka OS driver module not installed, exiting")
-	}
 	return &NodeServer{
 		caps: getNodeServiceCapabilities(
 			[]csi.NodeServiceCapability_RPC_Type{
