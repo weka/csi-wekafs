@@ -1,6 +1,7 @@
 package wekafs
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha1"
 	"encoding/base32"
@@ -468,4 +469,22 @@ func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int
 	}
 	matches := reportedCapacity == capacity
 	return exists, matches, err
+}
+
+func isWekaInstalled() bool {
+	file, err := os.Open("/proc/modules")
+	if err != nil {
+		log.Err(err).Msg("Failed to open procfs and check for existence of Weka kernel module")
+		return false
+	}
+	defer func() { _ = file.Close() }()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		s := strings.Split(scanner.Text(), " ")
+		name := s[0]
+		if name == WekaKernelModuleName {
+			return true
+		}
+	}
+	return false
 }

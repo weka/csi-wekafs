@@ -19,6 +19,8 @@ package wekafs
 import (
 	"context"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -30,12 +32,14 @@ import (
 type identityServer struct {
 	name    string
 	version string
+	config  *DriverConfig
 }
 
-func NewIdentityServer(name, version string) *identityServer {
+func NewIdentityServer(name, version string, config *DriverConfig) *identityServer {
 	return &identityServer{
 		name:    name,
 		version: version,
+		config:  config,
 	}
 }
 
@@ -69,8 +73,21 @@ func (ids *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPlugin
 	}, nil
 }
 
+func (ids *identityServer) getConfig() *DriverConfig {
+	return ids.config
+}
+
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	return &csi.ProbeResponse{}, nil
+	isReady := ids.getConfig().isInDevMode() || isWekaInstalled()
+	if !isReady {
+		logger := log.Ctx(ctx)
+		logger.Error().Msg("Weka driver not running on host, not ready to perform operations")
+	}
+	return &csi.ProbeResponse{
+		Ready: &wrapperspb.BoolValue{
+			Value: isReady,
+		},
+	}, nil
 }
 
 func (ids *identityServer) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
