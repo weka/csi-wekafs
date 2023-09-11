@@ -22,10 +22,9 @@ VERSION=$(shell cat charts/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '
 DOCKER_IMAGE_NAME=csi-wekafs
 
 $(CMDS:%=build-%): build-%:
-	docker build --build-arg VERSION=v$(VERSION) -t $(DOCKER_IMAGE_NAME):v$(VERSION) -f Dockerfile --label revision=v$(VERSION) .
+	docker build --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE_NAME):$(VERSION) -f Dockerfile --label revision=$(VERSION) .
 
 build: $(CMDS:%=build-%)
 
 clean:
 	-rm -rf bin
-
