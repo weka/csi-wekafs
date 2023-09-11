@@ -258,7 +258,7 @@ func (driver *WekaFsDriver) Run() {
 
 	// identity server runs always
 	log.Info().Msg("Loading IdentityServer")
-	driver.ids = NewIdentityServer(driver.name, driver.version)
+	driver.ids = NewIdentityServer(driver.name, driver.version, driver.config)
 
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")

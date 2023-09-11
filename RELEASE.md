@@ -1,3 +1,8 @@
+# Release v2.2.1
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+
+
 # Release v2.2.0
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
 
