@@ -133,7 +133,7 @@ jobs:
           cat changelog1 > charts/csi-wekafsplugin/CHANGELOG.md
           mv CHANGELOG.md RELEASE.md
 
-      - uses: docker/setup-buildx-action@v2
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
