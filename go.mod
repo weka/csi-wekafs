@@ -42,7 +42,7 @@ require (
 	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/sys v0.12.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230911183012-2d3300fd4832 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 )
