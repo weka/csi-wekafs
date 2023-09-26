@@ -149,9 +149,9 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
             - "--timeout=60s"
-            - "--health-port=9809"
+            - "--health-port={{ .Values.registrar.healthPort }}"
           ports:
-            - containerPort: 9809
+            - containerPort: {{ .Values.registrar.healthPort }}
               name: healthz
           livenessProbe:
             httpGet:
