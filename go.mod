@@ -9,7 +9,7 @@ require (
 	github.com/hashicorp/go-version v1.6.0
 	github.com/kubernetes-csi/csi-lib-utils v0.15.0
 	github.com/pkg/xattr v0.4.9
-	github.com/prometheus/client_golang v1.16.0
+	github.com/prometheus/client_golang v1.17.0
 	github.com/rs/zerolog v1.30.0
 	github.com/showa-93/go-mask v0.6.0
 	go.opentelemetry.io/otel v1.17.0
@@ -35,7 +35,7 @@ require (
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/moby/sys/mountinfo v0.6.2 // indirect
-	github.com/prometheus/client_model v0.4.0 // indirect
+	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.1 // indirect
 	go.opentelemetry.io/otel/metric v1.17.0 // indirect
