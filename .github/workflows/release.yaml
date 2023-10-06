@@ -168,7 +168,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
-      - uses: stefanzweifel/git-auto-commit-action@v4 
+      - uses: stefanzweifel/git-auto-commit-action@v5 
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
 
