@@ -28,6 +28,9 @@ LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 # Add util-linux to get a new version of losetup.
 RUN apk add util-linux libselinux libselinux-utils util-linux pciutils usbutils coreutils binutils findutils grep bash
+# Update CA certificates
+RUN apk add ca-certificates
+RUN update-ca-certificates
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 ARG binary=/bin/wekafsplugin
 ENTRYPOINT ["/wekafsplugin"]
