@@ -99,6 +99,11 @@ func (cs *ControllerServer) ControllerGetVolume(context.Context, *csi.Controller
 	panic("implement me")
 }
 
+//goland:noinspection GoUnusedParameter
+func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
+	panic("implement me")
+}
+
 func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, config *DriverConfig) *ControllerServer {
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
