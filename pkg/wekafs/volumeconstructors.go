@@ -263,7 +263,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 	requestedVolumeName := req.GetName()
 
 	var mountPath string
-	
+
 	filesystemName := GetFSNameFromRequest(req)
 	sourceVolId := req.GetVolumeContentSource().GetVolume().GetVolumeId() // we can assume no nil pointer as the function is called only if it happens
 	if sourceVolId == "" {
