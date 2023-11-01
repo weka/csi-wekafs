@@ -61,7 +61,7 @@ jobs:
           fi
 
 
-      - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac # v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
         with:
           token: ${{ secrets.PAT }} # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
           fetch-depth: 0
@@ -168,7 +168,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
-      - uses: stefanzweifel/git-auto-commit-action@v4 
+      - uses: stefanzweifel/git-auto-commit-action@v5 
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
 
