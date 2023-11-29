@@ -60,10 +60,13 @@ func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume *Volume) {
 	volumeTrashLoc := filepath.Join(path, garbagePath)
 	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
 		logger.Error().Err(err).Msg("Failed to create garbage collector directory")
+	} else {
+		logger.Debug().Str("garbage_collection_path", volumeTrashLoc).Msg("Successfuly created garbage collection directory")
 	}
-	fullPath := volume.GetFullPath(ctx)
+	fullPath := filepath.Join(path, volume.GetFullPath(ctx))
 	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Moving volume contents to trash")
-	if err := os.Rename(fullPath, volumeTrashLoc); err == nil {
+	newPath := filepath.Join(volumeTrashLoc, filepath.Base(fullPath))
+	if err := os.Rename(fullPath, newPath); err != nil {
 		logger.Error().Err(err).Str("full_path", fullPath).
 			Str("volume_trash_location", volumeTrashLoc).Msg("Failed to move volume contents to volumeTrashLoc")
 	}
