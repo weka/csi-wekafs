@@ -1,4 +1,4 @@
-FROM golang:1.20-alpine as go-builder
+FROM golang:1.21-alpine as go-builder
 # https://stackoverflow.com/questions/36279253/go-compiled-binary-wont-run-in-an-alpine-docker-container-on-ubuntu-host
 RUN apk add --no-cache libc6-compat gcc
 RUN apk add musl-dev
@@ -23,7 +23,7 @@ RUN true
 RUN echo Building package
 RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o "/bin/wekafsplugin" /src/cmd/*
 
-FROM alpine:3.18
+FROM alpine:3.19
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 # Add util-linux to get a new version of losetup.
