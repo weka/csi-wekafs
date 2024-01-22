@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/container-storage-interface/spec v1.9.0
 	github.com/google/go-querystring v1.1.0
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.5.0
 	github.com/hashicorp/go-version v1.6.0
 	github.com/kubernetes-csi/csi-lib-utils v0.16.0
 	github.com/pkg/xattr v0.4.9
