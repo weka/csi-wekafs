@@ -1,4 +1,4 @@
-FROM golang:1.20-alpine
+FROM golang:1.21-alpine
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY pkg pkg
 RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o wekafsplugin ./cmd/wekafsplugin/main.go
 
 
-FROM golang:1.20-alpine
+FROM golang:1.21-alpine
 
 ADD tests/csi-sanity/wekafs-dirv1.yaml /test/wekafs-dirv1.yaml
 ADD tests/csi-sanity/wekafs-fs.yaml /test/wekafs-fs.yaml
