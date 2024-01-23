@@ -10,8 +10,8 @@ sources:
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
-version: 2.3.3-SNAPSHOT.1.b15832d
-appVersion: v2.3.3-SNAPSHOT.1.b15832d
+version: 2.3.3-SNAPSHOT.4.f393b34
+appVersion: v2.3.3-SNAPSHOT.4.f393b34
 keywords: [storage, filesystem, HPC]
 annotations:
   artifacthub.io/category: "storage"
