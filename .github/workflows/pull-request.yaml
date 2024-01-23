@@ -102,7 +102,7 @@ jobs:
           helm schema-gen charts/csi-wekafsplugin/values.yaml >| charts/csi-wekafsplugin/values.schema.json 
 
       # TEST CHART
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
           check-latest: true
