@@ -152,7 +152,7 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 
 		logger.Trace().Strs("mount_options", m.mountOptions.Strings()).
 			Fields(mountOptions).Msg("Performing mount")
-		return m.kMounter.MountSensitive(m.fsName, m.mountPoint, "wekafs", mountOptions.Strings(), mountOptionsSensitive)
+		return m.kMounter.MountSensitiveWithoutSystemd(m.fsName, m.mountPoint, "wekafs", mountOptions.Strings(), mountOptionsSensitive)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsName)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
