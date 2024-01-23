@@ -9,7 +9,7 @@ require (
 	github.com/hashicorp/go-version v1.6.0
 	github.com/kubernetes-csi/csi-lib-utils v0.16.0
 	github.com/pkg/xattr v0.4.9
-	github.com/prometheus/client_golang v1.17.0
+	github.com/prometheus/client_golang v1.18.0
 	github.com/rs/zerolog v1.31.0
 	github.com/showa-93/go-mask v0.6.1
 	go.opentelemetry.io/otel v1.21.0
