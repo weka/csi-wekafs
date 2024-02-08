@@ -81,9 +81,12 @@ func (v *Volume) getCsiContentSource(ctx context.Context) *csi.VolumeContentSour
 	return nil
 }
 
-func (v *Volume) initMountOptions(ctx context.Context) {
-	v.mountOptions = v.server.getDefaultMountOptions()
+func (v *Volume) sanitizeMountOptions(ctx context.Context) {
 	v.pruneUnsupportedMountOptions(ctx)
+}
+
+func (v *Volume) initMountOptions(ctx context.Context) {
+	v.mountOptions = getDefaultMountOptions()
 }
 
 func (v *Volume) pruneUnsupportedMountOptions(ctx context.Context) {
@@ -824,7 +827,7 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
 
-	mountOpts := v.getMountOptions(ctx)
+	mountOpts := v.getMountOptions(ctx).MergedWith(v.server.getDefaultMountOptions(), v.server.getConfig().mutuallyExclusiveOptions)
 	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := func() {}
 	if err == nil {

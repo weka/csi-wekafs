@@ -33,6 +33,7 @@ func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.
 		server:              server,
 	}
 	v.initMountOptions(ctx)
+	v.sanitizeMountOptions(ctx)
 	return v, nil
 }
 
@@ -91,9 +92,10 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 			return nil, err
 		}
 	}
-	volume.initMountOptions(ctx)
 	params := req.GetParameters()
+	volume.initMountOptions(ctx)
 	err = volume.ObtainRequestParams(ctx, params)
+	volume.sanitizeMountOptions(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not obtain volume parameters from request")
 	}

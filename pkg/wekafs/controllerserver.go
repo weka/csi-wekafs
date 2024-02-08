@@ -260,9 +260,8 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// IDEMPOTENCE FLOW: If directory already exists, return the createResponse if size matches, or error
 	volExists, volMatchesCapacity, err := volumeExistsAndMatchesCapacity(ctx, volume, capacity)
 
-	// set params to have all relevant mount options (default + those received in params - default controller opts) to be passed as part of volumeContext
-	mountOpts := volume.getMountOptions(ctx).RemoveOption(MountOptionAcl)
-	params["mountOptions"] = mountOpts.String()
+	// set params to have all relevant mount options (global default + those received in params) to be passed as part of volumeContext
+	params["mountOptions"] = volume.getMountOptions(ctx).String()
 
 	if err != nil {
 		if !volExists {
