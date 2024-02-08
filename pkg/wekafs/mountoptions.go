@@ -14,6 +14,7 @@ const (
 	MountOptionWriteCache  = "writecache"
 	MountOptionCoherent    = "coherent"
 	MountOptionReadCache   = "readcache"
+	MountOptionAcl         = "acl"
 )
 
 type mountOption struct {
@@ -149,6 +150,7 @@ func (opts MountOptions) setSelinux(selinuxSupport bool) {
 	if selinuxSupport {
 		o := newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s_t:s0\"", selinuxContext))
 		opts.customOptions[o.option] = o
+		opts.AddOption(MountOptionAcl)
 	} else {
 		delete(opts.customOptions, "fscontext")
 	}
@@ -182,7 +184,7 @@ func getDefaultMountOptions() MountOptions {
 
 	ret := MountOptions{
 		customOptions:  make(map[string]mountOption),
-		excludeOptions: []string{""},
+		excludeOptions: []string{},
 	}
 	for _, optstring := range defaultOptions {
 		opt := newMountOptionFromString(optstring)
