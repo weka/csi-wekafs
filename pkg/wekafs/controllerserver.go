@@ -261,7 +261,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	volExists, volMatchesCapacity, err := volumeExistsAndMatchesCapacity(ctx, volume, capacity)
 
 	// set params to have all relevant mount options (global default + those received in params) to be passed as part of volumeContext
-	params["mountOptions"] = volume.getMountOptions(ctx).String()
+	//params["mountOptions"] = volume.getMountOptions(ctx).String()
 
 	if err != nil {
 		if !volExists {
@@ -305,7 +305,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	// Actually try to create the volume here
-	logger.Info().Int64("capacity", capacity).Str("mount_options", volume.mountOptions.String()).
+	logger.Info().Int64("capacity", capacity).Str("mount_options", volume.getMountOptions(ctx).String()).
 		Str("volume_id", volume.GetId()).Msg("Creating volume")
 	if err := volume.Create(ctx, capacity); err != nil {
 		return nil, err
