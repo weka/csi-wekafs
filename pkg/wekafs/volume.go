@@ -116,7 +116,8 @@ func (v *Volume) MarshalZerologObject(e *zerolog.Event) {
 		Str("group_name", v.filesystemGroupName).
 		Str("snapshot_name", v.SnapshotName).
 		Str("snapshot_access_point", v.SnapshotAccessPoint).
-		Str("inner_path", v.innerPath)
+		Str("inner_path", v.innerPath).
+		Str("mount_options", v.mountOptions.String())
 
 	if v.srcVolume != nil {
 		srcVolID := v.srcVolume.GetId()

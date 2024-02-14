@@ -305,7 +305,8 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	// Actually try to create the volume here
-	logger.Info().Int64("capacity", capacity).Str("volume_id", volume.GetId()).Msg("Creating volume")
+	logger.Info().Int64("capacity", capacity).Str("mount_options", volume.mountOptions.String()).
+		Str("volume_id", volume.GetId()).Msg("Creating volume")
 	if err := volume.Create(ctx, capacity); err != nil {
 		return nil, err
 	}
