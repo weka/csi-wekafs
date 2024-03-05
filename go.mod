@@ -7,7 +7,7 @@ toolchain go1.21.6
 require (
 	github.com/container-storage-interface/spec v1.9.0
 	github.com/google/go-querystring v1.1.0
-	github.com/google/uuid v1.5.0
+	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.6.0
 	github.com/kubernetes-csi/csi-lib-utils v0.17.0
 	github.com/pkg/xattr v0.4.9
@@ -20,7 +20,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.22.0
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
 	golang.org/x/sync v0.6.0
-	google.golang.org/grpc v1.60.1
+	google.golang.org/grpc v1.62.1
 	google.golang.org/protobuf v1.32.0
 	k8s.io/apimachinery v0.29.1
 	k8s.io/helm v2.17.0+incompatible
