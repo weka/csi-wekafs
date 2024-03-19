@@ -43,8 +43,8 @@ func (q *Quota) GetType() string {
 	return "quota"
 }
 
-func (q *Quota) GetBasePath() string {
-	fsUrl := (&FileSystem{Uid: q.FilesystemUid}).GetApiUrl()
+func (q *Quota) GetBasePath(a *ApiClient) string {
+	fsUrl := (&FileSystem{Uid: q.FilesystemUid}).GetApiUrl(a)
 	url, err := urlutil.URLJoin(fsUrl, q.GetType())
 	if err != nil {
 		return ""
@@ -52,8 +52,8 @@ func (q *Quota) GetBasePath() string {
 	return url
 }
 
-func (q *Quota) GetApiUrl() string {
-	url, err := urlutil.URLJoin(q.GetBasePath(), strconv.FormatUint(q.InodeId, 10))
+func (q *Quota) GetApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(q.GetBasePath(a), strconv.FormatUint(q.InodeId, 10))
 	if err != nil {
 		return ""
 	}
@@ -96,8 +96,8 @@ type QuotaCreateRequest struct {
 	capacityLimit  uint64
 }
 
-func (qc *QuotaCreateRequest) getApiUrl() string {
-	return qc.getRelatedObject().GetApiUrl()
+func (qc *QuotaCreateRequest) getApiUrl(a *ApiClient) string {
+	return qc.getRelatedObject().GetApiUrl(a)
 }
 
 func (qc *QuotaCreateRequest) getRequiredFields() []string {
@@ -126,8 +126,8 @@ type QuotaUpdateRequest struct {
 	capacityLimit  uint64
 }
 
-func (qu *QuotaUpdateRequest) getApiUrl() string {
-	return qu.getRelatedObject().GetApiUrl()
+func (qu *QuotaUpdateRequest) getApiUrl(a *ApiClient) string {
+	return qu.getRelatedObject().GetApiUrl(a)
 }
 
 func (qu *QuotaUpdateRequest) getRequiredFields() []string {
@@ -200,8 +200,8 @@ func (qd *QuotaDeleteRequest) String() string {
 	return fmt.Sprintln("QuotaDeleteRequest(fsUid:", qd.filesystemUid, "inodeId:", qd.InodeId, ")")
 }
 
-func (qd *QuotaDeleteRequest) getApiUrl() string {
-	url, err := urlutil.URLJoin((&FileSystem{Uid: qd.filesystemUid}).GetApiUrl(), "quotas", strconv.FormatUint(qd.InodeId, 10))
+func (qd *QuotaDeleteRequest) getApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin((&FileSystem{Uid: qd.filesystemUid}).GetApiUrl(a), "quotas", strconv.FormatUint(qd.InodeId, 10))
 	if err != nil {
 		return ""
 	}
@@ -236,7 +236,7 @@ func (a *ApiClient) CreateQuota(ctx context.Context, qr *QuotaCreateRequest, q *
 		return err
 	}
 
-	err = a.Put(ctx, qr.getApiUrl(), &payload, nil, q)
+	err = a.Put(ctx, qr.getApiUrl(a), &payload, nil, q)
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultS
 		return RequestMissingParams
 	}
 	ret := &[]Quota{}
-	err := a.Get(ctx, query.GetBasePath(), nil, ret)
+	err := a.Get(ctx, query.GetBasePath(a), nil, ret)
 	if err != nil {
 		return err
 	}
@@ -295,7 +295,7 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 		FilesystemUid: fs.Uid,
 		InodeId:       inodeId,
 	}
-	err := a.Get(ctx, ret.GetApiUrl(), nil, ret)
+	err := a.Get(ctx, ret.GetApiUrl(a), nil, ret)
 	if err != nil {
 		switch t := err.(type) {
 		case ApiNotFoundError:
@@ -359,7 +359,7 @@ func (a *ApiClient) UpdateQuota(ctx context.Context, r *QuotaUpdateRequest, q *Q
 	if err != nil {
 		return err
 	}
-	err = a.Put(ctx, r.getApiUrl(), &payload, nil, q)
+	err = a.Put(ctx, r.getApiUrl(a), &payload, nil, q)
 	if err != nil {
 		return err
 	}
@@ -375,7 +375,7 @@ func (a *ApiClient) DeleteQuota(ctx context.Context, r *QuotaDeleteRequest) erro
 		return RequestMissingParams
 	}
 	apiResponse := &ApiResponse{}
-	err := a.Delete(ctx, r.getApiUrl(), nil, nil, apiResponse)
+	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
 	if err != nil {
 		return err
 	}

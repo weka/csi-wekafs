@@ -43,7 +43,7 @@ func (a *ApiClient) FindSnapshotsByFilter(ctx context.Context, query *Snapshot, 
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	ret := &[]Snapshot{}
 	q, _ := qs.Values(query)
-	err := a.Get(ctx, query.GetBasePath(), q, ret)
+	err := a.Get(ctx, query.GetBasePath(a), q, ret)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (a *ApiClient) GetSnapshotByUid(ctx context.Context, uid uuid.UUID, snap *S
 	ret := &Snapshot{
 		Uid: uid,
 	}
-	return a.Get(ctx, ret.GetApiUrl(), nil, snap)
+	return a.Get(ctx, ret.GetApiUrl(a), nil, snap)
 }
 
 func (a *ApiClient) CreateSnapshot(ctx context.Context, r *SnapshotCreateRequest, snap *Snapshot) error {
@@ -112,7 +112,7 @@ func (a *ApiClient) CreateSnapshot(ctx context.Context, r *SnapshotCreateRequest
 		return err
 	}
 
-	err = a.Post(ctx, r.getRelatedObject().GetBasePath(), &payload, nil, snap)
+	err = a.Post(ctx, r.getRelatedObject().GetBasePath(a), &payload, nil, snap)
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (a *ApiClient) UpdateSnapshot(ctx context.Context, r *SnapshotUpdateRequest
 	if err != nil {
 		return err
 	}
-	err = a.Put(ctx, r.getApiUrl(), &payload, nil, snap)
+	err = a.Put(ctx, r.getApiUrl(a), &payload, nil, snap)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (a *ApiClient) DeleteSnapshot(ctx context.Context, r *SnapshotDeleteRequest
 		return RequestMissingParams
 	}
 	apiResponse := &ApiResponse{}
-	err := a.Delete(ctx, r.getApiUrl(), nil, nil, apiResponse)
+	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
 	if err != nil {
 		switch t := err.(type) {
 		case *ApiNotFoundError:
@@ -168,12 +168,12 @@ func (snap *Snapshot) GetType() string {
 	return "snapshot"
 }
 
-func (snap *Snapshot) GetBasePath() string {
+func (snap *Snapshot) GetBasePath(a *ApiClient) string {
 	return "snapshots"
 }
 
-func (snap *Snapshot) GetApiUrl() string {
-	url, err := urlutil.URLJoin(snap.GetBasePath(), snap.Uid.String())
+func (snap *Snapshot) GetApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(snap.GetBasePath(a), snap.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -211,8 +211,8 @@ type SnapshotCreateRequest struct {
 	IsWritable    bool       `json:"is_writable,omitempty"`
 }
 
-func (snapc *SnapshotCreateRequest) getApiUrl() string {
-	return snapc.getRelatedObject().GetBasePath()
+func (snapc *SnapshotCreateRequest) getApiUrl(a *ApiClient) string {
+	return snapc.getRelatedObject().GetBasePath(a)
 }
 
 func (snapc *SnapshotCreateRequest) getRequiredFields() []string {
@@ -238,8 +238,8 @@ type SnapshotUpdateRequest struct {
 	IsWritable  bool      `json:"is_writable"`
 }
 
-func (snapu *SnapshotUpdateRequest) getApiUrl() string {
-	url, err := urlutil.URLJoin(snapu.getRelatedObject().GetBasePath(), snapu.Uid.String())
+func (snapu *SnapshotUpdateRequest) getApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(snapu.getRelatedObject().GetBasePath(a), snapu.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -270,8 +270,8 @@ func (snapd *SnapshotDeleteRequest) String() string {
 	return fmt.Sprintln("SnapshotDeleteRequest(Uid:", snapd.Uid, ")")
 }
 
-func (snapd *SnapshotDeleteRequest) getApiUrl() string {
-	url, err := urlutil.URLJoin(snapd.getRelatedObject().GetBasePath(), snapd.Uid.String())
+func (snapd *SnapshotDeleteRequest) getApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(snapd.getRelatedObject().GetBasePath(a), snapd.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -299,8 +299,8 @@ func (snapr *SnapshotRestoreRequest) String() string {
 	return fmt.Sprintln("SnapshotRestoreRequest(fsUid:", snapr.Uid, ")")
 }
 
-func (snapr *SnapshotRestoreRequest) getApiUrl() string {
-	url, err := urlutil.URLJoin(snapr.getRelatedObject().GetBasePath(), snapr.FsUid.String(), snapr.Uid.String(), "restore")
+func (snapr *SnapshotRestoreRequest) getApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(snapr.getRelatedObject().GetBasePath(a), snapr.FsUid.String(), snapr.Uid.String(), "restore")
 	if err != nil {
 		return ""
 	}

@@ -38,12 +38,17 @@ func (n *WekaNode) GetType() string {
 	return "wekanode"
 }
 
-func (n *WekaNode) GetBasePath() string {
+func (n *WekaNode) GetBasePath(a *ApiClient) string {
+	if a != nil {
+		if a.CompatibilityMap.NewNodeApiObjectPath {
+			return "processes"
+		}
+	}
 	return "nodes"
 }
 
-func (n *WekaNode) GetApiUrl() string {
-	url, err := urlutil.URLJoin(n.GetBasePath(), n.Uid.String())
+func (n *WekaNode) GetApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(n.GetBasePath(a), n.Uid.String())
 	if err != nil {
 		return url
 	}
@@ -79,7 +84,7 @@ func (n *WekaNode) isDrive() bool {
 func (a *ApiClient) GetNodes(ctx context.Context, nodes *[]WekaNode) error {
 	node := &WekaNode{}
 
-	err := a.Get(ctx, node.GetBasePath(), nil, nodes)
+	err := a.Get(ctx, node.GetBasePath(a), nil, nodes)
 	if err != nil {
 		return err
 	}
@@ -104,7 +109,7 @@ func (a *ApiClient) GetNodeByUid(ctx context.Context, uid uuid.UUID, node *WekaN
 	n := &WekaNode{
 		Uid: uid,
 	}
-	err := a.Get(ctx, n.GetApiUrl(), nil, node)
+	err := a.Get(ctx, n.GetApiUrl(a), nil, node)
 	if err != nil {
 		return err
 	}
