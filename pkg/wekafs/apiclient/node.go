@@ -12,6 +12,7 @@ const (
 	NodeRoleFrontend   = "FRONTEND"
 	NodeRoleDrive      = "DRIVES"
 	NodeRoleManagement = "MANAGEMENT"
+	NodeModeBackend    = "backend"
 )
 
 type WekaNode struct {
@@ -21,6 +22,7 @@ type WekaNode struct {
 	Uid         uuid.UUID `json:"uid"`
 	Hostname    string    `json:"hostname"`
 	Ips         []string  `json:"ips"`
+	MgmtPort    int       `json:"mgmt_port,omitempty"`
 	Slot        int       `json:"slot"`
 	Roles       []string  `json:"roles"`
 	Status      string    `json:"status"`
