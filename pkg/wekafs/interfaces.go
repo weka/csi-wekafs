@@ -10,7 +10,7 @@ type AnyServer interface {
 	getMounter() AnyMounter
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
-	isInDevMode() bool // TODO: Rename to isInDevMode
+	isInDevMode() bool
 	getDefaultMountOptions() MountOptions
 	getNodeId() string
 }

@@ -259,9 +259,9 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run() {
-	// Create GRPC servers
-	// TODO: replace with NewMounter
 	mounter := driver.NewMounter()
+
+	// Create GRPC servers
 
 	// identity server runs always
 	log.Info().Msg("Loading IdentityServer")
