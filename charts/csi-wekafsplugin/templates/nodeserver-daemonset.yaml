@@ -106,6 +106,12 @@ spec:
             - "--concurrency.nodePublishVolume={{ .Values.node.concurrency.nodePublishVolume | default "1" }}"
             - "--concurrency.nodeUnpublishVolume={{ .Values.node.concurrency.nodeUnpublishVolume | default "1" }}"
           {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
+            - "--usenfs"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.allowNfsFailback | default false }}
+            - "--allownfsfailback"
+          {{- end }}
           ports:
             - containerPort: 9899
               name: healthz

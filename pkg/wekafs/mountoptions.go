@@ -8,12 +8,15 @@ import (
 )
 
 const (
-	selinuxContext         = "wekafs_csi_volume"
+	selinuxContextWekaFs   = "wekafs_csi_volume_t"
+	selinuxContextNfs      = "nfs_t"
 	MountOptionSyncOnClose = "sync_on_close"
 	MountOptionReadOnly    = "ro"
 	MountOptionWriteCache  = "writecache"
 	MountOptionCoherent    = "coherent"
 	MountOptionReadCache   = "readcache"
+	MountProtocolWekafs    = "wekafs"
+	MountProtocolNfs       = "nfs"
 )
 
 type mountOption struct {
@@ -155,12 +158,22 @@ func (opts MountOptions) AsMapKey() string {
 	return ret.String()
 }
 
-func (opts MountOptions) setSelinux(selinuxSupport bool) {
+func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 	if selinuxSupport {
-		o := newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s_t:s0\"", selinuxContext))
+		var o mountOption
+		if mountProtocol == MountProtocolWekafs {
+			o = newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s:s0\"", selinuxContextWekaFs))
+		} else if mountProtocol == MountProtocolNfs {
+			o = newMountOptionFromString(fmt.Sprintf("context=\"system_u:object_r:%s:s0\"", selinuxContextNfs))
+		}
 		opts.customOptions[o.option] = o
 	} else {
-		delete(opts.customOptions, "fscontext")
+		if mountProtocol == MountProtocolWekafs {
+			delete(opts.customOptions, "fscontext")
+		}
+		if mountProtocol == MountProtocolNfs {
+			delete(opts.customOptions, "context")
+		}
 	}
 }
 

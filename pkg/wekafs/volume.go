@@ -628,7 +628,7 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 
 func (v *Volume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
-		v.server.getMounter().gc.triggerGcVolume(ctx, v)
+		v.server.getMounter().getGarbageCollector().triggerGcVolume(ctx, v)
 		return nil
 	}
 	return v.Delete(ctx)

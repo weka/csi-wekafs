@@ -64,6 +64,7 @@ type ApiClient struct {
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
 	hostname                   string
+	NfsInterfaceGroup          *InterfaceGroup
 }
 
 type ApiEndPoint struct {
