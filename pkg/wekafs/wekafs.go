@@ -260,6 +260,7 @@ func NewWekaFsDriver(
 
 func (driver *WekaFsDriver) Run() {
 	// Create GRPC servers
+	// TODO: replace with NewMounter
 	mounter := newWekafsMounter(driver)
 
 	// identity server runs always
