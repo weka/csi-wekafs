@@ -215,6 +215,12 @@ spec:
             - "--concurrency.createSnapshot={{ .Values.controller.concurrency.createSnapshot | default "1" }}"
             - "--concurrency.deleteSnapshot={{ .Values.controller.concurrency.deleteSnapshot | default "1" }}"
           {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
+            - "--usenfs"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.allowNfsFailback | default false }}
+            - "--allownfsfailback"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
