@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"k8s.io/helm/pkg/urlutil"
+	"sort"
 )
 
 type InterfaceGroupType string
@@ -62,17 +63,26 @@ func (i *InterfaceGroup) isNfs() bool {
 	return i.getInterfaceGroupType() == InterfaceGroupTypeNFS
 }
 
-func (a *ApiClient) GetInterfaceGroups(ctx context.Context, intefaceGroups *[]InterfaceGroup) error {
+func (i *InterfaceGroup) isSmb() bool {
+	return i.getInterfaceGroupType() == InterfaceGroupTypeSMB
+}
+
+// GetIpAddress returns a single IP address based on hostname, so for same server, always same IP address will be returned
+func (i *InterfaceGroup) GetIpAddress(hostname string) bool {
+	return i.isNfs() || i.isSmb()
+}
+
+func (a *ApiClient) GetInterfaceGroups(ctx context.Context, interfaceGroups *[]InterfaceGroup) error {
 	ig := &InterfaceGroup{}
 
-	err := a.Get(ctx, ig.GetBasePath(), nil, intefaceGroups)
+	err := a.Get(ctx, ig.GetBasePath(), nil, interfaceGroups)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (a *ApiClient) GetIntefaceGroupsByType(ctx context.Context, groupType InterfaceGroupType, interfaceGroups *[]InterfaceGroup) error {
+func (a *ApiClient) GetInterfaceGroupsByType(ctx context.Context, groupType InterfaceGroupType, interfaceGroups *[]InterfaceGroup) error {
 	res := &[]InterfaceGroup{}
 	err := a.GetInterfaceGroups(ctx, res)
 	if err != nil {
@@ -99,12 +109,12 @@ func (a *ApiClient) GetInterfaceGroupByUid(ctx context.Context, uid uuid.UUID, i
 
 func (a *ApiClient) fetchNfsInterfaceGroup(ctx context.Context, name *string, useDefault bool) error {
 	igs := &[]InterfaceGroup{}
-	err := a.GetIntefaceGroupsByType(ctx, InterfaceGroupTypeNFS, igs)
+	err := a.GetInterfaceGroupsByType(ctx, InterfaceGroupTypeNFS, igs)
 	if err != nil {
-		return errors.Join(errors.New("failed to fetch nfs inteface groups"), err)
+		return errors.Join(errors.New("failed to fetch nfs interface groups"), err)
 	}
 	if len(*igs) == 0 {
-		return errors.New("no nfs inteface groups found")
+		return errors.New("no nfs interface groups found")
 	}
 	if name != nil {
 		for _, ig := range *igs {
@@ -115,12 +125,23 @@ func (a *ApiClient) fetchNfsInterfaceGroup(ctx context.Context, name *string, us
 	} else if useDefault {
 		a.NfsInterfaceGroup = &(*igs)[0]
 	}
+	if len(a.NfsInterfaceGroup.Ips) == 0 {
+		return errors.New("no IP addresses found for nfs interface group")
+	}
+	// Make sure the IPs are always sorted
+	sort.Strings(a.NfsInterfaceGroup.Ips)
 	return nil
 }
 
-func (a *ApiClient) GetNfsIntefaceGroup(ctx context.Context) *InterfaceGroup {
+func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context) *InterfaceGroup {
 	if a.NfsInterfaceGroup == nil {
 		_ = a.fetchNfsInterfaceGroup(ctx, nil, true)
 	}
 	return a.NfsInterfaceGroup
+}
+
+// GetNfsMountIp returns the first IP address of the NFS interface group
+// TODO: need to do it much more sophisticated way to distribute load
+func (a *ApiClient) GetNfsMountIp(ctx context.Context) string {
+	return a.GetNfsInterfaceGroup(ctx).Ips[0]
 }
