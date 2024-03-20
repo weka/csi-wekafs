@@ -22,7 +22,7 @@ func (m *nfsMounter) getGarbageCollector() *innerPathVolGc {
 	return m.gc
 }
 
-func newnfsMounter(driver *WekaFsDriver) *nfsMounter {
+func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 	mounter := &nfsMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
