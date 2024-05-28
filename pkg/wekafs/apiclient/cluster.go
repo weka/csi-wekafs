@@ -208,7 +208,7 @@ func (a *ApiClient) GetLocalContainer(ctx context.Context) (*Container, error) {
 
 func filterFrontendContainers(ctx context.Context, hostname string, containerList []Container, allowProtocolContainers bool) []Container {
 	logger := log.Ctx(ctx)
-	ret := []Container{}
+	var ret []Container
 	for _, container := range containerList {
 		if container.Hostname == hostname {
 			if container.Mode == "backend" {
@@ -220,7 +220,7 @@ func filterFrontendContainers(ctx context.Context, hostname string, containerLis
 				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping a backend container")
 				continue
 			}
-			if container.State != "ACTIVE" {
+			if container.State != "ACTIVE" || container.Status != "UP" {
 				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping an INACTIVE container")
 				continue
 			}
