@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -14,14 +15,15 @@ import (
 )
 
 type nfsMount struct {
-	fsName                  string
-	mountPoint              string
-	refCount                int
-	lock                    sync.Mutex
-	kMounter                mount.Interface
-	debugPath               string
-	mountOptions            MountOptions
-	lastUsed                time.Time
+	fsName         string
+	mountPoint     string
+	refCount       int
+	lock           sync.Mutex
+	kMounter       mount.Interface
+	debugPath      string
+	mountOptions   MountOptions
+	lastUsed       time.Time
+	mountIpAddress net.IP
 	allowProtocolContainers bool
 }
 
