@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"time"
 )
 
@@ -187,9 +188,35 @@ func (a *ApiClient) GetLocalContainer(ctx context.Context) (*Container, error) {
 	}
 
 	var ret []Container
-	for _, container := range *allContainers {
-		if container.Hostname == a.hostname {
+	ret = filterFrontendContainers(ctx, a.hostname, *allContainers, false)
+	if len(ret) == 0 {
+		logger.Warn().Msg("No frontend containers found, trying to find backend containers with frontend cores")
+		ret = filterFrontendContainers(ctx, a.hostname, *allContainers, true)
+	}
+
+	if len(ret) == 1 {
+		return &ret[0], nil
+	} else if len(ret) > 1 {
+		logger.Warn().Msg("Found more than one local client container, selecting one randomly")
+		return &ret[rand.IntnRange(0, len(ret))], nil
+	} else {
+		err := errors.New("could not find any local client container")
+		logger.Error().Err(err).Msg("Cannot fetch local container")
+		return nil, err
+	}
+}
+
+func filterFrontendContainers(ctx context.Context, hostname string, containerList []Container, allowProtocolContainers bool) []Container {
+	logger := log.Ctx(ctx)
+	ret := []Container{}
+	for _, container := range containerList {
+		if container.Hostname == hostname {
 			if container.Mode == "backend" {
+				if container.FrontendDedicatedCores >= 1 && allowProtocolContainers {
+					logger.Trace().Str("container_hostname", container.Hostname).Msg("Found a backend container with frontend cores, will use it as a frontend container")
+					ret = append(ret, container)
+					continue
+				}
 				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping a backend container")
 				continue
 			}
@@ -197,19 +224,9 @@ func (a *ApiClient) GetLocalContainer(ctx context.Context) (*Container, error) {
 				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping an INACTIVE container")
 				continue
 			}
-			logger.Debug().Str("container_hostname", container.Hostname).Msg("Found a valid container")
+			logger.Debug().Str("container_hostname", container.Hostname).Str("container_name", container.ContainerName).Msg("Found a valid container")
 			ret = append(ret, container)
 		}
 	}
-	if len(ret) == 1 {
-		return &ret[0], nil
-	} else if len(ret) > 1 {
-		err := errors.New("could not determine local client containers, ambiguous hostname")
-		logger.Error().Err(err).Msg("Cannot fetch local container")
-		return nil, err
-	} else {
-		err := errors.New("could not find any local client container")
-		logger.Error().Err(err).Msg("Cannot fetch local container")
-		return nil, err
-	}
+	return ret
 }
