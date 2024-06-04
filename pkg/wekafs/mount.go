@@ -14,14 +14,15 @@ import (
 )
 
 type wekaMount struct {
-	fsName       string
-	mountPoint   string
-	refCount     int
-	lock         sync.Mutex
-	kMounter     mount.Interface
-	debugPath    string
-	mountOptions MountOptions
-	lastUsed     time.Time
+	fsName                  string
+	mountPoint              string
+	refCount                int
+	lock                    sync.Mutex
+	kMounter                mount.Interface
+	debugPath               string
+	mountOptions            MountOptions
+	lastUsed                time.Time
+	allowProtocolContainers bool
 }
 
 func (m *wekaMount) isInDevMode() bool {
@@ -123,7 +124,7 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 				if localContainerName != "" {
 					logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secrets")
 				} else {
-					container, err := apiClient.GetLocalContainer(ctx)
+					container, err := apiClient.GetLocalContainer(ctx, m.allowProtocolContainers)
 					if err != nil || container == nil {
 						logger.Warn().Err(err).Msg("Failed to determine local container, assuming default")
 					} else {

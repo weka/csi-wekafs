@@ -17,16 +17,17 @@ type mountsMapPerFs map[string]*wekaMount
 type mountsMap map[string]mountsMapPerFs
 
 type wekaMounter struct {
-	mountMap       mountsMap
-	lock           sync.Mutex
-	kMounter       mount.Interface
-	debugPath      string
-	selinuxSupport bool
-	gc             *innerPathVolGc
+	mountMap                mountsMap
+	lock                    sync.Mutex
+	kMounter                mount.Interface
+	debugPath               string
+	selinuxSupport          bool
+	gc                      *innerPathVolGc
+	allowProtocolContainers bool
 }
 
 func newWekaMounter(driver *WekaFsDriver) *wekaMounter {
-	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
+	mounter := &wekaMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport, allowProtocolContainers: driver.config.allowProtocolContainers}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
 
@@ -44,11 +45,12 @@ func (m *wekaMounter) NewMount(fsName string, options MountOptions) *wekaMount {
 	if _, ok := m.mountMap[fsName][options.String()]; !ok {
 		uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
 		wMount := &wekaMount{
-			kMounter:     m.kMounter,
-			fsName:       fsName,
-			debugPath:    m.debugPath,
-			mountPoint:   "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
-			mountOptions: options,
+			kMounter:                m.kMounter,
+			fsName:                  fsName,
+			debugPath:               m.debugPath,
+			mountPoint:              "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+			mountOptions:            options,
+			allowProtocolContainers: m.allowProtocolContainers,
 		}
 		m.mountMap[fsName][options.String()] = wMount
 	}

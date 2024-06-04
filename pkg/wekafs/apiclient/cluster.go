@@ -179,7 +179,7 @@ func (a *ApiClient) getContainers(ctx context.Context) (*ContainersResponse, err
 	return responseData, err
 }
 
-func (a *ApiClient) GetLocalContainer(ctx context.Context) (*Container, error) {
+func (a *ApiClient) GetLocalContainer(ctx context.Context, allowProtocolContainers bool) (*Container, error) {
 	logger := log.Ctx(ctx)
 	logger.Info().Str("hostname", a.hostname).Msg("Fetching client containers on host")
 	allContainers, err := a.getContainers(ctx)
@@ -189,7 +189,7 @@ func (a *ApiClient) GetLocalContainer(ctx context.Context) (*Container, error) {
 
 	var ret []Container
 	ret = filterFrontendContainers(ctx, a.hostname, *allContainers, false)
-	if len(ret) == 0 {
+	if len(ret) == 0 && allowProtocolContainers {
 		logger.Warn().Msg("No frontend containers found, trying to find backend containers with frontend cores")
 		ret = filterFrontendContainers(ctx, a.hostname, *allContainers, true)
 	}
