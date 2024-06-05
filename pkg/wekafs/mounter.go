@@ -1,10 +1,13 @@
 package wekafs
 
 import (
+	"bufio"
 	"context"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -60,8 +63,39 @@ func (m *wekaMounter) NewMount(fsName string, options MountOptions) *wekaMount {
 
 type UnmountFunc func()
 
+func (m *wekaMounter) getSelinuxStatus(ctx context.Context) bool {
+	logger := log.Ctx(ctx)
+	if m.selinuxSupport {
+		logger.Trace().Msg("SELinux support is forced")
+		return true
+	}
+	// check if we have /etc/selinux/config
+	// if it exists, we can check if selinux is enforced or not
+	selinuxConf := "/etc/selinux/config"
+	file, err := os.Open(selinuxConf)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "SELINUX=enforcing") {
+			// no need to repeat each time, just set the selinuxSupport to true
+			m.selinuxSupport = true
+			return true
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
+	}
+	return false
+}
+
 func (m *wekaMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	mountOptions.setSelinux(m.selinuxSupport)
+	mountOptions.setSelinux(m.getSelinuxStatus(ctx))
 	mountObj := m.NewMount(fsName, mountOptions)
 	mountErr := mountObj.incRef(ctx, apiClient)
 
@@ -82,7 +116,7 @@ func (m *wekaMounter) Mount(ctx context.Context, fs string, apiClient *apiclient
 
 func (m *wekaMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
 	opts := options
-	options.setSelinux(m.selinuxSupport)
+	options.setSelinux(m.getSelinuxStatus(ctx))
 
 	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
 	if mnt, ok := m.mountMap[fsName][options.String()]; ok {

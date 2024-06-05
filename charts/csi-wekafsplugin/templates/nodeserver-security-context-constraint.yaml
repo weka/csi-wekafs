@@ -10,7 +10,7 @@ allowedVolumeTypes:
   - hostPath
   - secret
 readOnlyRootFilesystem: false
-
+allowHostPorts: true
 runAsUser:
   type: RunAsAny
 seLinuxContext:

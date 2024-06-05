@@ -39,7 +39,26 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
-      hostNetwork: true
+      initContainers:
+        - name: init
+          volumeMounts:
+            - mountPath: /etc/nodeinfo
+              name: nodeinfo
+          image: {{ .Values.images.nodeinfo }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            # This doesn't need to run as root.
+            runAsUser: 9376
+            runAsGroup: 9376
+          env:
+            - name: NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          args:
+            - bash
+            - -c
+            - kubectl get node $NODENAME -o json | jq '.metadata' > /etc/nodeinfo/metadata
       containers:
         - name: wekafs
           securityContext:
@@ -114,17 +133,6 @@ spec:
               value: {{ required "Provide CSI Driver Dynamic Volume Creation Path"  .Values.dynamicProvisionPath }}
             - name: X_CSI_MODE
               value: node
-            {{- if .Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints" }}
-            - name: OS_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['node.openshift.io/os_id']
-            - name: OS_IDTEST
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.labels['node.openshift.io/os_idtest']
-
-            {{- end }}
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
@@ -138,11 +146,18 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
+            - mountPath: /etc/nodeinfo
+              name: nodeinfo
+              readOnly: true
 {{- if .Values.legacyVolumeSecretName }}
             - mountPath: /legacy-volume-access
               name: legacy-volume-access
               readOnly: true
 {{- end }}
+            {{- if or (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") (eq .Values.selinuxSupport "on") }}
+            - mountPath: /etc/selinux/config
+              name: selinux-config
+            {{- end }}
         - name: liveness-probe
           volumeMounts:
             - mountPath: /csi
@@ -190,10 +205,6 @@ spec:
               name: registration-dir
             - mountPath: /var/lib/csi-wekafs-data
               name: csi-data-dir
-          {{- if or (eq .Values.selinuxSupport "enforced") (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
-            - mountPath: /etc/selinux/config
-              name: selinux-config
-          {{- end }}
       {{- with .Values.nodePluginTolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
@@ -232,6 +243,8 @@ spec:
             type: File
           name: selinux-config
       {{- end }}
+        - name: nodeinfo
+          emptyDir: {}
 {{- if .Values.legacyVolumeSecretName }}
         - name: legacy-volume-access
           secret:

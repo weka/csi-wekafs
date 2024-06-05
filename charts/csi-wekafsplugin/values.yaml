@@ -19,10 +19,13 @@ images:
   resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.9.3
   # -- CSI snapshotter sidecar image URL
   snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v6.3.3
+  # -- CSI podinfo sidecar image URL
+  nodeinfo: thockin/kubectl-sidecar:v1.29.2-1
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
   csidriverTag: *csiDriverVersion
+
 # -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master
