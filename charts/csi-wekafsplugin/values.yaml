@@ -37,6 +37,11 @@ controllerPluginTolerations: *globalPluginTolerations
 nodePluginTolerations: *globalPluginTolerations
 # -- Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only
 nodeSelector: {}
+# -- Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on
+# NOTE: by default, the policy will be installed both on workers and control plane nodes
+machineConfigLabels:
+  - "worker"
+  - "master"
 # Controller-specific parameters, please do not change unless explicitly guided
 controller:
   # -- Controller number of replicas
