@@ -211,6 +211,9 @@
                         }
                     }
                 },
+                "fsGroupPolicy": {
+                    "type": "string"
+                },
                 "mutuallyExclusiveMountOptions": {
                     "type": "array",
                     "items": {
