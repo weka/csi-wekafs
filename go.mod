@@ -8,7 +8,7 @@ require (
 	github.com/container-storage-interface/spec v1.9.0
 	github.com/google/go-querystring v1.1.0
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/go-version v1.6.0
+	github.com/hashicorp/go-version v1.7.0
 	github.com/kubernetes-csi/csi-lib-utils v0.17.0
 	github.com/pkg/xattr v0.4.9
 	github.com/prometheus/client_golang v1.18.0
