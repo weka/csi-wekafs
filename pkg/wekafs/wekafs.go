@@ -105,14 +105,20 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 	if !ok {
 		localContainerName = ""
 	}
+	autoUpdateEndpoints := false
+	autoUpdateEndpointsStr, ok := secrets["autoUpdateEndpoints"]
+	if ok {
+		autoUpdateEndpoints = strings.TrimSpace(strings.TrimSuffix(autoUpdateEndpointsStr, "\n")) == "true"
+	}
 
 	credentials := apiclient.Credentials{
-		Username:           strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
-		Password:           strings.TrimSuffix(secrets["password"], "\n"),
-		Organization:       strings.TrimSpace(strings.TrimSuffix(secrets["organization"], "\n")),
-		Endpoints:          endpoints,
-		HttpScheme:         strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
-		LocalContainerName: localContainerName,
+		Username:            strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
+		Password:            strings.TrimSuffix(secrets["password"], "\n"),
+		Organization:        strings.TrimSpace(strings.TrimSuffix(secrets["organization"], "\n")),
+		Endpoints:           endpoints,
+		HttpScheme:          strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
+		LocalContainerName:  localContainerName,
+		AutoUpdateEndpoints: autoUpdateEndpoints,
 	}
 	return api.fromCredentials(ctx, credentials, hostname)
 }

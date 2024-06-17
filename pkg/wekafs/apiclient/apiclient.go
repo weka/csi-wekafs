@@ -593,10 +593,15 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		return err
 	}
 	logger.Debug().Msg("Successfully connected to cluster API")
-	if err := a.UpdateApiEndpoints(ctx); err != nil {
-		logger.Error().Err(err).Msg("failed to update actual API endpoints")
+
+	if a.Credentials.AutoUpdateEndpoints {
+		if err := a.UpdateApiEndpoints(ctx); err != nil {
+			logger.Error().Err(err).Msg("Failed to update actual API endpoints")
+		} else {
+			logger.Debug().Strs("new_api_endpoints", maps.Keys(a.actualApiEndpoints)).Str("current_endpoint", a.getEndpoint(ctx).String()).Msg("Updated API endpoints")
+		}
 	} else {
-		logger.Debug().Strs("new_api_endpoints", maps.Keys(a.actualApiEndpoints)).Str("current_endpoint", a.getEndpoint(ctx).String()).Msg("Updated API endpoints")
+		logger.Debug().Str("current_endpoint", a.getEndpoint(ctx).String()).Msg("Auto update of API endpoints is disabled")
 	}
 	return nil
 }
@@ -710,12 +715,13 @@ type ApiObjectRequest interface {
 }
 
 type Credentials struct {
-	Username           string
-	Password           string
-	Organization       string
-	HttpScheme         string
-	Endpoints          []string
-	LocalContainerName string
+	Username            string
+	Password            string
+	Organization        string
+	HttpScheme          string
+	Endpoints           []string
+	LocalContainerName  string
+	AutoUpdateEndpoints bool
 }
 
 func (c *Credentials) String() string {
