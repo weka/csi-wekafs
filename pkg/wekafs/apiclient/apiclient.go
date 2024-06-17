@@ -557,8 +557,8 @@ type ApiResponse struct {
 // ApiObject generic interface of API object of any type (FileSystem, Quota, etc.)
 type ApiObject interface {
 	GetType() string
-	GetBasePath() string
-	GetApiUrl() string
+	GetBasePath(a *ApiClient) string
+	GetApiUrl(a *ApiClient) string
 	EQ(other ApiObject) bool
 	getImmutableFields() []string
 	String() string
@@ -569,7 +569,7 @@ type ApiObjectRequest interface {
 	getRequiredFields() []string
 	hasRequiredFields() bool
 	getRelatedObject() ApiObject
-	getApiUrl() string
+	getApiUrl(a *ApiClient) string
 	String() string
 }
 

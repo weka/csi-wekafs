@@ -17,6 +17,7 @@ type WekaCompatibilityRequiredVersions struct {
 	UrlQueryParams                 string
 	SyncOnCloseMountOption         string
 	SingleClientMultipleClusters   string
+	NewNodeApiObjectPath           string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
@@ -31,6 +32,7 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	UrlQueryParams:                 "v4.0",  // can perform URL query by fields
 	SyncOnCloseMountOption:         "v4.2",  // can perform sync_on_close mount option
 	SingleClientMultipleClusters:   "v4.2",  // single client can have multiple Weka cluster connections
+	NewNodeApiObjectPath:           "v4.2",  // new API object paths (processes, containers, etc.)
 }
 
 type WekaCompatibilityMap struct {
@@ -45,6 +47,7 @@ type WekaCompatibilityMap struct {
 	UrlQueryParams                  bool
 	SyncOnCloseMountOption          bool
 	SingleClientMultipleClusters    bool
+	NewNodeApiObjectPath            bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -62,6 +65,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.UrlQueryParams = false
 		cm.SyncOnCloseMountOption = false
 		cm.SingleClientMultipleClusters = false
+		cm.NewNodeApiObjectPath = false
 		return
 	}
 	d, _ := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
@@ -75,6 +79,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	u, _ := version.NewVersion(MinimumSupportedWekaVersions.UrlQueryParams)
 	sc, _ := version.NewVersion(MinimumSupportedWekaVersions.SyncOnCloseMountOption)
 	mc, _ := version.NewVersion(MinimumSupportedWekaVersions.SingleClientMultipleClusters)
+	nn, _ := version.NewVersion(MinimumSupportedWekaVersions.NewNodeApiObjectPath)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
@@ -87,6 +92,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.UrlQueryParams = v.GreaterThanOrEqual(u)
 	cm.SyncOnCloseMountOption = v.GreaterThanOrEqual(sc)
 	cm.SingleClientMultipleClusters = v.GreaterThanOrEqual(mc)
+	cm.NewNodeApiObjectPath = v.GreaterThanOrEqual(nn)
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
@@ -131,4 +137,8 @@ func (a *ApiClient) SupportsSyncOnCloseMountOption() bool {
 
 func (a *ApiClient) SupportsMultipleClusters() bool {
 	return a.CompatibilityMap.SingleClientMultipleClusters
+}
+
+func (a *ApiClient) RequiresNewNodePath() bool {
+	return a.CompatibilityMap.NewNodeApiObjectPath
 }
