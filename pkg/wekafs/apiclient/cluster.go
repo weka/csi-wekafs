@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"time"
 )
 
@@ -179,7 +180,7 @@ func (a *ApiClient) getContainers(ctx context.Context) (*ContainersResponse, err
 	return responseData, err
 }
 
-func (a *ApiClient) GetLocalContainer(ctx context.Context) (*Container, error) {
+func (a *ApiClient) GetLocalContainer(ctx context.Context, allowProtocolContainers bool) (*Container, error) {
 	logger := log.Ctx(ctx)
 	logger.Info().Str("hostname", a.hostname).Msg("Fetching client containers on host")
 	allContainers, err := a.getContainers(ctx)
@@ -188,29 +189,45 @@ func (a *ApiClient) GetLocalContainer(ctx context.Context) (*Container, error) {
 	}
 
 	var ret []Container
-	for _, container := range *allContainers {
-		if container.Hostname == a.hostname {
-			if container.Mode == "backend" {
-				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping a backend container")
-				continue
-			}
-			if container.State != "ACTIVE" {
-				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping an INACTIVE container")
-				continue
-			}
-			logger.Debug().Str("container_hostname", container.Hostname).Msg("Found a valid container")
-			ret = append(ret, container)
-		}
+	ret = filterFrontendContainers(ctx, a.hostname, *allContainers, false)
+	if len(ret) == 0 && allowProtocolContainers {
+		logger.Warn().Msg("No frontend containers found, trying to find backend containers with frontend cores")
+		ret = filterFrontendContainers(ctx, a.hostname, *allContainers, true)
 	}
+
 	if len(ret) == 1 {
 		return &ret[0], nil
 	} else if len(ret) > 1 {
-		err := errors.New("could not determine local client containers, ambiguous hostname")
-		logger.Error().Err(err).Msg("Cannot fetch local container")
-		return nil, err
+		logger.Warn().Msg("Found more than one local client container, selecting one randomly")
+		return &ret[rand.IntnRange(0, len(ret))], nil
 	} else {
 		err := errors.New("could not find any local client container")
 		logger.Error().Err(err).Msg("Cannot fetch local container")
 		return nil, err
 	}
+}
+
+func filterFrontendContainers(ctx context.Context, hostname string, containerList []Container, allowProtocolContainers bool) []Container {
+	logger := log.Ctx(ctx)
+	var ret []Container
+	for _, container := range containerList {
+		if container.Hostname == hostname {
+			if container.Mode == "backend" {
+				if container.FrontendDedicatedCores >= 1 && allowProtocolContainers {
+					logger.Trace().Str("container_hostname", container.Hostname).Msg("Found a backend container with frontend cores, will use it as a frontend container")
+					ret = append(ret, container)
+					continue
+				}
+				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping a backend container")
+				continue
+			}
+			if container.State != "ACTIVE" || container.Status != "UP" {
+				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping an INACTIVE container")
+				continue
+			}
+			logger.Debug().Str("container_hostname", container.Hostname).Str("container_name", container.ContainerName).Msg("Found a valid container")
+			ret = append(ret, container)
+		}
+	}
+	return ret
 }
