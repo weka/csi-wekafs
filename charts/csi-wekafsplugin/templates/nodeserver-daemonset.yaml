@@ -154,7 +154,7 @@ spec:
               name: legacy-volume-access
               readOnly: true
 {{- end }}
-            {{- if or (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") (eq .Values.selinuxSupport "on") }}
+            {{- if or (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") (eq .Values.selinuxSupport "enforced") }}
             - mountPath: /etc/selinux/config
               name: selinux-config
             {{- end }}
