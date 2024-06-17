@@ -19,10 +19,13 @@ images:
   resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.9.3
   # -- CSI snapshotter sidecar image URL
   snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v6.3.3
+  # -- CSI nodeinfo sidecar image URL, used for reading node metadata
+  nodeinfo: quay.io/weka.io/kubectl-sidecar:v1.29.2-1
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
   csidriverTag: *csiDriverVersion
+
 # -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master
@@ -34,6 +37,11 @@ controllerPluginTolerations: *globalPluginTolerations
 nodePluginTolerations: *globalPluginTolerations
 # -- Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only
 nodeSelector: {}
+# -- Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on
+# NOTE: by default, the policy will be installed both on workers and control plane nodes
+machineConfigLabels:
+  - "worker"
+  - "master"
 # Controller-specific parameters, please do not change unless explicitly guided
 controller:
   # -- Controller number of replicas
@@ -78,6 +86,7 @@ priorityClassName: ""
 #    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts
 #    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.
 #    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!
+#    NOTE: SELinux support is enabled automatically on clusters recognized as RedHat OpenShift Container Platform
 selinuxSupport: "off"
 # -- This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,
 #    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label
