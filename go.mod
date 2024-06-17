@@ -1,6 +1,6 @@
 module github.com/wekafs/csi-wekafs
 
-go 1.21
+go 1.22.0
 
 toolchain go1.22.4
 
@@ -9,7 +9,7 @@ require (
 	github.com/google/go-querystring v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.7.0
-	github.com/kubernetes-csi/csi-lib-utils v0.17.0
+	github.com/kubernetes-csi/csi-lib-utils v0.18.1
 	github.com/pkg/xattr v0.4.9
 	github.com/prometheus/client_golang v1.18.0
 	github.com/rs/zerolog v1.33.0
@@ -22,7 +22,7 @@ require (
 	golang.org/x/sync v0.7.0
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.34.2
-	k8s.io/apimachinery v0.29.1
+	k8s.io/apimachinery v0.30.0
 	k8s.io/helm v2.17.0+incompatible
 	k8s.io/mount-utils v0.29.1
 )
@@ -40,7 +40,7 @@ require (
 	github.com/prometheus/common v0.46.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	go.opentelemetry.io/otel/metric v1.22.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
