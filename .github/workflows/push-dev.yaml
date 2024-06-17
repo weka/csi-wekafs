@@ -140,7 +140,7 @@ jobs:
         with:
           author_name: Weka CSI Bot
           author_email: botty@weka.io
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.BOTTY_GH_TOKEN }}
           branch: dev
         if: |
           steps.helm-test.outputs.passed == 'true'

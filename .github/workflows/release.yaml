@@ -68,7 +68,7 @@ jobs:
 
       - run: gh release view ${{inputs.draftTag}}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
 
       - name: Configure git
         run: |
@@ -116,7 +116,7 @@ jobs:
       - name: Update RELEASE.md
         env:
           VERSION: ${{ steps.set_version.outputs.version }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
         run: |
           gh release view ${{inputs.draftTag}} --json body | jq -r .body > changelog
 
@@ -165,7 +165,7 @@ jobs:
 
       - run: gh release delete ${{inputs.draftTag}} --yes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
 
       # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
       - uses: stefanzweifel/git-auto-commit-action@v5 
@@ -189,7 +189,7 @@ jobs:
 
       - uses: helm/chart-releaser-action@v1.6.0
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CR_TOKEN: "${{ secrets.BOTTY_GH_TOKEN }}"
           CR_RELEASE_NAME_TEMPLATE: "v{{ .Version }}"
           CR_GENERATE_RELEASE_NOTES: true
           CR_MAKE_RELEASE_LATEST: ${{ inputs.makeLatestRelease }}
