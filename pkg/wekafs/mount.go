@@ -14,14 +14,15 @@ import (
 )
 
 type wekaMount struct {
-	fsName       string
-	mountPoint   string
-	refCount     int
-	lock         sync.Mutex
-	kMounter     mount.Interface
-	debugPath    string
-	mountOptions MountOptions
-	lastUsed     time.Time
+	fsName                  string
+	mountPoint              string
+	refCount                int
+	lock                    sync.Mutex
+	kMounter                mount.Interface
+	debugPath               string
+	mountOptions            MountOptions
+	lastUsed                time.Time
+	allowProtocolContainers bool
 }
 
 func (m *wekaMount) isInDevMode() bool {
@@ -118,12 +119,12 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 
 		// if needed, add containerName to the mount string
 		if apiClient != nil && len(containerPaths) > 1 {
-			localContainerName = apiClient.Credentials.LocalContainerName
 			if apiClient.SupportsMultipleClusters() {
+				localContainerName = apiClient.Credentials.LocalContainerName
 				if localContainerName != "" {
-					logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secrets")
+					logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secret")
 				} else {
-					container, err := apiClient.GetLocalContainer(ctx)
+					container, err := apiClient.GetLocalContainer(ctx, m.allowProtocolContainers)
 					if err != nil || container == nil {
 						logger.Warn().Err(err).Msg("Failed to determine local container, assuming default")
 					} else {
@@ -139,13 +140,14 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 								option: "container_name",
 								value:  localContainerName,
 							}
-
 							break
 						}
 					}
 
 				} else {
-					logger.Error().Err(errors.New("Could not determine container name, refer to documentation on handling multiple clusters clients with Kubernetes")).Msg("Failed to mount")
+					err = errors.New("mount failed, local container name not specified and could not be determined automatically, refer to documentation on handling multiple clusters clients with Kubernetes")
+					logger.Error().Err(err).Msg("Failed to mount")
+					return err
 				}
 			}
 		}

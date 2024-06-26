@@ -32,6 +32,7 @@ type DriverConfig struct {
 	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
 	maxConcurrencyPerOp           map[string]int64
 	grpcRequestTimeout            time.Duration
+	allowProtocolContainers       bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -47,7 +48,9 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
 	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
-	grpcRequestTimeoutSeconds int) *DriverConfig {
+	grpcRequestTimeoutSeconds int,
+	allowProtocolContainers bool,
+) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
 	for _, exclusiveSet := range mutuallyExclusiveMountOptions {
@@ -85,6 +88,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
 		maxConcurrencyPerOp:           concurrency,
 		grpcRequestTimeout:            grpcRequestTimeout,
+		allowProtocolContainers:       allowProtocolContainers,
 	}
 }
 

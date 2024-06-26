@@ -59,7 +59,7 @@ func (a *ApiClient) GetFileSystemByUid(ctx context.Context, uid uuid.UUID, fs *F
 	ret := &FileSystem{
 		Uid: uid,
 	}
-	err := a.Get(ctx, ret.GetApiUrl(), nil, fs)
+	err := a.Get(ctx, ret.GetApiUrl(a), nil, fs)
 	if err != nil {
 		switch t := err.(type) {
 		case *ApiNotFoundError:
@@ -85,7 +85,7 @@ func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSyst
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	ret := &[]FileSystem{}
 	q, _ := qs.Values(query)
-	err := a.Get(ctx, query.GetBasePath(), q, ret)
+	err := a.Get(ctx, query.GetBasePath(a), q, ret)
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateReq
 		return err
 	}
 
-	err = a.Post(ctx, r.getRelatedObject().GetBasePath(), &payload, nil, fs)
+	err = a.Post(ctx, r.getRelatedObject().GetBasePath(a), &payload, nil, fs)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func (a *ApiClient) UpdateFileSystem(ctx context.Context, r *FileSystemResizeReq
 	if err != nil {
 		return err
 	}
-	err = a.Put(ctx, r.getApiUrl(), &payload, nil, fs)
+	err = a.Put(ctx, r.getApiUrl(a), &payload, nil, fs)
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 		return RequestMissingParams
 	}
 	apiResponse := &ApiResponse{}
-	err := a.Delete(ctx, r.getApiUrl(), nil, nil, apiResponse)
+	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
 	if err != nil {
 		switch t := err.(type) {
 		case *ApiNotFoundError:
@@ -222,7 +222,7 @@ func (a *ApiClient) GetFileSystemMountToken(ctx context.Context, r *FileSystemMo
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
-	err := a.Get(ctx, r.getApiUrl(), nil, token)
+	err := a.Get(ctx, r.getApiUrl(a), nil, token)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to obtain a mount token")
 		return err
@@ -260,12 +260,12 @@ func (fs *FileSystem) GetType() string {
 	return "filesystem"
 }
 
-func (fs *FileSystem) GetBasePath() string {
+func (fs *FileSystem) GetBasePath(a *ApiClient) string {
 	return "fileSystems"
 }
 
-func (fs *FileSystem) GetApiUrl() string {
-	url, err := urlutil.URLJoin(fs.GetBasePath(), fs.Uid.String())
+func (fs *FileSystem) GetApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(fs.GetBasePath(a), fs.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -297,8 +297,8 @@ type FileSystemCreateRequest struct {
 	AllowNoKms    bool   `json:"allow_no_kms,omitempty"`
 }
 
-func (fsc *FileSystemCreateRequest) getApiUrl() string {
-	return fsc.getRelatedObject().GetBasePath()
+func (fsc *FileSystemCreateRequest) getApiUrl(a *ApiClient) string {
+	return fsc.getRelatedObject().GetBasePath(a)
 }
 
 func (fsc *FileSystemCreateRequest) getRequiredFields() []string {
@@ -339,8 +339,8 @@ func NewFileSystemResizeRequest(fsUid uuid.UUID, totalCapacity *int64) *FileSyst
 	return ret
 }
 
-func (fsu *FileSystemResizeRequest) getApiUrl() string {
-	url, err := urlutil.URLJoin(fsu.getRelatedObject().GetBasePath(), fsu.Uid.String())
+func (fsu *FileSystemResizeRequest) getApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(fsu.getRelatedObject().GetBasePath(a), fsu.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -371,8 +371,8 @@ func (fsd *FileSystemDeleteRequest) String() string {
 	return fmt.Sprintln("FileSystemDeleteRequest(fsUid:", fsd.Uid, ")")
 }
 
-func (fsd *FileSystemDeleteRequest) getApiUrl() string {
-	url, err := urlutil.URLJoin(fsd.getRelatedObject().GetBasePath(), fsd.Uid.String())
+func (fsd *FileSystemDeleteRequest) getApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(fsd.getRelatedObject().GetBasePath(a), fsd.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -399,8 +399,8 @@ func (fsm *FileSystemMountTokenRequest) String() string {
 	return fmt.Sprintln("FilesystemMountTokenRequest(fsUid:", fsm.Uid, ")")
 }
 
-func (fsm *FileSystemMountTokenRequest) getApiUrl() string {
-	url, err := urlutil.URLJoin(fsm.getRelatedObject().GetBasePath(), fsm.Uid.String(), "mountToken")
+func (fsm *FileSystemMountTokenRequest) getApiUrl(a *ApiClient) string {
+	url, err := urlutil.URLJoin(fsm.getRelatedObject().GetBasePath(a), fsm.Uid.String(), "mountToken")
 	if err != nil {
 		return ""
 	}

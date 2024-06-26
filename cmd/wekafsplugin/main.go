@@ -90,6 +90,7 @@ var (
 	maxConcurrentNodePublishVolumeReqs   = flag.Int64("concurrency.nodePublishVolume", 1, "Maximum concurrent NodePublishVolume requests")
 	maxConcurrentNodeUnpublishVolumeReqs = flag.Int64("concurrency.nodeUnpublishVolume", 1, "Maximum concurrent NodeUnpublishVolume requests")
 	grpcRequestTimeoutSeconds            = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
+	allowProtocolContainers              = flag.Bool("allowprotocolcontainers", false, "Allow protocol containers to be used for mounting filesystems")
 	// Set by the build process
 	version = ""
 )
@@ -214,7 +215,9 @@ func handle() {
 		*maxConcurrentDeleteSnapshotReqs,
 		*maxConcurrentNodePublishVolumeReqs,
 		*maxConcurrentNodeUnpublishVolumeReqs,
-		*grpcRequestTimeoutSeconds)
+		*grpcRequestTimeoutSeconds,
+		*allowProtocolContainers,
+	)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

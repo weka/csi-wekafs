@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/showa-93/go-mask"
 	"go.opentelemetry.io/otel"
+	"golang.org/x/exp/maps"
 	"hash/fnv"
 	"io"
 	"k8s.io/helm/pkg/urlutil"
@@ -19,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -49,7 +51,8 @@ type ApiClient struct {
 	ClusterGuid                uuid.UUID
 	ClusterName                string
 	MountEndpoints             []string
-	currentEndpointId          int
+	actualApiEndpoints         map[string]*ApiEndPoint
+	currentEndpoint            string
 	apiToken                   string
 	apiTokenExpiryDate         time.Time
 	refreshToken               string
@@ -59,6 +62,29 @@ type ApiClient struct {
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
 	hostname                   string
+}
+
+type ApiEndPoint struct {
+	IpAddress            string
+	MgmtPort             int
+	lastActive           time.Time
+	failCount            int64
+	timeoutCount         int64
+	http400ErrCount      int64
+	http401ErrCount      int64
+	http404ErrCount      int64
+	http409ErrCount      int64
+	http500ErrCount      int64
+	generalErrCount      int64
+	transportErrCount    int64
+	noRespCount          int64
+	parseErrCount        int64
+	requestCount         int64
+	requestDurationTotal time.Duration
+}
+
+func (e *ApiEndPoint) String() string {
+	return fmt.Sprintf("%s:%d", e.IpAddress, e.MgmtPort)
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
@@ -73,15 +99,46 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 			Jar:           nil,
 			Timeout:       ApiHttpTimeOutSeconds * time.Second,
 		},
-		ClusterGuid:       uuid.UUID{},
-		Credentials:       credentials,
-		CompatibilityMap:  &WekaCompatibilityMap{},
-		currentEndpointId: -1,
-		hostname:          hostname,
+		ClusterGuid:        uuid.UUID{},
+		Credentials:        credentials,
+		CompatibilityMap:   &WekaCompatibilityMap{},
+		hostname:           hostname,
+		actualApiEndpoints: make(map[string]*ApiEndPoint),
 	}
+	a.resetDefaultEndpoints(ctx)
+
 	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
 	return a, nil
+}
+
+func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
+	actualEndPoints := make(map[string]*ApiEndPoint)
+	for _, e := range a.Credentials.Endpoints {
+
+		split := strings.Split(e, ":")
+		ip := split[0]
+		port := "14000" // default port
+
+		if len(split) > 1 {
+			port = split[1]
+		}
+		portNum, err := strconv.Atoi(port)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Str("port", port).Msg("Failed to parse port number, using default")
+			portNum = 14000
+		}
+		endPoint := &ApiEndPoint{
+			IpAddress:            ip,
+			MgmtPort:             portNum,
+			lastActive:           time.Now(),
+			failCount:            0,
+			requestCount:         0,
+			requestDurationTotal: 0,
+		}
+		actualEndPoints[e] = endPoint
+	}
+	a.actualApiEndpoints = actualEndPoints
 }
 
 // fetchMountEndpoints used to obtain actual data plane IP addresses
@@ -101,11 +158,60 @@ func (a *ApiClient) fetchMountEndpoints(ctx context.Context) error {
 	return nil
 }
 
-// UpdateEndpoints fetches current management IP addresses of the cluster
-func (a *ApiClient) UpdateEndpoints(endpoints []string) {
-	a.Lock()
-	defer a.Unlock()
-	a.Credentials.Endpoints = endpoints
+// UpdateApiEndpoints fetches current management IP addresses of the cluster
+func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
+	logger := log.Ctx(ctx)
+	nodes := &[]WekaNode{}
+	err := a.GetNodesByRole(ctx, NodeRoleManagement, nodes)
+	if err != nil {
+		return err
+	}
+	if len(*nodes) == 0 {
+		logger.Error().Msg("No management nodes found, not updating endpoints")
+		return errors.New("no management nodes found, could not update api endpoints")
+	}
+
+	newEndpoints := make(map[string]*ApiEndPoint)
+	updateTime := time.Now()
+
+	// Create a copy of all existing endpoints to swap without locking
+	existingEndpoints := make(map[string]*ApiEndPoint)
+	for k, v := range a.actualApiEndpoints {
+		newEndPoint := *v
+		existingEndpoints[k] = &newEndPoint
+	}
+
+	for _, n := range *nodes {
+		// Make sure that only backends and not clients are added to the list
+		if n.Mode == NodeModeBackend {
+			for _, IpAddress := range n.Ips {
+				endpointKey := fmt.Sprintf("%s:%d", IpAddress, n.MgmtPort)
+				existingEndpoint, ok := existingEndpoints[endpointKey]
+				if ok {
+					logger.Debug().Str("endpoint", endpointKey).Msg("Updating existing API endpoint")
+					existingEndpoint.lastActive = updateTime
+					newEndpoints[endpointKey] = existingEndpoint
+				} else {
+					logger.Info().Str("endpoint", endpointKey).Msg("Adding new API endpoint")
+					endpoint := &ApiEndPoint{IpAddress: IpAddress, MgmtPort: n.MgmtPort, lastActive: updateTime, failCount: 0, requestCount: 0, requestDurationTotal: 0}
+					newEndpoints[endpointKey] = endpoint
+				}
+			}
+		}
+	}
+	// prune endpoints which are not active anymore (not existing on cluster)
+	for _, endpoint := range existingEndpoints {
+		if endpoint.lastActive.Before(updateTime) {
+			logger.Warn().Time("endpoint_last_active_time", endpoint.lastActive).Str("endpoint", endpoint.String()).Msg("Removing inactive API endpoint")
+			delete(newEndpoints, endpoint.String())
+		}
+	}
+
+	a.actualApiEndpoints = newEndpoints
+
+	// always rotate endpoint to make sure we distribute load between different Weka Nodes
+	a.rotateEndpoint(ctx)
+	return nil
 }
 
 // isLoggedIn returns true if client has a refresh token and it is not expired so it can refresh or perform ops directly
@@ -122,23 +228,26 @@ func (a *ApiClient) isLoggedIn() bool {
 // rotateEndpoint returns a random endpoint of the configured ones
 func (a *ApiClient) rotateEndpoint(ctx context.Context) {
 	logger := log.Ctx(ctx)
-	if a.Credentials.Endpoints == nil || len(a.Credentials.Endpoints) == 0 {
-		a.currentEndpointId = -1
+	if len(a.actualApiEndpoints) == 0 {
+		a.resetDefaultEndpoints(ctx)
+	}
+	if len(a.actualApiEndpoints) == 0 {
+		a.currentEndpoint = ""
 		logger.Error().Msg("Failed to choose random endpoint, no endpoints exist")
 		return
 	}
-	//a.currentEndpointId = rand.Intn(len(a.Credentials.Endpoints))
-	a.currentEndpointId = (a.currentEndpointId + 1) % len(a.Credentials.Endpoints)
-
-	logger.Trace().Str("current_endpoint", a.getEndpoint(ctx)).Msg("Switched to new API endpoint")
+	keys := reflect.ValueOf(a.actualApiEndpoints).MapKeys()
+	key := keys[rand.Intn(len(keys))].String()
+	logger.Debug().Str("new_endpoint", key).Str("previous_endpoint", a.currentEndpoint).Msg("Switched to new API endpoint")
+	a.currentEndpoint = key
 }
 
 // getEndpoint returns last known endpoint to work against
-func (a *ApiClient) getEndpoint(ctx context.Context) string {
-	if a.currentEndpointId < 0 {
+func (a *ApiClient) getEndpoint(ctx context.Context) *ApiEndPoint {
+	if a.currentEndpoint == "" {
 		a.rotateEndpoint(ctx)
 	}
-	return a.Credentials.Endpoints[a.currentEndpointId]
+	return a.actualApiEndpoints[a.currentEndpoint]
 }
 
 // getBaseUrl returns the full HTTP URL of the API endpoint including schema, chosen endpoint and API prefix
@@ -153,7 +262,8 @@ func (a *ApiClient) getBaseUrl(ctx context.Context) string {
 	default:
 		scheme = "http"
 	}
-	return fmt.Sprintf("%s://%s/api/v2", scheme, a.getEndpoint(ctx))
+	endpoint := a.getEndpoint(ctx)
+	return fmt.Sprintf("%s://%s:%d/api/v2", scheme, endpoint.IpAddress, endpoint.MgmtPort)
 }
 
 // do Makes a basic API call to the client, returns an *ApiResponse that includes raw data, error message etc.
@@ -201,18 +311,32 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
 
+	//perform the request and update endpoint with stats
+	endpoint := a.getEndpoint(ctx)
+	endpoint.requestCount++
+	start := time.Now()
 	response, err := a.client.Do(r)
+
 	if err != nil {
+		endpoint.transportErrCount++
 		return nil, &transportError{err}
 	}
 
 	if response == nil {
+		endpoint.noRespCount++
 		return nil, &transportError{errors.New("received no response")}
+	}
+
+	// update endpoint stats for success and total duration
+	endpoint.requestDurationTotal += time.Since(start)
+	if response.StatusCode != http.StatusOK {
+		endpoint.failCount++
 	}
 
 	responseBody, err := io.ReadAll(response.Body)
 	logger.Trace().Str("response", maskPayload(string(responseBody))).Msg("")
 	if err != nil {
+		endpoint.parseErrCount++
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
@@ -228,6 +352,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	Response := &ApiResponse{}
 	err = json.Unmarshal(responseBody, Response)
+	endpoint.parseErrCount++
 	Response.HttpStatusCode = response.StatusCode
 	if err != nil {
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
@@ -250,6 +375,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	case http.StatusNoContent: //203
 		return Response, nil
 	case http.StatusBadRequest: //400
+		endpoint.http400ErrCount++
 		return Response, &ApiBadRequestError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -258,6 +384,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusUnauthorized: //401
+		endpoint.http401ErrCount++
 		return Response, &ApiAuthorizationError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -266,6 +393,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusNotFound: //404
+		endpoint.http404ErrCount++
 		return Response, &ApiNotFoundError{
 			Err:         nil,
 			Text:        "Object not found",
@@ -274,6 +402,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusConflict: //409
+		endpoint.http409ErrCount++
 		return Response, &ApiConflictError{
 			ApiError: ApiError{
 				Err:         nil,
@@ -286,6 +415,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	case http.StatusInternalServerError: //500
+		endpoint.http500ErrCount++
 		return Response, ApiInternalError{
 			Err:         nil,
 			Text:        Response.Message,
@@ -295,6 +425,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	default:
+		endpoint.generalErrCount++
 		return Response, ApiError{
 			Err:         err,
 			Text:        "General failure during API command",
@@ -445,7 +576,7 @@ func (a *ApiClient) Login(ctx context.Context) error {
 	responseData := &LoginResponse{}
 	if err := a.request(ctx, "POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
-			logger.Error().Err(err).Str("endpoint", a.getEndpoint(ctx)).Msg("Could not log in to endpoint")
+			logger.Error().Err(err).Str("endpoint", a.getEndpoint(ctx).String()).Msg("Could not log in to endpoint")
 		}
 		logger.Error().Err(err).Msg("")
 		return err
@@ -462,6 +593,16 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		return err
 	}
 	logger.Debug().Msg("Successfully connected to cluster API")
+
+	if a.Credentials.AutoUpdateEndpoints {
+		if err := a.UpdateApiEndpoints(ctx); err != nil {
+			logger.Error().Err(err).Msg("Failed to update actual API endpoints")
+		} else {
+			logger.Debug().Strs("new_api_endpoints", maps.Keys(a.actualApiEndpoints)).Str("current_endpoint", a.getEndpoint(ctx).String()).Msg("Updated API endpoints")
+		}
+	} else {
+		logger.Debug().Str("current_endpoint", a.getEndpoint(ctx).String()).Msg("Auto update of API endpoints is disabled")
+	}
 	return nil
 }
 
@@ -557,8 +698,8 @@ type ApiResponse struct {
 // ApiObject generic interface of API object of any type (FileSystem, Quota, etc.)
 type ApiObject interface {
 	GetType() string
-	GetBasePath() string
-	GetApiUrl() string
+	GetBasePath(a *ApiClient) string
+	GetApiUrl(a *ApiClient) string
 	EQ(other ApiObject) bool
 	getImmutableFields() []string
 	String() string
@@ -569,17 +710,18 @@ type ApiObjectRequest interface {
 	getRequiredFields() []string
 	hasRequiredFields() bool
 	getRelatedObject() ApiObject
-	getApiUrl() string
+	getApiUrl(a *ApiClient) string
 	String() string
 }
 
 type Credentials struct {
-	Username           string
-	Password           string
-	Organization       string
-	HttpScheme         string
-	Endpoints          []string
-	LocalContainerName string
+	Username            string
+	Password            string
+	Organization        string
+	HttpScheme          string
+	Endpoints           []string
+	LocalContainerName  string
+	AutoUpdateEndpoints bool
 }
 
 func (c *Credentials) String() string {
