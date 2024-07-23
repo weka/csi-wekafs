@@ -273,7 +273,7 @@ func PathExists(p string) bool {
 
 func PathIsWekaMount(ctx context.Context, path string) bool {
 	log.Ctx(ctx).Trace().Str("full_path", path).Msg("Checking if path is wekafs mount")
-	mountcmd := "mount -t wekafs | grep " + path
+	mountcmd := "mount -t wekafs | grep -w" + path
 	res, _ := exec.Command("sh", "-c", mountcmd).Output()
 	return strings.Contains(string(res), path)
 }
