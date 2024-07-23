@@ -30,6 +30,9 @@ spec:
       nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8}}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
+      {{- if .Values.hostNetwork }}
+      hostNetwork: {{ .Values.hostNetwork }}
+      {{- end }}
       containers:
         - name: csi-attacher
           image: {{ required "csi attacher sidercar image." .Values.images.attachersidecar }}

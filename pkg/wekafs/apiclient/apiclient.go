@@ -131,7 +131,7 @@ func isValidHostname(hostname string) bool {
 	// Regex to match the general structure of a hostname.
 	// Each label must start and end with an alphanumeric character,
 	// may contain hyphens, and be 1 to 63 characters long.
-	hostnameRegex := regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$`)
+	hostnameRegex := regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$`)
 
 	return hostnameRegex.MatchString(hostname)
 }

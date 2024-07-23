@@ -107,6 +107,8 @@ metrics:
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
+# -- Set to true to use host networking
+hostNetwork: false
 pluginConfig:
   # -- CSI Driver support for fsGroupPolicy, may be either "File" or "None". Default is "File"
   # -- WARNING: Changing this value might require uninstall and re-install of the plugin

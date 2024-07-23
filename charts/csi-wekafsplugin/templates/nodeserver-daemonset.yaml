@@ -39,6 +39,9 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
+      {{- if .Values.hostNetwork }}
+      hostNetwork: {{ .Values.hostNetwork }}
+      {{- end }}
       initContainers:
         - name: init
           volumeMounts:
@@ -104,7 +107,7 @@ spec:
             - "--concurrency.nodeUnpublishVolume={{ .Values.node.concurrency.nodeUnpublishVolume | default "1" }}"
           {{- end }}
           ports:
-            - containerPort: 9898
+            - containerPort: 9899
               name: healthz
               protocol: TCP
           {{- if .Values.metrics.enabled }}
@@ -171,7 +174,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
-              value: "9898"
+              value: "9899"
 
         - name: csi-registrar
           image: {{ required "Provide the csi node registrar sidecar container image." .Values.images.registrarsidecar }}
