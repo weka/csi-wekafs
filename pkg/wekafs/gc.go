@@ -43,13 +43,13 @@ func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *Volume) {
 	fsName := volume.FilesystemName
 	gc.Lock()
 	defer gc.Unlock()
+	go gc.purgeVolume(ctx, volume)
 	if gc.isRunning[fsName] {
 		gc.isDeferred[fsName] = true
 		return
 	}
 	gc.isRunning[fsName] = true
 	gc.isDeferred[fsName] = true
-	go gc.purgeVolume(ctx, volume)
 }
 
 func (gc *innerPathVolGc) purgeVolume(ctx context.Context, volume *Volume) {
