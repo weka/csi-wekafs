@@ -52,6 +52,10 @@ spec:
             - name: socket-dir
               mountPath: /csi
         - name: csi-provisioner
+          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
+          securityContext:
+              privileged: true
+          {{- end }}
           image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
@@ -85,6 +89,10 @@ spec:
               name: pr-metrics
               protocol: TCP
         - name: csi-resizer
+          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
+          securityContext:
+            privileged: true
+          {{- end }}
           image: {{ required "csi attacher sidercar image." .Values.images.resizersidecar }}
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
@@ -116,6 +124,10 @@ spec:
               name: rs-metrics
               protocol: TCP
         - name: csi-snapshotter
+          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
+          securityContext:
+            privileged: true
+          {{- end }}
           image: {{ required "csi snapshotter sidecar image." .Values.images.snapshottersidecar }}
           args:
             - "--v=5"
