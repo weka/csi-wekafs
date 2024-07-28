@@ -46,7 +46,8 @@ func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) 
 			return err
 		}
 	} else if !m.isMounted() {
-		logger.Warn().Str("mount_point", m.mountPoint).Int("refcount", m.refCount).Msg("Mount not exists although should!")
+		t := PathIsWekaMount(ctx, m.mountPoint)
+		logger.Warn().Str("mount_point", m.mountPoint).Int("refcount", m.refCount).Bool("is_mounted", t).Msg("Mount not exists although should!")
 		if err := m.doMount(ctx, apiClient, m.mountOptions); err != nil {
 			return err
 		}

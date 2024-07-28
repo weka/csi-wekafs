@@ -38,6 +38,8 @@ func (gc *innerPathVolGc) triggerGc(ctx context.Context, fs string, apiClient *a
 }
 
 func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *Volume) {
+	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
+	logger.Info().Msg("Triggering garbage collection of volume")
 	fsName := volume.FilesystemName
 	gc.Lock()
 	defer gc.Unlock()

@@ -18,6 +18,7 @@ package wekafs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
@@ -365,6 +366,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	volume, err := NewVolumeFromId(ctx, volumeID, client, cs)
 	if err != nil {
 		// Should return ok on incorrect ID (by CSI spec)
+		logger.Error().Err(err).Str("volume_id", volumeID).Msg("Failed to create volume object from ID")
 		result = "SUCCESS"
 		return &csi.DeleteVolumeResponse{}, nil
 	}
@@ -382,7 +384,8 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 	// cleanup
 	if err != nil {
-		if err == ErrFilesystemHasUnderlyingSnapshots {
+		logger.Error().Err(err).Msg("Failed to delete volume")
+		if errors.Is(err, ErrFilesystemHasUnderlyingSnapshots) {
 			return &csi.DeleteVolumeResponse{}, err
 		}
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
