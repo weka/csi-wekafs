@@ -166,5 +166,5 @@ jobs:
           SLACK_USERNAME: csiBot
           SLACK_ICON_EMOJI: ":robot_face:"
           SLACK_TITLE: "New build was pushed"
-          SLACK_MESSAGE: "helm upgrade csi-wekafs -n csi-wekafs --create-namespace -i  ${{ steps.helm-s3-upload.outputs.link }} --set logLevel=6"
-          SLACK_FOOTER: ""
+          SLACK_MESSAGE: "```helm upgrade csi-wekafs -n csi-wekafs --create-namespace -i  ${{ steps.helm-s3-upload.outputs.link }} --set logLevel=6```"
+          SLACK_FOOTER: "Package path: ${{ steps.helm-s3-upload.outputs.link }}"
