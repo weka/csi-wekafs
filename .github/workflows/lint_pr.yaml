@@ -46,6 +46,7 @@ jobs:
           scopes: |
             deps
             CSI-\d+
+            WEKAPP-\d+
           # Configure that a scope must always be provided.
           requireScope: true
           # Configure which scopes are disallowed in PR titles (newline-delimited).
