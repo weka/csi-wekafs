@@ -10,10 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 const garbagePath = ".__internal__wekafs-async-delete"
-const garbageCollectionMaxThreads = 32
+
+//const garbageCollectionMaxThreads = 32
 
 type innerPathVolGc struct {
 	isRunning  map[string]bool
@@ -89,41 +91,94 @@ func deleteDirectoryWorker(paths <-chan string, wg *sync.WaitGroup) {
 	}
 }
 
-func deleteDirectoryTree(ctx context.Context, path string) error {
-	op := "purgeDirectory"
+//func deleteDirectoryTree(ctx context.Context, path string) error {
+//	op := "deleteDirectoryTree"
+//	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+//	defer span.End()
+//	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+//	logger := log.Ctx(ctx).With().Str("path", path).Logger()
+//	paths := make(chan string, garbageCollectionMaxThreads)
+//	var wg sync.WaitGroup
+//
+//	// Start deleteDirectoryWorker goroutines
+//	for i := 0; i < garbageCollectionMaxThreads; i++ {
+//		wg.Add(1)
+//		go deleteDirectoryWorker(paths, &wg)
+//	}
+//
+//	// Walk the directory tree and send paths to the workers
+//	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+//		if err != nil {
+//			return err
+//		}
+//		paths <- path
+//		return nil
+//	})
+//	if err != nil {
+//		close(paths)
+//		logger.Trace().Msg("Waiting for deletion workers to finish")
+//		wg.Wait()
+//		return err
+//	}
+//
+//	// Close the paths channel and wait for all workers to finish
+//	close(paths)
+//	wg.Wait()
+//
+//	return nil
+//}
+
+func deleteDirectoryRecursively(ctx context.Context, path string, wg *sync.WaitGroup, errChan chan<- error, sem chan struct{}) {
+	op := "deleteDirectoryRecursively"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("path", path).Logger()
-	paths := make(chan string, garbageCollectionMaxThreads)
-	var wg sync.WaitGroup
 
-	// Start deleteDirectoryWorker goroutines
-	for i := 0; i < garbageCollectionMaxThreads; i++ {
-		wg.Add(1)
-		go deleteDirectoryWorker(paths, &wg)
-	}
-
-	// Walk the directory tree and send paths to the workers
-	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		paths <- path
-		return nil
-	})
+	dir, err := os.Open(path)
 	if err != nil {
-		close(paths)
-		logger.Trace().Msg("Waiting for deletion workers to finish")
-		wg.Wait()
-		return err
+		errChan <- fmt.Errorf("failed to open directory %s: %v", path, err)
+		return
 	}
+	defer dir.Close()
 
-	// Close the paths channel and wait for all workers to finish
-	close(paths)
-	wg.Wait()
-
-	return nil
+	for {
+		names, err := dir.Readdirnames(100) // Read directory entries in chunks
+		if err != nil {
+			if err != io.EOF {
+				logger.Error().Err(err).Msg("Failed to read directory entries")
+				errChan <- fmt.Errorf("failed to read directory entries: %v", err)
+			}
+			break
+		}
+		if len(names) == 0 {
+			break
+		}
+		logger.Trace().Int("num_entries", len(names)).Msg("Processing directory entries")
+		for _, name := range names {
+			subPath := filepath.Join(path, name)
+			go func(p string) {
+				logger.Trace().Str("sub_path", p).Msg("Processing subpath, acquiring semaphore")
+				sem <- struct{}{} // Acquire semaphore
+				logger.Trace().Str("sub_path", p).Msg("Processing subpath, acquired semaphore")
+				wg.Add(1)
+				defer wg.Done()
+				defer func() { <-sem }() // Release semaphore
+				fi, err := os.Lstat(p)
+				if err != nil {
+					logger.Error().Err(err).Str("path", p).Msg("Failed to stat path")
+					errChan <- fmt.Errorf("failed to stat %s: %v", p, err)
+					return
+				}
+				if fi.IsDir() {
+					deleteDirectoryRecursively(ctx, p, wg, errChan, sem) // Recurse into subdirectory
+					if err := os.Remove(p); err != nil {
+						errChan <- fmt.Errorf("failed to remove entry %s: %v", p, err)
+					}
+				}
+			}(subPath)
+		}
+	}
 }
 
 func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClient *apiclient.ApiClient) {
@@ -143,12 +198,32 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
 
-	err = deleteDirectoryTree(ctx, volumeTrashLoc)
-	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-	} else {
-		fmt.Println("Directory tree deleted successfully")
+	var wg sync.WaitGroup
+	errChan := make(chan error, 10000)
+	sem := make(chan struct{}, 1000)
+	go deleteDirectoryRecursively(ctx, volumeTrashLoc, &wg, errChan, sem)
+
+	time.Sleep(3 * time.Second) // Wait for some time to allow the workers to start
+	wg.Wait()
+
+	if err := os.Remove(path); err != nil {
+		errChan <- fmt.Errorf("failed to remove file %s: %v", path, err)
 	}
+
+	close(errChan)
+	for err := range errChan {
+		if err != nil {
+			logger.Warn().Err(err).Msg("Error occured during deletion")
+		}
+	}
+
+	//
+	//err = deleteDirectoryTree(ctx, volumeTrashLoc)
+	//if err != nil {
+	//	logger.Error().Err(err).Msg("Failed to remove directory tree")
+	//} else {
+	//	logger.Trace().Msg("Directory tree deleted successfully")
+	//}
 
 	logger.Debug().Msg("Garbage collection completed")
 	gc.Lock()
