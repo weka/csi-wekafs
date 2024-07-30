@@ -17,7 +17,6 @@ import (
 	"google.golang.org/grpc/status"
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -272,10 +271,21 @@ func PathExists(p string) bool {
 }
 
 func PathIsWekaMount(ctx context.Context, path string) bool {
-	log.Ctx(ctx).Trace().Str("full_path", path).Msg("Checking if path is wekafs mount")
-	mountcmd := "mount -t wekafs | grep " + path
-	res, _ := exec.Command("sh", "-c", mountcmd).Output()
-	return strings.Contains(string(res), path)
+	file, err := os.Open("/proc/mounts")
+	if err != nil {
+		return false
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) >= 3 && fields[2] == "wekafs" && fields[1] == path {
+			return true
+		}
+	}
+
+	return false
 }
 
 func validateVolumeId(volumeId string) error {
