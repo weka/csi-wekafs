@@ -270,6 +270,17 @@ func PathExists(p string) bool {
 	return true
 }
 
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
+}
+
 func PathIsWekaMount(ctx context.Context, path string) bool {
 	file, err := os.Open("/proc/mounts")
 	if err != nil {
