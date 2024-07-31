@@ -1,5 +1,5 @@
 {{- if .Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints" }}
-{{ range  .Values.machineConfigLabels }}
+{{- range .Values.machineConfigLabels }}
 kind: MachineConfig
 apiVersion: machineconfiguration.openshift.io/v1
 metadata:
@@ -34,5 +34,6 @@ spec:
             WantedBy=multi-user.target
           name: csi-wekafs-selinux-policy.service
           enabled: true
+---
 {{- end }}
 {{- end }}
