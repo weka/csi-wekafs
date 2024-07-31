@@ -102,8 +102,8 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 		output, err := deleteCmd.CombinedOutput()
 		if err != nil {
 			logger.Error().Err(err).Msg("Error running locar")
+			logger.Trace().Str("output", string(output)).Msg("Locar output")
 		}
-		logger.Trace().Str("output", string(output)).Msg("Output of locar")
 	} else {
 		logger.Debug().Msg("Using default deletion method")
 		if err := os.RemoveAll(volumeTrashLoc); err != nil {
