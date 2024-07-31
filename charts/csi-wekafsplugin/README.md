@@ -3,7 +3,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-![Version: 2.4.1-SNAPSHOT.21.01a82e1](https://img.shields.io/badge/Version-2.4.1--SNAPSHOT.21.01a82e1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.4.1-SNAPSHOT.21.01a82e1](https://img.shields.io/badge/AppVersion-v2.4.1--SNAPSHOT.21.01a82e1-informational?style=flat-square)
+![Version: 2.4.1-SNAPSHOT.24.e11ec44](https://img.shields.io/badge/Version-2.4.1--SNAPSHOT.24.e11ec44-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.4.1-SNAPSHOT.24.e11ec44](https://img.shields.io/badge/AppVersion-v2.4.1--SNAPSHOT.24.e11ec44-informational?style=flat-square)
 
 ## Homepage
 https://github.com/weka/csi-wekafs
@@ -52,7 +52,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.4.1-SNAPSHOT.21.01a82e1"` | CSI driver version |
+| csiDriverVersion | string | `"2.4.1-SNAPSHOT.24.e11ec44"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.12.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.5.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v4.0.0"` | CSI provisioner sidecar image URL |
@@ -61,7 +61,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v6.3.3"` | CSI snapshotter sidecar image URL |
 | images.nodeinfo | string | `"quay.io/weka.io/kubectl-sidecar:v1.29.2-1"` | CSI nodeinfo sidecar image URL, used for reading node metadata |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.4.1-SNAPSHOT.21.01a82e1"` | CSI driver tag |
+| images.csidriverTag | string | `"2.4.1-SNAPSHOT.24.e11ec44"` | CSI driver tag |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
@@ -69,7 +69,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | machineConfigLabels | list | `["worker","master"]` | Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on NOTE: by default, the policy will be installed both on workers and control plane nodes |
 | controller.replicas | int | `2` | Controller number of replicas |
 | controller.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
-| controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":1,"expandVolume":5}` | maximum concurrent operations per operation type |
+| controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
 | controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | controller.configureProvisionerLeaderElection | bool | `true` | Configure provisioner sidecar for leader election |
 | controller.configureResizerLeaderElection | bool | `true` | Configure resizer sidecar for leader election |
