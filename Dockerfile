@@ -31,6 +31,8 @@ RUN apk add util-linux libselinux libselinux-utils util-linux pciutils usbutils 
 # Update CA certificates
 RUN apk add ca-certificates
 RUN update-ca-certificates
+ADD https://github.com/tigrawap/locar/releases/download/0.4.0/locar_linux_amd64 /locar
+RUN chmod +x /locar
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 ARG binary=/bin/wekafsplugin
 ENTRYPOINT ["/wekafsplugin"]
