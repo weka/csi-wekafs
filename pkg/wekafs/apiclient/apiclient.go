@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -112,17 +113,50 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 	return a, nil
 }
 
+func isValidIPv6Address(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	return ip != nil && ip.To4() == nil && ip.To16() != nil
+}
+
+func isValidIPv4Address(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	return ip != nil && ip.To4() != nil
+}
+
+func isValidHostname(hostname string) bool {
+	if len(hostname) > 253 {
+		return false
+	}
+
+	// Regex to match the general structure of a hostname.
+	// Each label must start and end with an alphanumeric character,
+	// may contain hyphens, and be 1 to 63 characters long.
+	hostnameRegex := regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$`)
+
+	return hostnameRegex.MatchString(hostname)
+}
+
 func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
 	actualEndPoints := make(map[string]*ApiEndPoint)
 	for _, e := range a.Credentials.Endpoints {
 
 		split := strings.Split(e, ":")
-		ip := split[0]
+		ip := ""
 		port := "14000" // default port
 
+		// if there is a port number in the endpoint, use it
 		if len(split) > 1 {
-			port = split[1]
+			port = split[len(split)-1]
+			ip = strings.Join(split[:len(split)-1], ":")
+		} else {
+			ip = split[0]
 		}
+
+		if !isValidIPv4Address(ip) && !isValidIPv6Address(ip) && !isValidHostname(ip) {
+			log.Ctx(ctx).Error().Str("ip", ip).Msg("Cannot determine a valid hostname, IPv4 or IPv6 address, skipping endpoint")
+			continue
+		}
+
 		portNum, err := strconv.Atoi(port)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Str("port", port).Msg("Failed to parse port number, using default")
