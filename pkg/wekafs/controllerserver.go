@@ -41,6 +41,7 @@ const (
 )
 
 type ControllerServer struct {
+	csi.UnimplementedControllerServer
 	caps       []*csi.ControllerServiceCapability
 	nodeID     string
 	mounter    *wekaMounter

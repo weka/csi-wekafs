@@ -6,6 +6,9 @@ metadata:
 
 allowPrivilegedContainer: true
 allowHostDirVolumePlugin: true
+{{- if .Values.hostNetwork }}
+allowHostNetwork: true
+{{- end }}
 allowedVolumeTypes:
   - hostPath
   - secret

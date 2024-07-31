@@ -30,6 +30,7 @@ import (
 )
 
 type identityServer struct {
+	csi.UnimplementedIdentityServer
 	name    string
 	version string
 	config  *DriverConfig

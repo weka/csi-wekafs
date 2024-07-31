@@ -88,6 +88,9 @@
                 }
             }
         },
+        "hostNetwork": {
+            "type": "boolean"
+        },
         "images": {
             "type": "object",
             "properties": {

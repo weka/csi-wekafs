@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.4.0
+csiDriverVersion: &csiDriverVersion 2.4.1-SNAPSHOT.34.cbf6402
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.12.0
@@ -50,7 +50,7 @@ controller:
   # -- maximum concurrent operations per operation type
   concurrency:
     createVolume: 5
-    deleteVolume: 1
+    deleteVolume: 5
     expandVolume: 5
     createSnapshot: 5
     deleteSnapshot: 5
@@ -107,6 +107,8 @@ metrics:
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
+# -- Set to true to use host networking
+hostNetwork: false
 pluginConfig:
   # -- CSI Driver support for fsGroupPolicy, may be either "File" or "None". Default is "File"
   # -- WARNING: Changing this value might require uninstall and re-install of the plugin

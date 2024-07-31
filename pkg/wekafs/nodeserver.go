@@ -44,6 +44,7 @@ const (
 )
 
 type NodeServer struct {
+	csi.UnimplementedNodeServer
 	caps              []*csi.NodeServiceCapability
 	nodeID            string
 	maxVolumesPerNode int64
