@@ -50,7 +50,7 @@ controller:
   # -- maximum concurrent operations per operation type
   concurrency:
     createVolume: 5
-    deleteVolume: 1
+    deleteVolume: 5
     expandVolume: 5
     createSnapshot: 5
     deleteSnapshot: 5
