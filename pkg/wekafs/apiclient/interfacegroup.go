@@ -39,12 +39,12 @@ func (i *InterfaceGroup) GetType() string {
 	return "interfaceGroup"
 }
 
-func (i *InterfaceGroup) GetBasePath() string {
+func (i *InterfaceGroup) GetBasePath(client *ApiClient) string {
 	return "nodes"
 }
 
-func (i *InterfaceGroup) GetApiUrl() string {
-	url, err := urlutil.URLJoin(i.GetBasePath(), i.Uid.String())
+func (i *InterfaceGroup) GetApiUrl(client *ApiClient) string {
+	url, err := urlutil.URLJoin(i.GetBasePath(client), i.Uid.String())
 	if err != nil {
 		return url
 	}
@@ -75,7 +75,7 @@ func (i *InterfaceGroup) GetIpAddress(hostname string) bool {
 func (a *ApiClient) GetInterfaceGroups(ctx context.Context, interfaceGroups *[]InterfaceGroup) error {
 	ig := &InterfaceGroup{}
 
-	err := a.Get(ctx, ig.GetBasePath(), nil, interfaceGroups)
+	err := a.Get(ctx, ig.GetBasePath(a), nil, interfaceGroups)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (a *ApiClient) GetInterfaceGroupByUid(ctx context.Context, uid uuid.UUID, i
 	ig := &InterfaceGroup{
 		Uid: uid,
 	}
-	err := a.Get(ctx, ig.GetApiUrl(), nil, interfaceGroup)
+	err := a.Get(ctx, ig.GetApiUrl(a), nil, interfaceGroup)
 	if err != nil {
 		return err
 	}

@@ -62,8 +62,6 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 	return m.mountMap[fsName][options.String()]
 }
 
-type UnmountFunc func()
-
 func (m *wekafsMounter) getSelinuxStatus(ctx context.Context) bool {
 	logger := log.Ctx(ctx)
 	if m.selinuxSupport {
