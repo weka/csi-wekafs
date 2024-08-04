@@ -40,7 +40,7 @@ func (i *InterfaceGroup) GetType() string {
 }
 
 func (i *InterfaceGroup) GetBasePath(client *ApiClient) string {
-	return "nodes"
+	return "interfaceGroups"
 }
 
 func (i *InterfaceGroup) GetApiUrl(client *ApiClient) string {
