@@ -69,6 +69,7 @@ func (m *nfsMounter) getSelinuxStatus(ctx context.Context) bool {
 
 func (m *nfsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
+	mountOptions = mountOptions.AsNfs()
 	mountObj := m.NewMount(fsName, mountOptions)
 	mountErr := mountObj.incRef(ctx, apiClient)
 

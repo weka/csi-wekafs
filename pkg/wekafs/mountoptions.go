@@ -177,6 +177,41 @@ func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 	}
 }
 
+func (opts MountOptions) AsNfs() MountOptions {
+	ret := NewMountOptionsFromString("hard,rdirplus")
+	for _, o := range opts.getOpts() {
+		switch o.option {
+		case "writecache":
+			ret.AddOption("async")
+		case "coherent":
+			ret.AddOption("sync")
+		case "forcedirect":
+			ret.AddOption("sync")
+		case "readcache":
+			ret.AddOption("noac")
+		case "dentry_max_age_positive":
+			ret.AddOption(fmt.Sprintf("acdirmax=%s", o.value))
+			ret.AddOption(fmt.Sprintf("acregmax=%s", o.value))
+		case "inode_bits":
+			continue
+		case "verbose":
+			continue
+		case "quiet":
+			continue
+		case "acl":
+			ret.AddOption("user_xattr")
+			ret.AddOption("acl")
+		case "obs_direct":
+			continue
+		case "sync_on_close":
+			ret.AddOption("sync")
+		default:
+			continue
+		}
+	}
+	return ret
+}
+
 func NewMountOptionsFromString(optsString string) MountOptions {
 	if optsString == "" {
 		return NewMountOptions([]string{})
