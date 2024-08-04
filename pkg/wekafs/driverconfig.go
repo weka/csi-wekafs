@@ -52,6 +52,9 @@ func (dc *DriverConfig) Log() {
 		Int64("max_node_publish_volume_reqs", dc.maxConcurrencyPerOp["NodePublishVolume"]).
 		Int64("max_node_unpublish_volume_reqs", dc.maxConcurrencyPerOp["NodeUnpublishVolume"]).
 		Int("grpc_request_timeout_seconds", int(dc.grpcRequestTimeout.Seconds())).
+		Bool("allow_protocol_containers", dc.allowProtocolContainers).
+		Bool("allow_nfs_failback", dc.allowNfsFailback).
+		Bool("use_nfs", dc.useNfs).
 		Msg("Starting driver with the following configuration")
 
 }
