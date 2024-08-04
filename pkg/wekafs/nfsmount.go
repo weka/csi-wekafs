@@ -106,6 +106,17 @@ func (m *nfsMount) doUnmount(ctx context.Context) error {
 	return err
 }
 
+func (m *nfsMount) ensureMountIpAddress(ctx context.Context, apiClient *apiclient.ApiClient) error {
+	if m.mountIpAddress == "" {
+		ip, err := apiClient.GetNfsMountIp(ctx)
+		if err != nil {
+			return err
+		}
+		m.mountIpAddress = ip
+	}
+	return nil
+}
+
 func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
 	mountToken := ""
