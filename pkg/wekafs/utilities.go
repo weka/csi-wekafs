@@ -294,6 +294,10 @@ func PathIsWekaMount(ctx context.Context, path string) bool {
 		if len(fields) >= 3 && fields[2] == "wekafs" && fields[1] == path {
 			return true
 		}
+		// TODO: better protect against false positives
+		if len(fields) >= 3 && fields[2] == "nfs" && fields[1] == path {
+			return true
+		}
 	}
 
 	return false
