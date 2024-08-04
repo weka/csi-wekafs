@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"k8s.io/helm/pkg/urlutil"
+	"os"
 	"sort"
 )
 
@@ -68,8 +69,22 @@ func (i *InterfaceGroup) isSmb() bool {
 }
 
 // GetIpAddress returns a single IP address based on hostname, so for same server, always same IP address will be returned
-func (i *InterfaceGroup) GetIpAddress(hostname string) bool {
-	return i.isNfs() || i.isSmb()
+// This is useful for NFS mount, where we need to have same IP address for same server
+// TODO: this could be further optimized in future to avoid a situation where multiple servers are not evenly distributed
+// and some IPs are getting more load than others. Could be done, for example, by random selection of IP address etc.
+func (i *InterfaceGroup) GetIpAddress() (string, error) {
+	if len(i.Ips) == 0 {
+		return "", errors.New("no IP addresses found for interface group")
+	}
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+	if hostname == "" {
+		hostname = "localhost"
+	}
+
+	return i.Ips[hashString(hostname, len(i.Ips))], nil
 }
 
 func (a *ApiClient) GetInterfaceGroups(ctx context.Context, interfaceGroups *[]InterfaceGroup) error {
@@ -140,8 +155,12 @@ func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context) *InterfaceGroup {
 	return a.NfsInterfaceGroup
 }
 
-// GetNfsMountIp returns the first IP address of the NFS interface group
+// GetNfsMountIp returns the IP address of the NFS interface group to be used for NFS mount
 // TODO: need to do it much more sophisticated way to distribute load
-func (a *ApiClient) GetNfsMountIp(ctx context.Context) string {
-	return a.GetNfsInterfaceGroup(ctx).Ips[0]
+func (a *ApiClient) GetNfsMountIp(ctx context.Context) (string, error) {
+	ig := a.GetNfsInterfaceGroup(ctx)
+	if ig == nil {
+		return "", errors.New("no NFS interface group found")
+	}
+	return ig.GetIpAddress()
 }
