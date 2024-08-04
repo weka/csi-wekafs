@@ -14,7 +14,7 @@ type nfsMounter struct {
 	lock           sync.Mutex
 	kMounter       mount.Interface
 	debugPath      string
-	selinuxSupport bool
+	selinuxSupport *bool
 	gc             *innerPathVolGc
 }
 
@@ -23,7 +23,12 @@ func (m *nfsMounter) getGarbageCollector() *innerPathVolGc {
 }
 
 func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
-	mounter := &nfsMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
+	var selinuxSupport *bool
+	if driver.selinuxSupport {
+		log.Debug().Msg("SELinux support is forced")
+		selinuxSupport = &[]bool{true}[0]
+	}
+	mounter := &nfsMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
 
@@ -53,8 +58,17 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 	return m.mountMap[fsName][options.String()]
 }
 
+func (m *nfsMounter) getSelinuxStatus(ctx context.Context) bool {
+	if m.selinuxSupport != nil && *m.selinuxSupport {
+		return true
+	}
+	selinuxSupport := getSelinuxStatus(ctx)
+	m.selinuxSupport = &selinuxSupport
+	return *m.selinuxSupport
+}
+
 func (m *nfsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	mountOptions.setSelinux(m.selinuxSupport)
+	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	mountObj := m.NewMount(fsName, mountOptions)
 	mountErr := mountObj.incRef(ctx, apiClient)
 
@@ -75,7 +89,7 @@ func (m *nfsMounter) Mount(ctx context.Context, fs string, apiClient *apiclient.
 
 func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
 	opts := options
-	options.setSelinux(m.selinuxSupport)
+	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 
 	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
 	if mnt, ok := m.mountMap[fsName][options.String()]; ok {

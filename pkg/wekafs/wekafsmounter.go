@@ -1,13 +1,10 @@
 package wekafs
 
 import (
-	"bufio"
 	"context"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
-	"os"
-	"strings"
 	"sync"
 	"time"
 )
@@ -21,7 +18,7 @@ type wekafsMounter struct {
 	lock                    sync.Mutex
 	kMounter                mount.Interface
 	debugPath               string
-	selinuxSupport          bool
+	selinuxSupport          *bool
 	gc                      *innerPathVolGc
 	allowProtocolContainers bool
 }
@@ -31,7 +28,12 @@ func (m *wekafsMounter) getGarbageCollector() *innerPathVolGc {
 }
 
 func newWekafsMounter(driver *WekaFsDriver) *wekafsMounter {
-	mounter := &wekafsMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: driver.selinuxSupport}
+	var selinuxSupport *bool
+	if driver.selinuxSupport {
+		log.Debug().Msg("SELinux support is forced")
+		selinuxSupport = &[]bool{true}[0]
+	}
+	mounter := &wekafsMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
 
@@ -63,38 +65,16 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 }
 
 func (m *wekafsMounter) getSelinuxStatus(ctx context.Context) bool {
-	logger := log.Ctx(ctx)
-	if m.selinuxSupport {
-		logger.Trace().Msg("SELinux support is forced")
+	if m.selinuxSupport != nil && *m.selinuxSupport {
 		return true
 	}
-	// check if we have /etc/selinux/config
-	// if it exists, we can check if selinux is enforced or not
-	selinuxConf := "/etc/selinux/config"
-	file, err := os.Open(selinuxConf)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = file.Close() }()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "SELINUX=enforcing") {
-			// no need to repeat each time, just set the selinuxSupport to true
-			m.selinuxSupport = true
-			return true
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
-	}
-	return false
+	selinuxSupport := getSelinuxStatus(ctx)
+	m.selinuxSupport = &selinuxSupport
+	return *m.selinuxSupport
 }
 
 func (m *wekafsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
-	mountOptions.setSelinux(m.getSelinuxStatus(ctx))
+	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolWekafs)
 	mountObj := m.NewMount(fsName, mountOptions)
 	mountErr := mountObj.incRef(ctx, apiClient)
 
@@ -115,7 +95,7 @@ func (m *wekafsMounter) Mount(ctx context.Context, fs string, apiClient *apiclie
 
 func (m *wekafsMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
 	opts := options
-	options.setSelinux(m.getSelinuxStatus(ctx))
+	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolWekafs)
 
 	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
 	if mnt, ok := m.mountMap[fsName][options.AsMapKey()]; ok {
