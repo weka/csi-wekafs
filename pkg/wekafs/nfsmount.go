@@ -7,7 +7,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
-	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -23,8 +22,7 @@ type nfsMount struct {
 	debugPath      string
 	mountOptions   MountOptions
 	lastUsed       time.Time
-	mountIpAddress net.IP
-	allowProtocolContainers bool
+	mountIpAddress string
 }
 
 func (m *nfsMount) getMountPoint() string {
