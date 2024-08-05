@@ -198,9 +198,6 @@ func (opts MountOptions) AsNfs() MountOptions {
 			continue
 		case "quiet":
 			continue
-		case "acl":
-			ret.AddOption("user_xattr")
-			ret.AddOption("acl")
 		case "obs_direct":
 			continue
 		case "sync_on_close":
