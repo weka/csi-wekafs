@@ -295,7 +295,7 @@ func PathIsWekaMount(ctx context.Context, path string) bool {
 			return true
 		}
 		// TODO: better protect against false positives
-		if len(fields) >= 3 && fields[2] == "nfs" && fields[1] == path {
+		if len(fields) >= 3 && strings.HasPrefix(fields[2], "nfs") && fields[1] == path {
 			return true
 		}
 	}
