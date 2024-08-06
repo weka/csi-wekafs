@@ -39,3 +39,13 @@ func ObjectRequestHasRequiredFields(o ApiObjectRequest) bool {
 	}
 	return true
 }
+
+// hashString is a simple hash function that takes a string and returns a hash value in the range [0, n)
+func hashString(s string, n int) int {
+	const prime = 31
+	hash := 0
+	for _, char := range s {
+		hash = hash*prime + int(char)
+	}
+	return hash % n
+}

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-type wekaMount struct {
+type wekafsMount struct {
 	fsName                  string
 	mountPoint              string
 	refCount                int
@@ -25,15 +25,30 @@ type wekaMount struct {
 	allowProtocolContainers bool
 }
 
-func (m *wekaMount) isInDevMode() bool {
+func (m *wekafsMount) getMountPoint() string {
+	return m.mountPoint
+}
+
+func (m *wekafsMount) getRefCount() int {
+	return m.refCount
+}
+
+func (m *wekafsMount) getMountOptions() MountOptions {
+	return m.mountOptions
+}
+func (m *wekafsMount) getLastUsed() time.Time {
+	return m.lastUsed
+}
+
+func (m *wekafsMount) isInDevMode() bool {
 	return m.debugPath != ""
 }
 
-func (m *wekaMount) isMounted() bool {
+func (m *wekafsMount) isMounted() bool {
 	return PathExists(m.mountPoint) && PathIsWekaMount(context.Background(), m.mountPoint)
 }
 
-func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
+func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
 	logger := log.Ctx(ctx)
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -57,7 +72,7 @@ func (m *wekaMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) 
 	return nil
 }
 
-func (m *wekaMount) decRef(ctx context.Context) error {
+func (m *wekafsMount) decRef(ctx context.Context) error {
 	logger := log.Ctx(ctx)
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -76,7 +91,7 @@ func (m *wekaMount) decRef(ctx context.Context) error {
 	return nil
 }
 
-func (m *wekaMount) doUnmount(ctx context.Context) error {
+func (m *wekafsMount) doUnmount(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
 	logger.Trace().Strs("mount_options", m.mountOptions.Strings()).Msg("Performing umount via k8s native mounter")
 	err := m.kMounter.Unmount(m.mountPoint)
@@ -88,7 +103,7 @@ func (m *wekaMount) doUnmount(ctx context.Context) error {
 	return err
 }
 
-func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
+func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
 	mountToken := ""
 	var mountOptionsSensitive []string
@@ -119,10 +134,10 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 
 		// if needed, add containerName to the mount string
 		if apiClient != nil && len(containerPaths) > 1 {
+			localContainerName = apiClient.Credentials.LocalContainerName
 			if apiClient.SupportsMultipleClusters() {
-				localContainerName = apiClient.Credentials.LocalContainerName
 				if localContainerName != "" {
-					logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secret")
+					logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secrets")
 				} else {
 					container, err := apiClient.GetLocalContainer(ctx, m.allowProtocolContainers)
 					if err != nil || container == nil {
@@ -140,14 +155,13 @@ func (m *wekaMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient,
 								option: "container_name",
 								value:  localContainerName,
 							}
+
 							break
 						}
 					}
 
 				} else {
-					err = errors.New("mount failed, local container name not specified and could not be determined automatically, refer to documentation on handling multiple clusters clients with Kubernetes")
-					logger.Error().Err(err).Msg("Failed to mount")
-					return err
+					logger.Error().Err(errors.New("Could not determine container name, refer to documentation on handling multiple clusters clients with Kubernetes")).Msg("Failed to mount")
 				}
 			}
 		}

@@ -44,7 +44,7 @@ type ControllerServer struct {
 	csi.UnimplementedControllerServer
 	caps       []*csi.ControllerServiceCapability
 	nodeID     string
-	mounter    *wekaMounter
+	mounter    AnyMounter
 	api        *ApiStore
 	config     *DriverConfig
 	semaphores map[string]*semaphore.Weighted
@@ -67,7 +67,7 @@ func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }
 
-func (cs *ControllerServer) getMounter() *wekaMounter {
+func (cs *ControllerServer) getMounter() AnyMounter {
 	return cs.mounter
 }
 
@@ -105,7 +105,7 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter *wekaMounter, config *DriverConfig) *ControllerServer {
+func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig) *ControllerServer {
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
