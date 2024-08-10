@@ -223,7 +223,7 @@ type NfsClientGroup struct {
 	Uid   *uuid.UUID            `json:"uid,omitempty" url:"-"`
 	Rules *[]NfsClientGroupRule `json:"rules,omitempty" url:"-"`
 	Id    string                `json:"id" url:"-"`
-	Name  string                `json:"name" url:"name"`
+	Name  string                `json:"name,omitempty" url:"name,omitempty"`
 }
 
 func (g *NfsClientGroup) GetType() string {
@@ -247,8 +247,7 @@ func (g *NfsClientGroup) EQ(other ApiObject) bool {
 }
 
 func (g *NfsClientGroup) getImmutableFields() []string {
-	return []string{"Id", "Uid", "NfsClientGroup", "NfsClientGroupId", "GroupId", "Group", "PrivilegedPort", "ManageGids",
-		"CustomOptions", "RootSquashing"}
+	return []string{"Name", "Id", "Uid"}
 }
 
 func (g *NfsClientGroup) String() string {
@@ -286,6 +285,10 @@ func (a *ApiClient) FindNfsClientGroupsByFilter(ctx context.Context, query *NfsC
 
 // GetNfsClientGroupByFilter expected to return exactly one result of FindNfsClientGroupsByFilter (error)
 func (a *ApiClient) GetNfsClientGroupByFilter(ctx context.Context, query *NfsClientGroup) (*NfsClientGroup, error) {
+	op := "GetNfsClientGroupByFilter"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	rs := &[]NfsClientGroup{}
 	err := a.FindNfsClientGroupsByFilter(ctx, query, rs)
 	if err != nil {
@@ -329,6 +332,10 @@ func (a *ApiClient) CreateNfsClientGroup(ctx context.Context, r *NfsClientGroupC
 }
 
 func (a *ApiClient) EnsureCsiPluginNfsClientGroup(ctx context.Context) (*NfsClientGroup, error) {
+	op := "EnsureCsiPluginNfsClientGroup"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	var ret *NfsClientGroup
 	ret, err := a.GetNfsClientGroupByName(ctx, NfsClientGroupName)
 	if err == nil {
@@ -373,11 +380,11 @@ func NewNfsClientGroupCreateRequest(name string) *NfsClientGroupCreateRequest {
 type NfsClientGroupRuleType string
 
 type NfsClientGroupRule struct {
-	NfsClientGroupUid uuid.UUID              `json:"-"`
-	Type              NfsClientGroupRuleType `json:"type"`
-	Uid               uuid.UUID              `json:"uid"`
-	Rule              string                 `json:"rule"`
-	Id                string                 `json:"id"`
+	NfsClientGroupUid uuid.UUID              `json:"-" url:"-"`
+	Type              NfsClientGroupRuleType `json:"type" url:"-"`
+	Uid               uuid.UUID              `json:"uid" url:"-"`
+	Rule              string                 `json:"rule" url:"-"`
+	Id                string                 `json:"id" url:"-"`
 }
 
 func (r *NfsClientGroupRule) GetType() string {
@@ -406,8 +413,7 @@ func (r *NfsClientGroupRule) EQ(other ApiObject) bool {
 }
 
 func (r *NfsClientGroupRule) getImmutableFields() []string {
-	return []string{"Id", "Uid", "NfsClientGroup", "NfsClientGroupId", "GroupId", "Group", "PrivilegedPort", "ManageGids",
-		"CustomOptions", "RootSquashing"}
+	return []string{"Type", "Rule"}
 }
 
 func (r *NfsClientGroupRule) String() string {
@@ -443,6 +449,10 @@ func (r *NfsClientGroupRule) IsEligibleForIP(ip string) bool {
 }
 
 func (a *ApiClient) GetNfsClientGroupRules(ctx context.Context, rules *[]NfsClientGroupRule) error {
+	op := "GetNfsClientGroupRules"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx)
 	if err != nil {
 		return err
@@ -456,13 +466,18 @@ func (a *ApiClient) FindNfsClientGroupRulesByFilter(ctx context.Context, query *
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	ret := &[]NfsClientGroupRule{}
-	q, _ := qs.Values(query)
-	err := a.Get(ctx, query.GetBasePath(a), q, ret)
-	if err != nil {
+	logger := log.Ctx(ctx)
+
+	// this is different that in other functions since we don't have /rules entry point for GET
+	// so we need to get the client group first
+	logger.Trace().Str("client_group_uid", query.NfsClientGroupUid.String()).Msg("Getting client group")
+	cg, err := a.GetNfsClientGroupByUid(ctx, query.NfsClientGroupUid)
+	if cg == nil || err != nil {
 		return err
 	}
-	for _, r := range *ret {
+	ret := *cg.Rules
+
+	for _, r := range ret {
 		if r.EQ(query) {
 			*resultSet = append(*resultSet, r)
 		}
@@ -471,6 +486,10 @@ func (a *ApiClient) FindNfsClientGroupRulesByFilter(ctx context.Context, query *
 }
 
 func (a *ApiClient) GetNfsClientGroupRuleByFilter(ctx context.Context, rule *NfsClientGroupRule) (*NfsClientGroupRule, error) {
+	op := "GetNfsClientGroupRuleByFilter"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	rs := &[]NfsClientGroupRule{}
 	err := a.FindNfsClientGroupRulesByFilter(ctx, rule, rs)
 	if err != nil {
@@ -568,9 +587,16 @@ func (a *ApiClient) EnsureNfsClientGroupRuleForIp(ctx context.Context, cg *NfsCl
 }
 
 func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName string) error {
+	op := "EnsureNfsPermissions"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
 	// Ensure client group
+	logger.Debug().Msg("Ensuring CSI Plugin NFS Client Group")
 	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx)
 	if err != nil {
+		logger.Error().Err(err).Msg("Failed to ensure NFS client group")
 		return err
 	}
 
