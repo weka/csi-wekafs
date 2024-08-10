@@ -57,13 +57,14 @@ func hashString(s string, n int) int {
 type Network struct {
 	IP     net.IP
 	Subnet *net.IP
-	IsCIDR bool
+}
+
+func (n *Network) AsNfsRule() string {
+	return fmt.Sprintf("%s/%s", n.IP.String(), n.Subnet.String())
 }
 
 func parseNetworkString(s string) (*Network, error) {
 	var ip, subnet net.IP
-	var isCIDR bool
-
 	if strings.Contains(s, "/") {
 		parts := strings.Split(s, "/")
 		if len(parts) != 2 {
@@ -71,21 +72,21 @@ func parseNetworkString(s string) (*Network, error) {
 		}
 		ip = net.ParseIP(parts[0])
 		subnet = net.ParseIP(parts[1])
-		isCIDR = true
+		if subnet == nil {
+			_, ipNet, err := net.ParseCIDR(s)
+			if err != nil {
+				return nil, fmt.Errorf("invalid CIDR notation: %s", s)
+			}
+			subnet = net.IP(ipNet.Mask)
+		}
 	} else {
 		ip = net.ParseIP(s)
-		subnet = nil
-		isCIDR = false
-	}
-
-	if ip == nil {
-		return nil, fmt.Errorf("invalid IP address: %s", s)
+		subnet = net.ParseIP("255.255.255.255")
 	}
 
 	return &Network{
 		IP:     ip,
 		Subnet: &subnet,
-		IsCIDR: isCIDR,
 	}, nil
 }
 
@@ -95,15 +96,11 @@ func (n *Network) ContainsIPAddress(ipStr string) bool {
 		return false
 	}
 
-	if n.IsCIDR {
-		_, ipNet, err := net.ParseCIDR(fmt.Sprintf("%s/%s", n.IP.String(), n.Subnet.String()))
-		if err != nil {
-			return false
-		}
-		return ipNet.Contains(ip)
+	_, ipNet, err := net.ParseCIDR(fmt.Sprintf("%s/%s", n.IP.String(), n.Subnet.String()))
+	if err != nil {
+		return false
 	}
-
-	return n.IP.Equal(ip)
+	return ipNet.Contains(ip)
 }
 
 func GetNodeIpAddress() string {

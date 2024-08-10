@@ -33,7 +33,7 @@ func (i *InterfaceGroup) String() string {
 }
 
 func (i *InterfaceGroup) getImmutableFields() []string {
-	return []string{"Id", "Uid", "Slot"}
+	return []string{"Name", "Gateway", "SubnetMask", "Type"}
 }
 
 func (i *InterfaceGroup) GetType() string {
@@ -46,7 +46,7 @@ func (i *InterfaceGroup) GetBasePath(client *ApiClient) string {
 
 func (i *InterfaceGroup) GetApiUrl(client *ApiClient) string {
 	url, err := urlutil.URLJoin(i.GetBasePath(client), i.Uid.String())
-	if err != nil {
+	if err == nil {
 		return url
 	}
 	return ""
@@ -162,5 +162,9 @@ func (a *ApiClient) GetNfsMountIp(ctx context.Context) (string, error) {
 	if ig == nil {
 		return "", errors.New("no NFS interface group found")
 	}
+	if ig.Ips == nil || len(ig.Ips) == 0 {
+		return "", errors.New("no IP addresses found for NFS interface group")
+	}
+
 	return ig.GetIpAddress()
 }
