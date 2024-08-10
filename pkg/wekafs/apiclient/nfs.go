@@ -13,45 +13,48 @@ import (
 	"k8s.io/helm/pkg/urlutil"
 )
 
+type NfsPermissionType string
+type NfsPermissionSquashMode string
+type NfsClientGroupRuleType string
 type NfsVersionString string
 type NfsAuthType string
 
 const (
-	NfsPermissionTypeReadWrite                   = "RW"
-	NfsPermissionTypeReadOnly                    = "RO"
-	NfsPermissionSquashModeNone                  = "none"
-	NfsPermissionSquashModeRoot                  = "root"
-	NfsPermissionSquashModeAll                   = "all"
-	NfsClientGroupRuleTypeDNS                    = "DNS"
-	NfsClientGroupRuleTypeIP                     = "IP"
-	NfsClientGroupName                           = "WekaCSIPluginClients"
-	NfsVersionV3                NfsVersionString = "V3"
-	NfsVersionV4                NfsVersionString = "V4"
-	NfsAuthTypeNone             NfsAuthType      = "NONE"
-	NfsAuthTypeSys              NfsAuthType      = "SYS"
-	NfsAuthTypeKerberos5        NfsAuthType      = "KRB5"
+	NfsPermissionTypeReadWrite  NfsPermissionType       = "RW"
+	NfsPermissionTypeReadOnly   NfsPermissionType       = "RO"
+	NfsPermissionSquashModeNone NfsPermissionSquashMode = "none"
+	NfsPermissionSquashModeRoot NfsPermissionSquashMode = "root"
+	NfsPermissionSquashModeAll  NfsPermissionSquashMode = "all"
+	NfsClientGroupRuleTypeDNS   NfsClientGroupRuleType  = "DNS"
+	NfsClientGroupRuleTypeIP    NfsClientGroupRuleType  = "IP"
+	NfsVersionV3                NfsVersionString        = "V3"
+	NfsVersionV4                NfsVersionString        = "V4"
+	NfsAuthTypeNone             NfsAuthType             = "NONE"
+	NfsAuthTypeSys              NfsAuthType             = "SYS"
+	NfsAuthTypeKerberos5        NfsAuthType             = "KRB5"
+	NfsClientGroupName                                  = "WekaCSIPluginClients"
 )
 
 type NfsPermission struct {
-	GroupId           *string             `json:"group_id,omitempty"`
-	PrivilegedPort    *bool               `json:"privileged_port,omitempty"`
-	SupportedVersions *[]NfsVersionString `json:"supported_versions,omitempty"`
-	Id                *string             `json:"id,omitempty"`
-	ObsDirect         *bool               `json:"obs_direct,omitempty"`
-	AnonUid           *string             `json:"anon_uid,omitempty"`
-	ManageGids        *bool               `json:"manage_gids,omitempty"`
-	CustomOptions     *string             `json:"custom_options,omitempty"`
-	Filesystem        string              `json:"filesystem"`
-	Uid               *uuid.UUID          `json:"uid,omitempty"`
-	Group             string              `json:"group"`
-	NfsClientGroupId  *string             `json:"NfsClientGroup_id,omitempty"`
-	PermissionType    string              `json:"permission_type,omitempty"`
-	MountOptions      *string             `json:"mount_options,omitempty"`
-	Path              string              `json:"path,omitempty"`
-	SquashMode        string              `json:"squash_mode,omitempty"`
-	RootSquashing     *bool               `json:"root_squashing,omitempty"`
-	AnonGid           *string             `json:"anon_gid,omitempty"`
-	EnableAuthTypes   []NfsAuthType       `json:"enable_auth_types,omitempty"`
+	GroupId           *string                 `json:"group_id,omitempty"`
+	PrivilegedPort    *bool                   `json:"privileged_port,omitempty"`
+	SupportedVersions *[]NfsVersionString     `json:"supported_versions,omitempty"`
+	Id                *string                 `json:"id,omitempty"`
+	ObsDirect         *bool                   `json:"obs_direct,omitempty"`
+	AnonUid           *string                 `json:"anon_uid,omitempty"`
+	ManageGids        *bool                   `json:"manage_gids,omitempty"`
+	CustomOptions     *string                 `json:"custom_options,omitempty"`
+	Filesystem        string                  `json:"filesystem"`
+	Uid               *uuid.UUID              `json:"uid,omitempty"`
+	Group             string                  `json:"group"`
+	NfsClientGroupId  *string                 `json:"NfsClientGroup_id,omitempty"`
+	PermissionType    NfsPermissionType       `json:"permission_type,omitempty"`
+	MountOptions      *string                 `json:"mount_options,omitempty"`
+	Path              string                  `json:"path,omitempty"`
+	SquashMode        NfsPermissionSquashMode `json:"squash_mode,omitempty"`
+	RootSquashing     *bool                   `json:"root_squashing,omitempty"`
+	AnonGid           *string                 `json:"anon_gid,omitempty"`
+	EnableAuthTypes   []NfsAuthType           `json:"enable_auth_types,omitempty"`
 }
 
 func (n *NfsPermission) GetType() string {
@@ -147,17 +150,17 @@ func (a *ApiClient) GetNfsPermissionByUid(ctx context.Context, uid uuid.UUID) (*
 }
 
 type NfsPermissionCreateRequest struct {
-	Filesystem        string    `json:"filesystem"`
-	Group             string    `json:"group"`
-	Path              string    `json:"path"`
-	PermissionType    string    `json:"permission_type"`
-	SquashMode        string    `json:"squash_mode"`
-	AnonUid           int       `json:"anon_uid"`
-	AnonGid           int       `json:"anon_gid"`
-	ObsDirect         *bool     `json:"obs_direct,omitempty"`
-	SupportedVersions *[]string `json:"supported_versions,omitempty"`
-	Priority          int       `json:"priority"`
-	EnableAuthTypes   []string  `json:"enable_auth_types"`
+	Filesystem        string                  `json:"filesystem"`
+	Group             string                  `json:"group"`
+	Path              string                  `json:"path"`
+	PermissionType    NfsPermissionType       `json:"permission_type"`
+	SquashMode        NfsPermissionSquashMode `json:"squash_mode"`
+	AnonUid           int                     `json:"anon_uid"`
+	AnonGid           int                     `json:"anon_gid"`
+	ObsDirect         *bool                   `json:"obs_direct,omitempty"`
+	SupportedVersions *[]string               `json:"supported_versions,omitempty"`
+	Priority          int                     `json:"priority"`
+	EnableAuthTypes   []NfsAuthType           `json:"enable_auth_types"`
 }
 
 func (qc *NfsPermissionCreateRequest) getApiUrl(a *ApiClient) string {
@@ -376,8 +379,6 @@ func NewNfsClientGroupCreateRequest(name string) *NfsClientGroupCreateRequest {
 		Name: name,
 	}
 }
-
-type NfsClientGroupRuleType string
 
 type NfsClientGroupRule struct {
 	NfsClientGroupUid uuid.UUID              `json:"-" url:"-"`
