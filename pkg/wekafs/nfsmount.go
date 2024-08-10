@@ -128,6 +128,13 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 			return errors.New("no API client for mount, cannot do NFS mount")
 		}
 
+		nodeIP := apiclient.GetNodeIpAddress()
+		nodeIpNetString := fmt.Sprintf("%s/32", nodeIP)
+		if apiClient.EnsureNfsPermissions(ctx, nodeIpNetString, m.fsName) != nil {
+			logger.Error().Msg("Failed to ensure NFS permissions")
+			return errors.New("failed to ensure NFS permissions")
+		}
+
 		if err := m.ensureMountIpAddress(ctx, apiClient); err != nil {
 			logger.Error().Err(err).Msg("Failed to get mount IP address")
 			return err

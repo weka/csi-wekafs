@@ -142,6 +142,10 @@ spec:
               value: {{ required "Provide CSI Driver Dynamic Volume Creation Path"  .Values.dynamicProvisionPath }}
             - name: X_CSI_MODE
               value: node
+            - name: NODE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
