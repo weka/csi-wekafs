@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine as go-builder
+FROM golang:1.22-alpine AS go-builder
 # https://stackoverflow.com/questions/36279253/go-compiled-binary-wont-run-in-an-alpine-docker-container-on-ubuntu-host
 RUN apk add --no-cache libc6-compat gcc musl-dev
 COPY go.mod /src/go.mod
