@@ -28,7 +28,7 @@ https://github.com/weka/csi-wekafs
 - [SELinux Support & Installation Notes](selinux/README.md)
 
 ## Additional Documentation
-- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendix/weka-csi-plugin)
+- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
 ## Building the binaries
 If you want to build the driver yourself, you can do so with the following command from the root directory:
