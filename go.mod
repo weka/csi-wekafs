@@ -1,15 +1,15 @@
 module github.com/wekafs/csi-wekafs
 
-go 1.22.0
+go 1.22.5
 
-toolchain go1.22.4
+toolchain go1.23.0
 
 require (
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/google/go-querystring v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.7.0
-	github.com/kubernetes-csi/csi-lib-utils v0.18.1
+	github.com/kubernetes-csi/csi-lib-utils v0.19.0
 	github.com/pkg/xattr v0.4.10
 	github.com/prometheus/client_golang v1.19.1
 	github.com/rs/zerolog v1.33.0
@@ -22,7 +22,7 @@ require (
 	golang.org/x/sync v0.7.0
 	google.golang.org/grpc v1.65.0
 	google.golang.org/protobuf v1.34.2
-	k8s.io/apimachinery v0.30.3
+	k8s.io/apimachinery v0.31.0
 	k8s.io/helm v2.17.0+incompatible
 	k8s.io/mount-utils v0.30.3
 )
