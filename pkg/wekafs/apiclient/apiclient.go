@@ -64,7 +64,7 @@ type ApiClient struct {
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
 	hostname                   string
-	NfsInterfaceGroup          *InterfaceGroup
+	NfsInterfaceGroups         map[string]*InterfaceGroup
 }
 
 type ApiEndPoint struct {
@@ -120,6 +120,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		CompatibilityMap:   &WekaCompatibilityMap{},
 		hostname:           hostname,
 		actualApiEndpoints: make(map[string]*ApiEndPoint),
+		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
 	a.resetDefaultEndpoints(ctx)
 

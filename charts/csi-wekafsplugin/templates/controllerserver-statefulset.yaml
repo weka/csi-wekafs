@@ -221,6 +221,9 @@ spec:
           {{- if .Values.pluginConfig.mountProtocol.allowNfsFailback | default false }}
             - "--allownfsfailback"
           {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.interfaceGroupName }}
+            - "--interfacegroupname={{ .Values.pluginConfig.mountProtocol.interfaceGroupName }}"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz

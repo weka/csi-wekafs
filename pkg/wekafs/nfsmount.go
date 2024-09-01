@@ -14,15 +14,16 @@ import (
 )
 
 type nfsMount struct {
-	fsName         string
-	mountPoint     string
-	refCount       int
-	lock           sync.Mutex
-	kMounter       mount.Interface
-	debugPath      string
-	mountOptions   MountOptions
-	lastUsed       time.Time
-	mountIpAddress string
+	fsName             string
+	mountPoint         string
+	refCount           int
+	lock               sync.Mutex
+	kMounter           mount.Interface
+	debugPath          string
+	mountOptions       MountOptions
+	lastUsed           time.Time
+	mountIpAddress     string
+	interfaceGroupName *string
 }
 
 func (m *nfsMount) getMountPoint() string {
@@ -106,7 +107,7 @@ func (m *nfsMount) doUnmount(ctx context.Context) error {
 
 func (m *nfsMount) ensureMountIpAddress(ctx context.Context, apiClient *apiclient.ApiClient) error {
 	if m.mountIpAddress == "" {
-		ip, err := apiClient.GetNfsMountIp(ctx)
+		ip, err := apiClient.GetNfsMountIp(ctx, m.interfaceGroupName)
 		if err != nil {
 			return err
 		}

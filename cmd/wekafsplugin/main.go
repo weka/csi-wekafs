@@ -93,6 +93,7 @@ var (
 	allowProtocolContainers              = flag.Bool("allowprotocolcontainers", false, "Allow protocol containers to be used for mounting filesystems")
 	allowNfsFailback                     = flag.Bool("allownfsfailback", false, "Allow NFS failback")
 	useNfs                               = flag.Bool("usenfs", false, "Use NFS for mounting volumes")
+	interfaceGroupName                   = flag.String("interfacegroupname", "", "Name of the NFS interface group to use for mounting volumes")
 	// Set by the build process
 	version = ""
 )
@@ -221,6 +222,7 @@ func handle() {
 		*allowProtocolContainers,
 		*allowNfsFailback,
 		*useNfs,
+		*interfaceGroupName,
 	)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
