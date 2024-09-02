@@ -9,6 +9,7 @@ import (
 	"k8s.io/mount-utils"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -144,9 +145,24 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 		logger.Trace().
 			Strs("mount_options", m.mountOptions.Strings()).
 			Str("mount_target", mountTarget).
-			Fields(mountOptions).
 			Msg("Performing mount")
-		return m.kMounter.MountSensitive(mountTarget, m.mountPoint, "nfs", mountOptions.Strings(), mountOptionsSensitive)
+		err := m.kMounter.MountSensitive(mountTarget, m.mountPoint, "nfs", mountOptions.Strings(), mountOptionsSensitive)
+		if err != nil {
+			if os.IsNotExist(err) {
+				logger.Error().Err(err).Msg("Mount target not found")
+			} else if os.IsPermission(err) {
+				logger.Error().Err(err).Msg("Mount failed due to permissions issue")
+				return err
+			} else if strings.Contains(err.Error(), "invalid argument") {
+				logger.Error().Err(err).Msg("Mount failed due to invalid argument")
+				return err
+			} else {
+				logger.Error().Err(err).Msg("Mount failed due to unknown issue")
+			}
+			return err
+		}
+		logger.Trace().Msg("Mounted successfully")
+		return nil
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsName)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
