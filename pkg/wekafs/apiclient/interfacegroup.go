@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"k8s.io/helm/pkg/urlutil"
 	"os"
 	"sort"
@@ -72,7 +73,11 @@ func (i *InterfaceGroup) isSmb() bool {
 // This is useful for NFS mount, where we need to have same IP address for same server
 // TODO: this could be further optimized in future to avoid a situation where multiple servers are not evenly distributed
 // and some IPs are getting more load than others. Could be done, for example, by random selection of IP address etc.
-func (i *InterfaceGroup) GetIpAddress() (string, error) {
+func (i *InterfaceGroup) GetIpAddress(ctx context.Context) (string, error) {
+	logger := log.Ctx(ctx)
+	if i == nil {
+		return "", errors.New("interface group is nil")
+	}
 	if len(i.Ips) == 0 {
 		return "", errors.New("no IP addresses found for interface group")
 	}
@@ -83,8 +88,9 @@ func (i *InterfaceGroup) GetIpAddress() (string, error) {
 	if hostname == "" {
 		hostname = "localhost"
 	}
-
-	return i.Ips[hashString(hostname, len(i.Ips))], nil
+	idx := hashString(hostname, len(i.Ips))
+	logger.Debug().Int("index", idx).Str("hostname", hostname).Int("ips", len(i.Ips)).Msg("Selected IP address based on hostname")
+	return i.Ips[idx], nil
 }
 
 func (a *ApiClient) GetInterfaceGroups(ctx context.Context, interfaceGroups *[]InterfaceGroup) error {
@@ -185,5 +191,5 @@ func (a *ApiClient) GetNfsMountIp(ctx context.Context, interfaceGroupName *strin
 		return "", errors.New("no IP addresses found for NFS interface group")
 	}
 
-	return ig.GetIpAddress()
+	return ig.GetIpAddress(ctx)
 }
