@@ -45,7 +45,7 @@ func (m *wekaMounter) NewMount(fsName string, options MountOptions) *wekaMount {
 	if _, ok := m.mountMap[fsName]; !ok {
 		m.mountMap[fsName] = mountsMapPerFs{}
 	}
-	if _, ok := m.mountMap[fsName][options.String()]; !ok {
+	if _, ok := m.mountMap[fsName][options.AsMapKey()]; !ok {
 		uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
 		wMount := &wekaMount{
 			kMounter:                m.kMounter,
@@ -55,10 +55,10 @@ func (m *wekaMounter) NewMount(fsName string, options MountOptions) *wekaMount {
 			mountOptions:            options,
 			allowProtocolContainers: m.allowProtocolContainers,
 		}
-		m.mountMap[fsName][options.String()] = wMount
+		m.mountMap[fsName][options.AsMapKey()] = wMount
 	}
 	m.lock.Unlock()
-	return m.mountMap[fsName][options.String()]
+	return m.mountMap[fsName][options.AsMapKey()]
 }
 
 type UnmountFunc func()
@@ -119,10 +119,10 @@ func (m *wekaMounter) unmountWithOptions(ctx context.Context, fsName string, opt
 	options.setSelinux(m.getSelinuxStatus(ctx))
 
 	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
-	if mnt, ok := m.mountMap[fsName][options.String()]; ok {
+	if mnt, ok := m.mountMap[fsName][options.AsMapKey()]; ok {
 		err := mnt.decRef(ctx)
 		if err == nil {
-			if m.mountMap[fsName][options.String()].refCount <= 0 {
+			if m.mountMap[fsName][options.AsMapKey()].refCount <= 0 {
 				log.Ctx(ctx).Trace().Str("filesystem", fsName).Strs("mount_options", options.Strings()).Msg("This is a last use of this mount, removing from map")
 				delete(m.mountMap[fsName], options.String())
 			}
