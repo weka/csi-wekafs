@@ -3,6 +3,7 @@ package apiclient
 import (
 	"fmt"
 	"github.com/rs/zerolog/log"
+	"hash/fnv"
 	"net"
 	"os"
 	"reflect"
@@ -46,12 +47,21 @@ func ObjectRequestHasRequiredFields(o ApiObjectRequest) bool {
 
 // hashString is a simple hash function that takes a string and returns a hash value in the range [0, n)
 func hashString(s string, n int) int {
-	const prime = 31
-	hash := 0
-	for _, char := range s {
-		hash = hash*prime + int(char)
+	if n == 0 {
+		return 0
 	}
-	return hash % n
+
+	// Create a new FNV-1a hash
+	h := fnv.New32a()
+
+	// Write the string to the hash
+	_, _ = h.Write([]byte(s))
+
+	// Get the hash sum as a uint32
+	hashValue := h.Sum32()
+
+	// Return the hash value in the range of [0, n)
+	return int(hashValue % uint32(n))
 }
 
 type Network struct {
