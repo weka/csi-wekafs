@@ -358,6 +358,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			result = "SUCCESS"
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		} else {
+			logger.Error().Err(err).Msg("Failed to check target path")
 			return NodeUnpublishVolumeError(ctx, codes.Internal, "unexpected situation, please contact support")
 		}
 
