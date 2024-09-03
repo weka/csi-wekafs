@@ -17,6 +17,7 @@ type nfsMounter struct {
 	selinuxSupport     *bool
 	gc                 *innerPathVolGc
 	interfaceGroupName *string
+	clientGroupName    string
 }
 
 func (m *nfsMounter) getGarbageCollector() *innerPathVolGc {
@@ -32,7 +33,8 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 	mounter := &nfsMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
-	mounter.interfaceGroupName = driver.config.interfaceGroupName
+	mounter.interfaceGroupName = &driver.config.interfaceGroupName
+	mounter.clientGroupName = driver.config.clientGroupName
 
 	return mounter
 }
@@ -54,6 +56,7 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 			mountPoint:         "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
 			mountOptions:       options,
 			interfaceGroupName: m.interfaceGroupName,
+			clientGroupName:    m.clientGroupName,
 		}
 		m.mountMap[fsName][options.String()] = wMount
 	}

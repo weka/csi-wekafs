@@ -224,6 +224,9 @@ spec:
           {{- if .Values.pluginConfig.mountProtocol.interfaceGroupName }}
             - "--interfacegroupname={{ .Values.pluginConfig.mountProtocol.interfaceGroupName }}"
           {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.clientGroupName }}
+            - "--clientgroupname={{ .Values.pluginConfig.mountProtocol.clientGroupName }}"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
