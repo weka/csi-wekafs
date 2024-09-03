@@ -1,6 +1,7 @@
 package apiclient
 
 import (
+	"encoding/binary"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"hash/fnv"
@@ -73,6 +74,24 @@ func (n *Network) AsNfsRule() string {
 	return fmt.Sprintf("%s/%s", n.IP.String(), n.Subnet.String())
 }
 
+func (n *Network) GetMaskBits() int {
+	ip := n.Subnet.To4()
+	if ip == nil {
+		return 0
+	}
+	// Count the number of 1 bits
+	mask := binary.BigEndian.Uint32(ip)
+
+	// Count the number of set bits
+	cidrBits := 0
+	for mask != 0 {
+		cidrBits += int(mask & 1)
+		mask >>= 1
+	}
+
+	return cidrBits
+}
+
 func parseNetworkString(s string) (*Network, error) {
 	var ip, subnet net.IP
 	if strings.Contains(s, "/") {
@@ -107,8 +126,11 @@ func (n *Network) ContainsIPAddress(ipStr string) bool {
 	}
 
 	_, ipNet, err := net.ParseCIDR(fmt.Sprintf("%s/%s", n.IP.String(), n.Subnet.String()))
-	if err != nil {
-		return false
+	if err != nil || ipNet == nil {
+		_, ipNet, err = net.ParseCIDR(fmt.Sprintf("%s/%d", n.IP.String(), n.GetMaskBits()))
+		if err != nil || ipNet == nil {
+			return false
+		}
 	}
 	return ipNet.Contains(ip)
 }

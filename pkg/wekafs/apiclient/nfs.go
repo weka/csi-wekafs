@@ -495,6 +495,15 @@ func (r *NfsClientGroupRule) EQ(other ApiObject) bool {
 	return ObjectsAreEqual(r, other)
 }
 
+func (r *NfsClientGroupRule) IsSupersetOf(other *NfsClientGroupRule) bool {
+	if r.IsIPRule() && other.IsIPRule() {
+		n1 := r.GetNetwork()
+		n2 := other.GetNetwork()
+		return n1.ContainsIPAddress(n2.IP.String())
+	}
+	return false
+}
+
 func (r *NfsClientGroupRule) getImmutableFields() []string {
 	return []string{"Rule"}
 }
@@ -565,6 +574,9 @@ func (a *ApiClient) FindNfsClientGroupRulesByFilter(ctx context.Context, query *
 
 	for _, r := range ret {
 		if r.EQ(query) {
+			*resultSet = append(*resultSet, r)
+		} else if r.IsSupersetOf(query) {
+			// if we have a rule that covers the IP address by bigger network segment, also add it
 			*resultSet = append(*resultSet, r)
 		}
 	}
