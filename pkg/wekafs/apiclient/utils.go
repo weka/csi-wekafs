@@ -2,6 +2,7 @@ package apiclient
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"hash/fnv"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 )
 
 // ObjectsAreEqual returns true if both ApiObject have same immutable fields (other fields and nil fields are disregarded)
@@ -141,4 +143,38 @@ func GetNodeIpAddress() string {
 		return ret
 	}
 	return "127.0.0.1"
+}
+
+func GetNodeIpAddressByRouting(targetHost string) (string, error) {
+	rAddr, err := net.ResolveUDPAddr("udp", targetHost+":80")
+	if err != nil {
+		return "", err
+	}
+
+	// Create a UDP connection to the resolved IP address
+	conn, err := net.DialUDP("udp", nil, rAddr)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	// Set a deadline for the connection
+	err = conn.SetDeadline(time.Now().Add(1 * time.Second))
+	if err != nil {
+		return "", err
+	}
+
+	// Get the local address from the UDP connection
+	localAddr := conn.LocalAddr()
+	if localAddr == nil {
+		return "", errors.New("failed to get local address")
+	}
+
+	// Extract the IP address from the local address
+	localIP, _, err := net.SplitHostPort(localAddr.String())
+	if err != nil {
+		return "", err
+	}
+
+	return localIP, nil
 }

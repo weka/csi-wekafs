@@ -131,23 +131,30 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 			return errors.New("no API client for mount, cannot do NFS mount")
 		}
 
-		nodeIP := apiclient.GetNodeIpAddress()
-		if apiClient.EnsureNfsPermissions(ctx, nodeIP, m.fsName, m.clientGroupName) != nil {
-			logger.Error().Msg("Failed to ensure NFS permissions")
-			return errors.New("failed to ensure NFS permissions")
-		}
-
 		if err := m.ensureMountIpAddress(ctx, apiClient); err != nil {
 			logger.Error().Err(err).Msg("Failed to get mount IP address")
 			return err
+		}
+
+		nodeIP, err := apiclient.GetNodeIpAddressByRouting(m.mountIpAddress)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to get routed node IP address, relying on node IP")
+			nodeIP = apiclient.GetNodeIpAddress()
+		}
+
+		if apiClient.EnsureNfsPermissions(ctx, nodeIP, m.fsName, m.clientGroupName) != nil {
+			logger.Error().Msg("Failed to ensure NFS permissions")
+			return errors.New("failed to ensure NFS permissions")
 		}
 
 		mountTarget := m.mountIpAddress + ":/" + m.fsName
 		logger.Trace().
 			Strs("mount_options", m.mountOptions.Strings()).
 			Str("mount_target", mountTarget).
+			Str("mount_ip_address", m.mountIpAddress).
 			Msg("Performing mount")
-		err := m.kMounter.MountSensitive(mountTarget, m.mountPoint, "nfs", mountOptions.Strings(), mountOptionsSensitive)
+
+		err = m.kMounter.MountSensitive(mountTarget, m.mountPoint, "nfs", mountOptions.Strings(), mountOptionsSensitive)
 		if err != nil {
 			if os.IsNotExist(err) {
 				logger.Error().Err(err).Msg("Mount target not found")
