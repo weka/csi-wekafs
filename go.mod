@@ -2,7 +2,7 @@ module github.com/wekafs/csi-wekafs
 
 go 1.22.0
 
-toolchain go1.22.4
+toolchain go1.23.1
 
 require (
 	github.com/container-storage-interface/spec v1.10.0
