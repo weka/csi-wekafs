@@ -9,12 +9,13 @@ import (
 )
 
 type nfsMounter struct {
-	kMounter           mount.Interface
-	debugPath          string
-	selinuxSupport     *bool
-	gc                 *innerPathVolGc
-	interfaceGroupName *string
-	clientGroupName    string
+	kMounter              mount.Interface
+	debugPath             string
+	selinuxSupport        *bool
+	gc                    *innerPathVolGc
+	interfaceGroupName    *string
+	clientGroupName       string
+	exclusiveMountOptions []mutuallyExclusiveMountOptionSet
 }
 
 func (m *nfsMounter) getGarbageCollector() *innerPathVolGc {
@@ -27,7 +28,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &nfsMounter{debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
+	mounter := &nfsMounter{debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
 	mounter.interfaceGroupName = &driver.config.interfaceGroupName
@@ -65,6 +66,7 @@ func (m *nfsMounter) getSelinuxStatus(ctx context.Context) bool {
 func (m *nfsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	mountOptions = mountOptions.AsNfs()
+	mountOptions.Merge(mountOptions, m.exclusiveMountOptions)
 	mountObj := m.NewMount(fsName, mountOptions)
 	mountErr := mountObj.incRef(ctx, apiClient)
 
@@ -87,6 +89,7 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 	opts := options
 	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	options = options.AsNfs()
+	options.Merge(options, m.exclusiveMountOptions)
 	mnt := m.NewMount(fsName, options)
 
 	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")

@@ -145,6 +145,7 @@ pluginConfig:
     snapshotVolumesWithoutQuotaEnforcement: false
   mutuallyExclusiveMountOptions:
     - "readcache,writecache,coherent,forcedirect"
+    - "sync,async"
   mountProtocol:
     # -- Use NFS transport for mounting Weka filesystems, off by default
     useNfs: false
