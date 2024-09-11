@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -89,9 +90,22 @@ func (e *ApiEndPoint) String() string {
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
+	logger := log.Ctx(ctx)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
 	}
+	useCustomCACert := credentials.CaCertificate != ""
+	if useCustomCACert {
+		var caCertPool *x509.CertPool
+		if pool, err := x509.SystemCertPool(); err != nil {
+			caCertPool = x509.NewCertPool()
+		} else {
+			caCertPool = pool
+		}
+		caCertPool.AppendCertsFromPEM([]byte(credentials.CaCertificate))
+		tr.TLSClientConfig.RootCAs = caCertPool
+	}
+
 	a := &ApiClient{
 		Mutex: sync.Mutex{},
 		client: &http.Client{
@@ -108,7 +122,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 	}
 	a.resetDefaultEndpoints(ctx)
 
-	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
+	logger.Trace().Bool("insecure_skip_verify", allowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
 	return a, nil
 }
@@ -756,6 +770,7 @@ type Credentials struct {
 	Endpoints           []string
 	LocalContainerName  string
 	AutoUpdateEndpoints bool
+	CaCertificate       string
 }
 
 func (c *Credentials) String() string {
