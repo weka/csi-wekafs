@@ -17,7 +17,7 @@ spec:
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/path: '/metrics'
-        prometheus.io/port: '{{ .Values.metrics.port | default 9090 }}'
+        prometheus.io/port: '{{ .Values.metrics.nodePort | default 9090 }}'
     {{- end }}
     spec:
       {{- if (eq .Values.selinuxSupport "mixed")}}
@@ -86,7 +86,7 @@ spec:
           {{- end }}
           {{- if .Values.metrics.enabled }}
             - "--enablemetrics"
-            - "--metricsport={{ .Values.metrics.port | default 9090 }}"
+            - "--metricsport={{ .Values.metrics.nodePort | default 9090 }}"
           {{- end }}
           {{- if .Values.pluginConfig.allowInsecureHttps }}
             - "--allowinsecurehttps"
@@ -120,7 +120,7 @@ spec:
               name: healthz
               protocol: TCP
           {{- if .Values.metrics.enabled }}
-            - containerPort: {{ .Values.metrics.port }}
+            - containerPort: {{ .Values.metrics.nodePort }}
               name: metrics
               protocol: TCP
           {{- end }}

@@ -96,14 +96,16 @@ kubeletPath: "/var/lib/kubelet"
 metrics:
   # -- Enable Prometheus Metrics
   enabled: true
-  # -- Metrics port
-  port: 9090
+  # -- Metrics port for Controller Server
+  controllerPort: 9090
   # -- Provisioner metrics port
   provisionerPort: 9091
   # -- Resizer metrics port
   resizerPort: 9092
   # -- Snapshotter metrics port
   snapshotterPort: 9093
+  # -- Metrics port for Node Serer
+  nodePort: 9094
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
