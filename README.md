@@ -26,6 +26,7 @@ https://github.com/weka/csi-wekafs
 ## Usage
 - [Deploy an Example application](docs/usage.md)
 - [SELinux Support & Installation Notes](selinux/README.md)
+- [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
 
 ## Additional Documentation
 - [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
