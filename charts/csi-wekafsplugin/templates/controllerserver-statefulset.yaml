@@ -30,8 +30,8 @@ spec:
       nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8}}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
-      {{- if .Values.hostNetwork }}
-      hostNetwork: {{ .Values.hostNetwork }}
+      {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}
+      hostNetwork: true
       {{- end }}
       containers:
         - name: csi-attacher

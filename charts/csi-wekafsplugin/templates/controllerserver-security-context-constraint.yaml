@@ -6,14 +6,14 @@ metadata:
 
 allowPrivilegedContainer: true
 allowHostDirVolumePlugin: true
-{{- if .Values.hostNetwork }}
+{{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.allowNfsFailback .Values.pluginConfig.mountProtocol.useNfs }}
 allowHostNetwork: true
 {{- end }}
 allowedVolumeTypes:
   - hostPath
   - secret
 readOnlyRootFilesystem: false
-
+allowHostPorts: true
 runAsUser:
   type: RunAsAny
 seLinuxContext:
