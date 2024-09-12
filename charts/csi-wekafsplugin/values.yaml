@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.4.2-SNAPSHOT.34.926d473
+csiDriverVersion: &csiDriverVersion 2.4.2-SNAPSHOT.37.996c623
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.12.0
@@ -28,7 +28,6 @@ images:
 # -- image pull secret required for image download. Must have permissions to access all images above.
 #    Should be used in case of private registry that requires authentication
 imagePullSecret: ""
-
 # -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master

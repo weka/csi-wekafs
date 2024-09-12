@@ -91,6 +91,9 @@
         "hostNetwork": {
             "type": "boolean"
         },
+        "imagePullSecret": {
+            "type": "string"
+        },
         "images": {
             "type": "object",
             "properties": {
