@@ -238,6 +238,9 @@
                         "allowNfsFailback": {
                             "type": "boolean"
                         },
+                        "clientGroupName": {
+                            "type": "string"
+                        },
                         "interfaceGroupName": {
                             "type": "string"
                         },
