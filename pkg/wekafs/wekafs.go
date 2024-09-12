@@ -110,6 +110,10 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 	if ok {
 		autoUpdateEndpoints = strings.TrimSpace(strings.TrimSuffix(autoUpdateEndpointsStr, "\n")) == "true"
 	}
+	caCertificate, ok := secrets["caCertificate"]
+	if !ok {
+		caCertificate = ""
+	}
 
 	credentials := apiclient.Credentials{
 		Username:            strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
@@ -119,6 +123,7 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		HttpScheme:          strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
 		LocalContainerName:  localContainerName,
 		AutoUpdateEndpoints: autoUpdateEndpoints,
+		CaCertificate:       caCertificate,
 	}
 	return api.fromCredentials(ctx, credentials, hostname)
 }
