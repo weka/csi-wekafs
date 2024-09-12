@@ -21,16 +21,19 @@ RUN true
 
 RUN echo Building package
 RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o "/bin/wekafsplugin" /src/cmd/*
+FROM registry.k8s.io/kubernetes/kubectl:v1.31.1 AS kubectl
 
 FROM alpine:3.18
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
+
 ADD --chmod=777 https://github.com/tigrawap/locar/releases/download/0.4.0/locar_linux_amd64 /locar
 RUN apk add --no-cache util-linux libselinux libselinux-utils util-linux  \
     pciutils usbutils coreutils binutils findutils  \
-    grep bash nfs-utils rpcbind ca-certificates
+    grep bash nfs-utils rpcbind ca-certificates jq
 # Update CA certificates
 RUN update-ca-certificates
+COPY --from=kubectl /bin/kubectl /bin/kubectl
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 ARG binary=/bin/wekafsplugin
 EXPOSE 2049 111/tcp 111/udp

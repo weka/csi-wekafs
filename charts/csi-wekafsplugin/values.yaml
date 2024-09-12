@@ -20,7 +20,7 @@ images:
   # -- CSI snapshotter sidecar image URL
   snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.1.0
   # -- CSI nodeinfo sidecar image URL, used for reading node metadata
-  nodeinfo: quay.io/weka.io/kubectl-sidecar:v1.29.2-1
+  nodeinfo: quay.io/weka.io/csi-wekafs
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
