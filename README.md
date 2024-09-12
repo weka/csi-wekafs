@@ -15,7 +15,7 @@ https://github.com/weka/csi-wekafs
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
 ## Pre-requisite
-- Kubernetes cluster of version 1.18 or later. Although older versions from 1.13 and up should work, they were not tested
+- Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
 - Access to terminal with `kubectl` installed
 - Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
 
