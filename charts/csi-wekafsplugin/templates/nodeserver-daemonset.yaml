@@ -39,8 +39,8 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
-      {{- if .Values.hostNetwork }}
-      hostNetwork: {{ .Values.hostNetwork }}
+      {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}
+      hostNetwork: true
       {{- end }}
       initContainers:
         - name: init
@@ -106,6 +106,15 @@ spec:
             - "--concurrency.nodePublishVolume={{ .Values.node.concurrency.nodePublishVolume | default "1" }}"
             - "--concurrency.nodeUnpublishVolume={{ .Values.node.concurrency.nodeUnpublishVolume | default "1" }}"
           {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
+            - "--usenfs"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.allowNfsFailback | default false }}
+            - "--allownfsfailback"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.interfaceGroupName }}
+            - "--interfacegroupname={{ .Values.pluginConfig.mountProtocol.interfaceGroupName }}"
+          {{- end }}
           ports:
             - containerPort: 9899
               name: healthz
@@ -136,6 +145,10 @@ spec:
               value: {{ required "Provide CSI Driver Dynamic Volume Creation Path"  .Values.dynamicProvisionPath }}
             - name: X_CSI_MODE
               value: node
+            - name: KUBE_NODE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
           volumeMounts:
             - mountPath: /csi
               name: socket-dir

@@ -294,6 +294,10 @@ func PathIsWekaMount(ctx context.Context, path string) bool {
 		if len(fields) >= 3 && fields[2] == "wekafs" && fields[1] == path {
 			return true
 		}
+		// TODO: better protect against false positives
+		if len(fields) >= 3 && strings.HasPrefix(fields[2], "nfs") && fields[1] == path {
+			return true
+		}
 	}
 
 	return false
@@ -506,6 +510,32 @@ func isWekaInstalled() bool {
 		if name == WekaKernelModuleName {
 			return true
 		}
+	}
+	return false
+}
+
+func getSelinuxStatus(ctx context.Context) bool {
+	logger := log.Ctx(ctx)
+	// check if we have /etc/selinux/config
+	// if it exists, we can check if selinux is enforced or not
+	selinuxConf := "/etc/selinux/config"
+	file, err := os.Open(selinuxConf)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = file.Close() }()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "SELINUX=enforcing") {
+			// no need to repeat each time, just set the selinuxSupport to true
+			return true
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
 	}
 	return false
 }

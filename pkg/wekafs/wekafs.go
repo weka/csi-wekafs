@@ -264,8 +264,9 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run() {
+	mounter := driver.NewMounter()
+
 	// Create GRPC servers
-	mounter := newWekaMounter(driver)
 
 	// identity server runs always
 	log.Info().Msg("Loading IdentityServer")
@@ -321,4 +322,22 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
 		return ""
 	}
+}
+
+func (driver *WekaFsDriver) NewMounter() AnyMounter {
+	log.Info().Msg("Configuring Mounter")
+	if driver.config.useNfs {
+		log.Warn().Msg("Enforcing NFS transport due to configuration")
+		return newNfsMounter(driver)
+	}
+	if driver.config.allowNfsFailback && !isWekaInstalled() {
+		if driver.config.isInDevMode() {
+			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
+		} else {
+			log.Warn().Msg("Weka Driver not found. Failing back to NFS transport")
+			return newNfsMounter(driver)
+		}
+	}
+	log.Info().Msg("Enforcing WekaFS transport")
+	return newWekafsMounter(driver)
 }

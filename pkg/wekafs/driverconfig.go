@@ -33,15 +33,36 @@ type DriverConfig struct {
 	maxConcurrencyPerOp           map[string]int64
 	grpcRequestTimeout            time.Duration
 	allowProtocolContainers       bool
+	allowNfsFailback              bool
+	useNfs                        bool
+	interfaceGroupName            *string
 }
 
 func (dc *DriverConfig) Log() {
+	igName := "<<default>>"
+	if dc.interfaceGroupName != nil {
+		igName = *dc.interfaceGroupName
+	}
 	log.Info().Str("dynamic_vol_path", dc.DynamicVolPath).
 		Str("volume_prefix", dc.VolumePrefix).Str("snapshot_prefix", dc.SnapshotPrefix).Str("seed_snapshot_prefix", dc.SnapshotPrefix).
 		Bool("allow_auto_fs_creation", dc.allowAutoFsCreation).Bool("allow_auto_fs_expansion", dc.allowAutoFsExpansion).
 		Bool("advertise_snapshot_support", dc.advertiseSnapshotSupport).Bool("advertise_volume_clone_support", dc.advertiseVolumeCloneSupport).
 		Bool("allow_insecure_https", dc.allowInsecureHttps).Bool("always_allow_snapshot_volumes", dc.alwaysAllowSnapshotVolumes).
-		Interface("mutually_exclusive_mount_options", dc.mutuallyExclusiveOptions).Msg("Starting driver with the following configuration")
+		Interface("mutually_exclusive_mount_options", dc.mutuallyExclusiveOptions).
+		Int64("max_create_volume_reqs", dc.maxConcurrencyPerOp["CreateVolume"]).
+		Int64("max_delete_volume_reqs", dc.maxConcurrencyPerOp["DeleteVolume"]).
+		Int64("max_expand_volume_reqs", dc.maxConcurrencyPerOp["ExpandVolume"]).
+		Int64("max_create_snapshot_reqs", dc.maxConcurrencyPerOp["CreateSnapshot"]).
+		Int64("max_delete_snapshot_reqs", dc.maxConcurrencyPerOp["DeleteSnapshot"]).
+		Int64("max_node_publish_volume_reqs", dc.maxConcurrencyPerOp["NodePublishVolume"]).
+		Int64("max_node_unpublish_volume_reqs", dc.maxConcurrencyPerOp["NodeUnpublishVolume"]).
+		Int("grpc_request_timeout_seconds", int(dc.grpcRequestTimeout.Seconds())).
+		Bool("allow_protocol_containers", dc.allowProtocolContainers).
+		Bool("allow_nfs_failback", dc.allowNfsFailback).
+		Bool("use_nfs", dc.useNfs).
+		Str("interface_group_name", igName).
+		Msg("Starting driver with the following configuration")
+
 }
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfLegacyVolumes bool,
@@ -50,6 +71,8 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
 	grpcRequestTimeoutSeconds int,
 	allowProtocolContainers bool,
+	allowNfsFailback, useNfs bool,
+	interfaceGroupName string,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -72,6 +95,11 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	concurrency["NodePublishVolume"] = maxNodePublishVolumeReqs
 	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
 
+	igName := &[]string{interfaceGroupName}[0]
+	if interfaceGroupName == "" {
+		igName = nil
+	}
+
 	return &DriverConfig{
 		DynamicVolPath:                dynamicVolPath,
 		VolumePrefix:                  VolumePrefix,
@@ -89,6 +117,9 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		maxConcurrencyPerOp:           concurrency,
 		grpcRequestTimeout:            grpcRequestTimeout,
 		allowProtocolContainers:       allowProtocolContainers,
+		allowNfsFailback:              allowNfsFailback,
+		useNfs:                        useNfs,
+		interfaceGroupName:            igName,
 	}
 }
 

@@ -88,9 +88,14 @@ func (v *Volume) initMountOptions(ctx context.Context) {
 
 func (v *Volume) pruneUnsupportedMountOptions(ctx context.Context) {
 	logger := log.Ctx(ctx)
-	if v.mountOptions.hasOption(MountOptionSyncOnClose) && (v.apiClient == nil || !v.apiClient.SupportsSyncOnCloseMountOption()) {
-		logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
-		v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
+	if v.mountOptions.hasOption(MountOptionSyncOnClose) {
+		if v.apiClient != nil && !v.apiClient.SupportsSyncOnCloseMountOption() {
+			logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
+			v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
+		} else if v.apiClient == nil {
+			logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Cannot determine current Weka cluster version, dropping mount option.")
+			v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
+		}
 	}
 	if v.mountOptions.hasOption(MountOptionReadOnly) {
 		logger.Error().Str("mount_option", MountOptionReadOnly).Msg("Mount option is not supported via custom mount options, use readOnly volume attachments instead")
@@ -628,7 +633,7 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 
 func (v *Volume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
-		v.server.getMounter().gc.triggerGcVolume(ctx, v)
+		v.server.getMounter().getGarbageCollector().triggerGcVolume(ctx, v)
 		return nil
 	}
 	return v.Delete(ctx)

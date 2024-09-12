@@ -30,8 +30,8 @@ spec:
       nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8}}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
-      {{- if .Values.hostNetwork }}
-      hostNetwork: {{ .Values.hostNetwork }}
+      {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}
+      hostNetwork: true
       {{- end }}
       containers:
         - name: csi-attacher
@@ -215,6 +215,15 @@ spec:
             - "--concurrency.createSnapshot={{ .Values.controller.concurrency.createSnapshot | default "1" }}"
             - "--concurrency.deleteSnapshot={{ .Values.controller.concurrency.deleteSnapshot | default "1" }}"
           {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
+            - "--usenfs"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.allowNfsFailback | default false }}
+            - "--allownfsfailback"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.interfaceGroupName }}
+            - "--interfacegroupname={{ .Values.pluginConfig.mountProtocol.interfaceGroupName }}"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
@@ -249,6 +258,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: KUBE_NODE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
           volumeMounts:
             - mountPath: /csi
               name: socket-dir

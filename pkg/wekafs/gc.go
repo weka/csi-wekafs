@@ -21,10 +21,10 @@ type innerPathVolGc struct {
 	isRunning  map[string]bool
 	isDeferred map[string]bool
 	sync.Mutex
-	mounter *wekaMounter
+	mounter AnyMounter
 }
 
-func initInnerPathVolumeGc(mounter *wekaMounter) *innerPathVolGc {
+func initInnerPathVolumeGc(mounter AnyMounter) *innerPathVolGc {
 	gc := innerPathVolGc{mounter: mounter}
 	gc.isRunning = make(map[string]bool)
 	gc.isDeferred = make(map[string]bool)

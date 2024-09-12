@@ -48,7 +48,7 @@ type NodeServer struct {
 	caps              []*csi.NodeServiceCapability
 	nodeID            string
 	maxVolumesPerNode int64
-	mounter           *wekaMounter
+	mounter           AnyMounter
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
@@ -75,7 +75,7 @@ func (ns *NodeServer) getApiStore() *ApiStore {
 	return ns.api
 }
 
-func (ns *NodeServer) getMounter() *wekaMounter {
+func (ns *NodeServer) getMounter() AnyMounter {
 	return ns.mounter
 }
 
@@ -89,7 +89,7 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeG
 	panic("implement me")
 }
 
-func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter *wekaMounter, config *DriverConfig) *NodeServer {
+func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter AnyMounter, config *DriverConfig) *NodeServer {
 	//goland:noinspection GoBoolExpressions
 	return &NodeServer{
 		caps: getNodeServiceCapabilities(
@@ -358,6 +358,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			result = "SUCCESS"
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		} else {
+			logger.Error().Err(err).Msg("Failed to check target path")
 			return NodeUnpublishVolumeError(ctx, codes.Internal, "unexpected situation, please contact support")
 		}
 
