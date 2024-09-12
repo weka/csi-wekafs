@@ -226,6 +226,20 @@
                 "fsGroupPolicy": {
                     "type": "string"
                 },
+                "mountProtocol": {
+                    "type": "object",
+                    "properties": {
+                        "allowNfsFailback": {
+                            "type": "boolean"
+                        },
+                        "interfaceGroupName": {
+                            "type": "string"
+                        },
+                        "useNfs": {
+                            "type": "boolean"
+                        }
+                    }
+                },
                 "mutuallyExclusiveMountOptions": {
                     "type": "array",
                     "items": {
