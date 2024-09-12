@@ -8,17 +8,17 @@ csiDriverName: "csi.weka.io"
 csiDriverVersion: &csiDriverVersion 2.4.2-SNAPSHOT.68.74cb32a
 images:
   # -- CSI liveness probe sidecar image URL
-  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.12.0
+  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.14.0
   # -- CSI attacher sidecar image URL
-  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.5.0
+  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.7.0
   # -- CSI provisioner sidecar image URL
-  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v4.0.0
+  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v5.1.0
   # -- CSI registrar sidercar
-  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0
+  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
   # -- CSI resizer sidecar image URL
-  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.9.3
+  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.12.0
   # -- CSI snapshotter sidecar image URL
-  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v6.3.3
+  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.1.0
   # -- CSI nodeinfo sidecar image URL, used for reading node metadata
   nodeinfo: quay.io/weka.io/kubectl-sidecar:v1.29.2-1
   # -- CSI driver main image URL
