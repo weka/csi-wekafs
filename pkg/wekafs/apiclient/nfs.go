@@ -363,22 +363,25 @@ func (a *ApiClient) CreateNfsClientGroup(ctx context.Context, r *NfsClientGroupC
 	return err
 }
 
-func (a *ApiClient) EnsureCsiPluginNfsClientGroup(ctx context.Context) (*NfsClientGroup, error) {
+func (a *ApiClient) EnsureCsiPluginNfsClientGroup(ctx context.Context, clientGroupName string) (*NfsClientGroup, error) {
 	op := "EnsureCsiPluginNfsClientGroup"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	var ret *NfsClientGroup
-	logger.Trace().Str("client_group_name", NfsClientGroupName).Msg("Getting client group by name")
-	ret, err := a.GetNfsClientGroupByName(ctx, NfsClientGroupName)
+	if clientGroupName == "" {
+		clientGroupName = NfsClientGroupName
+	}
+	logger.Trace().Str("client_group_name", clientGroupName).Msg("Getting client group by name")
+	ret, err := a.GetNfsClientGroupByName(ctx, clientGroupName)
 	if err != nil {
 		if err != ObjectNotFoundError {
 			logger.Error().Err(err).Msg("Failed to get client group by name")
 			return ret, err
 		} else {
-			logger.Trace().Str("client_group_name", NfsClientGroupName).Msg("Existing client group not found, creating client group")
-			err = a.CreateNfsClientGroup(ctx, NewNfsClientGroupCreateRequest(NfsClientGroupName), ret)
+			logger.Trace().Str("client_group_name", clientGroupName).Msg("Existing client group not found, creating client group")
+			err = a.CreateNfsClientGroup(ctx, NewNfsClientGroupCreateRequest(clientGroupName), ret)
 		}
 	}
 	return ret, nil
@@ -540,12 +543,12 @@ func (r *NfsClientGroupRule) IsEligibleForIP(ip string) bool {
 	return network.ContainsIPAddress(ip)
 }
 
-func (a *ApiClient) GetNfsClientGroupRules(ctx context.Context, rules *[]NfsClientGroupRule) error {
+func (a *ApiClient) GetNfsClientGroupRules(ctx context.Context, clientGroupName string, rules *[]NfsClientGroupRule) error {
 	op := "GetNfsClientGroupRules"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx)
+	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
 	if err != nil {
 		return err
 	}
@@ -705,16 +708,16 @@ func (a *ApiClient) EnsureNfsClientGroupRuleForIp(ctx context.Context, cg *NfsCl
 	return err
 }
 
-func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName string) error {
+func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName string, clientGroupName string) error {
 	op := "EnsureNfsPermissions"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	logger.Debug().Str("ip", ip).Str("filesystem", fsName).Msg("Ensuring NFS permissions")
+	logger.Debug().Str("ip", ip).Str("filesystem", fsName).Str("client_group_name", clientGroupName).Msg("Ensuring NFS permissions")
 	// Ensure client group
 	logger.Trace().Msg("Ensuring CSI Plugin NFS Client Group")
-	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx)
+	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to ensure NFS client group")
 		return err

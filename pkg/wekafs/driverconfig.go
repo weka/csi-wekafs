@@ -35,14 +35,11 @@ type DriverConfig struct {
 	allowProtocolContainers       bool
 	allowNfsFailback              bool
 	useNfs                        bool
-	interfaceGroupName            *string
+	interfaceGroupName            string
+	clientGroupName               string
 }
 
 func (dc *DriverConfig) Log() {
-	igName := "<<default>>"
-	if dc.interfaceGroupName != nil {
-		igName = *dc.interfaceGroupName
-	}
 	log.Info().Str("dynamic_vol_path", dc.DynamicVolPath).
 		Str("volume_prefix", dc.VolumePrefix).Str("snapshot_prefix", dc.SnapshotPrefix).Str("seed_snapshot_prefix", dc.SnapshotPrefix).
 		Bool("allow_auto_fs_creation", dc.allowAutoFsCreation).Bool("allow_auto_fs_expansion", dc.allowAutoFsExpansion).
@@ -60,7 +57,8 @@ func (dc *DriverConfig) Log() {
 		Bool("allow_protocol_containers", dc.allowProtocolContainers).
 		Bool("allow_nfs_failback", dc.allowNfsFailback).
 		Bool("use_nfs", dc.useNfs).
-		Str("interface_group_name", igName).
+		Str("interface_group_name", dc.interfaceGroupName).
+		Str("client_group_name", dc.clientGroupName).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -72,7 +70,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	grpcRequestTimeoutSeconds int,
 	allowProtocolContainers bool,
 	allowNfsFailback, useNfs bool,
-	interfaceGroupName string,
+	interfaceGroupName, clientGroupName string,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -95,11 +93,6 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	concurrency["NodePublishVolume"] = maxNodePublishVolumeReqs
 	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
 
-	igName := &[]string{interfaceGroupName}[0]
-	if interfaceGroupName == "" {
-		igName = nil
-	}
-
 	return &DriverConfig{
 		DynamicVolPath:                dynamicVolPath,
 		VolumePrefix:                  VolumePrefix,
@@ -119,7 +112,8 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowProtocolContainers:       allowProtocolContainers,
 		allowNfsFailback:              allowNfsFailback,
 		useNfs:                        useNfs,
-		interfaceGroupName:            igName,
+		interfaceGroupName:            interfaceGroupName,
+		clientGroupName:               clientGroupName,
 	}
 }
 

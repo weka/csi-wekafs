@@ -203,14 +203,14 @@ func TestNfsClientGroup(t *testing.T) {
 
 func TestEnsureCsiPluginNfsClientGroup(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
-	result, err := apiClient.EnsureCsiPluginNfsClientGroup(context.Background())
+	result, err := apiClient.EnsureCsiPluginNfsClientGroup(context.Background(), NfsClientGroupName)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
 
 func TestNfsClientGroupRules(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
-	cg, err := apiClient.EnsureCsiPluginNfsClientGroup(context.Background())
+	cg, err := apiClient.EnsureCsiPluginNfsClientGroup(context.Background(), NfsClientGroupName)
 	assert.NoError(t, err)
 	assert.NotNil(t, cg)
 
@@ -236,7 +236,7 @@ outerLoop:
 		assert.NoError(t, err)
 	}
 	rules := &[]NfsClientGroupRule{}
-	err = apiClient.GetNfsClientGroupRules(context.Background(), rules)
+	err = apiClient.GetNfsClientGroupRules(context.Background(), NfsClientGroupName, rules)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, rules)
 	for _, rule := range *rules {
@@ -251,7 +251,7 @@ func TestNfsEnsureNfsPermissions(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
 
 	// Test EnsureNfsPermission
-	err := apiClient.EnsureNfsPermissions(context.Background(), "172.16.5.147", "default")
+	err := apiClient.EnsureNfsPermissions(context.Background(), "172.16.5.147", "default", NfsClientGroupName)
 	assert.NoError(t, err)
 }
 

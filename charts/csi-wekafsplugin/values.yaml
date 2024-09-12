@@ -152,3 +152,5 @@ pluginConfig:
     allowNfsFailback: false
     # -- Specify name of NFS interface group to use for mounting Weka filesystems. If not set, first NFS interface group will be used
     interfaceGroupName: ""
+    # -- Specify existing client group name for NFS configuration. If not set, "WekaCSIPluginClients" group will be created
+    clientGroupName: ""

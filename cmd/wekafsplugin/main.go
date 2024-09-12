@@ -94,6 +94,7 @@ var (
 	allowNfsFailback                     = flag.Bool("allownfsfailback", false, "Allow NFS failback")
 	useNfs                               = flag.Bool("usenfs", false, "Use NFS for mounting volumes")
 	interfaceGroupName                   = flag.String("interfacegroupname", "", "Name of the NFS interface group to use for mounting volumes")
+	clientGroupName                      = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
 	// Set by the build process
 	version = ""
 )
@@ -223,6 +224,7 @@ func handle() {
 		*allowNfsFailback,
 		*useNfs,
 		*interfaceGroupName,
+		*clientGroupName,
 	)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
