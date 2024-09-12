@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/helm/pkg/urlutil"
 	"os"
 	"sort"
@@ -91,6 +92,20 @@ func (i *InterfaceGroup) GetIpAddress(ctx context.Context) (string, error) {
 	idx := hashString(hostname, len(i.Ips))
 	logger.Debug().Int("index", idx).Str("hostname", hostname).Int("ips", len(i.Ips)).Msg("Selected IP address based on hostname")
 	return i.Ips[idx], nil
+}
+
+func (i *InterfaceGroup) GetRandomIpAddress(ctx context.Context) (string, error) {
+	logger := log.Ctx(ctx)
+	if i == nil {
+		return "", errors.New("interface group is nil")
+	}
+	if len(i.Ips) == 0 {
+		return "", errors.New("no IP addresses found for interface group")
+	}
+	idx := rand.Intn(len(i.Ips))
+	ip := i.Ips[idx]
+	logger.Debug().Str("ip", ip).Msg("Selected random IP address")
+	return ip, nil
 }
 
 func (a *ApiClient) GetInterfaceGroups(ctx context.Context, interfaceGroups *[]InterfaceGroup) error {
@@ -191,5 +206,5 @@ func (a *ApiClient) GetNfsMountIp(ctx context.Context, interfaceGroupName *strin
 		return "", errors.New("no IP addresses found for NFS interface group")
 	}
 
-	return ig.GetIpAddress(ctx)
+	return ig.GetRandomIpAddress(ctx)
 }
