@@ -145,6 +145,16 @@ func (opts MountOptions) Hash() uint32 {
 	return h.Sum32()
 }
 
+func (opts MountOptions) AsMapKey() string {
+	ret := opts
+	// TODO: if adding any other version-agnostic options, add them here
+	excludedOpts := []string{MountOptionSyncOnClose}
+	for _, o := range excludedOpts {
+		ret = ret.RemoveOption(o)
+	}
+	return ret.String()
+}
+
 func (opts MountOptions) setSelinux(selinuxSupport bool) {
 	if selinuxSupport {
 		o := newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s_t:s0\"", selinuxContext))
