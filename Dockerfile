@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine as go-builder
+FROM golang:1.22-alpine AS go-builder
 # https://stackoverflow.com/questions/36279253/go-compiled-binary-wont-run-in-an-alpine-docker-container-on-ubuntu-host
 RUN apk add --no-cache libc6-compat gcc musl-dev
 COPY go.mod /src/go.mod
@@ -25,8 +25,7 @@ RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.vers
 FROM alpine:3.18
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
-ADD https://github.com/tigrawap/locar/releases/download/0.4.0/locar_linux_amd64 /locar
-RUN chmod +x /locar
+ADD --chmod=777 https://github.com/tigrawap/locar/releases/download/0.4.0/locar_linux_amd64 /locar
 RUN apk add --no-cache util-linux libselinux libselinux-utils util-linux  \
     pciutils usbutils coreutils binutils findutils  \
     grep bash nfs-utils rpcbind ca-certificates
