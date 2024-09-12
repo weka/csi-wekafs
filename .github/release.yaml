@@ -10,8 +10,10 @@ changelog:
     - title: Bug Fixes
       labels:
         - fix
+        - field issue
     - title: Miscellaneous
       labels:
         - dependencies
         - ci
         - documentation
+        - sidecar
