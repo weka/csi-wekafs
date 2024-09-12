@@ -312,3 +312,33 @@ func TestInterfaceGroup(t *testing.T) {
 	//	}
 	//}
 }
+
+func TestIsSupersetOf(t *testing.T) {
+	// Test case 1: IP rule superset
+	rule1 := &NfsClientGroupRule{
+		Type: NfsClientGroupRuleTypeIP,
+		Rule: "192.168.1.0/24",
+	}
+	rule2 := &NfsClientGroupRule{
+		Type: NfsClientGroupRuleTypeIP,
+		Rule: "192.168.1.1",
+	}
+	assert.True(t, rule1.IsSupersetOf(rule2))
+
+	// Test case 2: IP rule not superset
+	rule3 := &NfsClientGroupRule{
+		Type: NfsClientGroupRuleTypeIP,
+		Rule: "192.168.2.0/24",
+	}
+	assert.False(t, rule1.IsSupersetOf(rule3))
+
+	// Test case 3: Non-IP rule
+	rule4 := &NfsClientGroupRule{
+		Type: NfsClientGroupRuleTypeDNS,
+		Rule: "example.com",
+	}
+	assert.False(t, rule1.IsSupersetOf(rule4))
+
+	// Test case 4: Same rule
+	assert.True(t, rule1.IsSupersetOf(rule1))
+}
