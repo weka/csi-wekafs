@@ -25,6 +25,10 @@ images:
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
   csidriverTag: *csiDriverVersion
+# -- image pull secret required for image download. Must have permissions to access all images above.
+#    Should be used in case of private registry that requires authentication
+imagePullSecret: ""
+
 # -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master
