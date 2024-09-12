@@ -47,7 +47,7 @@ spec:
           volumeMounts:
             - mountPath: /etc/nodeinfo
               name: nodeinfo
-          image: {{ .Values.images.nodeinfo }}
+          image: "{{ .Values.images.nodeinfo }}:v{{ .Values.images.csidriverTag}}"
           imagePullPolicy: IfNotPresent
           securityContext:
             # This doesn't need to run as root.
@@ -58,8 +58,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-          args:
+          command:
             - bash
+          args:
             - -c
             - kubectl get node $NODENAME -o json | jq '.metadata' > /etc/nodeinfo/metadata
       containers:
