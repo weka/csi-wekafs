@@ -141,10 +141,13 @@
         "metrics": {
             "type": "object",
             "properties": {
+                "controllerPort": {
+                    "type": "integer"
+                },
                 "enabled": {
                     "type": "boolean"
                 },
-                "port": {
+                "nodePort": {
                     "type": "integer"
                 },
                 "provisionerPort": {

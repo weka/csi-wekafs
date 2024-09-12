@@ -1,7 +1,7 @@
 # CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-![Version: 2.4.2-SNAPSHOT.28.d581918](https://img.shields.io/badge/Version-2.4.2--SNAPSHOT.28.d581918-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.4.2-SNAPSHOT.28.d581918](https://img.shields.io/badge/AppVersion-v2.4.2--SNAPSHOT.28.d581918-informational?style=flat-square)
+![Version: 2.4.2-SNAPSHOT.31.6710087](https://img.shields.io/badge/Version-2.4.2--SNAPSHOT.31.6710087-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.4.2-SNAPSHOT.31.6710087](https://img.shields.io/badge/AppVersion-v2.4.2--SNAPSHOT.31.6710087-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
 
@@ -43,7 +43,7 @@ make build
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.4.2-SNAPSHOT.28.d581918"` | CSI driver version |
+| csiDriverVersion | string | `"2.4.2-SNAPSHOT.31.6710087"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.12.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.5.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v4.0.0"` | CSI provisioner sidecar image URL |
@@ -52,7 +52,7 @@ make build
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v6.3.3"` | CSI snapshotter sidecar image URL |
 | images.nodeinfo | string | `"quay.io/weka.io/kubectl-sidecar:v1.29.2-1"` | CSI nodeinfo sidecar image URL, used for reading node metadata |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.4.2-SNAPSHOT.28.d581918"` | CSI driver tag |
+| images.csidriverTag | string | `"2.4.2-SNAPSHOT.31.6710087"` | CSI driver tag |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
@@ -76,10 +76,11 @@ make build
 | selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
 | kubeletPath | string | `"/var/lib/kubelet"` | kubelet path, in cases Kubernetes is installed not in default folder |
 | metrics.enabled | bool | `true` | Enable Prometheus Metrics |
-| metrics.port | int | `9090` | Metrics port |
+| metrics.controllerPort | int | `9090` | Metrics port for Controller Server |
 | metrics.provisionerPort | int | `9091` | Provisioner metrics port |
 | metrics.resizerPort | int | `9092` | Resizer metrics port |
 | metrics.snapshotterPort | int | `9093` | Snapshotter metrics port |
+| metrics.nodePort | int | `9094` | Metrics port for Node Serer |
 | hostNetwork | bool | `false` | Set to true to use host networking. Will be always set to true when using NFS mount protocol |
 | pluginConfig.fsGroupPolicy | string | `"File"` | WARNING: Changing this value might require uninstall and re-install of the plugin |
 | pluginConfig.allowInsecureHttps | bool | `false` | Allow insecure HTTPS (skip TLS certificate verification) |
