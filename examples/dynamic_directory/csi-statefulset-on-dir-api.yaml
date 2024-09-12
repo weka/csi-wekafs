@@ -1,0 +1,44 @@
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: csi-wekafs-test-statefulset-on-dir-api
+  labels:
+    app: "csi-wekafs-test-statefulset-on-dir-api"
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Retain
+  replicas: 100
+  selector:
+    matchLabels:
+      kubernetes.io/os: linux
+  template:
+    metadata:
+      labels:
+        kubernetes.io/os: linux
+        app: "csi-wekafs-test-statefulset-on-dir-api"
+    spec:
+      terminationGracePeriodSeconds: 1
+      # make sure that pod is scheduled only on node having weka CSI node running
+      nodeSelector:
+        topology.csi.weka.io/global: "true"
+      containers:
+        - name: my-frontend
+          image: busybox
+          volumeMounts:
+          - mountPath: "/data"
+            name: csi-wekafs-dir-api
+          command: ["/bin/sh"]
+          args: ["-c", "while true; do echo `date` hello >> /data/`hostname`.txt; sleep 10;done"]
+  volumeClaimTemplates:
+  - metadata:
+      name: csi-wekafs-dir-api
+      labels:
+        app: "csi-wekafs-test-statefulset-on-dir-api"
+    spec:
+      accessModes: [ "ReadWriteMany" ]
+      storageClassName: storageclass-wekafs-dir-api
+      resources:
+        requests:
+          storage: 1Gi
+  serviceName: "csi-wekafs-test-statefulset-on-dir-api"
