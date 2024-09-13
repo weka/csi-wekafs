@@ -149,20 +149,21 @@ func (m *nfsMount) ensureMountIpAddress(ctx context.Context, apiClient *apiclien
 func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	var mountOptionsSensitive []string
+	if apiClient == nil {
+		// this flow is relevant only for legacy volumes, will not work with SCMC
+		logger.Trace().Msg("No API client for mount, cannot proceed")
+		return errors.New("no API client for mount, cannot do NFS mount")
+	}
+
+	if err := m.ensureMountIpAddress(ctx, apiClient); err != nil {
+		logger.Error().Err(err).Msg("Failed to get mount IP address")
+		return err
+	}
+
 	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 		return err
 	}
 	if !m.isInDevMode() {
-		if apiClient == nil {
-			// this flow is relevant only for legacy volumes, will not work with SCMC
-			logger.Trace().Msg("No API client for mount, cannot proceed")
-			return errors.New("no API client for mount, cannot do NFS mount")
-		}
-
-		if err := m.ensureMountIpAddress(ctx, apiClient); err != nil {
-			logger.Error().Err(err).Msg("Failed to get mount IP address")
-			return err
-		}
 
 		nodeIP, err := apiclient.GetNodeIpAddressByRouting(m.mountIpAddress)
 		if err != nil {
