@@ -26,7 +26,7 @@ type nfsMount struct {
 }
 
 func (m *nfsMount) getMountPoint() string {
-	return m.mountPoint
+	return fmt.Sprintf("%s-%s", m.mountPoint, m.mountIpAddress)
 }
 
 func (m *nfsMount) getRefCount() int {
