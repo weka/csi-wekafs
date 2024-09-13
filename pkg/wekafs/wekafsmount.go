@@ -85,6 +85,7 @@ func (m *wekafsMount) decRef(ctx context.Context) error {
 	}
 	if m.refCount == 0 {
 		if err := m.doUnmount(ctx); err != nil {
+			m.refCount++ // since we failed to unmount, we need to increase the refcount back to the original value
 			return err
 		}
 	}
