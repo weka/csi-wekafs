@@ -45,7 +45,7 @@ func (m *wekafsMount) isInDevMode() bool {
 }
 
 func (m *wekafsMount) isMounted() bool {
-	return PathExists(m.mountPoint) && PathIsWekaMount(context.Background(), m.mountPoint)
+	return PathExists(m.getMountPoint()) && PathIsWekaMount(context.Background(), m.getMountPoint())
 }
 
 func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
@@ -53,22 +53,22 @@ func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if m.refCount < 0 {
-		logger.Error().Str("mount_point", m.mountPoint).Int("refcount", m.refCount).Msg("During incRef negative refcount encountered")
+		logger.Error().Str("mount_point", m.getMountPoint()).Int("refcount", m.refCount).Msg("During incRef negative refcount encountered")
 		m.refCount = 0 // to make sure that we don't have negative refcount later
 	}
 	if m.refCount == 0 {
-		if err := m.doMount(ctx, apiClient, m.mountOptions); err != nil {
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
 			return err
 		}
 	} else if !m.isMounted() {
-		logger.Warn().Str("mount_point", m.mountPoint).Int("refcount", m.refCount).Msg("Mount not exists although should!")
-		if err := m.doMount(ctx, apiClient, m.mountOptions); err != nil {
+		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", m.refCount).Msg("Mount not exists although should!")
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
 			return err
 		}
 
 	}
 	m.refCount++
-	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.mountOptions.Strings()).Str("filesystem_name", m.fsName).Msg("RefCount increased")
+	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount increased")
 	return nil
 }
 
@@ -78,7 +78,7 @@ func (m *wekafsMount) decRef(ctx context.Context) error {
 	defer m.lock.Unlock()
 	m.refCount--
 	m.lastUsed = time.Now()
-	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.mountOptions.Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
+	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
 	if m.refCount < 0 {
 		logger.Error().Int("refcount", m.refCount).Msg("During decRef negative refcount encountered")
 		m.refCount = 0 // to make sure that we don't have negative refcount later
@@ -92,9 +92,9 @@ func (m *wekafsMount) decRef(ctx context.Context) error {
 }
 
 func (m *wekafsMount) doUnmount(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
-	logger.Trace().Strs("mount_options", m.mountOptions.Strings()).Msg("Performing umount via k8s native mounter")
-	err := m.kMounter.Unmount(m.mountPoint)
+	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
+	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing umount via k8s native mounter")
+	err := m.kMounter.Unmount(m.getMountPoint())
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
 	} else {
@@ -104,11 +104,11 @@ func (m *wekafsMount) doUnmount(ctx context.Context) error {
 }
 
 func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
+	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	mountToken := ""
 	var mountOptionsSensitive []string
 	var localContainerName string
-	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
+	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 		return err
 	}
 	if !m.isInDevMode() {
@@ -166,16 +166,16 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 			}
 		}
 
-		logger.Trace().Strs("mount_options", m.mountOptions.Strings()).
+		logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).
 			Fields(mountOptions).Msg("Performing mount")
-		return m.kMounter.MountSensitive(m.fsName, m.mountPoint, "wekafs", mountOptions.Strings(), mountOptionsSensitive)
+		return m.kMounter.MountSensitive(m.fsName, m.getMountPoint(), "wekafs", mountOptions.Strings(), mountOptionsSensitive)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsName)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
 			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
 		}
-		logger.Trace().Strs("mount_options", m.mountOptions.Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
+		logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
 
-		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
+		return m.kMounter.Mount(fakePath, m.getMountPoint(), "", []string{"bind"})
 	}
 }
