@@ -155,3 +155,5 @@ pluginConfig:
     interfaceGroupName: ""
     # -- Specify existing client group name for NFS configuration. If not set, "WekaCSIPluginClients" group will be created
     clientGroupName: ""
+    # -- Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions
+    nfsProtocolVersion: "4.1"

@@ -227,6 +227,9 @@ spec:
           {{- if .Values.pluginConfig.mountProtocol.clientGroupName }}
             - "--clientgroupname={{ .Values.pluginConfig.mountProtocol.clientGroupName }}"
           {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.nfsProtocolVersion }}
+            - "--nfsprotocolversion={{ .Values.pluginConfig.mountProtocol.nfsProtocolVersion | toString}}"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz

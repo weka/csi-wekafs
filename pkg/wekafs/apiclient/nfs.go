@@ -12,12 +12,25 @@ import (
 	"golang.org/x/exp/slices"
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
+	"strings"
 )
 
 type NfsPermissionType string
 type NfsPermissionSquashMode string
 type NfsClientGroupRuleType string
 type NfsVersionString string
+
+func (n NfsVersionString) String() string {
+	return string(n)
+}
+func (n NfsVersionString) AsOption() string {
+	return strings.TrimLeft(n.String(), "V")
+}
+
+func (n NfsVersionString) AsWeka() NfsVersionString {
+	return NfsVersionString(strings.Split(n.String(), ".")[0])
+}
+
 type NfsAuthType string
 
 const (
@@ -199,9 +212,9 @@ func (a *ApiClient) CreateNfsPermission(ctx context.Context, r *NfsPermissionCre
 	return err
 }
 
-func EnsureNfsPermission(ctx context.Context, fsName string, group string, apiClient *ApiClient) error {
+func EnsureNfsPermission(ctx context.Context, fsName string, group string, version NfsVersionString, apiClient *ApiClient) error {
 	perm := &NfsPermission{
-		SupportedVersions: []NfsVersionString{NfsVersionV4},
+		SupportedVersions: []NfsVersionString{version.AsWeka()},
 		AnonUid:           strconv.Itoa(65534),
 		AnonGid:           strconv.Itoa(65534),
 		Filesystem:        fsName,
@@ -708,7 +721,7 @@ func (a *ApiClient) EnsureNfsClientGroupRuleForIp(ctx context.Context, cg *NfsCl
 	return err
 }
 
-func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName string, clientGroupName string) error {
+func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName string, version NfsVersionString, clientGroupName string) error {
 	op := "EnsureNfsPermissions"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -731,6 +744,6 @@ func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName 
 	}
 	// Ensure NFS permission
 	logger.Trace().Str("filesystem", fsName).Str("client_group", cg.Name).Msg("Ensuring NFS Export for client group")
-	err = EnsureNfsPermission(ctx, fsName, cg.Name, a)
+	err = EnsureNfsPermission(ctx, fsName, cg.Name, version, a)
 	return err
 }

@@ -2,6 +2,7 @@ package wekafs
 
 import (
 	"context"
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
@@ -18,6 +19,7 @@ type nfsMounter struct {
 	gc                    *innerPathVolGc
 	interfaceGroupName    *string
 	clientGroupName       string
+	nfsProtocolVersion    string
 	exclusiveMountOptions []mutuallyExclusiveMountOptionSet
 }
 
@@ -36,6 +38,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 	mounter.schedulePeriodicMountGc()
 	mounter.interfaceGroupName = &driver.config.interfaceGroupName
 	mounter.clientGroupName = driver.config.clientGroupName
+	mounter.nfsProtocolVersion = driver.config.nfsProtocolVersion
 
 	return mounter
 }
@@ -54,6 +57,7 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		mountOptions:       options,
 		interfaceGroupName: m.interfaceGroupName,
 		clientGroupName:    m.clientGroupName,
+		protocolVersion:    apiclient.NfsVersionString(fmt.Sprintf("V%s", m.nfsProtocolVersion)),
 	}
 	return wMount
 }
