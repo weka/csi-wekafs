@@ -244,6 +244,9 @@
                         "interfaceGroupName": {
                             "type": "string"
                         },
+                        "nfsProtocolVersion": {
+                            "type": "string"
+                        },
                         "useNfs": {
                             "type": "boolean"
                         }
