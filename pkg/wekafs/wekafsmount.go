@@ -179,3 +179,7 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 		return m.kMounter.Mount(fakePath, m.getMountPoint(), "", []string{"bind"})
 	}
 }
+
+func (m *wekafsMount) locateMountIP() error {
+	return nil
+}

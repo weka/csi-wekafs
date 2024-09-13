@@ -303,6 +303,24 @@ func PathIsWekaMount(ctx context.Context, path string) bool {
 	return false
 }
 
+func GetMountIpFromActualMountPoint(mountPointBase string) (string, error) {
+	file, err := os.Open("/proc/mounts")
+	if err != nil {
+		return "", errors.New("failed to open /proc/mounts")
+	}
+	defer func() { _ = file.Close() }()
+	var actualMountPoint string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) >= 3 && strings.HasPrefix(fields[1], fmt.Sprintf("%s-", mountPointBase)) {
+			actualMountPoint = fields[1]
+			return strings.TrimLeft(actualMountPoint, mountPointBase+"-"), nil
+		}
+	}
+	return "", errors.New("mount point not found")
+}
+
 func validateVolumeId(volumeId string) error {
 	// Volume New format:
 	// VolID format is as following:

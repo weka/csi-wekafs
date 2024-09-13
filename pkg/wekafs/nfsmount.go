@@ -63,6 +63,17 @@ func (m *nfsMount) decRef(ctx context.Context) error {
 	return nil
 }
 
+func (m *nfsMount) locateMountIP() error {
+	if m.mountIpAddress == "" {
+		ipAddr, err := GetMountIpFromActualMountPoint(m.mountPoint)
+		if err != nil {
+			return err
+		}
+		m.mountIpAddress = ipAddr
+	}
+	return nil
+}
+
 func (m *nfsMount) doUnmount(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing umount via k8s native mounter")
