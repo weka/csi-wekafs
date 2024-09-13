@@ -28,6 +28,7 @@ type AnyMounter interface {
 
 type mountsMapPerFs map[string]AnyMount
 type mountsMap map[string]mountsMapPerFs
+type nfsMountsMap map[string]int // we only follow the mountPath and number of references
 
 type UnmountFunc func()
 
@@ -42,4 +43,5 @@ type AnyMount interface {
 	getMountPoint() string
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
+	locateMountIP() error // used only for NFS
 }

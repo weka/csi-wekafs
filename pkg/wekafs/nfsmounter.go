@@ -5,10 +5,13 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"sync"
 	"time"
 )
 
 type nfsMounter struct {
+	mountMap              nfsMountsMap
+	lock                  sync.Mutex
 	kMounter              mount.Interface
 	debugPath             string
 	selinuxSupport        *bool
@@ -28,7 +31,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &nfsMounter{debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
+	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
 	mounter.interfaceGroupName = &driver.config.interfaceGroupName
@@ -43,6 +46,7 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 	}
 	uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
 	wMount := &nfsMount{
+		mounter:            m,
 		kMounter:           m.kMounter,
 		fsName:             fsName,
 		debugPath:          m.debugPath,
@@ -91,6 +95,12 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 	options = options.AsNfs()
 	options.Merge(options, m.exclusiveMountOptions)
 	mnt := m.NewMount(fsName, options)
+	// since we are not aware of the IP address of the mount, we need to find the mount point by listing the mounts
+	err := mnt.locateMountIP()
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("Failed to locate mount IP")
+		return err
+	}
 
 	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
 	return mnt.decRef(ctx)

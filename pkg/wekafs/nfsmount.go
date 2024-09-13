@@ -14,6 +14,7 @@ import (
 )
 
 type nfsMount struct {
+	mounter            *nfsMounter
 	fsName             string
 	mountPoint         string
 	kMounter           mount.Interface
@@ -26,7 +27,7 @@ type nfsMount struct {
 }
 
 func (m *nfsMount) getMountPoint() string {
-	return m.mountPoint
+	return fmt.Sprintf("%s-%s", m.mountPoint, m.mountIpAddress)
 }
 
 func (m *nfsMount) getRefCount() int {
@@ -46,27 +47,86 @@ func (m *nfsMount) isInDevMode() bool {
 }
 
 func (m *nfsMount) isMounted() bool {
-	return PathExists(m.mountPoint) && PathIsWekaMount(context.Background(), m.mountPoint)
+	return PathExists(m.getMountPoint()) && PathIsWekaMount(context.Background(), m.mountPoint)
 }
 
 func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
-	if err := m.doMount(ctx, apiClient, m.mountOptions); err != nil {
-		return err
+	logger := log.Ctx(ctx)
+	if m.mounter == nil {
+		logger.Error().Msg("Mounter is nil")
+		return errors.New("mounter is nil")
 	}
+	m.mounter.lock.Lock()
+	defer m.mounter.lock.Unlock()
+	refCount, ok := m.mounter.mountMap[m.getMountPoint()]
+	if !ok {
+		refCount = 0
+	}
+	if refCount == 0 {
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
+			return err
+		}
+	} else if !m.isMounted() {
+		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", refCount).Msg("Mount not exists although should!")
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
+			return err
+		}
+
+	}
+	refCount++
+	m.mounter.mountMap[m.getMountPoint()] = refCount
+
+	logger.Trace().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount increased")
 	return nil
 }
 
 func (m *nfsMount) decRef(ctx context.Context) error {
-	if err := m.doUnmount(ctx); err != nil {
-		return err
+	logger := log.Ctx(ctx)
+	if m.mounter == nil {
+		logger.Error().Msg("Mounter is nil")
+		return errors.New("mounter is nil")
+	}
+	m.mounter.lock.Lock()
+	defer m.mounter.lock.Unlock()
+	refCount, ok := m.mounter.mountMap[m.getMountPoint()]
+	defer func() {
+		if refCount == 0 {
+			delete(m.mounter.mountMap, m.getMountPoint())
+		} else {
+			m.mounter.mountMap[m.getMountPoint()] = refCount
+		}
+	}()
+	if !ok {
+		refCount = 0
+	}
+	if refCount < 0 {
+		logger.Error().Int("refcount", refCount).Msg("During decRef negative refcount encountered")
+		refCount = 0 // to make sure that we don't have negative refcount later
+	}
+	if refCount == 1 {
+		if err := m.doUnmount(ctx); err != nil {
+			return err
+		}
+		refCount--
+	}
+	return nil
+}
+
+func (m *nfsMount) locateMountIP() error {
+	if m.mountIpAddress == "" {
+		ipAddr, err := GetMountIpFromActualMountPoint(m.mountPoint)
+		if err != nil {
+			return err
+		}
+		m.mountIpAddress = ipAddr
 	}
 	return nil
 }
 
 func (m *nfsMount) doUnmount(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
-	logger.Trace().Strs("mount_options", m.mountOptions.Strings()).Msg("Performing umount via k8s native mounter")
-	err := m.kMounter.Unmount(m.mountPoint)
+	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
+	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing umount via k8s native mounter")
+	err := m.kMounter.Unmount(m.getMountPoint())
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
 	} else {
@@ -87,9 +147,9 @@ func (m *nfsMount) ensureMountIpAddress(ctx context.Context, apiClient *apiclien
 }
 
 func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.mountPoint).Str("filesystem", m.fsName).Logger()
+	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	var mountOptionsSensitive []string
-	if err := os.MkdirAll(m.mountPoint, DefaultVolumePermissions); err != nil {
+	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 		return err
 	}
 	if !m.isInDevMode() {
@@ -117,12 +177,12 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 
 		mountTarget := m.mountIpAddress + ":/" + m.fsName
 		logger.Trace().
-			Strs("mount_options", m.mountOptions.Strings()).
+			Strs("mount_options", m.getMountOptions().Strings()).
 			Str("mount_target", mountTarget).
 			Str("mount_ip_address", m.mountIpAddress).
 			Msg("Performing mount")
 
-		err = m.kMounter.MountSensitive(mountTarget, m.mountPoint, "nfs", mountOptions.Strings(), mountOptionsSensitive)
+		err = m.kMounter.MountSensitive(mountTarget, m.getMountPoint(), "nfs", mountOptions.Strings(), mountOptionsSensitive)
 		if err != nil {
 			if os.IsNotExist(err) {
 				logger.Error().Err(err).Msg("Mount target not found")
@@ -144,8 +204,8 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
 			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
 		}
-		logger.Trace().Strs("mount_options", m.mountOptions.Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
+		logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
 
-		return m.kMounter.Mount(fakePath, m.mountPoint, "", []string{"bind"})
+		return m.kMounter.Mount(fakePath, m.getMountPoint(), "", []string{"bind"})
 	}
 }
