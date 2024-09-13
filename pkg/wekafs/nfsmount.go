@@ -14,6 +14,7 @@ import (
 )
 
 type nfsMount struct {
+	mounter            *nfsMounter
 	fsName             string
 	mountPoint         string
 	kMounter           mount.Interface
@@ -50,15 +51,63 @@ func (m *nfsMount) isMounted() bool {
 }
 
 func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
-	if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-		return err
+	logger := log.Ctx(ctx)
+	if m.mounter == nil {
+		logger.Error().Msg("Mounter is nil")
+		return errors.New("mounter is nil")
 	}
+	m.mounter.lock.Lock()
+	defer m.mounter.lock.Unlock()
+	refCount, ok := m.mounter.mountMap[m.getMountPoint()]
+	if !ok {
+		refCount = 0
+	}
+	if refCount == 0 {
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
+			return err
+		}
+	} else if !m.isMounted() {
+		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", refCount).Msg("Mount not exists although should!")
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
+			return err
+		}
+
+	}
+	refCount++
+	m.mounter.mountMap[m.getMountPoint()] = refCount
+
+	logger.Trace().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount increased")
 	return nil
 }
 
 func (m *nfsMount) decRef(ctx context.Context) error {
-	if err := m.doUnmount(ctx); err != nil {
-		return err
+	logger := log.Ctx(ctx)
+	if m.mounter == nil {
+		logger.Error().Msg("Mounter is nil")
+		return errors.New("mounter is nil")
+	}
+	m.mounter.lock.Lock()
+	defer m.mounter.lock.Unlock()
+	refCount, ok := m.mounter.mountMap[m.getMountPoint()]
+	defer func() {
+		if refCount == 0 {
+			delete(m.mounter.mountMap, m.getMountPoint())
+		} else {
+			m.mounter.mountMap[m.getMountPoint()] = refCount
+		}
+	}()
+	if !ok {
+		refCount = 0
+	}
+	if refCount < 0 {
+		logger.Error().Int("refcount", refCount).Msg("During decRef negative refcount encountered")
+		refCount = 0 // to make sure that we don't have negative refcount later
+	}
+	if refCount == 1 {
+		if err := m.doUnmount(ctx); err != nil {
+			return err
+		}
+		refCount--
 	}
 	return nil
 }

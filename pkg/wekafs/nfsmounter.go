@@ -5,10 +5,13 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"sync"
 	"time"
 )
 
 type nfsMounter struct {
+	mountMap              nfsMountsMap
+	lock                  sync.Mutex
 	kMounter              mount.Interface
 	debugPath             string
 	selinuxSupport        *bool
@@ -28,7 +31,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &nfsMounter{debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
+	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
 	mounter.interfaceGroupName = &driver.config.interfaceGroupName
@@ -43,6 +46,7 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 	}
 	uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
 	wMount := &nfsMount{
+		mounter:            m,
 		kMounter:           m.kMounter,
 		fsName:             fsName,
 		debugPath:          m.debugPath,
