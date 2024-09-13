@@ -24,6 +24,7 @@ type nfsMount struct {
 	mountIpAddress     string
 	interfaceGroupName *string
 	clientGroupName    string
+	protocolVersion    apiclient.NfsVersionString
 }
 
 func (m *nfsMount) getMountPoint() string {
@@ -35,7 +36,7 @@ func (m *nfsMount) getRefCount() int {
 }
 
 func (m *nfsMount) getMountOptions() MountOptions {
-	return m.mountOptions
+	return m.mountOptions.AddOption(fmt.Sprintf("vers=%s", m.protocolVersion.AsOption()))
 }
 
 func (m *nfsMount) getLastUsed() time.Time {
@@ -171,7 +172,7 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 			nodeIP = apiclient.GetNodeIpAddress()
 		}
 
-		if apiClient.EnsureNfsPermissions(ctx, nodeIP, m.fsName, m.clientGroupName) != nil {
+		if apiClient.EnsureNfsPermissions(ctx, nodeIP, m.fsName, apiclient.NfsVersionV4, m.clientGroupName) != nil {
 			logger.Error().Msg("Failed to ensure NFS permissions")
 			return errors.New("failed to ensure NFS permissions")
 		}

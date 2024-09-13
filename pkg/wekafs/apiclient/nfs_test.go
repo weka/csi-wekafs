@@ -251,7 +251,7 @@ func TestNfsEnsureNfsPermissions(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
 
 	// Test EnsureNfsPermission
-	err := apiClient.EnsureNfsPermissions(context.Background(), "172.16.5.147", "default", NfsClientGroupName)
+	err := apiClient.EnsureNfsPermissions(context.Background(), "172.16.5.147", "default", NfsVersionV4, NfsClientGroupName)
 	assert.NoError(t, err)
 }
 
