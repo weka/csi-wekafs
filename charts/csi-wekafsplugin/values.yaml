@@ -5,26 +5,29 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.4.1
+csiDriverVersion: &csiDriverVersion 2.4.2-SNAPSHOT.99.90161ea
 images:
   # -- CSI liveness probe sidecar image URL
-  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.12.0
+  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.14.0
   # -- CSI attacher sidecar image URL
-  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.5.0
+  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.7.0
   # -- CSI provisioner sidecar image URL
-  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v4.0.0
+  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v5.1.0
   # -- CSI registrar sidercar
-  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0
+  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
   # -- CSI resizer sidecar image URL
-  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.9.3
+  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.12.0
   # -- CSI snapshotter sidecar image URL
-  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v6.3.3
+  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.1.0
   # -- CSI nodeinfo sidecar image URL, used for reading node metadata
-  nodeinfo: quay.io/weka.io/kubectl-sidecar:v1.29.2-1
+  nodeinfo: quay.io/weka.io/csi-wekafs
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
   csidriverTag: *csiDriverVersion
+# -- image pull secret required for image download. Must have permissions to access all images above.
+#    Should be used in case of private registry that requires authentication
+imagePullSecret: ""
 # -- Tolerations for all CSI driver components
 globalPluginTolerations: &globalPluginTolerations
   - key: node-role.kubernetes.io/master
@@ -96,18 +99,20 @@ kubeletPath: "/var/lib/kubelet"
 metrics:
   # -- Enable Prometheus Metrics
   enabled: true
-  # -- Metrics port
-  port: 9090
+  # -- Metrics port for Controller Server
+  controllerPort: 9090
   # -- Provisioner metrics port
   provisionerPort: 9091
   # -- Resizer metrics port
   resizerPort: 9092
   # -- Snapshotter metrics port
   snapshotterPort: 9093
+  # -- Metrics port for Node Serer
+  nodePort: 9094
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
-# -- Set to true to use host networking
+# -- Set to true to use host networking. Will be always set to true when using NFS mount protocol
 hostNetwork: false
 pluginConfig:
   # -- CSI Driver support for fsGroupPolicy, may be either "File" or "None". Default is "File"
@@ -140,3 +145,15 @@ pluginConfig:
     snapshotVolumesWithoutQuotaEnforcement: false
   mutuallyExclusiveMountOptions:
     - "readcache,writecache,coherent,forcedirect"
+    - "sync,async"
+  mountProtocol:
+    # -- Use NFS transport for mounting Weka filesystems, off by default
+    useNfs: false
+    # -- Allow Failback to NFS transport if Weka client fails to mount filesystem using native protocol
+    allowNfsFailback: false
+    # -- Specify name of NFS interface group to use for mounting Weka filesystems. If not set, first NFS interface group will be used
+    interfaceGroupName: ""
+    # -- Specify existing client group name for NFS configuration. If not set, "WekaCSIPluginClients" group will be created
+    clientGroupName: ""
+    # -- Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions
+    nfsProtocolVersion: "4.1"

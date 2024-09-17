@@ -1,7 +1,7 @@
 # CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-![Version: 2.4.1](https://img.shields.io/badge/Version-2.4.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.4.1](https://img.shields.io/badge/AppVersion-v2.4.1-informational?style=flat-square)
+![Version: 2.4.2-SNAPSHOT.99.90161ea](https://img.shields.io/badge/Version-2.4.2--SNAPSHOT.99.90161ea-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.4.2-SNAPSHOT.99.90161ea](https://img.shields.io/badge/AppVersion-v2.4.2--SNAPSHOT.99.90161ea-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
 
@@ -15,7 +15,7 @@ https://github.com/weka/csi-wekafs
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
 ## Pre-requisite
-- Kubernetes cluster of version 1.18 or later. Although older versions from 1.13 and up should work, they were not tested
+- Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
 - Access to terminal with `kubectl` installed
 - Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
 
@@ -26,9 +26,10 @@ https://github.com/weka/csi-wekafs
 ## Usage
 - [Deploy an Example application](docs/usage.md)
 - [SELinux Support & Installation Notes](selinux/README.md)
+- [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
 
 ## Additional Documentation
-- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendix/weka-csi-plugin)
+- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
 ## Building the binaries
 If you want to build the driver yourself, you can do so with the following command from the root directory:
@@ -43,16 +44,17 @@ make build
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.4.1"` | CSI driver version |
-| images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.12.0"` | CSI liveness probe sidecar image URL |
-| images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.5.0"` | CSI attacher sidecar image URL |
-| images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v4.0.0"` | CSI provisioner sidecar image URL |
-| images.registrarsidecar | string | `"registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.0"` | CSI registrar sidercar |
-| images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.9.3"` | CSI resizer sidecar image URL |
-| images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v6.3.3"` | CSI snapshotter sidecar image URL |
-| images.nodeinfo | string | `"quay.io/weka.io/kubectl-sidecar:v1.29.2-1"` | CSI nodeinfo sidecar image URL, used for reading node metadata |
+| csiDriverVersion | string | `"2.4.2-SNAPSHOT.99.90161ea"` | CSI driver version |
+| images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.14.0"` | CSI liveness probe sidecar image URL |
+| images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.7.0"` | CSI attacher sidecar image URL |
+| images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.1.0"` | CSI provisioner sidecar image URL |
+| images.registrarsidecar | string | `"registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0"` | CSI registrar sidercar |
+| images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.12.0"` | CSI resizer sidecar image URL |
+| images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.1.0"` | CSI snapshotter sidecar image URL |
+| images.nodeinfo | string | `"quay.io/weka.io/csi-wekafs"` | CSI nodeinfo sidecar image URL, used for reading node metadata |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.4.1"` | CSI driver tag |
+| images.csidriverTag | string | `"2.4.2-SNAPSHOT.99.90161ea"` | CSI driver tag |
+| imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
@@ -76,11 +78,12 @@ make build
 | selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
 | kubeletPath | string | `"/var/lib/kubelet"` | kubelet path, in cases Kubernetes is installed not in default folder |
 | metrics.enabled | bool | `true` | Enable Prometheus Metrics |
-| metrics.port | int | `9090` | Metrics port |
+| metrics.controllerPort | int | `9090` | Metrics port for Controller Server |
 | metrics.provisionerPort | int | `9091` | Provisioner metrics port |
 | metrics.resizerPort | int | `9092` | Resizer metrics port |
 | metrics.snapshotterPort | int | `9093` | Snapshotter metrics port |
-| hostNetwork | bool | `false` | Set to true to use host networking |
+| metrics.nodePort | int | `9094` | Metrics port for Node Serer |
+| hostNetwork | bool | `false` | Set to true to use host networking. Will be always set to true when using NFS mount protocol |
 | pluginConfig.fsGroupPolicy | string | `"File"` | WARNING: Changing this value might require uninstall and re-install of the plugin |
 | pluginConfig.allowInsecureHttps | bool | `false` | Allow insecure HTTPS (skip TLS certificate verification) |
 | pluginConfig.objectNaming.volumePrefix | string | `"csivol-"` | Prefix that will be added to names of Weka cluster filesystems / snapshots assocciated with CSI volume,    must not exceed 7 symbols. |
@@ -91,6 +94,12 @@ make build
 | pluginConfig.allowedOperations.snapshotDirectoryVolumes | bool | `false` | Create snapshots of legacy (dir/v1) volumes. By default disabled.    Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful) |
 | pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement | bool | `false` | Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced |
 | pluginConfig.mutuallyExclusiveMountOptions[0] | string | `"readcache,writecache,coherent,forcedirect"` |  |
+| pluginConfig.mutuallyExclusiveMountOptions[1] | string | `"sync,async"` |  |
+| pluginConfig.mountProtocol.useNfs | bool | `false` | Use NFS transport for mounting Weka filesystems, off by default |
+| pluginConfig.mountProtocol.allowNfsFailback | bool | `false` | Allow Failback to NFS transport if Weka client fails to mount filesystem using native protocol |
+| pluginConfig.mountProtocol.interfaceGroupName | string | `""` | Specify name of NFS interface group to use for mounting Weka filesystems. If not set, first NFS interface group will be used |
+| pluginConfig.mountProtocol.clientGroupName | string | `""` | Specify existing client group name for NFS configuration. If not set, "WekaCSIPluginClients" group will be created |
+| pluginConfig.mountProtocol.nfsProtocolVersion | string | `"4.1"` | Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions |
 
 ----------------------------------------------
 Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)

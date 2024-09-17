@@ -79,10 +79,15 @@ func (ids *identityServer) getConfig() *DriverConfig {
 }
 
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
+	logger := log.Ctx(ctx)
 	isReady := ids.getConfig().isInDevMode() || isWekaInstalled()
 	if !isReady {
-		logger := log.Ctx(ctx)
-		logger.Error().Msg("Weka driver not running on host, not ready to perform operations")
+		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
+			isReady = true
+		}
+	}
+	if !isReady {
+		logger.Error().Msg("Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
 	}
 	return &csi.ProbeResponse{
 		Ready: &wrapperspb.BoolValue{

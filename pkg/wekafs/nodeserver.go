@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -32,6 +33,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -48,7 +50,7 @@ type NodeServer struct {
 	caps              []*csi.NodeServiceCapability
 	nodeID            string
 	maxVolumesPerNode int64
-	mounter           *wekaMounter
+	mounter           AnyMounter
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
@@ -75,7 +77,7 @@ func (ns *NodeServer) getApiStore() *ApiStore {
 	return ns.api
 }
 
-func (ns *NodeServer) getMounter() *wekaMounter {
+func (ns *NodeServer) getMounter() AnyMounter {
 	return ns.mounter
 }
 
@@ -84,16 +86,104 @@ func (ns *NodeServer) NodeExpandVolume(ctx context.Context, request *csi.NodeExp
 	panic("implement me")
 }
 
-//goland:noinspection GoUnusedParameter
-func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, request *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
-	panic("implement me")
+func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+	volumeID := req.GetVolumeId()
+	volumePath := req.GetVolumePath()
+
+	// Validate request fields
+	if volumeID == "" || volumePath == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID and path must be provided")
+	}
+
+	// Check if the volume path exists
+	if ns.getConfig().isInDevMode() {
+		// In dev mode, we don't have the actual Weka mount, so we just check if the path exists
+		if _, err := os.Stat(volumePath); err != nil {
+			return nil, status.Error(codes.NotFound, "Volume path not found")
+		}
+
+	} else {
+		// In production mode, we check if the path is indeed a Weka mount (Either NFS or WekaFS)
+		if !PathIsWekaMount(ctx, volumePath) {
+			return nil, status.Error(codes.NotFound, "Volume path not found")
+		}
+	}
+
+	// Validate Weka volume ID
+	if err := validateVolumeId(volumeID); err != nil {
+		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, "invalid volume ID").Error())
+	}
+
+	stats, err := getVolumeStats(volumePath)
+	if err != nil || stats == nil {
+		return &csi.NodeGetVolumeStatsResponse{
+			Usage: nil,
+			VolumeCondition: &csi.VolumeCondition{
+				Abnormal: true,
+				Message:  "Failed to fetch volume stats for volume",
+			},
+		}, status.Errorf(codes.Internal, "Failed to get stats for volume %s: %v", volumeID, err)
+	}
+	// Prepare response
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Unit:      csi.VolumeUsage_BYTES,
+				Total:     stats.TotalBytes,
+				Used:      stats.UsedBytes,
+				Available: stats.AvailableBytes,
+			},
+			{
+				Unit:      csi.VolumeUsage_INODES,
+				Total:     stats.TotalInodes,
+				Used:      stats.UsedInodes,
+				Available: stats.AvailableInodes,
+			},
+		},
+		VolumeCondition: &csi.VolumeCondition{
+			Abnormal: false,
+			Message:  "volume is healthy",
+		},
+	}, nil
 }
 
-func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter *wekaMounter, config *DriverConfig) *NodeServer {
+type VolumeStats struct {
+	TotalBytes      int64
+	UsedBytes       int64
+	AvailableBytes  int64
+	TotalInodes     int64
+	UsedInodes      int64
+	AvailableInodes int64
+}
+
+// getVolumeStats fetches filesystem statistics for the mounted volume path.
+func getVolumeStats(volumePath string) (volumeStats *VolumeStats, err error) {
+	var stat syscall.Statfs_t
+
+	// Use Statfs to get filesystem statistics for the volume path
+	err = syscall.Statfs(volumePath, &stat)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate capacity, available, and used space in bytes
+	capacityBytes := int64(stat.Blocks) * int64(stat.Bsize)
+	availableBytes := int64(stat.Bavail) * int64(stat.Bsize)
+	usedBytes := capacityBytes - availableBytes
+	inodes := int64(stat.Files)
+	inodesFree := int64(stat.Ffree)
+	inodesUsed := inodes - inodesFree
+	return &VolumeStats{capacityBytes, usedBytes, availableBytes, inodes, inodesUsed, inodesFree}, nil
+}
+
+func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter AnyMounter, config *DriverConfig) *NodeServer {
 	//goland:noinspection GoBoolExpressions
 	return &NodeServer{
 		caps: getNodeServiceCapabilities(
 			[]csi.NodeServiceCapability_RPC_Type{
+				csi.NodeServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
+				csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+				csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
 				//csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
 			},
 		),
@@ -251,9 +341,11 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	err, unmount := volume.MountUnderlyingFS(ctx)
 	if err != nil {
-		unmount()
+		logger.Error().Err(err).Msg("Failed to mount underlying filesystem")
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
+	defer unmount() // unmount the parent mount since there is a bind mount anyway
+
 	fullPath := volume.GetFullPath(ctx)
 
 	targetPathDir := filepath.Dir(targetPath)
@@ -294,10 +386,8 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", innerMountOpts); err != nil {
-		var errList strings.Builder
-		errList.WriteString(err.Error())
-		unmount() // unmount only if mount bind failed
-		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
+		logger.Error().Err(err).Str("full_path", fullPath).Str("target_path", targetPath).Msg("Failed to perform mount")
+		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, err.Error()))
 	}
 	result = "SUCCESS"
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
@@ -314,7 +404,6 @@ func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMe
 func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	op := "NodeUnpublishVolume"
 	result := "FAILURE"
-	volumeID := req.GetVolumeId()
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
@@ -337,12 +426,6 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		return NodeUnpublishVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
 	}
 
-	// Check arguments
-	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns)
-	if err != nil {
-		return &csi.NodeUnpublishVolumeResponse{}, err
-	}
-
 	if len(req.GetTargetPath()) == 0 {
 		return NodeUnpublishVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
 	}
@@ -358,6 +441,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			result = "SUCCESS"
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		} else {
+			logger.Error().Err(err).Msg("Failed to check target path")
 			return NodeUnpublishVolumeError(ctx, codes.Internal, "unexpected situation, please contact support")
 		}
 
@@ -386,11 +470,6 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 	}
 
-	logger.Trace().Str("volume_id", volumeID).Msg("Unmounting")
-	err = volume.UnmountUnderlyingFS(ctx)
-	if err != nil {
-		logger.Error().Str("volume_id", volumeID).Err(err).Msg("Post-unpublish task failed")
-	}
 	result = "SUCCESS"
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

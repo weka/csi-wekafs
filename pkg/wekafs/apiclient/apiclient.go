@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,6 +64,7 @@ type ApiClient struct {
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
 	hostname                   string
+	NfsInterfaceGroups         map[string]*InterfaceGroup
 }
 
 type ApiEndPoint struct {
@@ -89,9 +91,22 @@ func (e *ApiEndPoint) String() string {
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
+	logger := log.Ctx(ctx)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
 	}
+	useCustomCACert := credentials.CaCertificate != ""
+	if useCustomCACert {
+		var caCertPool *x509.CertPool
+		if pool, err := x509.SystemCertPool(); err != nil {
+			caCertPool = x509.NewCertPool()
+		} else {
+			caCertPool = pool
+		}
+		caCertPool.AppendCertsFromPEM([]byte(credentials.CaCertificate))
+		tr.TLSClientConfig.RootCAs = caCertPool
+	}
+
 	a := &ApiClient{
 		Mutex: sync.Mutex{},
 		client: &http.Client{
@@ -105,10 +120,11 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		CompatibilityMap:   &WekaCompatibilityMap{},
 		hostname:           hostname,
 		actualApiEndpoints: make(map[string]*ApiEndPoint),
+		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
 	a.resetDefaultEndpoints(ctx)
 
-	log.Ctx(ctx).Trace().Bool("insecure_skip_verify", allowInsecureHttps).Msg("Creating new API client")
+	logger.Trace().Bool("insecure_skip_verify", allowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
 	return a, nil
 }
@@ -731,21 +747,21 @@ type ApiResponse struct {
 
 // ApiObject generic interface of API object of any type (FileSystem, Quota, etc.)
 type ApiObject interface {
-	GetType() string
-	GetBasePath(a *ApiClient) string
-	GetApiUrl(a *ApiClient) string
-	EQ(other ApiObject) bool
-	getImmutableFields() []string
-	String() string
+	GetType() string                 // returns the type of the object
+	GetBasePath(a *ApiClient) string // returns the base path of objects of this type (plural)
+	GetApiUrl(a *ApiClient) string   // returns the full URL of the object consisting of base path and object UID
+	EQ(other ApiObject) bool         // a way to compare objects and check if they are the same
+	getImmutableFields() []string    // provides a list of fields that are used for comparison in EQ()
+	String() string                  // returns a string representation of the object
 }
 
 // ApiObjectRequest interface that describes a request for an ApiObject CRUD operation
 type ApiObjectRequest interface {
-	getRequiredFields() []string
-	hasRequiredFields() bool
-	getRelatedObject() ApiObject
-	getApiUrl(a *ApiClient) string
-	String() string
+	getRequiredFields() []string   // returns a list of fields that are mandatory for the object for creation
+	hasRequiredFields() bool       // checks if all mandatory fields are filled in
+	getRelatedObject() ApiObject   // returns the type of object that is being requested
+	getApiUrl(a *ApiClient) string // returns the full URL of the object consisting of base path and object UID
+	String() string                // returns a string representation of the object request
 }
 
 type Credentials struct {
@@ -756,6 +772,7 @@ type Credentials struct {
 	Endpoints           []string
 	LocalContainerName  string
 	AutoUpdateEndpoints bool
+	CaCertificate       string
 }
 
 func (c *Credentials) String() string {

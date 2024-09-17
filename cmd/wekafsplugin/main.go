@@ -91,6 +91,11 @@ var (
 	maxConcurrentNodeUnpublishVolumeReqs = flag.Int64("concurrency.nodeUnpublishVolume", 1, "Maximum concurrent NodeUnpublishVolume requests")
 	grpcRequestTimeoutSeconds            = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
 	allowProtocolContainers              = flag.Bool("allowprotocolcontainers", false, "Allow protocol containers to be used for mounting filesystems")
+	allowNfsFailback                     = flag.Bool("allownfsfailback", false, "Allow NFS failback")
+	useNfs                               = flag.Bool("usenfs", false, "Use NFS for mounting volumes")
+	interfaceGroupName                   = flag.String("interfacegroupname", "", "Name of the NFS interface group to use for mounting volumes")
+	clientGroupName                      = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
+	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
 	// Set by the build process
 	version = ""
 )
@@ -217,6 +222,11 @@ func handle() {
 		*maxConcurrentNodeUnpublishVolumeReqs,
 		*grpcRequestTimeoutSeconds,
 		*allowProtocolContainers,
+		*allowNfsFailback,
+		*useNfs,
+		*interfaceGroupName,
+		*clientGroupName,
+		*nfsProtocolVersion,
 	)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)

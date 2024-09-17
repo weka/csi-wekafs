@@ -8,12 +8,15 @@ import (
 )
 
 const (
-	selinuxContext         = "wekafs_csi_volume"
+	selinuxContextWekaFs   = "wekafs_csi_volume_t"
+	selinuxContextNfs      = "nfs_t"
 	MountOptionSyncOnClose = "sync_on_close"
 	MountOptionReadOnly    = "ro"
 	MountOptionWriteCache  = "writecache"
 	MountOptionCoherent    = "coherent"
 	MountOptionReadCache   = "readcache"
+	MountProtocolWekafs    = "wekafs"
+	MountProtocolNfs       = "nfs"
 )
 
 type mountOption struct {
@@ -145,13 +148,65 @@ func (opts MountOptions) Hash() uint32 {
 	return h.Sum32()
 }
 
-func (opts MountOptions) setSelinux(selinuxSupport bool) {
+func (opts MountOptions) AsMapKey() string {
+	ret := opts
+	// TODO: if adding any other version-agnostic options, add them here
+	excludedOpts := []string{MountOptionSyncOnClose}
+	for _, o := range excludedOpts {
+		ret = ret.RemoveOption(o)
+	}
+	return ret.String()
+}
+
+func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 	if selinuxSupport {
-		o := newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s_t:s0\"", selinuxContext))
+		var o mountOption
+		if mountProtocol == MountProtocolWekafs {
+			o = newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s:s0\"", selinuxContextWekaFs))
+		} else if mountProtocol == MountProtocolNfs {
+			o = newMountOptionFromString(fmt.Sprintf("context=\"system_u:object_r:%s:s0\"", selinuxContextNfs))
+		}
 		opts.customOptions[o.option] = o
 	} else {
-		delete(opts.customOptions, "fscontext")
+		if mountProtocol == MountProtocolWekafs {
+			delete(opts.customOptions, "fscontext")
+		}
+		if mountProtocol == MountProtocolNfs {
+			delete(opts.customOptions, "context")
+		}
 	}
+}
+
+func (opts MountOptions) AsNfs() MountOptions {
+	ret := NewMountOptionsFromString("hard,rdirplus")
+	for _, o := range opts.getOpts() {
+		switch o.option {
+		case "writecache":
+			ret.AddOption("async")
+		case "coherent":
+			ret.AddOption("sync")
+		case "forcedirect":
+			ret.AddOption("sync")
+		case "readcache":
+			ret.AddOption("noac")
+		case "dentry_max_age_positive":
+			ret.AddOption(fmt.Sprintf("acdirmax=%s", o.value))
+			ret.AddOption(fmt.Sprintf("acregmax=%s", o.value))
+		case "inode_bits":
+			continue
+		case "verbose":
+			continue
+		case "quiet":
+			continue
+		case "obs_direct":
+			continue
+		case "sync_on_close":
+			ret.AddOption("sync")
+		default:
+			continue
+		}
+	}
+	return ret
 }
 
 func NewMountOptionsFromString(optsString string) MountOptions {

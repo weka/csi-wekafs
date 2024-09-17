@@ -110,6 +110,10 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 	if ok {
 		autoUpdateEndpoints = strings.TrimSpace(strings.TrimSuffix(autoUpdateEndpointsStr, "\n")) == "true"
 	}
+	caCertificate, ok := secrets["caCertificate"]
+	if !ok {
+		caCertificate = ""
+	}
 
 	credentials := apiclient.Credentials{
 		Username:            strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
@@ -119,6 +123,7 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		HttpScheme:          strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
 		LocalContainerName:  localContainerName,
 		AutoUpdateEndpoints: autoUpdateEndpoints,
+		CaCertificate:       caCertificate,
 	}
 	return api.fromCredentials(ctx, credentials, hostname)
 }
@@ -259,8 +264,9 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run() {
+	mounter := driver.NewMounter()
+
 	// Create GRPC servers
-	mounter := newWekaMounter(driver)
 
 	// identity server runs always
 	log.Info().Msg("Loading IdentityServer")
@@ -316,4 +322,22 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
 		return ""
 	}
+}
+
+func (driver *WekaFsDriver) NewMounter() AnyMounter {
+	log.Info().Msg("Configuring Mounter")
+	if driver.config.useNfs {
+		log.Warn().Msg("Enforcing NFS transport due to configuration")
+		return newNfsMounter(driver)
+	}
+	if driver.config.allowNfsFailback && !isWekaInstalled() {
+		if driver.config.isInDevMode() {
+			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
+		} else {
+			log.Warn().Msg("Weka Driver not found. Failing back to NFS transport")
+			return newNfsMounter(driver)
+		}
+	}
+	log.Info().Msg("Enforcing WekaFS transport")
+	return newWekafsMounter(driver)
 }

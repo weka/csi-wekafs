@@ -21,27 +21,27 @@ type innerPathVolGc struct {
 	isRunning  map[string]bool
 	isDeferred map[string]bool
 	sync.Mutex
-	mounter *wekaMounter
+	mounter AnyMounter
 }
 
-func initInnerPathVolumeGc(mounter *wekaMounter) *innerPathVolGc {
+func initInnerPathVolumeGc(mounter AnyMounter) *innerPathVolGc {
 	gc := innerPathVolGc{mounter: mounter}
 	gc.isRunning = make(map[string]bool)
 	gc.isDeferred = make(map[string]bool)
 	return &gc
 }
 
-func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *Volume) {
+func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *Volume) error {
 	op := "triggerGcVolume"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
 	logger.Info().Msg("Triggering garbage collection of volume")
-	gc.moveVolumeToTrash(ctx, volume) // always do it synchronously
+	return gc.moveVolumeToTrash(ctx, volume)
 }
 
-func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume) {
+func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume) error {
 	op := "moveVolumeToTrash"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -54,7 +54,7 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	defer unmount()
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to mount filesystem for GC processing")
-		return
+		return err
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
 	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
@@ -68,6 +68,7 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	if err := os.Rename(fullPath, newPath); err != nil {
 		logger.Error().Err(err).Str("full_path", fullPath).
 			Str("volume_trash_location", volumeTrashLoc).Msg("Failed to move volume contents to volumeTrashLoc")
+		return err
 	}
 	// NOTE: there is a problem of directory leaks here. If the volume innerPath is deeper than /csi-volumes/vol-name,
 	// e.g. if using statically provisioned volume, we move only the deepest directory
@@ -77,6 +78,7 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	// 2024-07-29: apparently seems this is not a real problem since static volumes are not deleted this way
 	//             and dynamic volumes are always created inside the /csi-volumes
 	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Volume contents moved to trash")
+	return nil
 }
 
 func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClient *apiclient.ApiClient) {
