@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+const (
+	dataTransportNfs    DataTransport = "nfs"
+	dataTransportWekafs DataTransport = "wekafs"
+)
+
 type AnyServer interface {
 	getMounter() AnyMounter
 	getApiStore() *ApiStore
@@ -24,12 +29,13 @@ type AnyMounter interface {
 	gcInactiveMounts()
 	schedulePeriodicMountGc()
 	getGarbageCollector() *innerPathVolGc
+	getTransport() DataTransport
 }
 
 type mountsMapPerFs map[string]AnyMount
 type mountsMap map[string]mountsMapPerFs
 type nfsMountsMap map[string]int // we only follow the mountPath and number of references
-
+type DataTransport string
 type UnmountFunc func()
 
 type AnyMount interface {
