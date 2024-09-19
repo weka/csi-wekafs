@@ -41,6 +41,7 @@ const (
 	TopologyKeyNode                  = "topology.wekafs.csi/node"
 	TopologyLabelNode                = "topology.csi.weka.io/node"
 	TopologyLabelWeka                = "topology.csi.weka.io/global"
+	TopologyLabelTransport           = "topology.csi.weka.io/transport"
 	WekaKernelModuleName             = "wekafsgw"
 	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
 )
@@ -564,9 +565,10 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	}()
 	topology := &csi.Topology{
 		Segments: map[string]string{
-			TopologyKeyNode:   ns.nodeID, // required exactly same way as this is how node is accessed by K8s
-			TopologyLabelNode: ns.nodeID,
-			TopologyLabelWeka: "true",
+			TopologyKeyNode:        ns.nodeID, // required exactly same way as this is how node is accessed by K8s
+			TopologyLabelNode:      ns.nodeID,
+			TopologyLabelWeka:      "true",
+			TopologyLabelTransport: string(ns.getMounter().getTransport()),
 		},
 	}
 

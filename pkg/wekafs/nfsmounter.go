@@ -162,3 +162,7 @@ func (m *nfsMounter) schedulePeriodicMountGc() {
 		}
 	}()
 }
+
+func (m *nfsMounter) getTransport() DataTransport {
+	return dataTransportNfs
+}

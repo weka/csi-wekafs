@@ -47,6 +47,24 @@ the Weka CSI Plugin will translate them to NFS alternatives. Unknown or unsuppor
 ### QoS and Performance
 QoS is not supported for NFS transport. Performance is limited by the NFS protocol and the network configuration.
 
+### Scheduling Workloads by Transport Protocol
+Weka CSI Plugin node server populates the transport protocol in the node topology.
+This allows you to use node affinity rules to force workloads to use WekaFS transport on nodes where the Weka client is installed.
+For example, in hybrid deployments where some nodes have the Weka client installed and some do not, 
+the administrator would prefer storage-intensive workloads to run on nodes with the Weka client installed, while more generic workloads can run on other nodes.
+
+In order to force a workload to a certain transport type, a nodeSelector can be applied to the workload manifest.
+#### An example of a nodeSelector for WekaFS transport:
+```yaml
+nodeSelector:
+  topology.weka.com/transport: wekafs
+```
+#### An example of a nodeSelector for NFS transport:
+```yaml
+nodeSelector:
+  topology.weka.com/transport: nfs
+```
+
 ### Switching from NFS to WekaFS transport
 To switch between NFS and WekaFS transport, you need to:
 1. Install the Weka client on Kubernetes node
