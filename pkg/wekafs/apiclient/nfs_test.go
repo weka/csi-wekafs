@@ -16,7 +16,7 @@ var fsName string
 var client *ApiClient
 
 func TestMain(m *testing.M) {
-	flag.StringVar(&endpoint, "api-endpoint", "vm49-1723969301909816-0.lan:14000", "API endpoint for tests")
+	flag.StringVar(&endpoint, "api-endpoint", "vm125-1726039130891528-0.lan:14000", "API endpoint for tests")
 	flag.StringVar(&creds.Username, "api-username", "admin", "API username for tests")
 	flag.StringVar(&creds.Password, "api-password", "AAbb1234", "API password for tests")
 	flag.StringVar(&creds.Organization, "api-org", "Root", "API org for tests")

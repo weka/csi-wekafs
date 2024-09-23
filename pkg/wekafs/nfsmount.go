@@ -22,7 +22,7 @@ type nfsMount struct {
 	mountOptions       MountOptions
 	lastUsed           time.Time
 	mountIpAddress     string
-	interfaceGroupName *string
+	interfaceGroupName string
 	clientGroupName    string
 	protocolVersion    apiclient.NfsVersionString
 }
