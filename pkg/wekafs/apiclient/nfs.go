@@ -172,7 +172,6 @@ type NfsPermissionCreateRequest struct {
 	ObsDirect         *bool                   `json:"obs_direct,omitempty"`
 	SupportedVersions *[]string               `json:"supported_versions,omitempty"`
 	Priority          int                     `json:"priority"`
-	EnableAuthTypes   []NfsAuthType           `json:"enable_auth_types"`
 }
 
 func (qc *NfsPermissionCreateRequest) getApiUrl(a *ApiClient) string {
