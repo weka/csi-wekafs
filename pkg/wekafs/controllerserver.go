@@ -459,7 +459,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 
 	ok, err := volume.Exists(ctx)
 	if err != nil {
-		return ExpandVolumeError(ctx, codes.Internal, err.Error())
+		return ExpandVolumeError(ctx, codes.NotFound, err.Error())
 	}
 	if !ok {
 		return ExpandVolumeError(ctx, codes.Internal, "Volume does not exist")
