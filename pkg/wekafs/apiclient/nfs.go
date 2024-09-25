@@ -800,7 +800,11 @@ func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName 
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	logger.Debug().Str("ip", ip).Str("filesystem", fsName).Str("client_group_name", clientGroupName).Msg("Ensuring NFS permissions")
+	clientGroupCaption := clientGroupName
+	if clientGroupCaption == "" {
+		clientGroupCaption = NfsClientGroupName
+	}
+	logger.Debug().Str("ip", ip).Str("filesystem", fsName).Str("client_group_name", clientGroupCaption).Msg("Ensuring NFS permissions")
 	// Ensure client group
 	logger.Trace().Msg("Ensuring CSI Plugin NFS Client Group")
 	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)

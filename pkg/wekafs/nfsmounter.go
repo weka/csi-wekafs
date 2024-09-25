@@ -117,16 +117,20 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 }
 
 func (m *nfsMounter) LogActiveMounts() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	if len(m.mountMap) > 0 {
 		count := 0
 		for refIndex := range m.mountMap {
 			if mapEntry, ok := m.mountMap[refIndex]; ok {
 				parts := strings.Split(refIndex, "^")
+				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int("refcount", mapEntry).Logger()
+
 				if mapEntry > 0 {
-					log.Trace().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Int("refcount", mapEntry).Msg("Mount is active")
+					logger.Trace().Msg("Mount is active")
 					count++
 				} else {
-					log.Trace().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Int("refcount", mapEntry).Msg("Mount is not active")
+					logger.Trace().Msg("Mount is not active")
 				}
 
 			}
@@ -136,26 +140,20 @@ func (m *nfsMounter) LogActiveMounts() {
 }
 
 func (m *nfsMounter) gcInactiveMounts() {
-	//if len(m.mountMap) > 0 {
-	//	for fsName := range m.mountMap {
-	//		for uniqueId, wekaMount := range m.mountMap[fsName] {
-	//			if wekaMount.getRefCount() == 0 {
-	//				if wekaMount.getLastUsed().Before(time.Now().Add(-inactiveMountGcPeriod)) {
-	//					m.lock.Lock()
-	//					if wekaMount.getRefCount() == 0 {
-	//						log.Trace().Str("filesystem", fsName).Strs("mount_options", wekaMount.getMountOptions().Strings()).
-	//							Time("last_used", wekaMount.getLastUsed()).Msg("Removing stale mount from map")
-	//						delete(m.mountMap[fsName], uniqueId)
-	//					}
-	//					m.lock.Unlock()
-	//				}
-	//			}
-	//		}
-	//		if len(m.mountMap[fsName]) == 0 {
-	//			delete(m.mountMap, fsName)
-	//		}
-	//	}
-	//}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if len(m.mountMap) > 0 {
+		for refIndex := range m.mountMap {
+			if mapEntry, ok := m.mountMap[refIndex]; ok {
+				if mapEntry == 0 {
+					parts := strings.Split(refIndex, "^")
+					logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Logger()
+					logger.Trace().Msg("Removing inactive mount from map")
+					delete(m.mountMap, refIndex)
+				}
+			}
+		}
+	}
 }
 
 func (m *nfsMounter) schedulePeriodicMountGc() {
