@@ -48,7 +48,11 @@ func (m *nfsMount) isInDevMode() bool {
 }
 
 func (m *nfsMount) isMounted() bool {
-	return PathExists(m.getMountPoint()) && PathIsWekaMount(context.Background(), m.mountPoint)
+	return PathExists(m.getMountPoint()) && PathIsWekaMount(context.Background(), m.getMountPoint())
+}
+
+func (m *nfsMount) getRefcountIdx() string {
+	return m.getMountPoint() + "^" + m.mountOptions.AsNfs().String()
 }
 
 func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
@@ -57,9 +61,10 @@ func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) e
 		logger.Error().Msg("Mounter is nil")
 		return errors.New("mounter is nil")
 	}
+
 	m.mounter.lock.Lock()
 	defer m.mounter.lock.Unlock()
-	refCount, ok := m.mounter.mountMap[m.getMountPoint()]
+	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
 	if !ok {
 		refCount = 0
 	}
@@ -67,17 +72,22 @@ func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) e
 		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
 			return err
 		}
-	} else if !m.isMounted() {
+	}
+	if refCount > 0 && !m.isMounted() {
 		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", refCount).Msg("Mount not exists although should!")
 		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
 			return err
 		}
-
 	}
 	refCount++
-	m.mounter.mountMap[m.getMountPoint()] = refCount
+	m.mounter.mountMap[m.getRefcountIdx()] = refCount
 
-	logger.Trace().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount increased")
+	logger.Trace().
+		Int("refcount", refCount).
+		Strs("mount_options", m.getMountOptions().Strings()).
+		Str("filesystem_name", m.fsName).
+		Str("mount_point", m.getMountPoint()).
+		Msg("RefCount increased")
 	return nil
 }
 
@@ -89,18 +99,11 @@ func (m *nfsMount) decRef(ctx context.Context) error {
 	}
 	m.mounter.lock.Lock()
 	defer m.mounter.lock.Unlock()
-	refCount, ok := m.mounter.mountMap[m.getMountPoint()]
-	defer func() {
-		if refCount == 0 {
-			delete(m.mounter.mountMap, m.getMountPoint())
-		} else {
-			m.mounter.mountMap[m.getMountPoint()] = refCount
-		}
-	}()
+	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
 	if !ok {
 		refCount = 0
 	}
-	if refCount < 0 {
+	if refCount <= 0 {
 		logger.Error().Int("refcount", refCount).Msg("During decRef negative refcount encountered")
 		refCount = 0 // to make sure that we don't have negative refcount later
 	}
@@ -109,6 +112,10 @@ func (m *nfsMount) decRef(ctx context.Context) error {
 			return err
 		}
 		refCount--
+	}
+	m.mounter.mountMap[m.getRefcountIdx()] = refCount
+	if refCount == 0 {
+		delete(m.mounter.mountMap, m.getMountPoint())
 	}
 	return nil
 }
@@ -132,6 +139,12 @@ func (m *nfsMount) doUnmount(ctx context.Context) error {
 		logger.Error().Err(err).Msg("Failed to unmount")
 	} else {
 		logger.Trace().Msg("Unmounted successfully")
+		if err := os.Remove(m.getMountPoint()); err != nil {
+			logger.Error().Err(err).Msg("Failed to remove mount point")
+			return err
+		} else {
+			logger.Trace().Msg("Removed mount point successfully")
+		}
 	}
 	return err
 }
@@ -156,11 +169,6 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 		return errors.New("no API client for mount, cannot do NFS mount")
 	}
 
-	if err := m.ensureMountIpAddress(ctx, apiClient); err != nil {
-		logger.Error().Err(err).Msg("Failed to get mount IP address")
-		return err
-	}
-
 	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 		return err
 	}
@@ -181,6 +189,7 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 		logger.Trace().
 			Strs("mount_options", m.getMountOptions().Strings()).
 			Str("mount_target", mountTarget).
+			Str("mount_point", m.getMountPoint()).
 			Str("mount_ip_address", m.mountIpAddress).
 			Msg("Performing mount")
 

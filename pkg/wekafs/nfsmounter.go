@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"strings"
 	"sync"
 	"time"
 )
@@ -75,7 +76,12 @@ func (m *nfsMounter) mountWithOptions(ctx context.Context, fsName string, mountO
 	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	mountOptions = mountOptions.AsNfs()
 	mountOptions.Merge(mountOptions, m.exclusiveMountOptions)
-	mountObj := m.NewMount(fsName, mountOptions)
+	mountObj := m.NewMount(fsName, mountOptions).(*nfsMount)
+
+	if err := mountObj.ensureMountIpAddress(ctx, apiClient); err != nil {
+		return "", err, func() {}
+	}
+
 	mountErr := mountObj.incRef(ctx, apiClient)
 
 	if mountErr != nil {
@@ -98,7 +104,7 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	options = options.AsNfs()
 	options.Merge(options, m.exclusiveMountOptions)
-	mnt := m.NewMount(fsName, options)
+	mnt := m.NewMount(fsName, options).(*nfsMount)
 	// since we are not aware of the IP address of the mount, we need to find the mount point by listing the mounts
 	err := mnt.locateMountIP()
 	if err != nil {
@@ -111,22 +117,22 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 }
 
 func (m *nfsMounter) LogActiveMounts() {
-	//if len(m.mountMap) > 0 {
-	//	count := 0
-	//	for fsName := range m.mountMap {
-	//		for mnt := range m.mountMap[fsName] {
-	//			mapEntry := m.mountMap[fsName][mnt]
-	//			if mapEntry.getRefCount() > 0 {
-	//				log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.getRefCount()).Strs("mount_options", mapEntry.getMountOptions().Strings()).Msg("Mount is active")
-	//				count++
-	//			} else {
-	//				log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.getRefCount()).Strs("mount_options", mapEntry.getMountOptions().Strings()).Msg("Mount is not active")
-	//			}
-	//
-	//		}
-	//	}
-	//	log.Debug().Int("total", len(m.mountMap)).Int("active", count).Msg("Periodic checkup on mount map")
-	//}
+	if len(m.mountMap) > 0 {
+		count := 0
+		for refIndex := range m.mountMap {
+			if mapEntry, ok := m.mountMap[refIndex]; ok {
+				parts := strings.Split(refIndex, "^")
+				if mapEntry > 0 {
+					log.Trace().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Int("refcount", mapEntry).Msg("Mount is active")
+					count++
+				} else {
+					log.Trace().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Int("refcount", mapEntry).Msg("Mount is not active")
+				}
+
+			}
+		}
+		log.Debug().Int("total", len(m.mountMap)).Int("active", count).Msg("Periodic checkup on mount map")
+	}
 }
 
 func (m *nfsMounter) gcInactiveMounts() {

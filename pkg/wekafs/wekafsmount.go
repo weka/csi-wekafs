@@ -100,6 +100,12 @@ func (m *wekafsMount) doUnmount(ctx context.Context) error {
 		logger.Error().Err(err).Msg("Failed to unmount")
 	} else {
 		logger.Trace().Msg("Unmounted successfully")
+		if err := os.Remove(m.getMountPoint()); err != nil {
+			logger.Error().Err(err).Msg("Failed to remove mount point")
+			return err
+		} else {
+			logger.Trace().Msg("Removed mount point successfully")
+		}
 	}
 	return err
 }
@@ -179,8 +185,4 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 
 		return m.kMounter.Mount(fakePath, m.getMountPoint(), "", []string{"bind"})
 	}
-}
-
-func (m *wekafsMount) locateMountIP() error {
-	return nil
 }
