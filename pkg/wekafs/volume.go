@@ -59,6 +59,7 @@ type Volume struct {
 	server AnyServer
 }
 
+//goland:noinspection GoUnusedParameter
 func (v *Volume) getCsiContentSource(ctx context.Context) *csi.VolumeContentSource {
 	if v.srcVolume != nil {
 		return &csi.VolumeContentSource{
@@ -103,10 +104,12 @@ func (v *Volume) pruneUnsupportedMountOptions(ctx context.Context) {
 	}
 }
 
+//goland:noinspection GoUnusedParameter
 func (v *Volume) setMountOptions(ctx context.Context, mountOptions MountOptions) {
 	v.mountOptions.Merge(mountOptions, v.server.getConfig().mutuallyExclusiveOptions)
 }
 
+//goland:noinspection GoUnusedParameter
 func (v *Volume) getMountOptions(ctx context.Context) MountOptions {
 	return v.mountOptions
 }
@@ -643,6 +646,8 @@ func (v *Volume) getInnerPath() string {
 }
 
 // GetFullPath returns a full path on which volume is accessible including snapshot subdir and inner path
+//
+//goland:noinspection GoUnusedParameter
 func (v *Volume) GetFullPath(ctx context.Context) string {
 	mountParts := []string{v.mountPath}
 	if v.isOnSnapshot() {
@@ -1513,6 +1518,8 @@ func (v *Volume) waitForSnapshotDeletion(ctx context.Context, logger zerolog.Log
 
 // ObtainRequestParams takes additional optional params from storage class params and applies them to Volume object
 // those params then need to be set during actual volume creation via UpdateParams function
+//
+//goland:noinspection GoUnusedParameter
 func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]string) error {
 	// set explicit mount options if were passed in storageclass
 	if val, ok := params["mountOptions"]; ok {
@@ -1578,10 +1585,10 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, er
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	s, err := NewSnapshotFromVolumeCreate(ctx, name, v, v.apiClient, v.server)
-	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("snapshot_id", s.GetId()).Logger()
 	if err != nil {
 		return &Snapshot{}, err
 	}
+	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("snapshot_id", s.GetId()).Logger()
 	// check if snapshot with this name already exists
 	exists, err := s.Exists(ctx)
 	if err != nil {

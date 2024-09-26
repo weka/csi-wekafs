@@ -34,6 +34,7 @@ func (n NfsVersionString) AsWeka() NfsVersionString {
 
 type NfsAuthType string
 
+//goland:noinspection GoUnusedConst
 const (
 	NfsPermissionTypeReadWrite  NfsPermissionType       = "RW"
 	NfsPermissionTypeReadOnly   NfsPermissionType       = "RO"
@@ -76,13 +77,14 @@ func (n *NfsPermission) GetType() string {
 	return "nfsPermission"
 }
 
+//goland:noinspection GoUnusedParameter
 func (n *NfsPermission) GetBasePath(a *ApiClient) string {
 	return "nfs/permissions"
 }
 
 func (n *NfsPermission) GetApiUrl(a *ApiClient) string {
 	url, err := urlutil.URLJoin(n.GetBasePath(a), n.Uid.String())
-	if err != nil {
+	if err == nil {
 		return url
 	}
 	return ""
@@ -104,16 +106,6 @@ func (n *NfsPermission) IsEligibleForCsi() bool {
 	return n.RootSquashing == false && slices.Contains(n.SupportedVersions, "V4") &&
 		n.PermissionType == NfsPermissionTypeReadWrite &&
 		n.SquashMode == NfsPermissionSquashModeNone
-}
-
-func (a *ApiClient) GetNfsPermissions(ctx context.Context, fsUid uuid.UUID, permissions *[]NfsPermission) error {
-	n := &NfsPermission{}
-
-	err := a.Get(ctx, n.GetBasePath(a), nil, permissions)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (a *ApiClient) FindNfsPermissionsByFilter(ctx context.Context, query *NfsPermission, resultSet *[]NfsPermission) error {
@@ -333,6 +325,7 @@ func (g *NfsClientGroup) GetType() string {
 	return "clientGroup"
 }
 
+//goland:noinspection GoUnusedParameter
 func (g *NfsClientGroup) GetBasePath(a *ApiClient) string {
 	return "nfs/clientGroups"
 }

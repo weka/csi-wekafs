@@ -282,6 +282,7 @@ func (fs *FileSystem) GetType() string {
 	return "filesystem"
 }
 
+//goland:noinspection GoUnusedParameter
 func (fs *FileSystem) GetBasePath(a *ApiClient) string {
 	return "fileSystems"
 }

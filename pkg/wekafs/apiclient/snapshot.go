@@ -168,6 +168,7 @@ func (snap *Snapshot) GetType() string {
 	return "snapshot"
 }
 
+//goland:noinspection GoUnusedParameter
 func (snap *Snapshot) GetBasePath(a *ApiClient) string {
 	return "snapshots"
 }
