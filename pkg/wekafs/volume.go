@@ -1364,7 +1364,8 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 	logger.Debug().Str("filesystem", v.FilesystemName).Msg("Deleting filesystem")
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
-		return status.Errorf(codes.Internal, "Failed to delete filesystem %s", v.FilesystemName)
+		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to fetch filesystem for deletion")
+		return status.Errorf(codes.Internal, "Failed to fetch filesystem for deletion %s", v.FilesystemName)
 	}
 	if fsObj == nil || fsObj.Uid == uuid.Nil {
 		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Apparently filesystem not exists, returning OK")
@@ -1372,6 +1373,14 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		return nil
 	}
 	if !fsObj.IsRemoving { // if filesystem is already removing, just wait
+		if v.server.getMounter().getTransport() == dataTransportNfs {
+			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
+			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
+			if err != nil {
+				logger.Error().Str("filesystem", v.FilesystemName).Err(err).Msg("Failed to remove NFS permissions, cannot delete filesystem")
+				return err
+			}
+		}
 		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")
 		fsd := &apiclient.FileSystemDeleteRequest{Uid: fsObj.Uid}
 		err = v.apiClient.DeleteFileSystem(ctx, fsd)
