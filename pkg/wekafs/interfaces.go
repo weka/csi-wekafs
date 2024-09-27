@@ -49,5 +49,4 @@ type AnyMount interface {
 	getMountPoint() string
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
-	locateMountIP() error // used only for NFS
 }
