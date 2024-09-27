@@ -156,7 +156,7 @@ func GetNodeIpAddressByRouting(targetHost string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Set a deadline for the connection
 	err = conn.SetDeadline(time.Now().Add(1 * time.Second))

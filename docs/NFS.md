@@ -164,7 +164,7 @@ This is done by setting the `pluginConfig.mountProtocol.allowNfsFailback` parame
 The parameter `pluginConfig.mountProtocol.useNfs` enforces the use of NFS transport even if Weka client is installed on the node, 
 and recommended to be set to `true` ONLY for testing.
 
-Follow the [Helm installation instructions](./charts/csi-wekafsplugin/README.md) to install the Weka CSI Plugin. 
+Follow the [Helm installation instructions](../charts/csi-wekafsplugin/README.md) to install the Weka CSI Plugin. 
 Most of the installation steps are the same as for the native WekaFS driver, however, additional parameters should be set in the `values.yaml` file,
 or passed as command line arguments to the `helm install` command.
 

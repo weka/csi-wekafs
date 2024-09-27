@@ -35,6 +35,7 @@ const (
 	xattrVolumeName = "user.weka_k8s_volname"
 )
 
+//goland:noinspection GoExportedFuncWithUnexportedType
 func NewNonBlockingGRPCServer(mode CsiPluginMode) *nonBlockingGRPCServer {
 	return &nonBlockingGRPCServer{
 		csiMmode: mode,

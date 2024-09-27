@@ -41,6 +41,7 @@ func (i *InterfaceGroup) GetType() string {
 	return "interfaceGroup"
 }
 
+//goland:noinspection GoUnusedParameter
 func (i *InterfaceGroup) GetBasePath(client *ApiClient) string {
 	return "interfaceGroups"
 }
