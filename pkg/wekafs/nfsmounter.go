@@ -17,7 +17,7 @@ type nfsMounter struct {
 	debugPath             string
 	selinuxSupport        *bool
 	gc                    *innerPathVolGc
-	interfaceGroupName    *string
+	interfaceGroupName    string
 	clientGroupName       string
 	nfsProtocolVersion    string
 	exclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -36,7 +36,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
-	mounter.interfaceGroupName = &driver.config.interfaceGroupName
+	mounter.interfaceGroupName = driver.config.interfaceGroupName
 	mounter.clientGroupName = driver.config.clientGroupName
 	mounter.nfsProtocolVersion = driver.config.nfsProtocolVersion
 
