@@ -1,4 +1,4 @@
-filesystemName: default
+filesystemName: snapvolFilesystem
 permissions: "0775"
 ownerUid: "1001"
 ownerGid: "1002"

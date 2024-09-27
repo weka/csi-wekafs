@@ -222,6 +222,9 @@ func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsN
 	if err != nil {
 		logger.Error().Err(err).Str("filesystem", fsName).Msg("Failed to list NFS permissions")
 	}
+	if len(*permissions) > 0 {
+		logger.Debug().Int("permissions", len(*permissions)).Str("filesystem", fsName).Msg("Found stale NFS permissions, deleting")
+	}
 	for _, p := range *permissions {
 		err = a.DeleteNfsPermission(ctx, &NfsPermissionDeleteRequest{Uid: p.Uid})
 		if err != nil {

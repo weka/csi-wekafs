@@ -33,6 +33,22 @@ services:
     privileged: true
     ports:
       - "9004:9090"
+  plugin_controller_nfs:
+    build: .
+    command: wekafsplugin -nodeid 1 -v 9 --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/controller-nfs.sock --debugpath=/tmp/weka-csi-test/filesystems --csimode=controller -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -alwaysallowsnapshotvolumes -usenfs
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    privileged: true
+    ports:
+      - "9005:9090"
+  plugin_node_nfs:
+    build: .
+    command: wekafsplugin -nodeid 1 -v 9 --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/node.sock --debugpath=/tmp/weka-csi-test/filesystems --csimode=node -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes  -alwaysallowsnapshotvolumes -usenfs
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    privileged: true
+    ports:
+      - "9006:9090"
   sanity:
     build: .
     command: run_sanity

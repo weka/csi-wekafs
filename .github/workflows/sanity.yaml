@@ -54,11 +54,21 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
       - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
-          SANITY_FUNCTION: directory_volume_and_snapshots 
+          SANITY_FUNCTION: directory_volume_and_snapshots
+
+  directory_volume_and_snapshots_nfs:
+    if: success() || failure()
+    needs: directory_volume_and_snapshots
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - run: docker-compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: directory_volume_and_snapshots_nfs
 
   snaphot_volumes_with_2nd_level_shapshots:
     if: success() || failure()
-    needs: directory_volume_and_snapshots
+    needs: directory_volume_and_snapshots_nfs
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
@@ -66,12 +76,32 @@ jobs:
         env:
           SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots  
 
+  snaphot_volumes_with_2nd_level_shapshots_nfs:
+      if: success() || failure()
+      needs: snaphot_volumes_with_2nd_level_shapshots
+      runs-on: self-hosted
+      steps:
+        - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        - run: docker-compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+          env:
+            SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots_nfs
+
   filesystem_volumes:
     if: success() || failure()
-    needs: snaphot_volumes_with_2nd_level_shapshots
+    needs: snaphot_volumes_with_2nd_level_shapshots_nfs
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
       - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: filesystem_volumes 
+
+  filesystem_volumes_nfs:
+    if: success() || failure()
+    needs: filesystem_volumes
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+      - run: docker-compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: filesystem_volumes_nfs
