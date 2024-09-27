@@ -773,6 +773,7 @@ type Credentials struct {
 	LocalContainerName  string
 	AutoUpdateEndpoints bool
 	CaCertificate       string
+	NfsTargetIPs        []string
 }
 
 func (c *Credentials) String() string {

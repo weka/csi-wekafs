@@ -144,6 +144,16 @@ The Weka CSI Plugin requires AND will set the following NFS permissions on the W
 > Hence, it is **highly recommended** not creating additional permissions for the same filesystem 
 > Also, if multiple client groups are used, it is highly recommended to make sure that IP addresses are not overlapping between client groups. 
 
+## WEKA Cluster Preparation
+Before using the Weka CSI Plugin with NFS transport, the Weka cluster must be prepared for NFS access.
+This includes configuring the NFS protocol on the Weka cluster, creating an NFS interface group, and configuring at least 1 Group IP address
+
+Alternatively, in cloud deployments where setting a Group IP address is not possible, the Weka server IP addresses can be used instead.
+In such case, the IP addresses may be set via the API secret and will be used instead of the Group IP addresses.
+
+This can be set up by providing `nfsTargetIps` parameter in the API secret. Refer to the [API secret example](../examples/common/csi-wekafs-api-secret.yaml) for more information.
+> **WARNING:** Using an NFS load balancer that forwards NFS connection to multiple Weka servers is not supported at this moment.
+
 ## Installation
 By default, Weka CSI Plugin components will not start unless Weka driver is not detected on Kubernetes node.
 This is to prevent a potential misconfiguration where volumes are attempted to be provisioned or published on node while no Weka client is installed.

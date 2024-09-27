@@ -188,6 +188,14 @@ func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context, name string) *Inte
 // GetNfsMountIp returns the IP address of the NFS interface group to be used for NFS mount
 // TODO: need to do it much more sophisticated way to distribute load
 func (a *ApiClient) GetNfsMountIp(ctx context.Context, interfaceGroupName string) (string, error) {
+	// if override is set, use it
+	if len(a.Credentials.NfsTargetIPs) > 0 {
+		ips := a.Credentials.NfsTargetIPs
+		idx := rand.Intn(len(ips))
+		ip := ips[idx]
+		return ip, nil
+	}
+
 	ig := a.GetNfsInterfaceGroup(ctx, interfaceGroupName)
 	if ig == nil {
 		return "", errors.New("no NFS interface group found")
