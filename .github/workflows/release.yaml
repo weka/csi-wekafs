@@ -83,6 +83,26 @@ jobs:
           minor-identifier: /feat(ure)*:/
           major-identifier: /breaking:/
 
+      - name: create-jira-release-string
+        id: create_jira_release_string
+        run: echo "jira_release_string=$(echo -n ${{ steps.version.outputs.version }} | sed -e 's/v/V/g')" >> $GITHUB_OUTPUT
+      - name: calculate-jira-ticket-ids
+        id: calculate_jira_ticket_ids
+        run: |
+          echo "Calculating JIRA ticket IDs"
+          JIRA_TICKET_IDS=$(gh release view ${{inputs.draftTag}} --json body | jq -r .body | grep CSI- | sed 's/.*\(CSI-[0-9]*\).*/\1/g'| sort -u | tr '\n' ',' | sed 's/,$//g') >> $GITHUB_OUTPUT
+      - name: jira-release-action
+        uses: charpi/jira-release-actions@v1.0.2
+        with:
+          email: ${{ secrets.JIRA_USER_EMAIL }}
+          api_token: ${{ secrets.JIRA_API_TOKEN }}
+          subdomain: wekaio
+          jira_project: CSI
+          release_name: ${{ steps.create_jira_release_string.outputs.jira_release_string }}
+          create: true
+          dry_run: true
+          ticket_ids: ${{ steps.calculate_jira_ticket_ids.outputs.jira_ticket_ids }}
+
       - name: Set package version
         id: set_version
         env:
