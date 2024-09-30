@@ -214,6 +214,31 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 	return nil
 }
 
+func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsName string) error {
+	logger := log.Ctx(ctx)
+	logger.Trace().Str("filesystem", fsName).Msg("Ensuring no NFS permissions for filesystem")
+	permissions := &[]NfsPermission{}
+	err := a.FindNfsPermissionsByFilesystem(ctx, fsName, permissions)
+	if err != nil {
+		logger.Error().Err(err).Str("filesystem", fsName).Msg("Failed to list NFS permissions")
+	}
+	if len(*permissions) > 0 {
+		logger.Debug().Int("permissions", len(*permissions)).Str("filesystem", fsName).Msg("Found stale NFS permissions, deleting")
+	}
+	for _, p := range *permissions {
+		err = a.DeleteNfsPermission(ctx, &NfsPermissionDeleteRequest{Uid: p.Uid})
+		if err != nil {
+			logger.Error().Err(err).Str("permission", p.Uid.String()).Str("filesystem", p.Filesystem).Str("client_group", p.Group).Msg("Failed to delete NFS permission")
+			return err
+		}
+	}
+	if len(*permissions) > 0 {
+		time.Sleep(time.Second * 5) // wait for NFS permissions reconfiguration
+		logger.Trace().Str("filesystem", fsName).Msg("Deleted NFS permissions")
+	}
+	return nil
+}
+
 func (a *ApiClient) GetFileSystemMountToken(ctx context.Context, r *FileSystemMountTokenRequest, token *FileSystemMountToken) error {
 	op := "GetFileSystemMountToken"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
@@ -260,6 +285,7 @@ func (fs *FileSystem) GetType() string {
 	return "filesystem"
 }
 
+//goland:noinspection GoUnusedParameter
 func (fs *FileSystem) GetBasePath(a *ApiClient) string {
 	return "fileSystems"
 }

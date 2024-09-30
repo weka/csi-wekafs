@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-rm -rf /tmp/weka-csi-test/sanity-workspace/
+rm -rf /tmp/weka-csi-test/sanity-workspace
 rm -rf /tmp/weka-csi-test/filesystems
 rm -rf /tmp/csi-test-staging
 
@@ -13,7 +13,7 @@ if \
   csi-sanity -csi.stagingdir /tmp/csi-test-staging \
     --csi.controllerendpoint /tmp/weka-csi-test/controller-no-snaps.sock \
     --csi.endpoint /tmp/weka-csi-test/node-no-snaps.sock \
-    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace/ \
+    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace \
     -ginkgo.reportPassed \
     -ginkgo.failFast \
     -ginkgo.progress \
@@ -37,7 +37,7 @@ if \
     --csi.controllerendpoint /tmp/weka-csi-test/controller-no-snaps.sock \
     --csi.endpoint /tmp/weka-csi-test/node-no-snaps.sock \
     -csi.secrets /test/wekafs-api-secret.yaml \
-    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace/ \
+    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace \
     -ginkgo.seed 0 \
     -ginkgo.failFast \
     -ginkgo.progress \
@@ -60,7 +60,7 @@ if \
     --csi.controllerendpoint /tmp/weka-csi-test/controller-no-snaps.sock \
     --csi.endpoint /tmp/weka-csi-test/node-no-snaps.sock \
     -csi.secrets /test/wekafs-api-secret.yaml \
-    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace/ \
+    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace \
     -csi.testvolumeparameters /test/wekafs-fs.yaml \
     -ginkgo.seed 0 \
     -ginkgo.failFast \
@@ -82,7 +82,7 @@ if \
     --csi.controllerendpoint /tmp/weka-csi-test/controller.sock \
     --csi.endpoint /tmp/weka-csi-test/node.sock \
     -csi.secrets /test/wekafs-api-secret.yaml \
-    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace/ \
+    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace \
     -ginkgo.seed 0 \
     -ginkgo.failFast \
     -ginkgo.progress \
@@ -105,7 +105,7 @@ if \
     --csi.controllerendpoint /tmp/weka-csi-test/controller.sock \
     --csi.endpoint /tmp/weka-csi-test/node.sock \
     -csi.secrets /test/wekafs-api-secret.yaml \
-    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace/ \
+    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace \
     -ginkgo.seed 0 \
     -ginkgo.failFast \
     -ginkgo.progress \
@@ -127,7 +127,7 @@ if \
     --csi.controllerendpoint /tmp/weka-csi-test/controller.sock \
     --csi.endpoint /tmp/weka-csi-test/node.sock \
     -csi.secrets /test/wekafs-api-secret.yaml \
-    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace/ \
+    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace \
     -ginkgo.seed 0 \
     -ginkgo.failFast \
     -ginkgo.progress \

@@ -13,6 +13,7 @@ import (
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type NfsPermissionType string
@@ -33,6 +34,7 @@ func (n NfsVersionString) AsWeka() NfsVersionString {
 
 type NfsAuthType string
 
+//goland:noinspection GoUnusedConst
 const (
 	NfsPermissionTypeReadWrite  NfsPermissionType       = "RW"
 	NfsPermissionTypeReadOnly   NfsPermissionType       = "RO"
@@ -75,13 +77,14 @@ func (n *NfsPermission) GetType() string {
 	return "nfsPermission"
 }
 
+//goland:noinspection GoUnusedParameter
 func (n *NfsPermission) GetBasePath(a *ApiClient) string {
 	return "nfs/permissions"
 }
 
 func (n *NfsPermission) GetApiUrl(a *ApiClient) string {
 	url, err := urlutil.URLJoin(n.GetBasePath(a), n.Uid.String())
-	if err != nil {
+	if err == nil {
 		return url
 	}
 	return ""
@@ -105,16 +108,6 @@ func (n *NfsPermission) IsEligibleForCsi() bool {
 		n.SquashMode == NfsPermissionSquashModeNone
 }
 
-func (a *ApiClient) GetNfsPermissions(ctx context.Context, fsUid uuid.UUID, permissions *[]NfsPermission) error {
-	n := &NfsPermission{}
-
-	err := a.Get(ctx, n.GetBasePath(a), nil, permissions)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (a *ApiClient) FindNfsPermissionsByFilter(ctx context.Context, query *NfsPermission, resultSet *[]NfsPermission) error {
 	op := "FindNfsPermissionsByFilter"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
@@ -128,6 +121,26 @@ func (a *ApiClient) FindNfsPermissionsByFilter(ctx context.Context, query *NfsPe
 	}
 	for _, r := range *ret {
 		if r.EQ(query) {
+			*resultSet = append(*resultSet, r)
+		}
+	}
+	return nil
+}
+
+func (a *ApiClient) FindNfsPermissionsByFilesystem(ctx context.Context, fsName string, resultSet *[]NfsPermission) error {
+	op := "FindNfsPermissionsByFilter"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ret := &[]NfsPermission{}
+	query := &NfsPermission{Filesystem: fsName}
+	q, _ := qs.Values(query)
+	err := a.Get(ctx, query.GetBasePath(a), q, ret)
+	if err != nil {
+		return err
+	}
+	for _, r := range *ret {
+		if r.Filesystem == query.Filesystem {
 			*resultSet = append(*resultSet, r)
 		}
 	}
@@ -172,7 +185,6 @@ type NfsPermissionCreateRequest struct {
 	ObsDirect         *bool                   `json:"obs_direct,omitempty"`
 	SupportedVersions *[]string               `json:"supported_versions,omitempty"`
 	Priority          int                     `json:"priority"`
-	EnableAuthTypes   []NfsAuthType           `json:"enable_auth_types"`
 }
 
 func (qc *NfsPermissionCreateRequest) getApiUrl(a *ApiClient) string {
@@ -200,16 +212,22 @@ func (a *ApiClient) CreateNfsPermission(ctx context.Context, r *NfsPermissionCre
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx).With().Str("nfs_permission", r.String()).Logger()
 	if !r.hasRequiredFields() {
 		return RequestMissingParams
 	}
 	payload, err := json.Marshal(r)
 	if err != nil {
+		logger.Error().Err(err).Msg("Failed to marshal request")
 		return err
 	}
-
+	logger.Trace().Msg("Creating permission")
 	err = a.Post(ctx, r.getRelatedObject().GetBasePath(a), &payload, nil, p)
-	return err
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create NFS permission")
+		return err
+	}
+	return nil
 }
 
 func EnsureNfsPermission(ctx context.Context, fsName string, group string, version NfsVersionString, apiClient *ApiClient) error {
@@ -236,10 +254,64 @@ func EnsureNfsPermission(ctx context.Context, fsName string, group string, versi
 				AnonUid:           65534,
 				SupportedVersions: &[]string{string(NfsVersionV4)},
 			}
-			return apiClient.CreateNfsPermission(ctx, req, perm)
+			if err := apiClient.CreateNfsPermission(ctx, req, perm); err != nil {
+				return err
+			}
+			time.Sleep(5 * time.Second) // wait for the permission to be applied
+			return nil
 		}
 	}
 	return err
+}
+
+type NfsPermissionDeleteRequest struct {
+	Uid uuid.UUID `json:"-"`
+}
+
+func (pd *NfsPermissionDeleteRequest) getApiUrl(a *ApiClient) string {
+	return pd.getRelatedObject().GetApiUrl(a)
+}
+
+func (pd *NfsPermissionDeleteRequest) getRelatedObject() ApiObject {
+	return &NfsPermission{Uid: pd.Uid}
+}
+
+func (pd *NfsPermissionDeleteRequest) getRequiredFields() []string {
+	return []string{"Uid"}
+}
+
+func (pd *NfsPermissionDeleteRequest) hasRequiredFields() bool {
+	return ObjectRequestHasRequiredFields(pd)
+}
+
+func (pd *NfsPermissionDeleteRequest) String() string {
+	return fmt.Sprintln("NfsPermissionDeleteRequest(uid:", pd.Uid)
+}
+
+func (a *ApiClient) DeleteNfsPermission(ctx context.Context, r *NfsPermissionDeleteRequest) error {
+	op := "DeleteNfsPermission"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	if !r.hasRequiredFields() {
+		return RequestMissingParams
+	}
+	apiResponse := &ApiResponse{}
+	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
+	if err != nil {
+		switch t := err.(type) {
+		case *ApiNotFoundError:
+			return ObjectNotFoundError
+		case *ApiBadRequestError:
+			for _, c := range t.ApiResponse.ErrorCodes {
+				if c == "PermissionDoesNotExistException" {
+					return ObjectNotFoundError
+				}
+			}
+		}
+	}
+	time.Sleep(5 * time.Second) // wait for the permission to be removed
+	return nil
 }
 
 type NfsClientGroup struct {
@@ -253,6 +325,7 @@ func (g *NfsClientGroup) GetType() string {
 	return "clientGroup"
 }
 
+//goland:noinspection GoUnusedParameter
 func (g *NfsClientGroup) GetBasePath(a *ApiClient) string {
 	return "nfs/clientGroups"
 }
@@ -727,7 +800,11 @@ func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName 
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	logger.Debug().Str("ip", ip).Str("filesystem", fsName).Str("client_group_name", clientGroupName).Msg("Ensuring NFS permissions")
+	clientGroupCaption := clientGroupName
+	if clientGroupCaption == "" {
+		clientGroupCaption = NfsClientGroupName
+	}
+	logger.Debug().Str("ip", ip).Str("filesystem", fsName).Str("client_group_name", clientGroupCaption).Msg("Ensuring NFS permissions")
 	// Ensure client group
 	logger.Trace().Msg("Ensuring CSI Plugin NFS Client Group")
 	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
@@ -740,6 +817,7 @@ func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName 
 	logger.Trace().Str("ip_address", ip).Msg("Ensuring NFS Client Group Rule for IP")
 	err = a.EnsureNfsClientGroupRuleForIp(ctx, cg, ip)
 	if err != nil {
+		logger.Error().Err(err).Str("ip_address", ip).Msg("Failed to ensure NFS client group rule for IP")
 		return err
 	}
 	// Ensure NFS permission

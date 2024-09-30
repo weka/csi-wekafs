@@ -170,3 +170,7 @@ func (m *wekafsMounter) schedulePeriodicMountGc() {
 		}
 	}()
 }
+
+func (m *wekafsMounter) getTransport() DataTransport {
+	return dataTransportWekafs
+}

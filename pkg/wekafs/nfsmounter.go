@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,7 +18,7 @@ type nfsMounter struct {
 	debugPath             string
 	selinuxSupport        *bool
 	gc                    *innerPathVolGc
-	interfaceGroupName    *string
+	interfaceGroupName    string
 	clientGroupName       string
 	nfsProtocolVersion    string
 	exclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -36,7 +37,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
-	mounter.interfaceGroupName = &driver.config.interfaceGroupName
+	mounter.interfaceGroupName = driver.config.interfaceGroupName
 	mounter.clientGroupName = driver.config.clientGroupName
 	mounter.nfsProtocolVersion = driver.config.nfsProtocolVersion
 
@@ -75,7 +76,12 @@ func (m *nfsMounter) mountWithOptions(ctx context.Context, fsName string, mountO
 	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	mountOptions = mountOptions.AsNfs()
 	mountOptions.Merge(mountOptions, m.exclusiveMountOptions)
-	mountObj := m.NewMount(fsName, mountOptions)
+	mountObj := m.NewMount(fsName, mountOptions).(*nfsMount)
+
+	if err := mountObj.ensureMountIpAddress(ctx, apiClient); err != nil {
+		return "", err, func() {}
+	}
+
 	mountErr := mountObj.incRef(ctx, apiClient)
 
 	if mountErr != nil {
@@ -98,7 +104,7 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	options = options.AsNfs()
 	options.Merge(options, m.exclusiveMountOptions)
-	mnt := m.NewMount(fsName, options)
+	mnt := m.NewMount(fsName, options).(*nfsMount)
 	// since we are not aware of the IP address of the mount, we need to find the mount point by listing the mounts
 	err := mnt.locateMountIP()
 	if err != nil {
@@ -111,45 +117,43 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 }
 
 func (m *nfsMounter) LogActiveMounts() {
-	//if len(m.mountMap) > 0 {
-	//	count := 0
-	//	for fsName := range m.mountMap {
-	//		for mnt := range m.mountMap[fsName] {
-	//			mapEntry := m.mountMap[fsName][mnt]
-	//			if mapEntry.getRefCount() > 0 {
-	//				log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.getRefCount()).Strs("mount_options", mapEntry.getMountOptions().Strings()).Msg("Mount is active")
-	//				count++
-	//			} else {
-	//				log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.getRefCount()).Strs("mount_options", mapEntry.getMountOptions().Strings()).Msg("Mount is not active")
-	//			}
-	//
-	//		}
-	//	}
-	//	log.Debug().Int("total", len(m.mountMap)).Int("active", count).Msg("Periodic checkup on mount map")
-	//}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if len(m.mountMap) > 0 {
+		count := 0
+		for refIndex := range m.mountMap {
+			if mapEntry, ok := m.mountMap[refIndex]; ok {
+				parts := strings.Split(refIndex, "^")
+				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int("refcount", mapEntry).Logger()
+
+				if mapEntry > 0 {
+					logger.Trace().Msg("Mount is active")
+					count++
+				} else {
+					logger.Trace().Msg("Mount is not active")
+				}
+
+			}
+		}
+		log.Debug().Int("total", len(m.mountMap)).Int("active", count).Msg("Periodic checkup on mount map")
+	}
 }
 
 func (m *nfsMounter) gcInactiveMounts() {
-	//if len(m.mountMap) > 0 {
-	//	for fsName := range m.mountMap {
-	//		for uniqueId, wekaMount := range m.mountMap[fsName] {
-	//			if wekaMount.getRefCount() == 0 {
-	//				if wekaMount.getLastUsed().Before(time.Now().Add(-inactiveMountGcPeriod)) {
-	//					m.lock.Lock()
-	//					if wekaMount.getRefCount() == 0 {
-	//						log.Trace().Str("filesystem", fsName).Strs("mount_options", wekaMount.getMountOptions().Strings()).
-	//							Time("last_used", wekaMount.getLastUsed()).Msg("Removing stale mount from map")
-	//						delete(m.mountMap[fsName], uniqueId)
-	//					}
-	//					m.lock.Unlock()
-	//				}
-	//			}
-	//		}
-	//		if len(m.mountMap[fsName]) == 0 {
-	//			delete(m.mountMap, fsName)
-	//		}
-	//	}
-	//}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	if len(m.mountMap) > 0 {
+		for refIndex := range m.mountMap {
+			if mapEntry, ok := m.mountMap[refIndex]; ok {
+				if mapEntry == 0 {
+					parts := strings.Split(refIndex, "^")
+					logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Logger()
+					logger.Trace().Msg("Removing inactive mount from map")
+					delete(m.mountMap, refIndex)
+				}
+			}
+		}
+	}
 }
 
 func (m *nfsMounter) schedulePeriodicMountGc() {
@@ -161,4 +165,8 @@ func (m *nfsMounter) schedulePeriodicMountGc() {
 			time.Sleep(10 * time.Minute)
 		}
 	}()
+}
+
+func (m *nfsMounter) getTransport() DataTransport {
+	return dataTransportNfs
 }

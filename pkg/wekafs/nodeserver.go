@@ -41,6 +41,7 @@ const (
 	TopologyKeyNode                  = "topology.wekafs.csi/node"
 	TopologyLabelNode                = "topology.csi.weka.io/node"
 	TopologyLabelWeka                = "topology.csi.weka.io/global"
+	TopologyLabelTransport           = "topology.csi.weka.io/transport"
 	WekaKernelModuleName             = "wekafsgw"
 	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
 )
@@ -91,8 +92,16 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 	volumePath := req.GetVolumePath()
 
 	// Validate request fields
-	if volumeID == "" || volumePath == "" {
-		return nil, status.Error(codes.InvalidArgument, "Volume ID and path must be provided")
+	if volumeID == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume ID must be provided")
+	}
+	if volumePath == "" {
+		return nil, status.Error(codes.InvalidArgument, "Volume path must be provided")
+	}
+	if req.GetStagingTargetPath() != "" {
+		if !PathExists(req.GetStagingTargetPath()) {
+			return nil, status.Error(codes.NotFound, "Staging area path not found")
+		}
 	}
 
 	// Check if the volume path exists
@@ -184,7 +193,6 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 				csi.NodeServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER,
 				csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
 				csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
-				//csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
 			},
 		),
 		nodeID:            nodeId,
@@ -453,6 +461,10 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		} else {
 			msg := fmt.Sprintf("Directory %s exists, but not a weka mount, assuming already unpublished", targetPath)
 			logger.Warn().Msg(msg)
+			if err := os.Remove(targetPath); err != nil {
+				result = "FAILURE"
+				return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
+			}
 			result = "SUCCESS_WITH_WARNING"
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		}
@@ -474,75 +486,14 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
-func NodeStageVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeStageVolumeResponse, error) {
-	err := status.Error(errorCode, strings.ToLower(errorMessage))
-	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error staging volume")
-	return &csi.NodeStageVolumeResponse{}, err
-}
-
+//goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	op := "NodeStageVolume"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-
-	volumeId := req.GetVolumeId()
-	logger := log.Ctx(ctx)
-	result := "FAILURE"
-	logger.Info().Str("volume_id", volumeId).Msg(">>>> Received request")
-	defer func() {
-		level := zerolog.InfoLevel
-		if result != "SUCCESS" {
-			level = zerolog.ErrorLevel
-		}
-		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
-	}()
-
-	// Check arguments
-	if len(req.GetStagingTargetPath()) == 0 {
-		return NodeStageVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
-	}
-
-	if req.GetVolumeCapability() == nil {
-		return NodeStageVolumeError(ctx, codes.InvalidArgument, "Error occured, volume Capability missing in request")
-	}
-
-	if req.GetVolumeCapability().GetBlock() != nil {
-		return NodeStageVolumeError(ctx, codes.InvalidArgument, "Block accessType is unsupported")
-	}
-	result = "SUCCESS"
-	return &csi.NodeStageVolumeResponse{}, nil
+	return nil, status.Error(codes.Unimplemented, "NodeStageVolume is not supported")
 }
 
-func NodeUnstageVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeUnstageVolumeResponse, error) {
-	err := status.Error(errorCode, strings.ToLower(errorMessage))
-	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error unstaging volume")
-	return &csi.NodeUnstageVolumeResponse{}, err
-}
-
+//goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	op := "NodeUnstageVolume"
-	result := "FAILURE"
-	volumeId := req.GetVolumeId()
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-
-	logger := log.Ctx(ctx)
-	logger.Info().Str("volume_id", volumeId).Msg(">>>> Received request")
-	defer func() {
-		level := zerolog.InfoLevel
-		if result != "SUCCESS" {
-			level = zerolog.ErrorLevel
-		}
-		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
-	}()
-
-	if len(req.GetStagingTargetPath()) == 0 {
-		return NodeUnstageVolumeError(ctx, codes.InvalidArgument, "Target path missing in request")
-	}
-	result = "SUCCESS"
-	return &csi.NodeUnstageVolumeResponse{}, nil
+	return nil, status.Error(codes.Unimplemented, "NodeUnstageVolume is not supported")
 }
 
 //goland:noinspection GoUnusedParameter
@@ -564,9 +515,10 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	}()
 	topology := &csi.Topology{
 		Segments: map[string]string{
-			TopologyKeyNode:   ns.nodeID, // required exactly same way as this is how node is accessed by K8s
-			TopologyLabelNode: ns.nodeID,
-			TopologyLabelWeka: "true",
+			TopologyKeyNode:        ns.nodeID, // required exactly same way as this is how node is accessed by K8s
+			TopologyLabelNode:      ns.nodeID,
+			TopologyLabelWeka:      "true",
+			TopologyLabelTransport: string(ns.getMounter().getTransport()),
 		},
 	}
 

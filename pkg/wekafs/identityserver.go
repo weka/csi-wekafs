@@ -36,6 +36,7 @@ type identityServer struct {
 	config  *DriverConfig
 }
 
+//goland:noinspection GoExportedFuncWithUnexportedType
 func NewIdentityServer(name, version string, config *DriverConfig) *identityServer {
 	return &identityServer{
 		name:    name,
@@ -44,6 +45,7 @@ func NewIdentityServer(name, version string, config *DriverConfig) *identityServ
 	}
 }
 
+//goland:noinspection GoUnusedParameter
 func (ids *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	op := "GetPluginInfo"
 	result := "SUCCESS"
@@ -78,6 +80,7 @@ func (ids *identityServer) getConfig() *DriverConfig {
 	return ids.config
 }
 
+//goland:noinspection GoUnusedParameter
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	logger := log.Ctx(ctx)
 	isReady := ids.getConfig().isInDevMode() || isWekaInstalled()
@@ -96,6 +99,7 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 	}, nil
 }
 
+//goland:noinspection GoUnusedParameter
 func (ids *identityServer) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
 	op := "GetPluginCapabilities"
 	result := "SUCCESS"

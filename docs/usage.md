@@ -352,7 +352,7 @@ pvc-ee54de25-14f3-4024-98d0-12225e4b8215   4Gi        RWX            Delete     
     <REPLACE spec.resources.requests.storage value with 4Gi>
     ```
 
-1. Check that configuration was applied
+2. Check that configuration was applied
     ```shell script
     $ kubectl get pv
     NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                    STORAGECLASS               REASON   AGE

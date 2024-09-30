@@ -281,6 +281,7 @@ func fileExists(filename string) bool {
 	return false
 }
 
+//goland:noinspection GoUnusedParameter
 func PathIsWekaMount(ctx context.Context, path string) bool {
 	file, err := os.Open("/proc/mounts")
 	if err != nil {

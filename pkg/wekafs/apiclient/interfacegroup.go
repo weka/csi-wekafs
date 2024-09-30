@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/helm/pkg/urlutil"
 	"os"
-	"sort"
 )
 
 type InterfaceGroupType string
@@ -42,6 +41,7 @@ func (i *InterfaceGroup) GetType() string {
 	return "interfaceGroup"
 }
 
+//goland:noinspection GoUnusedParameter
 func (i *InterfaceGroup) GetBasePath(client *ApiClient) string {
 	return "interfaceGroups"
 }
@@ -143,7 +143,7 @@ func (a *ApiClient) GetInterfaceGroupByUid(ctx context.Context, uid uuid.UUID, i
 	return nil
 }
 
-func (a *ApiClient) fetchNfsInterfaceGroup(ctx context.Context, name *string, useDefault bool) error {
+func (a *ApiClient) fetchNfsInterfaceGroup(ctx context.Context, name string) error {
 	igs := &[]InterfaceGroup{}
 	err := a.GetInterfaceGroupsByType(ctx, InterfaceGroupTypeNFS, igs)
 	if err != nil {
@@ -152,42 +152,33 @@ func (a *ApiClient) fetchNfsInterfaceGroup(ctx context.Context, name *string, us
 	if len(*igs) == 0 {
 		return errors.New("no nfs interface groups found")
 	}
-	if name != nil {
-		for _, ig := range *igs {
-			if ig.Name == *name {
-				a.NfsInterfaceGroups[*name] = &ig
+	igname := name
+	if name == "" {
+		igname = "default"
+	}
+	for _, ig := range *igs {
+		if ig.Name == name || name == "" {
+			if len(ig.Ips) == 0 {
+				if name == "" {
+					continue
+				}
+				return errors.New("no IP addresses found for nfs interface group \"" + name + "\"")
 			}
+			a.NfsInterfaceGroups[igname] = &ig
+			return nil
 		}
-	} else if useDefault {
-		a.NfsInterfaceGroups["default"] = &(*igs)[0]
 	}
-
-	ig := &InterfaceGroup{}
-	if name != nil {
-		ig = a.NfsInterfaceGroups[*name]
-	} else {
-		ig = a.NfsInterfaceGroups["default"]
-	}
-	if ig == nil {
-		return errors.New("no nfs interface group found")
-	}
-
-	if len(ig.Ips) == 0 {
-		return errors.New("no IP addresses found for nfs interface group")
-	}
-	// Make sure the IPs are always sorted
-	sort.Strings(ig.Ips)
-	return nil
+	return errors.New(fmt.Sprintf("no nfs interface group named '%s' found", name))
 }
 
-func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context, name *string) *InterfaceGroup {
-	igName := "default"
-	if name != nil {
-		igName = *name
+func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context, name string) *InterfaceGroup {
+	igName := name
+	if name == "" {
+		igName = "default"
 	}
 	_, ok := a.NfsInterfaceGroups[igName]
 	if !ok {
-		err := a.fetchNfsInterfaceGroup(ctx, name, true)
+		err := a.fetchNfsInterfaceGroup(ctx, name)
 		if err != nil {
 			return nil
 		}
@@ -197,7 +188,15 @@ func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context, name *string) *Int
 
 // GetNfsMountIp returns the IP address of the NFS interface group to be used for NFS mount
 // TODO: need to do it much more sophisticated way to distribute load
-func (a *ApiClient) GetNfsMountIp(ctx context.Context, interfaceGroupName *string) (string, error) {
+func (a *ApiClient) GetNfsMountIp(ctx context.Context, interfaceGroupName string) (string, error) {
+	// if override is set, use it
+	if len(a.Credentials.NfsTargetIPs) > 0 {
+		ips := a.Credentials.NfsTargetIPs
+		idx := rand.Intn(len(ips))
+		ip := ips[idx]
+		return ip, nil
+	}
+
 	ig := a.GetNfsInterfaceGroup(ctx, interfaceGroupName)
 	if ig == nil {
 		return "", errors.New("no NFS interface group found")

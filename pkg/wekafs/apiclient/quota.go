@@ -17,14 +17,17 @@ import (
 type QuotaType string
 type QuotaStatus string
 
-const QuotaTypeHard QuotaType = "HARD"
-const QuotaTypeSoft QuotaType = "SOFT"
-const QuotaTypeDefault = QuotaTypeHard
-const QuotaStatusActive = "ACTIVE"
-const QuotaStatusPending = "ADDING"
-const QuotaStatusError = "ERROR"
-const QuotaStatusDeleting = "DELETING"
-const MaxQuotaSize uint64 = 9223372036854775807
+//goland:noinspection GoUnusedConst
+const (
+	QuotaTypeHard       QuotaType = "HARD"
+	QuotaTypeSoft       QuotaType = "SOFT"
+	QuotaTypeDefault              = QuotaTypeHard
+	QuotaStatusActive             = "ACTIVE"
+	QuotaStatusPending            = "ADDING"
+	QuotaStatusError              = "ERROR"
+	QuotaStatusDeleting           = "DELETING"
+	MaxQuotaSize        uint64    = 9223372036854775807
+)
 
 type Quota struct {
 	FilesystemUid  uuid.UUID `json:"-"`

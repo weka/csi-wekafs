@@ -16,9 +16,9 @@ var fsName string
 var client *ApiClient
 
 func TestMain(m *testing.M) {
-	flag.StringVar(&endpoint, "api-endpoint", "vm49-1723969301909816-0.lan:14000", "API endpoint for tests")
+	flag.StringVar(&endpoint, "api-endpoint", "localhost:14000", "API endpoint for tests")
 	flag.StringVar(&creds.Username, "api-username", "admin", "API username for tests")
-	flag.StringVar(&creds.Password, "api-password", "AAbb1234", "API password for tests")
+	flag.StringVar(&creds.Password, "api-password", "Qwerty1@", "API password for tests")
 	flag.StringVar(&creds.Organization, "api-org", "Root", "API org for tests")
 	flag.StringVar(&creds.HttpScheme, "api-scheme", "https", "API scheme for tests")
 	flag.StringVar(&fsName, "fs-name", "default", "Filesystem name for tests")
@@ -81,16 +81,27 @@ func GetApiClientForTest(t *testing.T) *ApiClient {
 //	assert.NoError(t, err)
 //	assert.NotNil(t, result)
 //}
-//
-//func TestGetNfsPermissionsByFilesystemName(t *testing.T) {
-//	apiClient := GetApiClientForTest(t)
-//
-//
-//	var permissions []NfsPermission
-//	err := apiClient.GetNfsPermissionsByFilesystemName(context.Background(), "fs1", &permissions)
-//	assert.NoError(t, err)
-//	assert.NotEmpty(t, permissions)
-//}
+
+func TestFindNfsPermissionsByFilesystemName(t *testing.T) {
+	apiClient := GetApiClientForTest(t)
+
+	var permissions []NfsPermission
+	err := apiClient.FindNfsPermissionsByFilesystem(context.Background(), "snapvolFilesystem", &permissions)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, permissions)
+	if len(permissions) > 0 {
+		for _, p := range permissions {
+			r := &NfsPermissionDeleteRequest{Uid: p.Uid}
+			err := apiClient.DeleteNfsPermission(context.Background(), r)
+			assert.NoError(t, err)
+		}
+	}
+	err = apiClient.FindNfsPermissionsByFilesystem(context.Background(), "snapvolFilesystem", &permissions)
+	assert.NoError(t, err)
+	assert.Empty(t, permissions)
+
+}
+
 //
 //func TestGetNfsPermissionByUid(t *testing.T) {
 //	apiClient := GetApiClientForTest(t)

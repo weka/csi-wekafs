@@ -101,6 +101,18 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		return ret
 	}()
 
+	var nfsTargetIps []string
+	if _, ok := secrets["nfsTargetIps"]; ok {
+		nfsTargetIpsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["nfsTargetIps"], "\n"), "\n", ","))
+		nfsTargetIps = func() []string {
+			var ret []string
+			for _, s := range strings.Split(nfsTargetIpsRaw, ",") {
+				ret = append(ret, strings.TrimSpace(strings.TrimSuffix(s, "\n")))
+			}
+			return ret
+		}()
+	}
+
 	localContainerName, ok := secrets["localContainerName"]
 	if !ok {
 		localContainerName = ""
@@ -124,6 +136,7 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		LocalContainerName:  localContainerName,
 		AutoUpdateEndpoints: autoUpdateEndpoints,
 		CaCertificate:       caCertificate,
+		NfsTargetIPs:        nfsTargetIps,
 	}
 	return api.fromCredentials(ctx, credentials, hostname)
 }
