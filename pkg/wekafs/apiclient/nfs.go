@@ -252,7 +252,7 @@ func EnsureNfsPermission(ctx context.Context, fsName string, group string, versi
 				SquashMode:        NfsPermissionSquashModeNone,
 				AnonGid:           65534,
 				AnonUid:           65534,
-				SupportedVersions: &[]string{string(NfsVersionV4)},
+				SupportedVersions: &[]string{NfsVersionV3.String(), NfsVersionV4.String()},
 			}
 			if err := apiClient.CreateNfsPermission(ctx, req, perm); err != nil {
 				return err
