@@ -18,9 +18,9 @@ package wekafs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -120,7 +120,7 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 
 	// Validate Weka volume ID
 	if err := validateVolumeId(volumeID); err != nil {
-		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, "invalid volume ID").Error())
+		return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID %s: %v", volumeID, err)
 	}
 
 	stats, err := getVolumeStats(volumePath)
@@ -404,7 +404,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeUnpublishVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
-	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error deleting volume")
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error unpublishing volume")
 	return &csi.NodeUnpublishVolumeResponse{}, err
 }
 
@@ -448,6 +448,9 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			logger.Debug().Msg("Target path does not exist, assuming repeating unpublish request")
 			result = "SUCCESS"
 			return &csi.NodeUnpublishVolumeResponse{}, nil
+		} else if pathErr, ok := err.(*os.PathError); ok && errors.Is(pathErr.Err, syscall.ESTALE) {
+			logger.Debug().Msg("Target path is stale, assuming NFS publish failure")
+			goto FORCEUMOUNT
 		} else {
 			logger.Error().Err(err).Msg("Failed to check target path")
 			return NodeUnpublishVolumeError(ctx, codes.Internal, "unexpected situation, please contact support")
@@ -470,6 +473,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		}
 	}
 
+FORCEUMOUNT:
 	logger.Trace().Str("target_path", targetPath).Msg("Unmounting")
 	if err := mount.New("").Unmount(targetPath); err != nil {
 		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
