@@ -20,6 +20,7 @@ type NfsPermissionType string
 type NfsPermissionSquashMode string
 type NfsClientGroupRuleType string
 type NfsVersionString string
+type NfsVersionStrings []NfsVersionString
 
 func (n NfsVersionString) String() string {
 	return string(n)
@@ -30,6 +31,15 @@ func (n NfsVersionString) AsOption() string {
 
 func (n NfsVersionString) AsWeka() NfsVersionString {
 	return NfsVersionString(strings.Split(n.String(), ".")[0])
+}
+
+func (s NfsVersionStrings) Matches(other []NfsVersionString) bool {
+	for _, v := range s {
+		if !slices.Contains(other, v) {
+			return false
+		}
+	}
+	return true
 }
 
 type NfsAuthType string
@@ -54,7 +64,7 @@ const (
 type NfsPermission struct {
 	GroupId           string                  `json:"group_id,omitempty" url:"-"`
 	PrivilegedPort    bool                    `json:"privileged_port,omitempty" url:"-"`
-	SupportedVersions []NfsVersionString      `json:"supported_versions,omitempty" url:"-"`
+	SupportedVersions NfsVersionStrings       `json:"supported_versions,omitempty" url:"-"`
 	Id                string                  `json:"id,omitempty" url:"-"`
 	ObsDirect         bool                    `json:"obs_direct,omitempty" url:"-"`
 	AnonUid           string                  `json:"anon_uid,omitempty" url:"-"`
@@ -94,6 +104,18 @@ func (n *NfsPermission) EQ(other ApiObject) bool {
 	return ObjectsAreEqual(n, other)
 }
 
+func (n *NfsPermission) Matches(o NfsPermission) bool {
+	if n.SquashMode == o.SquashMode &&
+		n.Filesystem == o.Filesystem &&
+		n.Group == o.Group &&
+		n.Path == o.Path &&
+		n.PermissionType == o.PermissionType &&
+		n.SupportedVersions.Matches(o.SupportedVersions) {
+		return true
+	}
+	return false
+}
+
 func (n *NfsPermission) getImmutableFields() []string {
 	return []string{"Group", "Filesystem", "SupportedVersions", "PermissionType", "Path", "SquashMode"}
 }
@@ -120,7 +142,7 @@ func (a *ApiClient) FindNfsPermissionsByFilter(ctx context.Context, query *NfsPe
 		return err
 	}
 	for _, r := range *ret {
-		if r.EQ(query) {
+		if r.EQ(query) || query.Matches(r) {
 			*resultSet = append(*resultSet, r)
 		}
 	}
@@ -232,7 +254,7 @@ func (a *ApiClient) CreateNfsPermission(ctx context.Context, r *NfsPermissionCre
 
 func EnsureNfsPermission(ctx context.Context, fsName string, group string, version NfsVersionString, apiClient *ApiClient) error {
 	perm := &NfsPermission{
-		SupportedVersions: []NfsVersionString{version.AsWeka()},
+		SupportedVersions: NfsVersionStrings{version.AsWeka()},
 		AnonUid:           strconv.Itoa(65534),
 		AnonGid:           strconv.Itoa(65534),
 		Filesystem:        fsName,
