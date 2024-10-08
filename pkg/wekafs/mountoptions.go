@@ -178,7 +178,7 @@ func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 }
 
 func (opts MountOptions) AsNfs() MountOptions {
-	ret := NewMountOptionsFromString("hard,rdirplus")
+	ret := NewMountOptionsFromString("hard")
 	for _, o := range opts.getOpts() {
 		switch o.option {
 		case "writecache":
