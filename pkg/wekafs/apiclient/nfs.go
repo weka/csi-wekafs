@@ -252,7 +252,7 @@ func (a *ApiClient) CreateNfsPermission(ctx context.Context, r *NfsPermissionCre
 	return nil
 }
 
-func EnsureNfsPermission(ctx context.Context, fsName string, group string, version NfsVersionString, apiClient *ApiClient) error {
+func EnsureNfsPermission(ctx context.Context, fsName string, group string, version NfsVersionString, apiClient *ApiClient) (created bool, err error) {
 	perm := &NfsPermission{
 		SupportedVersions: NfsVersionStrings{version.AsWeka()},
 		AnonUid:           strconv.Itoa(65534),
@@ -263,7 +263,8 @@ func EnsureNfsPermission(ctx context.Context, fsName string, group string, versi
 		Path:              "/",
 		SquashMode:        NfsPermissionSquashModeNone,
 	}
-	_, err := apiClient.GetNfsPermissionByFilter(ctx, perm)
+	_, err = apiClient.GetNfsPermissionByFilter(ctx, perm)
+
 	if err != nil {
 		if err == ObjectNotFoundError {
 			req := &NfsPermissionCreateRequest{
@@ -276,14 +277,11 @@ func EnsureNfsPermission(ctx context.Context, fsName string, group string, versi
 				AnonUid:           65534,
 				SupportedVersions: &[]string{NfsVersionV3.String(), NfsVersionV4.String()},
 			}
-			if err := apiClient.CreateNfsPermission(ctx, req, perm); err != nil {
-				return err
-			}
-			time.Sleep(5 * time.Second) // wait for the permission to be applied
-			return nil
+			err := apiClient.CreateNfsPermission(ctx, req, perm)
+			return err == nil, err
 		}
 	}
-	return err
+	return false, err
 }
 
 type NfsPermissionDeleteRequest struct {
@@ -471,7 +469,7 @@ func (a *ApiClient) CreateNfsClientGroup(ctx context.Context, r *NfsClientGroupC
 	return err
 }
 
-func (a *ApiClient) EnsureCsiPluginNfsClientGroup(ctx context.Context, clientGroupName string) (*NfsClientGroup, error) {
+func (a *ApiClient) EnsureCsiPluginNfsClientGroup(ctx context.Context, clientGroupName string) (grp *NfsClientGroup, created bool, err error) {
 	op := "EnsureCsiPluginNfsClientGroup"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -482,17 +480,19 @@ func (a *ApiClient) EnsureCsiPluginNfsClientGroup(ctx context.Context, clientGro
 		clientGroupName = NfsClientGroupName
 	}
 	logger.Trace().Str("client_group_name", clientGroupName).Msg("Getting client group by name")
-	ret, err := a.GetNfsClientGroupByName(ctx, clientGroupName)
+	ret, err = a.GetNfsClientGroupByName(ctx, clientGroupName)
 	if err != nil {
 		if err != ObjectNotFoundError {
 			logger.Error().Err(err).Msg("Failed to get client group by name")
-			return ret, err
+			return ret, false, err
 		} else {
 			logger.Trace().Str("client_group_name", clientGroupName).Msg("Existing client group not found, creating client group")
+
 			err = a.CreateNfsClientGroup(ctx, NewNfsClientGroupCreateRequest(clientGroupName), ret)
+			return ret, err == nil, nil
 		}
 	}
-	return ret, nil
+	return ret, false, nil
 }
 
 type NfsClientGroupCreateRequest struct {
@@ -656,7 +656,7 @@ func (a *ApiClient) GetNfsClientGroupRules(ctx context.Context, clientGroupName 
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
+	cg, _, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
 	if err != nil {
 		return err
 	}
@@ -795,13 +795,13 @@ func (a *ApiClient) CreateNfsClientGroupRule(ctx context.Context, r *NfsClientGr
 	return err
 }
 
-func (a *ApiClient) EnsureNfsClientGroupRuleForIp(ctx context.Context, cg *NfsClientGroup, ip string) error {
+func (a *ApiClient) EnsureNfsClientGroupRuleForIp(ctx context.Context, cg *NfsClientGroup, ip string) (created bool, err error) {
 	if cg == nil {
-		return errors.New("NfsClientGroup is nil")
+		return false, errors.New("NfsClientGroup is nil")
 	}
 	r, err := parseNetworkString(ip)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	q := &NfsClientGroupRule{Type: NfsClientGroupRuleTypeIP, Rule: r.AsNfsRule(), NfsClientGroupUid: cg.Uid}
@@ -810,10 +810,11 @@ func (a *ApiClient) EnsureNfsClientGroupRuleForIp(ctx context.Context, cg *NfsCl
 	if err != nil {
 		if err == ObjectNotFoundError {
 			req := NewNfsClientGroupRuleCreateRequest(cg.Uid, q.Type, q.Rule)
-			return a.CreateNfsClientGroupRule(ctx, req, rule)
+			err = a.CreateNfsClientGroupRule(ctx, req, rule)
+			return err == nil, err
 		}
 	}
-	return err
+	return false, err
 }
 
 func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName string, version NfsVersionString, clientGroupName string) error {
@@ -821,29 +822,39 @@ func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName 
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
+	updateConfigRequired := false
+	logger := log.Ctx(ctx).With().Bool("update_config_required", func() bool { return updateConfigRequired }()).Logger()
 	clientGroupCaption := clientGroupName
 	if clientGroupCaption == "" {
 		clientGroupCaption = NfsClientGroupName
 	}
+	var created bool
+
 	logger.Debug().Str("ip", ip).Str("filesystem", fsName).Str("client_group_name", clientGroupCaption).Msg("Ensuring NFS permissions")
 	// Ensure client group
 	logger.Trace().Msg("Ensuring CSI Plugin NFS Client Group")
-	cg, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
+	cg, created, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to ensure NFS client group")
 		return err
 	}
+	updateConfigRequired = updateConfigRequired || created
 
 	// Ensure client group rule
 	logger.Trace().Str("ip_address", ip).Msg("Ensuring NFS Client Group Rule for IP")
-	err = a.EnsureNfsClientGroupRuleForIp(ctx, cg, ip)
+	created, err = a.EnsureNfsClientGroupRuleForIp(ctx, cg, ip)
 	if err != nil {
 		logger.Error().Err(err).Str("ip_address", ip).Msg("Failed to ensure NFS client group rule for IP")
 		return err
 	}
+	updateConfigRequired = updateConfigRequired || created
 	// Ensure NFS permission
 	logger.Trace().Str("filesystem", fsName).Str("client_group", cg.Name).Msg("Ensuring NFS Export for client group")
-	err = EnsureNfsPermission(ctx, fsName, cg.Name, version, a)
+	created, err = EnsureNfsPermission(ctx, fsName, cg.Name, version, a)
+	updateConfigRequired = updateConfigRequired || created
+	if updateConfigRequired {
+		logger.Trace().Msg("Waiting for NFS configuration to be applied")
+		time.Sleep(5 * time.Second)
+	}
 	return err
 }
