@@ -349,11 +349,9 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	err, unmount := volume.MountUnderlyingFS(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to mount underlying filesystem")
+		unmount()
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
-	defer unmount() // unmount the parent mount since there is a bind mount anyway
-
 	fullPath := volume.GetFullPath(ctx)
 
 	targetPathDir := filepath.Dir(targetPath)
@@ -394,8 +392,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", innerMountOpts); err != nil {
-		logger.Error().Err(err).Str("full_path", fullPath).Str("target_path", targetPath).Msg("Failed to perform mount")
-		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, err.Error()))
+		var errList strings.Builder
+		errList.WriteString(err.Error())
+		unmount() // unmount only if mount bind failed
+		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, errList.String()))
 	}
 	result = "SUCCESS"
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
@@ -412,6 +412,7 @@ func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMe
 func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	op := "NodeUnpublishVolume"
 	result := "FAILURE"
+	volumeID := req.GetVolumeId()
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
@@ -432,6 +433,12 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	defer cancel()
 	if err != nil {
 		return NodeUnpublishVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
+	// Check arguments
+	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), nil, ns)
+	if err != nil {
+		return &csi.NodeUnpublishVolumeResponse{}, err
 	}
 
 	if len(req.GetTargetPath()) == 0 {
@@ -486,6 +493,11 @@ FORCEUMOUNT:
 		return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 	}
 
+	logger.Trace().Str("volume_id", volumeID).Msg("Unmounting")
+	err = volume.UnmountUnderlyingFS(ctx)
+	if err != nil {
+		logger.Error().Str("volume_id", volumeID).Err(err).Msg("Post-unpublish task failed")
+	}
 	result = "SUCCESS"
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
