@@ -23,7 +23,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -209,7 +208,7 @@ func (cs *ControllerServer) initializeSemaphore(ctx context.Context, op string) 
 
 func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
 	op := "CreateVolume"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -329,7 +328,7 @@ func DeleteVolumeError(ctx context.Context, errorCode codes.Code, errorMessage s
 
 func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (*csi.DeleteVolumeResponse, error) {
 	op := "DeleteVolume"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -399,7 +398,7 @@ func ExpandVolumeError(ctx context.Context, errorCode codes.Code, errorMessage s
 
 func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	op := "ExpandVolume"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	volumeID := req.GetVolumeId()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).
@@ -491,7 +490,7 @@ func CreateSnapshotError(ctx context.Context, errorCode codes.Code, errorMessage
 
 func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
 	op := "CreateSnapshot"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -566,7 +565,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	op := "DeleteSnapshot"
 	snapshotID := req.GetSnapshotId()
 	secrets := req.GetSecrets()
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -624,7 +623,7 @@ func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnap
 func (cs *ControllerServer) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (*csi.ControllerGetCapabilitiesResponse, error) {
 	op := "ControllerGetCapabilities"
 	result := "SUCCESS"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -651,7 +650,7 @@ func ValidateVolumeCapsError(ctx context.Context, errorCode codes.Code, errorMes
 func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	op := "ValidateVolumeCapabilities"
 	volumeID := req.GetVolumeId()
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 

@@ -24,7 +24,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -252,7 +251,7 @@ func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	op := "NodePublishVolume"
 	volumeID := req.GetVolumeId()
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -412,7 +411,7 @@ func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMe
 func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	op := "NodeUnpublishVolume"
 	result := "FAILURE"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -504,7 +503,7 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	op := "NodeGetInfo"
 	result := "SUCCESS"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
