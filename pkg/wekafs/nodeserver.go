@@ -392,6 +392,19 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	logger.Debug().Str("volume_id", volumeID).Str("target_path", targetPath).Str("source_path", fullPath).
 		Fields(innerMountOpts).Msg("Performing bind mount")
 
+	// to overcome an issue with "stale file handle", we need first to cache the dirent for the mount point
+	// this is needed for NFS snapshot-backed volumes, since the mount point is inside .snapshots directory
+	// and when performing the mount bind, the mount point is not cached and the NFS server returns ESTALE on first access to folder.
+	// This is an experimental workaround, and should be removed when the issue is resolved.
+	// However, this test by itself is not bad to have, just in case the volume content is missing.
+	// Same can be obtained by volume.Exists() but this is more explicit
+	logger.Trace().Str("full_path", fullPath).Msg("Checking if volume path exists on underlying filesystem")
+	_, err = os.ReadDir(fullPath)
+	if err != nil {
+		logger.Error().Err(err).Str("full_path", fullPath).Msg("Failed to stat volume path on underlying filesystem")
+		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintf("failed to stat full path: %s", err.Error()))
+	}
+
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", innerMountOpts); err != nil {
 		logger.Error().Err(err).Str("full_path", fullPath).Str("target_path", targetPath).Msg("Failed to perform mount")
