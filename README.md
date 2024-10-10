@@ -1,7 +1,7 @@
 # CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-![Version: 2.4.2-SNAPSHOT.155.5e45be0](https://img.shields.io/badge/Version-2.4.2--SNAPSHOT.155.5e45be0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.4.2-SNAPSHOT.155.5e45be0](https://img.shields.io/badge/AppVersion-v2.4.2--SNAPSHOT.155.5e45be0-informational?style=flat-square)
+![Version: 2.4.2-SNAPSHOT.158.c7dfcc3](https://img.shields.io/badge/Version-2.4.2--SNAPSHOT.158.c7dfcc3-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.4.2-SNAPSHOT.158.c7dfcc3](https://img.shields.io/badge/AppVersion-v2.4.2--SNAPSHOT.158.c7dfcc3-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
 
@@ -44,7 +44,7 @@ make build
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.4.2-SNAPSHOT.155.5e45be0"` | CSI driver version |
+| csiDriverVersion | string | `"2.4.2-SNAPSHOT.158.c7dfcc3"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.14.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.7.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.1.0"` | CSI provisioner sidecar image URL |
@@ -53,7 +53,7 @@ make build
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.1.0"` | CSI snapshotter sidecar image URL |
 | images.nodeinfo | string | `"quay.io/weka.io/csi-wekafs"` | CSI nodeinfo sidecar image URL, used for reading node metadata |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.4.2-SNAPSHOT.155.5e45be0"` | CSI driver tag |
+| images.csidriverTag | string | `"2.4.2-SNAPSHOT.158.c7dfcc3"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -95,6 +95,7 @@ make build
 | pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement | bool | `false` | Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced |
 | pluginConfig.mutuallyExclusiveMountOptions[0] | string | `"readcache,writecache,coherent,forcedirect"` |  |
 | pluginConfig.mutuallyExclusiveMountOptions[1] | string | `"sync,async"` |  |
+| pluginConfig.mutuallyExclusiveMountOptions[2] | string | `"ro,rw"` |  |
 | pluginConfig.mountProtocol.useNfs | bool | `false` | Use NFS transport for mounting Weka filesystems, off by default |
 | pluginConfig.mountProtocol.allowNfsFailback | bool | `false` | Allow Failback to NFS transport if Weka client fails to mount filesystem using native protocol |
 | pluginConfig.mountProtocol.interfaceGroupName | string | `""` | Specify name of NFS interface group to use for mounting Weka filesystems. If not set, first NFS interface group will be used |
