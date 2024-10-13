@@ -23,6 +23,8 @@ This allows you to use WekaFS as a storage backend for your Kubernetes cluster w
 - **Network Configuration**: NFS interface group IP addresses must be accessible from the Kubernetes cluster nodes
 - **Security**: NFS transport is less secure than the native WekaFS driver, and may require additional security considerations
 - **QoS**: QoS is not supported for NFS transport
+- **Organizations and Multitenancy**: NFS transport can be used only for filesystems in `Root` organization. 
+    If you need to use a filesystem in a different organization, you must use the native WekaFS driver.
 
 ### Host Network Mode
 Weka CSI Plugin will automatically install in `hostNetwork` mode when using NFS transport. 
