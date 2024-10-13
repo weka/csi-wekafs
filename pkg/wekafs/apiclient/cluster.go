@@ -18,7 +18,9 @@ const ApiPathRefresh = "login/refresh"
 
 const ApiPathClusterInfo = "cluster"
 
-const ApiContainersInfo = "containers"
+const ApiPathContainersInfo = "containers"
+
+const ApiPathWhoami = "users/whoami"
 
 // updateTokensExpiryInterval fetches the refresh token expiry from API
 func (a *ApiClient) updateTokensExpiryInterval(ctx context.Context) error {
@@ -110,6 +112,15 @@ type ClusterInfoResponse struct {
 	Capacity    Capacity  `json:"capacity,omitempty"`
 }
 
+type WhoamiResponse struct {
+	OrgId    int         `json:"org_id,omitempty"`
+	Username string      `json:"username,omitempty"`
+	Source   string      `json:"source,omitempty"`
+	Uid      uuid.UUID   `json:"uid,omitempty"`
+	Role     ApiUserRole `json:"role,omitempty"`
+	OrgName  string      `json:"org_name,omitempty"`
+}
+
 type Container struct {
 	Id                   string    `json:"id,omitempty"`
 	SwReleaseString      string    `json:"sw_release_string,omitempty"`
@@ -176,7 +187,7 @@ type ContainersResponse []Container
 
 func (a *ApiClient) getContainers(ctx context.Context) (*ContainersResponse, error) {
 	responseData := &ContainersResponse{}
-	err := a.Get(ctx, ApiContainersInfo, nil, responseData)
+	err := a.Get(ctx, ApiPathContainersInfo, nil, responseData)
 	return responseData, err
 }
 
@@ -230,4 +241,31 @@ func filterFrontendContainers(ctx context.Context, hostname string, containerLis
 		}
 	}
 	return ret
+}
+
+func (a *ApiClient) fetchUserRoleAndOrgId(ctx context.Context) {
+	logger := log.Ctx(ctx)
+	ret := &WhoamiResponse{}
+	err := a.Request(ctx, "GET", ApiPathWhoami, nil, nil, ret)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch user role. Assuming old cluster version")
+		return
+	}
+	if ret != nil {
+		a.ApiUserRole = ret.Role
+		a.ApiOrgId = ret.OrgId
+	}
+}
+
+func (a *ApiClient) ensureSufficientPermissions(ctx context.Context) error {
+	logger := log.Ctx(ctx)
+	a.fetchUserRoleAndOrgId(ctx)
+	if a.ApiUserRole == "" {
+		logger.Error().Msg("Could not determine user role, assuming old version of WEKA cluster")
+	}
+	if !a.HasCSIPermissions() {
+		logger.Error().Str("username", a.Credentials.Username).Msg("User does not have CSI permissions and cannot be used for WEKA CSI Plugin")
+		return errors.New(fmt.Sprintf("user %s does not have sufficient permissions for performing CSI operations", a.Credentials.Username))
+	}
+	return nil
 }
