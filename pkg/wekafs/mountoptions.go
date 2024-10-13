@@ -16,11 +16,13 @@ const (
 	MountOptionCoherent    = "coherent"
 	MountOptionNfsAsync    = "async"
 	MountOptionNfsHard     = "hard"
+	MountOptionNfsRdirplus = "rdirplus"
 	MountOptionReadCache   = "readcache"
 	MountProtocolWekafs    = "wekafs"
 	MountProtocolNfs       = "nfs"
-	DefaultNfsMountOptions = MountOptionNfsHard + "," + MountOptionNfsAsync
 )
+
+var DefaultNfsMountOptions = strings.Join([]string{MountOptionNfsHard, MountOptionNfsAsync, MountOptionNfsRdirplus}, ",")
 
 type mountOption struct {
 	option string
@@ -193,6 +195,8 @@ func (opts MountOptions) AsNfs() MountOptions {
 	ret := NewMountOptionsFromString(DefaultNfsMountOptions)
 	for _, o := range opts.getOpts() {
 		switch o.option {
+		case "acl":
+			ret.AddOption("user_xattr")
 		case "writecache":
 			ret.AddOption("async")
 		case "coherent":
@@ -215,6 +219,10 @@ func (opts MountOptions) AsNfs() MountOptions {
 		default:
 			continue
 		}
+	}
+	if ret.getOptionValue("vers") == "3" {
+		// cannot set "acl" on nfsv3
+		ret.RemoveOption("user_xattr")
 	}
 	return ret
 }
