@@ -264,7 +264,7 @@ func (a *ApiClient) ensureSufficientPermissions(ctx context.Context) error {
 		logger.Error().Msg("Could not determine user role, assuming old version of WEKA cluster")
 	}
 	if !a.HasCSIPermissions() {
-		logger.Error().Str("username", a.Credentials.Username).Msg("User does not have CSI permissions and cannot be used for WEKA CSI Plugin")
+		logger.Error().Str("username", a.Credentials.Username).Str("role", string(a.ApiUserRole)).Msg("User does not have necessary CSI permissions and cannot be used. Refer to WEKA CSI Plugin /documentation")
 		return errors.New(fmt.Sprintf("user %s does not have sufficient permissions for performing CSI operations", a.Credentials.Username))
 	}
 	return nil
