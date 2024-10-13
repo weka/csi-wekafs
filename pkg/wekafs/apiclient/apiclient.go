@@ -648,17 +648,18 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		_ = a.updateTokensExpiryInterval(ctx)
 	}
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
-	if err := a.fetchClusterInfo(ctx); err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch information from Weka cluster on login")
-		return err
-	}
-	logger.Debug().Msg("Successfully connected to cluster API")
 
 	err = a.ensureSufficientPermissions(ctx)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to ensure sufficient permissions for supplied credentials. Cannot continue")
 		return err
 	}
+
+	if err := a.fetchClusterInfo(ctx); err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch information from Weka cluster on login")
+		return err
+	}
+	logger.Debug().Msg("Successfully connected to cluster API")
 
 	if a.Credentials.AutoUpdateEndpoints {
 		if err := a.UpdateApiEndpoints(ctx); err != nil {
@@ -799,7 +800,7 @@ func (c *Credentials) String() string {
 
 func (a *ApiClient) HasCSIPermissions() bool {
 	if a.ApiUserRole != "" {
-		return a.ApiUserRole == ApiUserRoleCSI || a.ApiUserRole == ApiUserRoleClusterAdmin || a.ApiUserRole == ApiUserRoleOrgAdmin && a.ApiOrgId != 0
+		return a.ApiUserRole == ApiUserRoleCSI || a.ApiUserRole == ApiUserRoleClusterAdmin || a.ApiUserRole == ApiUserRoleOrgAdmin
 	}
 	return false
 }
