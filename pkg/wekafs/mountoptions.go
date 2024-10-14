@@ -16,10 +16,11 @@ const (
 	MountOptionCoherent    = "coherent"
 	MountOptionNfsAsync    = "async"
 	MountOptionNfsHard     = "hard"
+	MountOptionNfsRdirPlus = "rdirplus"
 	MountOptionReadCache   = "readcache"
 	MountProtocolWekafs    = "wekafs"
 	MountProtocolNfs       = "nfs"
-	DefaultNfsMountOptions = MountOptionNfsHard + "," + MountOptionNfsAsync
+	DefaultNfsMountOptions = MountOptionNfsHard + "," + MountOptionNfsAsync + "," + MountOptionNfsRdirPlus
 )
 
 type mountOption struct {
@@ -204,14 +205,6 @@ func (opts MountOptions) AsNfs() MountOptions {
 		case "dentry_max_age_positive":
 			ret.AddOption(fmt.Sprintf("acdirmax=%s", o.value))
 			ret.AddOption(fmt.Sprintf("acregmax=%s", o.value))
-		case "inode_bits":
-			continue
-		case "verbose":
-			continue
-		case "quiet":
-			continue
-		case "obs_direct":
-			continue
 		default:
 			continue
 		}
