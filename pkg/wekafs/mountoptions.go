@@ -14,9 +14,13 @@ const (
 	MountOptionReadOnly    = "ro"
 	MountOptionWriteCache  = "writecache"
 	MountOptionCoherent    = "coherent"
+	MountOptionNfsAsync    = "async"
+	MountOptionNfsHard     = "hard"
+	MountOptionNfsRdirPlus = "rdirplus"
 	MountOptionReadCache   = "readcache"
 	MountProtocolWekafs    = "wekafs"
 	MountProtocolNfs       = "nfs"
+	DefaultNfsMountOptions = MountOptionNfsHard + "," + MountOptionNfsAsync + "," + MountOptionNfsRdirPlus
 )
 
 type mountOption struct {
@@ -114,6 +118,15 @@ func (opts MountOptions) hasOption(optstring string) bool {
 	return exists
 }
 
+func (opts MountOptions) getOptionValue(optstring string) string {
+	opt := newMountOptionFromString(optstring)
+	o, exists := opts.customOptions[opt.option]
+	if exists {
+		return o.value
+	}
+	return ""
+}
+
 func (opts MountOptions) getOpts() []mountOption {
 	var ret []mountOption
 	keys := make([]string, 0, len(opts.customOptions))
@@ -178,7 +191,7 @@ func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 }
 
 func (opts MountOptions) AsNfs() MountOptions {
-	ret := NewMountOptionsFromString("hard,rdirplus")
+	ret := NewMountOptionsFromString(DefaultNfsMountOptions)
 	for _, o := range opts.getOpts() {
 		switch o.option {
 		case "writecache":
@@ -192,16 +205,6 @@ func (opts MountOptions) AsNfs() MountOptions {
 		case "dentry_max_age_positive":
 			ret.AddOption(fmt.Sprintf("acdirmax=%s", o.value))
 			ret.AddOption(fmt.Sprintf("acregmax=%s", o.value))
-		case "inode_bits":
-			continue
-		case "verbose":
-			continue
-		case "quiet":
-			continue
-		case "obs_direct":
-			continue
-		case "sync_on_close":
-			ret.AddOption("sync")
 		default:
 			continue
 		}

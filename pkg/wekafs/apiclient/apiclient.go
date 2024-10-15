@@ -29,13 +29,21 @@ import (
 	"time"
 )
 
+type ApiUserRole string
+
 const (
-	ApiHttpTimeOutSeconds         = 60
-	ApiRetryIntervalSeconds       = 1
-	ApiRetryMaxCount              = 5
-	RetryBackoffExponentialFactor = 1
-	RootOrganizationName          = "Root"
-	TracerName                    = "weka-csi"
+	ApiHttpTimeOutSeconds                     = 60
+	ApiRetryIntervalSeconds                   = 1
+	ApiRetryMaxCount                          = 5
+	RetryBackoffExponentialFactor             = 1
+	RootOrganizationName                      = "Root"
+	TracerName                                = "weka-csi"
+	ApiUserRoleClusterAdmin       ApiUserRole = "ClusterAdmin"
+	ApiUserRoleOrgAdmin           ApiUserRole = "OrgAdmin"
+	ApiUserRoleReadOnly           ApiUserRole = "ReadOnly"
+	ApiUserRoleCSI                ApiUserRole = "CSI"
+	ApiUserRoleS3                 ApiUserRole = "S3"
+	ApiUserRoleRegular            ApiUserRole = "Regular"
 )
 
 // ApiClient is a structure that defines Weka API client
@@ -65,6 +73,8 @@ type ApiClient struct {
 	clientHash                 uint32
 	hostname                   string
 	NfsInterfaceGroups         map[string]*InterfaceGroup
+	ApiUserRole                ApiUserRole
+	ApiOrgId                   int
 }
 
 type ApiEndPoint struct {
@@ -638,6 +648,13 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		_ = a.updateTokensExpiryInterval(ctx)
 	}
 	a.refreshTokenExpiryDate = time.Now().Add(time.Duration(a.refreshTokenExpiryInterval) * time.Second)
+
+	err = a.ensureSufficientPermissions(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to ensure sufficient permissions for supplied credentials. Cannot continue")
+		return err
+	}
+
 	if err := a.fetchClusterInfo(ctx); err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch information from Weka cluster on login")
 		return err
@@ -779,6 +796,13 @@ type Credentials struct {
 func (c *Credentials) String() string {
 	return fmt.Sprintf("%s://%s:%s@%s",
 		c.HttpScheme, c.Username, c.Organization, c.Endpoints)
+}
+
+func (a *ApiClient) HasCSIPermissions() bool {
+	if a.ApiUserRole != "" {
+		return a.ApiUserRole == ApiUserRoleCSI || a.ApiUserRole == ApiUserRoleClusterAdmin || a.ApiUserRole == ApiUserRoleOrgAdmin
+	}
+	return false
 }
 
 func maskPayload(payload string) string {

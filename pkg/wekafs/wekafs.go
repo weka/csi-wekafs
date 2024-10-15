@@ -114,7 +114,9 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 	}
 
 	localContainerName, ok := secrets["localContainerName"]
-	if !ok {
+	if ok {
+		localContainerName = strings.TrimSpace(strings.TrimSuffix(localContainerName, "\n"))
+	} else {
 		localContainerName = ""
 	}
 	autoUpdateEndpoints := false

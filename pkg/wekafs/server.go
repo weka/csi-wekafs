@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/kubernetes-csi/csi-lib-utils/protosanitizer"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 	"net"
 	"os"
@@ -131,18 +132,21 @@ func parseEndpoint(ep string) (string, string, error) {
 }
 
 func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	ctx = log.With().Logger().WithContext(ctx)
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "GrpcRequest")
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
 	if info.FullMethod != "/csi.v1.Identity/Probe" {
 		// suppress annoying probe messages
-		log.Ctx(ctx).Trace().Str("method", info.FullMethod).Str("request", protosanitizer.StripSecrets(req).String()).Msg("GRPC request")
+		logger.Trace().Str("method", info.FullMethod).Str("request", protosanitizer.StripSecrets(req).String()).Msg("GRPC request")
 	}
 	resp, err := handler(ctx, req)
 	if err != nil {
-		log.Ctx(ctx).Trace().Err(err).Msg("GRPC error")
+		logger.Trace().Err(err).Msg("GRPC error")
 	} else {
 		if info.FullMethod != "/csi.v1.Identity/Probe" {
 			// suppress annoying probe messages
-			log.Ctx(ctx).Trace().Str("response", protosanitizer.StripSecrets(resp).String()).Msg("GRPC response")
+			logger.Trace().Str("response", protosanitizer.StripSecrets(resp).String()).Msg("GRPC response")
 		}
 	}
 	return resp, err

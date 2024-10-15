@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.5.0-beta2
+csiDriverVersion: &csiDriverVersion 2.4.2-SNAPSHOT.175.35c0016
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.14.0
@@ -146,6 +146,7 @@ pluginConfig:
   mutuallyExclusiveMountOptions:
     - "readcache,writecache,coherent,forcedirect"
     - "sync,async"
+    - "ro,rw"
   mountProtocol:
     # -- Use NFS transport for mounting Weka filesystems, off by default
     useNfs: false

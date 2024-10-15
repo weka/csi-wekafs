@@ -18,13 +18,12 @@ package wekafs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -120,7 +119,7 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 
 	// Validate Weka volume ID
 	if err := validateVolumeId(volumeID); err != nil {
-		return nil, status.Error(codes.InvalidArgument, errors.Wrap(err, "invalid volume ID").Error())
+		return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID %s: %v", volumeID, err)
 	}
 
 	stats, err := getVolumeStats(volumePath)
@@ -252,7 +251,7 @@ func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	op := "NodePublishVolume"
 	volumeID := req.GetVolumeId()
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -404,7 +403,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeUnpublishVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
-	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error deleting volume")
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error unpublishing volume")
 	return &csi.NodeUnpublishVolumeResponse{}, err
 }
 
@@ -412,7 +411,7 @@ func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMe
 func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	op := "NodeUnpublishVolume"
 	result := "FAILURE"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
@@ -448,6 +447,9 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			logger.Debug().Msg("Target path does not exist, assuming repeating unpublish request")
 			result = "SUCCESS"
 			return &csi.NodeUnpublishVolumeResponse{}, nil
+		} else if pathErr, ok := err.(*os.PathError); ok && errors.Is(pathErr.Err, syscall.ESTALE) {
+			logger.Debug().Msg("Target path is stale, assuming NFS publish failure")
+			goto FORCEUMOUNT
 		} else {
 			logger.Error().Err(err).Msg("Failed to check target path")
 			return NodeUnpublishVolumeError(ctx, codes.Internal, "unexpected situation, please contact support")
@@ -470,6 +472,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		}
 	}
 
+FORCEUMOUNT:
 	logger.Trace().Str("target_path", targetPath).Msg("Unmounting")
 	if err := mount.New("").Unmount(targetPath); err != nil {
 		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
@@ -500,7 +503,7 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	op := "NodeGetInfo"
 	result := "SUCCESS"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op, trace.WithNewRoot())
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
