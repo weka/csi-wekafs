@@ -8,7 +8,6 @@ volumeBindingMode: Immediate
 allowVolumeExpansion: true
 parameters:
   volumeType: dir/v1
-  filesystemName: default
 
   # optional parameters setting UID, GID and permissions on volume
   # UID of the volume owner, default 0 (root)
