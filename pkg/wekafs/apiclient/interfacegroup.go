@@ -190,7 +190,7 @@ func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context, name string) *Inte
 // TODO: need to do it much more sophisticated way to distribute load
 func (a *ApiClient) GetNfsMountIp(ctx context.Context, interfaceGroupName string) (string, error) {
 	// if override is set, use it
-	if len(a.Credentials.NfsTargetIPs) > 0 {
+	if len(a.Credentials.NfsTargetIPs) > 0 && a.Credentials.NfsTargetIPs[0] != "" {
 		ips := a.Credentials.NfsTargetIPs
 		idx := rand.Intn(len(ips))
 		ip := ips[idx]

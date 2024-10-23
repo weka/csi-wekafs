@@ -106,6 +106,9 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		nfsTargetIpsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["nfsTargetIps"], "\n"), "\n", ","))
 		nfsTargetIps = func() []string {
 			var ret []string
+			if nfsTargetIpsRaw == "" {
+				return ret
+			}
 			for _, s := range strings.Split(nfsTargetIpsRaw, ",") {
 				ret = append(ret, strings.TrimSpace(strings.TrimSuffix(s, "\n")))
 			}
