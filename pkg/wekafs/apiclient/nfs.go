@@ -26,7 +26,11 @@ func (n NfsVersionString) String() string {
 	return string(n)
 }
 func (n NfsVersionString) AsOption() string {
-	return strings.TrimLeft(n.String(), "V")
+	ret := strings.TrimLeft(n.String(), "V")
+	if strings.HasPrefix(ret, "3.") {
+		ret = "3"
+	}
+	return ret
 }
 
 func (n NfsVersionString) AsWeka() NfsVersionString {
