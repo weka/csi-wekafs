@@ -214,14 +214,14 @@ func TestNfsClientGroup(t *testing.T) {
 
 func TestEnsureCsiPluginNfsClientGroup(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
-	result, err := apiClient.EnsureCsiPluginNfsClientGroup(context.Background(), NfsClientGroupName)
+	result, _, err := apiClient.EnsureCsiPluginNfsClientGroup(context.Background(), NfsClientGroupName)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 }
 
 func TestNfsClientGroupRules(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
-	cg, err := apiClient.EnsureCsiPluginNfsClientGroup(context.Background(), NfsClientGroupName)
+	cg, _, err := apiClient.EnsureCsiPluginNfsClientGroup(context.Background(), NfsClientGroupName)
 	assert.NoError(t, err)
 	assert.NotNil(t, cg)
 
