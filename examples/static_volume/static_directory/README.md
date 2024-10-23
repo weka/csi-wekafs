@@ -8,9 +8,9 @@ This example covers a way to provision a directory on Weka filesystem as a stati
 4. However, since the volume is not created by the CSI controller, its quota is not set. If needed, please set quota manually.
 
 ## StorageClass Highlights
-- Storage class specifies the filesystemName to provision the directories in
+- No need to specify filesystemName in storage class definition since it is envoded in volumeHandle
+- If filesystemName is set within storageClass definition, it is disregarded
 - volumeType set to `dir/v1`
-- Filesystem name, if set, is disregarded within storageClass definition
 
 ## Prerequisites
 The example assumes the following operations were performed on Weka storage prior to execution:
@@ -24,7 +24,6 @@ The example assumes the following operations were performed on Weka storage prio
 # Workflow
 > All commands below may be executed by `kubectl apply -f <FILE>.yaml`
 1. Create storageclass `storageclass-wekafs-dir-static-api` 
-   - Make sure to set `filesystemName` to valid existing Weka filesystem
    - Make sure `volumeType` is set to `dir/v1`
 2. Create CSI secret `csi-wekafs-api-secret`  (Located in [../../common/csi-wekafs-api-secret.yaml](../../common/csi-wekafs-api-secret.yaml))
 3. Create a static directory-backed PersistentVolume entry `pv-wekafs-dir-static-api`
