@@ -62,7 +62,7 @@ spec:
             - bash
           args:
             - -c
-            - kubectl get node $NODENAME -o json | jq '.metadata' > /etc/nodeinfo/metadata
+            - kubectl label node $NODENAME "topology.csi.weka.io/transport-" ; kubectl get node $NODENAME -o json | jq '.metadata' > /etc/nodeinfo/metadata
       containers:
         - name: wekafs
           securityContext:
