@@ -26,8 +26,15 @@ spec:
         prometheus.io/port: '{{ .Values.metrics.controllerPort | default 9090 }},{{ .Values.metrics.provisionerPort | default 9091 }},{{ .Values.metrics.resizerPort | default 9092 }},{{ .Values.metrics.snapshotterPort | default 9093 }}'
     {{- end }}
     spec:
-      {{- if .Values.nodeSelector }}
-      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8}}
+      {{- if or .Values.controller.affinity .Values.affinity }}
+      {{- $affinity := mustMergeOverwrite .Values.affinity .Values.controller.affinity }}
+      affinity:
+        {{- toYaml $affinity | nindent 8}}
+      {{- end }}
+      {{- if or .Values.nodeSelector .Values.controller.nodeSelector}}
+      {{ $nodeselector := mustMergeOverwrite .Values.nodeSelector .Values.controller.nodeSelector }}
+      nodeSelector:
+        {{- toYaml $nodeselector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
       {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}
