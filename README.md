@@ -1,7 +1,7 @@
 # CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-![Version: 2.5.1-SNAPSHOT.14.22940b1](https://img.shields.io/badge/Version-2.5.1--SNAPSHOT.14.22940b1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.5.1-SNAPSHOT.14.22940b1](https://img.shields.io/badge/AppVersion-v2.5.1--SNAPSHOT.14.22940b1-informational?style=flat-square)
+![Version: 2.5.1-SNAPSHOT.19.485d87d](https://img.shields.io/badge/Version-2.5.1--SNAPSHOT.19.485d87d-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.5.1-SNAPSHOT.19.485d87d](https://img.shields.io/badge/AppVersion-v2.5.1--SNAPSHOT.19.485d87d-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
 
@@ -44,7 +44,7 @@ make build
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.5.1-SNAPSHOT.14.22940b1"` | CSI driver version |
+| csiDriverVersion | string | `"2.5.1-SNAPSHOT.19.485d87d"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.14.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.7.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.1.0"` | CSI provisioner sidecar image URL |
@@ -53,13 +53,14 @@ make build
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.1.0"` | CSI snapshotter sidecar image URL |
 | images.nodeinfo | string | `"quay.io/weka.io/csi-wekafs"` | CSI nodeinfo sidecar image URL, used for reading node metadata |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.5.1-SNAPSHOT.14.22940b1"` | CSI driver tag |
+| images.csidriverTag | string | `"2.5.1-SNAPSHOT.19.485d87d"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
-| nodeSelector | object | `{}` | Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only |
-| machineConfigLabels | list | `["worker","master"]` | Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on NOTE: by default, the policy will be installed both on workers and control plane nodes |
+| nodeSelector | object | `{}` | Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only    This nodeselector will be applied to all CSI plugin components |
+| affinity | object | `{}` | Optional affinity for CSI plugin deployment    This affinity will be applied to all CSI plugin components |
+| machineConfigLabels | list | `["worker","master"]` | Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on    NOTE: by default, the policy will be installed both on workers and control plane nodes |
 | controller.replicas | int | `2` | Controller number of replicas |
 | controller.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
 | controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
@@ -67,9 +68,13 @@ make build
 | controller.configureProvisionerLeaderElection | bool | `true` | Configure provisioner sidecar for leader election |
 | controller.configureResizerLeaderElection | bool | `true` | Configure resizer sidecar for leader election |
 | controller.configureSnapshotterLeaderElection | bool | `true` | Configure snapshotter sidecar for leader election |
+| controller.nodeSelector | object | `{}` | optional nodeSelector for controller components only |
+| controller.affinity | object | `{}` | optional affinity for controller components only |
 | node.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
 | node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
 | node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
+| node.nodeSelector | object | `{}` | optional nodeSelector for node components only |
+| node.affinity | object | `{}` | optional affinity for node components only |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
 | legacyVolumeSecretName | string | `""` | for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin |
