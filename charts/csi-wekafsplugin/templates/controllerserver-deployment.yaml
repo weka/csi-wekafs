@@ -1,4 +1,4 @@
-kind: StatefulSet
+kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: {{ .Release.Name }}-controller
@@ -11,7 +11,6 @@ spec:
   selector:
     matchLabels:
       app: {{ .Release.Name }}-controller
-  serviceName: {{ .Release.Name }}-controller
   replicas: {{ .Values.controller.replicas | default 1 }}
   template:
     metadata:
@@ -43,6 +42,132 @@ spec:
       hostNetwork: true
       {{- end }}
       containers:
+        - name: wekafs
+          securityContext:
+            privileged: true
+          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
+          imagePullPolicy: Always
+          args:
+            - "--drivername=$(CSI_DRIVER_NAME)"
+            - "--v={{ .Values.logLevel | default 5 }}"
+            - "--endpoint=$(CSI_ENDPOINT)"
+            - "--nodeid=$(KUBE_NODE_NAME)"
+            - "--dynamic-path=$(CSI_DYNAMIC_PATH)"
+            - "--csimode=$(X_CSI_MODE)"
+            - "--newvolumeprefix={{ .Values.pluginConfig.objectNaming.volumePrefix | default "csivol-" | trunc 7 }}"
+            - "--newsnapshotprefix={{ .Values.pluginConfig.objectNaming.snapshotPrefix | default "csisnp-" | trunc 7 }}"
+            - "--seedsnapshotprefix={{ .Values.pluginConfig.objectNaming.seedSnapshotPrefix | default "csisnp-seed-" | trunc 12 }}"
+          {{- if .Values.pluginConfig.allowedOperations.autoCreateFilesystems | default true }}
+            - "--allowautofscreation"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowedOperations.autoExpandFilesystems | default true }}
+            - "--allowautofsexpansion"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes }}
+            - "--allowsnapshotsoflegacyvolumes"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement }}
+            - "--alwaysallowsnapshotvolumes"
+          {{- end }}
+          {{- if .Values.tracingUrl }}
+            - "--tracingurl={{ .Values.tracingUrl }}"
+          {{- end }}
+          {{- if .Values.metrics.enabled }}
+            - "--enablemetrics"
+            - "--metricsport={{ .Values.metrics.controllerPort | default 9090 }}"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowInsecureHttps }}
+            - "--allowinsecurehttps"
+          {{- end }}
+          {{- if .Values.pluginConfig.mutuallyExclusiveMountOptions }}
+            {{- range  .Values.pluginConfig.mutuallyExclusiveMountOptions }}
+            - "--mutuallyexclusivemountoptions={{ . }}"
+            {{- end }}
+          {{- end}}
+          {{- if .Values.useJsonLogging }}
+            - "--usejsonlogging"
+          {{- end }}
+          {{- if .Values.controller.grpcRequestTimeoutSeconds }}
+            - "--grpcrequesttimeoutseconds={{ .Values.controller.grpcRequestTimeoutSeconds | default "5" }}"
+          {{- end }}
+          {{- if .Values.controller.concurrency }}
+            - "--concurrency.createVolume={{ .Values.controller.concurrency.createVolume | default "1" }}"
+            - "--concurrency.deleteVolume={{ .Values.controller.concurrency.deleteVolume | default "1" }}"
+            - "--concurrency.expandVolume={{ .Values.controller.concurrency.expandVolume | default "1" }}"
+            - "--concurrency.createSnapshot={{ .Values.controller.concurrency.createSnapshot | default "1" }}"
+            - "--concurrency.deleteSnapshot={{ .Values.controller.concurrency.deleteSnapshot | default "1" }}"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
+            - "--usenfs"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.allowNfsFailback | default false }}
+            - "--allownfsfailback"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.interfaceGroupName }}
+            - "--interfacegroupname={{ .Values.pluginConfig.mountProtocol.interfaceGroupName }}"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.clientGroupName }}
+            - "--clientgroupname={{ .Values.pluginConfig.mountProtocol.clientGroupName }}"
+          {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.nfsProtocolVersion }}
+            - "--nfsprotocolversion={{ .Values.pluginConfig.mountProtocol.nfsProtocolVersion | toString}}"
+          {{- end }}
+          ports:
+            - containerPort: 9898
+              name: healthz
+              protocol: TCP
+          {{- if .Values.metrics.enabled }}
+            - containerPort: {{ .Values.metrics.controllerPort | default 9090 }}
+              name: metrics
+              protocol: TCP
+          {{- end }}
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 2
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: CSI_DRIVER_NAME
+              value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
+            - name: CSI_DRIVER_VERSION
+              value: {{ required "Provide CSI Driver version"  .Values.csiDriverVersion }}
+            - name: X_CSI_MODE
+              value: controller
+            - name: CSI_DYNAMIC_PATH
+              value: {{ required "Provide CSI Driver Dynamic Volume Creation Path"  .Values.dynamicProvisionPath }}
+            - name: X_CSI_DEBUG
+              value: "false"
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBE_NODE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/pods
+              mountPropagation: Bidirectional
+              name: mountpoint-dir
+            - mountPath: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins
+              mountPropagation: Bidirectional
+              name: plugins-dir
+            - mountPath: /var/lib/csi-wekafs-data
+              name: csi-data-dir
+            - mountPath: /dev
+              name: dev-dir
+            {{- if .Values.legacyVolumeSecretName }}
+            - mountPath: /legacy-volume-access
+              name: legacy-volume-access
+              readOnly: true
+            {{- end }}
         - name: csi-attacher
           image: {{ required "csi attacher sidercar image." .Values.images.attachersidecar }}
           securityContext:
@@ -169,132 +294,6 @@ spec:
             - name: socket-dir
               mountPath: /csi
 
-        - name: wekafs
-          securityContext:
-            privileged: true
-          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
-          imagePullPolicy: Always
-          args:
-            - "--drivername=$(CSI_DRIVER_NAME)"
-            - "--v={{ .Values.logLevel | default 5 }}"
-            - "--endpoint=$(CSI_ENDPOINT)"
-            - "--nodeid=$(KUBE_NODE_NAME)"
-            - "--dynamic-path=$(CSI_DYNAMIC_PATH)"
-            - "--csimode=$(X_CSI_MODE)"
-            - "--newvolumeprefix={{ .Values.pluginConfig.objectNaming.volumePrefix | default "csivol-" | trunc 7 }}"
-            - "--newsnapshotprefix={{ .Values.pluginConfig.objectNaming.snapshotPrefix | default "csisnp-" | trunc 7 }}"
-            - "--seedsnapshotprefix={{ .Values.pluginConfig.objectNaming.seedSnapshotPrefix | default "csisnp-seed-" | trunc 12 }}"
-          {{- if .Values.pluginConfig.allowedOperations.autoCreateFilesystems | default true }}
-            - "--allowautofscreation"
-          {{- end }}
-          {{- if .Values.pluginConfig.allowedOperations.autoExpandFilesystems | default true }}
-            - "--allowautofsexpansion"
-          {{- end }}
-          {{- if .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes }}
-            - "--allowsnapshotsoflegacyvolumes"
-          {{- end }}
-          {{- if .Values.pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement }}
-            - "--alwaysallowsnapshotvolumes"
-          {{- end }}
-          {{- if .Values.tracingUrl }}
-            - "--tracingurl={{ .Values.tracingUrl }}"
-          {{- end }}
-          {{- if .Values.metrics.enabled }}
-            - "--enablemetrics"
-            - "--metricsport={{ .Values.metrics.controllerPort | default 9090 }}"
-          {{- end }}
-          {{- if .Values.pluginConfig.allowInsecureHttps }}
-            - "--allowinsecurehttps"
-          {{- end }}
-          {{- if .Values.pluginConfig.mutuallyExclusiveMountOptions }}
-            {{- range  .Values.pluginConfig.mutuallyExclusiveMountOptions }}
-            - "--mutuallyexclusivemountoptions={{ . }}"
-            {{- end }}
-          {{- end}}
-          {{- if .Values.useJsonLogging }}
-            - "--usejsonlogging"
-          {{- end }}
-          {{- if .Values.controller.grpcRequestTimeoutSeconds }}
-            - "--grpcrequesttimeoutseconds={{ .Values.controller.grpcRequestTimeoutSeconds | default "5" }}"
-          {{- end }}
-          {{- if .Values.controller.concurrency }}
-            - "--concurrency.createVolume={{ .Values.controller.concurrency.createVolume | default "1" }}"
-            - "--concurrency.deleteVolume={{ .Values.controller.concurrency.deleteVolume | default "1" }}"
-            - "--concurrency.expandVolume={{ .Values.controller.concurrency.expandVolume | default "1" }}"
-            - "--concurrency.createSnapshot={{ .Values.controller.concurrency.createSnapshot | default "1" }}"
-            - "--concurrency.deleteSnapshot={{ .Values.controller.concurrency.deleteSnapshot | default "1" }}"
-          {{- end }}
-          {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
-            - "--usenfs"
-          {{- end }}
-          {{- if .Values.pluginConfig.mountProtocol.allowNfsFailback | default false }}
-            - "--allownfsfailback"
-          {{- end }}
-          {{- if .Values.pluginConfig.mountProtocol.interfaceGroupName }}
-            - "--interfacegroupname={{ .Values.pluginConfig.mountProtocol.interfaceGroupName }}"
-          {{- end }}
-          {{- if .Values.pluginConfig.mountProtocol.clientGroupName }}
-            - "--clientgroupname={{ .Values.pluginConfig.mountProtocol.clientGroupName }}"
-          {{- end }}
-          {{- if .Values.pluginConfig.mountProtocol.nfsProtocolVersion }}
-            - "--nfsprotocolversion={{ .Values.pluginConfig.mountProtocol.nfsProtocolVersion | toString}}"
-          {{- end }}
-          ports:
-            - containerPort: 9898
-              name: healthz
-              protocol: TCP
-          {{- if .Values.metrics.enabled }}
-            - containerPort: {{ .Values.metrics.controllerPort | default 9090 }}
-              name: metrics
-              protocol: TCP
-          {{- end }}
-          livenessProbe:
-            failureThreshold: 5
-            httpGet:
-              path: /healthz
-              port: healthz
-            initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 2
-          env:
-            - name: CSI_ENDPOINT
-              value: unix:///csi/csi.sock
-            - name: CSI_DRIVER_NAME
-              value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
-            - name: CSI_DRIVER_VERSION
-              value: {{ required "Provide CSI Driver version"  .Values.csiDriverVersion }}
-            - name: X_CSI_MODE
-              value: controller
-            - name: CSI_DYNAMIC_PATH
-              value: {{ required "Provide CSI Driver Dynamic Volume Creation Path"  .Values.dynamicProvisionPath }}
-            - name: X_CSI_DEBUG
-              value: "false"
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-            - name: KUBE_NODE_IP_ADDRESS
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
-          volumeMounts:
-            - mountPath: /csi
-              name: socket-dir
-            - mountPath: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/pods
-              mountPropagation: Bidirectional
-              name: mountpoint-dir
-            - mountPath: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins
-              mountPropagation: Bidirectional
-              name: plugins-dir
-            - mountPath: /var/lib/csi-wekafs-data
-              name: csi-data-dir
-            - mountPath: /dev
-              name: dev-dir
-{{- if .Values.legacyVolumeSecretName }}
-            - mountPath: /legacy-volume-access
-              name: legacy-volume-access
-              readOnly: true
-{{- end }}
         - name: liveness-probe
           volumeMounts:
             - mountPath: /csi
