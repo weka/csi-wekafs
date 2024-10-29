@@ -27,14 +27,16 @@ spec:
     {{- end }}
     spec:
       {{- if or .Values.controller.affinity .Values.affinity }}
-      {{- $affinity := mustMergeOverwrite .Values.affinity .Values.controller.affinity }}
+      {{- $controllerAffinity := dict  -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $controllerAffinity .Values.controller.affinity .Values.affinity) }}
       affinity:
-        {{- toYaml $affinity | nindent 8}}
+        {{- toYaml $controllerAffinity | nindent 8}}
       {{- end }}
       {{- if or .Values.nodeSelector .Values.controller.nodeSelector}}
-      {{ $nodeselector := mustMergeOverwrite .Values.nodeSelector .Values.controller.nodeSelector }}
+      {{- $nodeSelector := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeSelector .Values.controller.nodeSelector .Values.nodeSelector) }}
       nodeSelector:
-        {{- toYaml $nodeselector | nindent 8 }}
+        {{- toYaml $nodeSelector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
       {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}

@@ -21,14 +21,16 @@ spec:
     {{- end }}
     spec:
       {{- if or .Values.node.affinity .Values.affinity }}
-      {{- $affinity := mustMergeOverwrite .Values.affinity .Values.node.affinity }}
+      {{- $nodeAffinity := dict  -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeAffinity .Values.node.affinity .Values.affinity) }}
       affinity:
-        {{- toYaml $affinity | nindent 8}}
+        {{- toYaml $nodeAffinity | nindent 8}}
       {{- end }}
       {{- if or .Values.nodeSelector .Values.node.nodeSelector}}
-      {{ $nodeselector := mustMergeOverwrite .Values.nodeSelector .Values.node.nodeSelector }}
+      {{- $nodeSelector := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeSelector .Values.node.nodeSelector .Values.nodeSelector) }}
       nodeSelector:
-        {{- toYaml $nodeselector | nindent 8 }}
+        {{- toYaml $nodeSelector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-node
       {{- if .Values.priorityClassName }}
