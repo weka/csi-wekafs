@@ -21,7 +21,7 @@ RUN true
 
 RUN echo Building package
 RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o "/bin/wekafsplugin" /src/cmd/*
-FROM registry.k8s.io/kubernetes/kubectl:v1.31.1 AS kubectl
+FROM registry.k8s.io/kubernetes/kubectl:v1.31.2 AS kubectl
 
 FROM alpine:3.18
 LABEL maintainers="WekaIO, LTD"
