@@ -20,20 +20,17 @@ spec:
         prometheus.io/port: '{{ .Values.metrics.nodePort | default 9090 }}'
     {{- end }}
     spec:
-      {{- if (eq .Values.selinuxSupport "mixed")}}
+      {{- if or .Values.node.affinity .Values.affinity }}
+      {{- $nodeAffinity := dict  -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeAffinity .Values.node.affinity .Values.affinity) }}
       affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: {{ .Values.selinuxNodeLabel |default "csi.weka.io/selinux_enabled" }}
-                    operator: In
-                    values:
-                      - "true"
+        {{- toYaml $nodeAffinity | nindent 8}}
       {{- end }}
-      {{- if .Values.nodeSelector }}
+      {{- if or .Values.nodeSelector .Values.node.nodeSelector}}
+      {{- $nodeSelector := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeSelector .Values.node.nodeSelector .Values.nodeSelector) }}
       nodeSelector:
-      {{- toYaml .Values.nodeSelector | nindent 8}}
+        {{- toYaml $nodeSelector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-node
       {{- if .Values.priorityClassName }}

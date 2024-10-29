@@ -38,9 +38,13 @@ controllerPluginTolerations: *globalPluginTolerations
 # -- Tolerations for CSI node component only (by default same as global)
 nodePluginTolerations: *globalPluginTolerations
 # -- Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only
+#    This nodeselector will be applied to all CSI plugin components
 nodeSelector: {}
+# -- Optional affinity for CSI plugin deployment
+#    This affinity will be applied to all CSI plugin components
+affinity: {}
 # -- Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on
-# NOTE: by default, the policy will be installed both on workers and control plane nodes
+#    NOTE: by default, the policy will be installed both on workers and control plane nodes
 machineConfigLabels:
   - "worker"
   - "master"
@@ -65,6 +69,10 @@ controller:
   configureResizerLeaderElection: true
   # -- Configure snapshotter sidecar for leader election
   configureSnapshotterLeaderElection: true
+  # -- optional nodeSelector for controller components only
+  nodeSelector: {}
+  # -- optional affinity for controller components only
+  affinity: {}
 # Node-specific parameters, please do not change unless explicitly guided
 node:
   # -- Maximum concurrent requests from sidecars (global)
@@ -75,6 +83,10 @@ node:
     nodeUnpublishVolume: 5
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
   grpcRequestTimeoutSeconds: 30
+  # -- optional nodeSelector for node components only
+  nodeSelector: {}
+  # -- optional affinity for node components only
+  affinity: {}
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
