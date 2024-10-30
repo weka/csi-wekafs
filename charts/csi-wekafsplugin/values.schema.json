@@ -31,6 +31,9 @@
                         }
                     }
                 },
+                "configureAttacherLeaderElection": {
+                    "type": "boolean"
+                },
                 "configureProvisionerLeaderElection": {
                     "type": "boolean"
                 },
@@ -153,6 +156,9 @@
         "metrics": {
             "type": "object",
             "properties": {
+                "attacherPort": {
+                    "type": "integer"
+                },
                 "controllerPort": {
                     "type": "integer"
                 },
