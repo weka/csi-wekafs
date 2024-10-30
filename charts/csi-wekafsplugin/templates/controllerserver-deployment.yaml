@@ -1,4 +1,4 @@
-kind: StatefulSet
+kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: {{ .Release.Name }}-controller
@@ -11,7 +11,6 @@ spec:
   selector:
     matchLabels:
       app: {{ .Release.Name }}-controller
-  serviceName: {{ .Release.Name }}-controller
   replicas: {{ .Values.controller.replicas | default 1 }}
   template:
     metadata:
@@ -23,143 +22,26 @@ spec:
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/path: '/metrics'
-        prometheus.io/port: '{{ .Values.metrics.controllerPort | default 9090 }},{{ .Values.metrics.provisionerPort | default 9091 }},{{ .Values.metrics.resizerPort | default 9092 }},{{ .Values.metrics.snapshotterPort | default 9093 }}'
+        prometheus.io/port: '{{ .Values.metrics.controllerPort | default 9090 }},{{ .Values.metrics.provisionerPort | default 9091 }},{{ .Values.metrics.resizerPort | default 9092 }},{{ .Values.metrics.snapshotterPort | default 9093 }},{{ .Values.metrics.attacherPort | default 9095 }}'
     {{- end }}
     spec:
-      {{- if .Values.nodeSelector }}
-      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8}}
+      {{- if or .Values.controller.affinity .Values.affinity }}
+      {{- $controllerAffinity := dict  -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $controllerAffinity .Values.controller.affinity .Values.affinity) }}
+      affinity:
+        {{- toYaml $controllerAffinity | nindent 8}}
+      {{- end }}
+      {{- if or .Values.nodeSelector .Values.controller.nodeSelector}}
+      {{- $nodeSelector := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeSelector .Values.controller.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml $nodeSelector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
       {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}
       hostNetwork: true
       {{- end }}
       containers:
-        - name: csi-attacher
-          image: {{ required "csi attacher sidercar image." .Values.images.attachersidecar }}
-          securityContext:
-            privileged: true
-          args:
-            - "--csi-address=$(ADDRESS)"
-            - "--v={{ .Values.logLevel | default 5 }}"
-            - "--timeout=60s"
-            - "--leader-election"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
-            - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
-          env:
-            - name: ADDRESS
-              value: unix:///csi/csi.sock
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
-        - name: csi-provisioner
-          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
-          securityContext:
-              privileged: true
-          {{- end }}
-          image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
-          args:
-            - "--v={{ .Values.logLevel | default 5 }}"
-            - "--csi-address=$(ADDRESS)"
-            - "--feature-gates=Topology=true"
-            - "--timeout=60s"
-            - "--prevent-volume-mode-conversion"
-          {{- if .Values.controller.configureProvisionerLeaderElection | default true }}
-            - "--leader-election"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
-          {{- end }}
-            - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
-            - "--retry-interval-start=10s"
-          {{- if or .Values.metrics.enabled .Values.controller.configureProvisionerLeaderElection }}
-            - "--http-endpoint=:{{ .Values.metrics.provisionerPort | default 9091 }}"
-          {{- end }}
-          {{- if .Values.controller.configureProvisionerLeaderElection }}
-          livenessProbe:
-            httpGet:
-              port: {{ .Values.metrics.provisionerPort | default 9091 }}
-              path: /healthz/leader-election
-          {{- end }}
-          env:
-            - name: ADDRESS
-              value: unix:///csi/csi.sock
-          volumeMounts:
-            - name: socket-dir
-              mountPath: "/csi"
-          ports:
-            - containerPort: {{ .Values.metrics.provisionerPort }}
-              name: pr-metrics
-              protocol: TCP
-        - name: csi-resizer
-          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
-          securityContext:
-            privileged: true
-          {{- end }}
-          image: {{ required "csi attacher sidercar image." .Values.images.resizersidecar }}
-          args:
-            - "--v={{ .Values.logLevel | default 5 }}"
-            - "--csi-address=$(ADDRESS)"
-            - "--timeout=60s"
-          {{- if or .Values.metrics.enabled .Values.controller.configureResizerLeaderElection }}
-            - "--http-endpoint=:{{ .Values.metrics.resizerPort | default 9092 }}"
-          {{- end }}
-          {{- if .Values.controller.configureResizerLeaderElection | default true }}
-            - "--leader-election"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
-          {{- end }}
-            - "--workers={{ .Values.controller.maxConcurrentRequests }}"
-            - "--retry-interval-start=10s"
-          {{- if .Values.controller.configureResizerLeaderElection }}
-          livenessProbe:
-            httpGet:
-              port: {{ .Values.metrics.resizerPort | default 9092 }}
-              path: /healthz/leader-election
-          {{- end }}
-          env:
-            - name: ADDRESS
-              value: unix:///csi/csi.sock
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
-          ports:
-            - containerPort: {{ .Values.metrics.resizerPort }}
-              name: rs-metrics
-              protocol: TCP
-        - name: csi-snapshotter
-          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
-          securityContext:
-            privileged: true
-          {{- end }}
-          image: {{ required "csi snapshotter sidecar image." .Values.images.snapshottersidecar }}
-          args:
-            - "--v=5"
-            - "--csi-address=$(ADDRESS)"
-            - "--timeout=60s"
-          {{- if .Values.controller.configureSnapshotterLeaderElection | default true }}
-            - "--leader-election"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
-          {{- end }}
-            - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
-            - "--retry-interval-start=10s"
-          {{- if or .Values.metrics.enabled .Values.controller.configureSnapshotterLeaderElection }}
-            - "--http-endpoint=:{{ .Values.metrics.snapshotterPort | default 9093 }}"
-          {{- end }}
-          {{- if .Values.controller.configureSnapshotterLeaderElection }}
-          livenessProbe:
-            httpGet:
-              port: {{ .Values.metrics.snapshotterPort | default 9093 }}
-              path: /healthz/leader-election
-          {{- end }}
-          ports:
-            - containerPort: {{ .Values.metrics.snapshotterPort }}
-              name: sn-metrics
-              protocol: TCP
-          env:
-            - name: ADDRESS
-              value: unix:///csi/csi.sock
-          imagePullPolicy: IfNotPresent
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
-
         - name: wekafs
           securityContext:
             privileged: true
@@ -281,11 +163,152 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
-{{- if .Values.legacyVolumeSecretName }}
+            {{- if .Values.legacyVolumeSecretName }}
             - mountPath: /legacy-volume-access
               name: legacy-volume-access
               readOnly: true
-{{- end }}
+            {{- end }}
+        - name: csi-attacher
+          image: {{ required "csi attacher sidercar image." .Values.images.attachersidecar }}
+          securityContext:
+            privileged: true
+          args:
+            - "--csi-address=$(ADDRESS)"
+            - "--v={{ .Values.logLevel | default 5 }}"
+            - "--timeout=60s"
+            {{- if .Values.controller.configureAttacherLeaderElection }}
+            - "--leader-election"
+            - "--leader-election-namespace={{ .Release.Namespace }}"
+            {{- end }}
+            - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            {{- if or .Values.metrics.enabled .Values.controller.configureAttacherLeaderElection }}
+            - "--http-endpoint=:{{ .Values.metrics.attacherPort | default 9095 }}"
+            {{- end }}
+          env:
+            - name: ADDRESS
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          {{- if .Values.controller.configureAttacherLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.attacherPort | default 9095 }}
+              path: /healthz/leader-election
+          ports:
+            - containerPort: {{ .Values.metrics.attacherPort | default 9095 }}
+              name: pr-metrics
+              protocol: TCP
+          {{- end }}
+        - name: csi-provisioner
+          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
+          securityContext:
+              privileged: true
+          {{- end }}
+          image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
+          args:
+            - "--v={{ .Values.logLevel | default 5 }}"
+            - "--csi-address=$(ADDRESS)"
+            - "--feature-gates=Topology=true"
+            - "--timeout=60s"
+            - "--prevent-volume-mode-conversion"
+          {{- if .Values.controller.configureProvisionerLeaderElection | default true }}
+            - "--leader-election"
+            - "--leader-election-namespace={{ .Release.Namespace }}"
+          {{- end }}
+            - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureProvisionerLeaderElection }}
+            - "--http-endpoint=:{{ .Values.metrics.provisionerPort | default 9091 }}"
+          {{- end }}
+          {{- if .Values.controller.configureProvisionerLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.provisionerPort | default 9091 }}
+              path: /healthz/leader-election
+          {{- end }}
+          env:
+            - name: ADDRESS
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: "/csi"
+          ports:
+            - containerPort: {{ .Values.metrics.provisionerPort }}
+              name: pr-metrics
+              protocol: TCP
+        - name: csi-resizer
+          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
+          securityContext:
+            privileged: true
+          {{- end }}
+          image: {{ required "csi attacher sidercar image." .Values.images.resizersidecar }}
+          args:
+            - "--v={{ .Values.logLevel | default 5 }}"
+            - "--csi-address=$(ADDRESS)"
+            - "--timeout=60s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureResizerLeaderElection }}
+            - "--http-endpoint=:{{ .Values.metrics.resizerPort | default 9092 }}"
+          {{- end }}
+          {{- if .Values.controller.configureResizerLeaderElection | default true }}
+            - "--leader-election"
+            - "--leader-election-namespace={{ .Release.Namespace }}"
+          {{- end }}
+            - "--workers={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
+          {{- if .Values.controller.configureResizerLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.resizerPort | default 9092 }}
+              path: /healthz/leader-election
+          {{- end }}
+          env:
+            - name: ADDRESS
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          ports:
+            - containerPort: {{ .Values.metrics.resizerPort }}
+              name: rs-metrics
+              protocol: TCP
+        - name: csi-snapshotter
+          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
+          securityContext:
+            privileged: true
+          {{- end }}
+          image: {{ required "csi snapshotter sidecar image." .Values.images.snapshottersidecar }}
+          args:
+            - "--v=5"
+            - "--csi-address=$(ADDRESS)"
+            - "--timeout=60s"
+          {{- if .Values.controller.configureSnapshotterLeaderElection | default true }}
+            - "--leader-election"
+            - "--leader-election-namespace={{ .Release.Namespace }}"
+          {{- end }}
+            - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--retry-interval-start=10s"
+          {{- if or .Values.metrics.enabled .Values.controller.configureSnapshotterLeaderElection }}
+            - "--http-endpoint=:{{ .Values.metrics.snapshotterPort | default 9093 }}"
+          {{- end }}
+          {{- if .Values.controller.configureSnapshotterLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.snapshotterPort | default 9093 }}
+              path: /healthz/leader-election
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.metrics.snapshotterPort }}
+              name: sn-metrics
+              protocol: TCP
+          env:
+            - name: ADDRESS
+              value: unix:///csi/csi.sock
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
         - name: liveness-probe
           volumeMounts:
             - mountPath: /csi

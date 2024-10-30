@@ -9,7 +9,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0
 	github.com/kubernetes-csi/csi-lib-utils v0.19.0
 	github.com/pkg/xattr v0.4.10
-	github.com/prometheus/client_golang v1.20.4
+	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/zerolog v1.33.0
 	github.com/showa-93/go-mask v0.6.2
 	github.com/stretchr/testify v1.9.0
@@ -17,13 +17,13 @@ require (
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
 	go.opentelemetry.io/otel/sdk v1.30.0
 	go.opentelemetry.io/otel/trace v1.30.0
-	golang.org/x/exp v0.0.0-20241004190924-225e2abe05e6
+	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 	golang.org/x/sync v0.8.0
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.35.1
-	k8s.io/apimachinery v0.31.1
+	k8s.io/apimachinery v0.31.2
 	k8s.io/helm v2.17.0+incompatible
-	k8s.io/mount-utils v0.31.1
+	k8s.io/mount-utils v0.31.2
 )
 
 require (

@@ -2,9 +2,15 @@
     "$schema": "http://json-schema.org/schema#",
     "type": "object",
     "properties": {
+        "affinity": {
+            "type": "object"
+        },
         "controller": {
             "type": "object",
             "properties": {
+                "affinity": {
+                    "type": "object"
+                },
                 "concurrency": {
                     "type": "object",
                     "properties": {
@@ -25,6 +31,9 @@
                         }
                     }
                 },
+                "configureAttacherLeaderElection": {
+                    "type": "boolean"
+                },
                 "configureProvisionerLeaderElection": {
                     "type": "boolean"
                 },
@@ -39,6 +48,9 @@
                 },
                 "maxConcurrentRequests": {
                     "type": "integer"
+                },
+                "nodeSelector": {
+                    "type": "object"
                 },
                 "replicas": {
                     "type": "integer"
@@ -144,6 +156,9 @@
         "metrics": {
             "type": "object",
             "properties": {
+                "attacherPort": {
+                    "type": "integer"
+                },
                 "controllerPort": {
                     "type": "integer"
                 },
@@ -167,6 +182,9 @@
         "node": {
             "type": "object",
             "properties": {
+                "affinity": {
+                    "type": "object"
+                },
                 "concurrency": {
                     "type": "object",
                     "properties": {
@@ -183,6 +201,9 @@
                 },
                 "maxConcurrentRequests": {
                     "type": "integer"
+                },
+                "nodeSelector": {
+                    "type": "object"
                 }
             }
         },

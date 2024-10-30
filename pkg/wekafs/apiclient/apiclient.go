@@ -676,7 +676,15 @@ func (a *ApiClient) Login(ctx context.Context) error {
 // generateHash used for storing multiple clients in hash table. Hash() is created once as connection params might change
 func (a *ApiClient) generateHash() uint32 {
 	h := fnv.New32a()
-	s := fmt.Sprintln(a.Credentials.Username, a.Credentials.Password, a.Credentials.Organization, a.Credentials.Endpoints)
+	s := fmt.Sprintln(
+		a.Credentials.Username,
+		a.Credentials.Password,
+		a.Credentials.Organization,
+		a.Credentials.Endpoints,
+		a.Credentials.NfsTargetIPs,
+		a.Credentials.LocalContainerName,
+		a.Credentials.CaCertificate,
+	)
 	_, _ = h.Write([]byte(s))
 	return h.Sum32()
 }
