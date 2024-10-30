@@ -22,7 +22,7 @@ spec:
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/path: '/metrics'
-        prometheus.io/port: '{{ .Values.metrics.controllerPort | default 9090 }},{{ .Values.metrics.provisionerPort | default 9091 }},{{ .Values.metrics.resizerPort | default 9092 }},{{ .Values.metrics.snapshotterPort | default 9093 }}'
+        prometheus.io/port: '{{ .Values.metrics.controllerPort | default 9090 }},{{ .Values.metrics.provisionerPort | default 9091 }},{{ .Values.metrics.resizerPort | default 9092 }},{{ .Values.metrics.snapshotterPort | default 9093 }},{{ .Values.metrics.attacherPort | default 9095 }}'
     {{- end }}
     spec:
       {{- if or .Values.controller.affinity .Values.affinity }}
@@ -176,15 +176,30 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--timeout=60s"
+            {{- if .Values.controller.configureAttacherLeaderElection }}
             - "--leader-election"
             - "--leader-election-namespace={{ .Release.Namespace }}"
+            {{- end }}
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            {{- if or .Values.metrics.enabled .Values.controller.configureAttacherLeaderElection }}
+            - "--http-endpoint=:{{ .Values.metrics.attacherPort | default 9095 }}"
+            {{- end }}
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
+          {{- if .Values.controller.configureAttacherLeaderElection }}
+          livenessProbe:
+            httpGet:
+              port: {{ .Values.metrics.attacherPort | default 9095 }}
+              path: /healthz/leader-election
+          ports:
+            - containerPort: {{ .Values.metrics.attacherPort | default 9095 }}
+              name: pr-metrics
+              protocol: TCP
+          {{- end }}
         - name: csi-provisioner
           {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
           securityContext:

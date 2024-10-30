@@ -69,6 +69,8 @@ controller:
   configureResizerLeaderElection: true
   # -- Configure snapshotter sidecar for leader election
   configureSnapshotterLeaderElection: true
+  # -- Configure attacher sidecar for leader election
+  configureAttacherLeaderElection: true
   # -- optional nodeSelector for controller components only
   nodeSelector: {}
   # -- optional affinity for controller components only
@@ -121,6 +123,8 @@ metrics:
   snapshotterPort: 9093
   # -- Metrics port for Node Serer
   nodePort: 9094
+  # -- Attacher metrics port
+  attacherPort: 9095
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
