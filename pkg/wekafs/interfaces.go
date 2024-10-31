@@ -32,9 +32,8 @@ type AnyMounter interface {
 	getTransport() DataTransport
 }
 
-type mountsMapPerFs map[string]AnyMount
-type mountsMap map[string]mountsMapPerFs
 type nfsMountsMap map[string]int // we only follow the mountPath and number of references
+type wekafsMountsMap map[string]int
 type DataTransport string
 type UnmountFunc func()
 

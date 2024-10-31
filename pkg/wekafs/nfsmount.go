@@ -81,7 +81,6 @@ func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) e
 	}
 	refCount++
 	m.mounter.mountMap[m.getRefcountIdx()] = refCount
-	m.mounter.mountMap[m.getRefcountIdx()] = refCount
 
 	logger.Trace().
 		Int("refcount", refCount).

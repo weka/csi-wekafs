@@ -321,6 +321,24 @@ func GetMountIpFromActualMountPoint(mountPointBase string) (string, error) {
 	}
 	return "", errors.New("mount point not found")
 }
+func GetMountContainerNameFromActualMountPoint(mountPointBase string) (string, error) {
+	file, err := os.Open("/proc/mounts")
+	if err != nil {
+		return "", errors.New("failed to open /proc/mounts")
+	}
+	defer func() { _ = file.Close() }()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) >= 4 && fields[2] == "wekafs" {
+			optionsString := fields[3]
+			mountOptions := NewMountOptionsFromString(optionsString)
+			containerName := mountOptions.getOptionValue("container_name")
+			return containerName, nil
+		}
+	}
+	return "", errors.New("mount point not found")
+}
 
 func validateVolumeId(volumeId string) error {
 	// Volume New format:

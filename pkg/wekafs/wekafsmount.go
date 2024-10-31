@@ -14,6 +14,7 @@ import (
 )
 
 type wekafsMount struct {
+	mounter                 *wekafsMounter
 	fsName                  string
 	mountPoint              string
 	refCount                int
@@ -23,9 +24,13 @@ type wekafsMount struct {
 	mountOptions            MountOptions
 	lastUsed                time.Time
 	allowProtocolContainers bool
+	containerName           string
 }
 
 func (m *wekafsMount) getMountPoint() string {
+	if m.containerName != "" {
+		return fmt.Sprintf("%s-%s", m.mountPoint, m.containerName)
+	}
 	return m.mountPoint
 }
 
@@ -48,46 +53,83 @@ func (m *wekafsMount) isMounted() bool {
 	return PathExists(m.getMountPoint()) && PathIsWekaMount(context.Background(), m.getMountPoint())
 }
 
+func (m *wekafsMount) getRefcountIdx() string {
+	return m.getMountPoint() + "^" + m.getMountOptions().String()
+}
+
 func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
 	logger := log.Ctx(ctx)
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	if m.refCount < 0 {
-		logger.Error().Str("mount_point", m.getMountPoint()).Int("refcount", m.refCount).Msg("During incRef negative refcount encountered")
-		m.refCount = 0 // to make sure that we don't have negative refcount later
+	if m.mounter == nil {
+		logger.Error().Msg("Mounter is nil")
+		return errors.New("mounter is nil")
 	}
-	if m.refCount == 0 {
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
-	} else if !m.isMounted() {
-		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", m.refCount).Msg("Mount not exists although should!")
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
 
+	m.mounter.lock.Lock()
+	defer m.mounter.lock.Unlock()
+	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
+	if !ok {
+		refCount = 0
 	}
-	m.refCount++
-	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount increased")
+	if refCount == 0 {
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
+			return err
+		}
+	}
+	if refCount > 0 && !m.isMounted() {
+		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", refCount).Msg("Mount not exists although should!")
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
+			return err
+		}
+	}
+	refCount++
+	m.mounter.mountMap[m.getRefcountIdx()] = refCount
+	logger.Trace().
+		Int("refcount", refCount).
+		Strs("mount_options", m.getMountOptions().Strings()).
+		Str("filesystem_name", m.fsName).
+		Str("mount_point", m.getMountPoint()).
+		Msg("RefCount increased")
 	return nil
 }
 
 func (m *wekafsMount) decRef(ctx context.Context) error {
 	logger := log.Ctx(ctx)
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	m.refCount--
-	m.lastUsed = time.Now()
-	logger.Trace().Int("refcount", m.refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
-	if m.refCount < 0 {
-		logger.Error().Int("refcount", m.refCount).Msg("During decRef negative refcount encountered")
-		m.refCount = 0 // to make sure that we don't have negative refcount later
+	if m.mounter == nil {
+		logger.Error().Msg("Mounter is nil")
+		return errors.New("mounter is nil")
 	}
-	if m.refCount == 0 {
-		if err := m.doUnmount(ctx); err != nil {
-			m.refCount++ // since we failed to unmount, we need to increase the refcount back to the original value
+	m.mounter.lock.Lock()
+	defer m.mounter.lock.Unlock()
+	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
+	if !ok {
+		logger.Error().Int("refcount", refCount).Str("mount_options", m.getMountOptions().String()).Str("mount_point", m.getMountPoint()).Msg("During decRef refcount not found")
+		refCount = 0
+	}
+	if refCount < 0 {
+		logger.Error().Int("refcount", refCount).Msg("During decRef negative refcount encountered, probably due to failed unmount")
+	}
+	if refCount > 0 {
+		logger.Trace().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
+		refCount--
+		m.mounter.mountMap[m.getRefcountIdx()] = refCount
+	}
+	if refCount == 0 {
+		if m.isMounted() {
+			if err := m.doUnmount(ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (m *wekafsMount) locateContainerName() error {
+	if m.containerName == "" {
+		containerName, err := GetMountContainerNameFromActualMountPoint(m.mountPoint)
+		if err != nil {
 			return err
 		}
+		m.containerName = containerName
 	}
 	return nil
 }
@@ -114,7 +156,6 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	mountToken := ""
 	var mountOptionsSensitive []string
-	var localContainerName string
 	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 		return err
 	}
@@ -141,26 +182,26 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 
 		// if needed, add containerName to the mount string
 		if apiClient != nil && len(containerPaths) > 1 {
-			localContainerName = apiClient.Credentials.LocalContainerName
+			m.containerName = apiClient.Credentials.LocalContainerName
 			if apiClient.SupportsMultipleClusters() {
-				if localContainerName != "" {
-					logger.Info().Str("local_container_name", localContainerName).Msg("Local container name set by secrets")
+				if m.containerName != "" {
+					logger.Info().Str("local_container_name", m.containerName).Msg("Local container name set by secrets")
 				} else {
 					container, err := apiClient.GetLocalContainer(ctx, m.allowProtocolContainers)
 					if err != nil || container == nil {
 						logger.Warn().Err(err).Msg("Failed to determine local container, assuming default")
 					} else {
-						localContainerName = container.ContainerName
+						m.containerName = container.ContainerName
 					}
 
 				}
-				if localContainerName != "" {
+				if m.containerName != "" {
 					for _, p := range containerPaths {
 						containerName := filepath.Base(filepath.Dir(p))
-						if localContainerName == containerName {
+						if m.containerName == containerName {
 							mountOptions.customOptions["container_name"] = mountOption{
 								option: "container_name",
-								value:  localContainerName,
+								value:  m.containerName,
 							}
 
 							break
