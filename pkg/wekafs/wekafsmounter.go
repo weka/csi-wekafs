@@ -5,6 +5,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"strings"
 	"sync"
 	"time"
 )
@@ -14,7 +15,7 @@ const (
 )
 
 type wekafsMounter struct {
-	mountMap                mountsMap
+	mountMap                wekafsMountsMap
 	lock                    sync.Mutex
 	kMounter                mount.Interface
 	debugPath               string
@@ -33,7 +34,7 @@ func newWekafsMounter(driver *WekaFsDriver) *wekafsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &wekafsMounter{mountMap: mountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
+	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc()
 
@@ -41,27 +42,20 @@ func newWekafsMounter(driver *WekaFsDriver) *wekafsMounter {
 }
 
 func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
-	m.lock.Lock()
 	if m.kMounter == nil {
 		m.kMounter = mount.New("")
 	}
-	if _, ok := m.mountMap[fsName]; !ok {
-		m.mountMap[fsName] = mountsMapPerFs{}
+	uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
+	wMount := &wekafsMount{
+		mounter:                 m,
+		kMounter:                m.kMounter,
+		fsName:                  fsName,
+		debugPath:               m.debugPath,
+		mountPoint:              "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+		mountOptions:            options,
+		allowProtocolContainers: m.allowProtocolContainers,
 	}
-	if _, ok := m.mountMap[fsName][options.AsMapKey()]; !ok {
-		uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
-		wMount := &wekafsMount{
-			kMounter:                m.kMounter,
-			fsName:                  fsName,
-			debugPath:               m.debugPath,
-			mountPoint:              "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
-			mountOptions:            options,
-			allowProtocolContainers: m.allowProtocolContainers,
-		}
-		m.mountMap[fsName][options.AsMapKey()] = wMount
-	}
-	m.lock.Unlock()
-	return m.mountMap[fsName][options.AsMapKey()]
+	return wMount
 }
 
 func (m *wekafsMounter) getSelinuxStatus(ctx context.Context) bool {
@@ -76,6 +70,7 @@ func (m *wekafsMounter) getSelinuxStatus(ctx context.Context) bool {
 func (m *wekafsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolWekafs)
 	mountObj := m.NewMount(fsName, mountOptions)
+
 	mountErr := mountObj.incRef(ctx, apiClient)
 
 	if mountErr != nil {
@@ -94,41 +89,34 @@ func (m *wekafsMounter) Mount(ctx context.Context, fs string, apiClient *apiclie
 }
 
 func (m *wekafsMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
-	opts := options
 	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolWekafs)
+	log.Ctx(ctx).Trace().Strs("mount_options", options.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
+	mnt := m.NewMount(fsName, options).(*wekafsMount)
 
-	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
-	if mnt, ok := m.mountMap[fsName][options.AsMapKey()]; ok {
-		err := mnt.decRef(ctx)
-		if err == nil {
-			if m.mountMap[fsName][options.AsMapKey()].getRefCount() <= 0 {
-				log.Ctx(ctx).Trace().Str("filesystem", fsName).Strs("mount_options", options.Strings()).Msg("This is a last use of this mount, removing from map")
-				delete(m.mountMap[fsName], options.String())
-			}
-			if len(m.mountMap[fsName]) == 0 {
-				log.Ctx(ctx).Trace().Str("filesystem", fsName).Msg("No more mounts to filesystem, removing from map")
-				delete(m.mountMap, fsName)
-			}
-		}
+	err := mnt.locateContainerName()
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msg("Failed to locate containerName")
 		return err
-
-	} else {
-		log.Ctx(ctx).Warn().Msg("Attempted to access mount point which is not known to the system")
-		return nil
 	}
+
+	return mnt.decRef(ctx)
 }
 
 func (m *wekafsMounter) LogActiveMounts() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	if len(m.mountMap) > 0 {
 		count := 0
-		for fsName := range m.mountMap {
-			for mnt := range m.mountMap[fsName] {
-				mapEntry := m.mountMap[fsName][mnt]
-				if mapEntry.getRefCount() > 0 {
-					log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.getRefCount()).Strs("mount_options", mapEntry.getMountOptions().Strings()).Msg("Mount is active")
+		for refIndex := range m.mountMap {
+			if mapEntry, ok := m.mountMap[refIndex]; ok {
+				parts := strings.Split(refIndex, "^")
+				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int("refcount", mapEntry).Logger()
+
+				if mapEntry > 0 {
+					logger.Trace().Msg("Mount is active")
 					count++
 				} else {
-					log.Trace().Str("filesystem", fsName).Int("refcount", mapEntry.getRefCount()).Strs("mount_options", mapEntry.getMountOptions().Strings()).Msg("Mount is not active")
+					logger.Trace().Msg("Mount is not active")
 				}
 
 			}
@@ -138,23 +126,17 @@ func (m *wekafsMounter) LogActiveMounts() {
 }
 
 func (m *wekafsMounter) gcInactiveMounts() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	if len(m.mountMap) > 0 {
-		for fsName := range m.mountMap {
-			for uniqueId, wekaMount := range m.mountMap[fsName] {
-				if wekaMount.getRefCount() == 0 {
-					if wekaMount.getLastUsed().Before(time.Now().Add(-inactiveMountGcPeriod)) {
-						m.lock.Lock()
-						if wekaMount.getRefCount() == 0 {
-							log.Trace().Str("filesystem", fsName).Strs("mount_options", wekaMount.getMountOptions().Strings()).
-								Time("last_used", wekaMount.getLastUsed()).Msg("Removing stale mount from map")
-							delete(m.mountMap[fsName], uniqueId)
-						}
-						m.lock.Unlock()
-					}
+		for refIndex := range m.mountMap {
+			if mapEntry, ok := m.mountMap[refIndex]; ok {
+				if mapEntry == 0 {
+					parts := strings.Split(refIndex, "^")
+					logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Logger()
+					logger.Trace().Msg("Removing inactive mount from map")
+					delete(m.mountMap, refIndex)
 				}
-			}
-			if len(m.mountMap[fsName]) == 0 {
-				delete(m.mountMap, fsName)
 			}
 		}
 	}
