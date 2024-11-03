@@ -170,44 +170,9 @@ func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *a
 		logger.Trace().Msg("In dev mode, skipping container name check")
 		return nil
 	}
-
-	// name explicitly set in secrets
-	m.containerName = apiClient.Credentials.LocalContainerName
-	if m.containerName != "" {
-		logger.Info().Str("local_container", m.containerName).Msg("Local container name set by secrets")
-		return nil
-	}
-
-	if !apiClient.SupportsMultipleClusters() {
-		logger.Trace().Msg("Not a multiple cluster client, skipping container name check")
-		return nil
-	}
-
-	logger.Trace().Msg("Ensuring local container name")
-	pattern := "/proc/wekafs/*/queue"
-	containerPaths, err := filepath.Glob(pattern)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch WekaFS containers on host, cannot mount filesystem without Weka container")
-		return err
-	} else if len(containerPaths) == 0 {
-		logger.Error().Err(err).Msg("Failed to find active Weka container, cannot mount filesystem")
-		return errors.New("could not perform a mount since active Weka container was not found on host")
-	}
-
-	if len(containerPaths) > 0 {
-		container, err := apiClient.GetLocalContainer(ctx, m.allowProtocolContainers)
-		if err != nil {
-			logger.Warn().Err(err).Msg("Failed to determine local container name via API")
-			return err
-		}
-		if container == nil {
-			logger.Warn().Err(err).Msg("Failed to determine local container name via API")
-			return errors.New("empty container returned from API")
-		}
-		m.containerName = container.ContainerName
-		logger.Debug().Str("container_name", m.containerName).Msg("Successfully determined local container name")
-		return nil
-
+	var err error
+	if m.containerName, err = apiClient.EnsureLocalContainer(ctx, m.allowProtocolContainers); err != nil {
+		logger.Error().Err(err).Msg("Failed to ensure local container")
 	}
 	return nil
 }
