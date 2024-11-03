@@ -330,14 +330,14 @@ func GetMountContainerNameFromActualMountPoint(mountPointBase string) (string, e
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
-		if len(fields) >= 4 && fields[2] == "wekafs" {
+		if len(fields) >= 4 && fields[2] == "wekafs" && strings.HasPrefix(fields[1], mountPointBase) {
 			optionsString := fields[3]
 			mountOptions := NewMountOptionsFromString(optionsString)
 			containerName := mountOptions.getOptionValue("container_name")
 			return containerName, nil
 		}
 	}
-	return "", errors.New("mount point not found")
+	return "", errors.New(fmt.Sprintf("mount point not found: %s", mountPointBase))
 }
 
 func validateVolumeId(volumeId string) error {
