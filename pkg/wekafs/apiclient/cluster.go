@@ -218,6 +218,26 @@ func (a *ApiClient) GetLocalContainer(ctx context.Context, allowProtocolContaine
 	}
 }
 
+func (a *ApiClient) EnsureLocalContainer(ctx context.Context, allowProtocolContainers bool) (string, error) {
+	// already have the container name set either via secret or via API call
+	if a.containerName != "" {
+		return a.containerName, nil
+	}
+	// if having a local container name set in secrets
+	if a.Credentials.LocalContainerName != "" {
+		a.containerName = a.Credentials.LocalContainerName
+		return a.containerName, nil
+	}
+
+	// fetch the container name from the API
+	container, err := a.GetLocalContainer(ctx, allowProtocolContainers)
+	if err != nil {
+		return "", err
+	}
+	a.containerName = container.ContainerName
+	return a.containerName, nil
+}
+
 func filterFrontendContainers(ctx context.Context, hostname string, containerList []Container, allowProtocolContainers bool) []Container {
 	logger := log.Ctx(ctx)
 	var ret []Container
