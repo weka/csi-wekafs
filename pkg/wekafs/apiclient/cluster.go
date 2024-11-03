@@ -229,6 +229,11 @@ func (a *ApiClient) EnsureLocalContainer(ctx context.Context, allowProtocolConta
 		return a.containerName, nil
 	}
 
+	// if the cluster does not support multiple clusters, we must omit the container name since we can't pass it as a mount option
+	if !a.SupportsMultipleClusters() {
+		return a.containerName, nil
+	}
+
 	// fetch the container name from the API
 	container, err := a.GetLocalContainer(ctx, allowProtocolContainers)
 	if err != nil {
@@ -253,7 +258,11 @@ func filterFrontendContainers(ctx context.Context, hostname string, containerLis
 				continue
 			}
 			if container.State != "ACTIVE" || container.Status != "UP" {
-				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping an INACTIVE container")
+				logger.Trace().Str("container_hostname", container.Hostname).
+					Str("container_state", container.State).
+					Str("container_status", container.Status).
+					Str("container_id", container.Id).
+					Msg("Skipping an INACTIVE container")
 				continue
 			}
 			logger.Debug().Str("container_hostname", container.Hostname).Str("container_name", container.ContainerName).Msg("Found a valid container")
