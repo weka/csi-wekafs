@@ -25,6 +25,8 @@ import (
 
 const SnapshotTypeUnifiedSnap = "wekasnap/v2"
 
+var ProcMountsPath = "/proc/mounts"
+
 func generateInnerPathForDirBasedVol(dynamicVolPath, csiVolName string) string {
 	requestedNameHash := getStringSha1(csiVolName)
 	asciiPart := getAsciiPart(csiVolName, 64)
@@ -322,7 +324,7 @@ func GetMountIpFromActualMountPoint(mountPointBase string) (string, error) {
 	return "", errors.New("mount point not found")
 }
 func GetMountContainerNameFromActualMountPoint(mountPointBase string) (string, error) {
-	file, err := os.Open("/proc/mounts")
+	file, err := os.Open(ProcMountsPath)
 	if err != nil {
 		return "", errors.New("failed to open /proc/mounts")
 	}
