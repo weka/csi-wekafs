@@ -69,7 +69,11 @@ func (m *wekafsMounter) getSelinuxStatus(ctx context.Context) bool {
 
 func (m *wekafsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolWekafs)
-	mountObj := m.NewMount(fsName, mountOptions)
+	mountObj := m.NewMount(fsName, mountOptions).(*wekafsMount)
+
+	if err := mountObj.ensureLocalContainerName(ctx, apiClient); err != nil {
+		return "", err, func() {}
+	}
 
 	mountErr := mountObj.incRef(ctx, apiClient)
 
