@@ -25,6 +25,8 @@ import (
 
 const SnapshotTypeUnifiedSnap = "wekasnap/v2"
 
+var ProcMountsPath = "/proc/mounts"
+
 func generateInnerPathForDirBasedVol(dynamicVolPath, csiVolName string) string {
 	requestedNameHash := getStringSha1(csiVolName)
 	asciiPart := getAsciiPart(csiVolName, 64)
@@ -320,6 +322,24 @@ func GetMountIpFromActualMountPoint(mountPointBase string) (string, error) {
 		}
 	}
 	return "", errors.New("mount point not found")
+}
+func GetMountContainerNameFromActualMountPoint(mountPointBase string) (string, error) {
+	file, err := os.Open(ProcMountsPath)
+	if err != nil {
+		return "", errors.New("failed to open /proc/mounts")
+	}
+	defer func() { _ = file.Close() }()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) >= 4 && fields[2] == "wekafs" && strings.HasPrefix(fields[1], mountPointBase) {
+			optionsString := fields[3]
+			mountOptions := NewMountOptionsFromString(optionsString)
+			containerName := mountOptions.getOptionValue("container_name")
+			return containerName, nil
+		}
+	}
+	return "", errors.New(fmt.Sprintf("mount point not found: %s", mountPointBase))
 }
 
 func validateVolumeId(volumeId string) error {
