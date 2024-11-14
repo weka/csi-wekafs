@@ -20,7 +20,7 @@ require (
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 	golang.org/x/sync v0.9.0
 	google.golang.org/grpc v1.67.1
-	google.golang.org/protobuf v1.35.1
+	google.golang.org/protobuf v1.35.2
 	k8s.io/apimachinery v0.31.2
 	k8s.io/helm v2.17.0+incompatible
 	k8s.io/mount-utils v0.31.2
