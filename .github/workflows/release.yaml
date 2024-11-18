@@ -21,12 +21,10 @@ on:
         type: boolean
         description: artifacthub:containsSecurityUpdates
         required: true
-      swear:
-        description: I solemnly swear that the inputs are correct and I run the workflow from the correct branch! 
-        type: choice
-        options: 
-        - "yes"
-        - "yes, I do"
+      performDryRun:
+        type: boolean
+        description: Perform a dry run
+        required: false
 
 jobs:
   release:
@@ -40,7 +38,6 @@ jobs:
           echo makeLatestRelease=${{inputs.makeLatestRelease}}
           echo preRelease=${{inputs.preRelease}}
           echo containsSecurityUpdates=${{inputs.containsSecurityUpdates}}
-          echo swear=${{inputs.swear}}
 
       - name: validate inputs
         run: |
@@ -118,19 +115,16 @@ jobs:
           VERSION: ${{ steps.set_version.outputs.version }}
           GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
         run: |
-          gh release view ${{inputs.draftTag}} --json body | jq -r .body > changelog
-
-          sed '$d' changelog > changelog1 # delete last line
+          gh release view ${{inputs.draftTag}} --json body | jq -r .body | sed '$d' > changelog
 
           # insert release note at the beginning
           # sed doesn't work well here
-
           echo "# Release $VERSION" >> CHANGELOG.md
-          cat changelog1 >> CHANGELOG.md
+          cat changelog >> CHANGELOG.md
           cat RELEASE.md >> CHANGELOG.md
 
           # release note will taken from here by helm/chart-releaser-action
-          cat changelog1 > charts/csi-wekafsplugin/CHANGELOG.md
+          cat changelog > charts/csi-wekafsplugin/CHANGELOG.md
           mv CHANGELOG.md RELEASE.md
 
       - name: Set up QEMU
@@ -146,6 +140,7 @@ jobs:
 
       - name: Build and push
         uses: docker/build-push-action@v6
+        if: ${{ !inputs.performDryRun }}
         with:
           push: true
           pull: true
@@ -169,16 +164,19 @@ jobs:
             helm-docs -s file -c charts
 
       - run: gh release delete ${{inputs.draftTag}} --yes
+        if: ${{ !inputs.performDryRun }}
         env:
           GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
 
       # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
-      - uses: stefanzweifel/git-auto-commit-action@v5 
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        if: ${{ !inputs.performDryRun }}
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
 
       # https://colinwilson.uk/2022/01/27/how-to-sign-helm-charts-using-chart-releaser-action/
       - name: Prepare GPG key
+        if: ${{ !inputs.performDryRun }}
         run: |
           gpg_dir=.cr-gpg
           mkdir "$gpg_dir"
@@ -196,7 +194,7 @@ jobs:
         env:
           CR_TOKEN: "${{ secrets.BOTTY_GH_TOKEN }}"
           CR_RELEASE_NAME_TEMPLATE: "v{{ .Version }}"
-          CR_GENERATE_RELEASE_NOTES: true
+          CR_GENERATE_RELEASE_NOTES: false
           CR_MAKE_RELEASE_LATEST: ${{ inputs.makeLatestRelease }}
           CR_RELEASE_NOTES_FILE: CHANGELOG.md
           CR_SIGN: true
