@@ -115,7 +115,7 @@ All values in the secret data file must be in base64-encoded format.
 
 A single K8s worker node can be connected to multiple WEKA clusters (maximum 7 clusters) simultaneously.
 
-<img src="csi-images/k8s-multiple-clusters.pngk8s-multiple-clusters.png">
+<img src="csi-images/k8s-multiple-clusters.png">
 k8s worker nodes connected to multiple WEKA clusters
 
 #### Procedure
