@@ -13,14 +13,16 @@ FAILURES=0
 usage() {
   cat <<-DELIM
 
-The utility simplifies hard capacity enforcement on CSI volumes created prior to Weka CSI plugin 0.7.0
-This utility can be run from any host being a part of Weka cluster which the CSI volumes are located on.
+The migration utility enables hard capacity enforcement on CSI volumes created before WEKA CSI plugin version 0.7.0. It can be run from any host within the WEKA cluster where the CSI volumes are located.
 
 The following OS packages or utilities are required:
-- xattr (xattr package)
-- getfattr (attr package)
-- jq (jq package)
-- Weka client software
+
+* xattr (from the xattr package)
+* getfattr (from the attr package)
+* jq (from the jq package)
+* WEKA client software
+
+For more details, refer to [Upgrade legacy persistent volumes for capacity enforcement](upgrade-legacy-pv.md).
 
 Usage: $0 <filesystem_name> [--csi-volumes-dir <CSI_VOLUMES_DIR>] [--endpoint-address IP_ADDRESS:PORT]
        $0 --help
@@ -29,7 +31,7 @@ Optional parameters:
 --------------------
 --debug             Execute with debug level logging
 --csi-volumes-dir   Assume CSI volumes are stored in different directory on the filesystem. Default is "csi-volumes"
---endpoint-address  API_ADDRESS:PORT of a Weka backend server, should be used for stateless clients.
+--endpoint-address  API_ADDRESS:PORT of a WEKA backend server for stateless clients.
 
 DELIM
 }
