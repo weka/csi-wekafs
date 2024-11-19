@@ -1,5 +1,5 @@
 #!/bin/bash
-BANNER="Weka CSI Volume migration utility. Copyright 2021 Weka"
+BANNER="WEKA CSI Volume Migration Utility. Copyright 2024 WEKA"
 LOG_LEVEL=4
 CSI_VOLUMES_DIR="csi-volumes"
 FILESYSTEM=
