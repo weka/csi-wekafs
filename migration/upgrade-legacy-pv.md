@@ -8,20 +8,19 @@ Capacity enforcement and integration with the WEKA filesystem directory quotas r
 * WEKA software version **v3.13.0** and up.
 * WEKA CSI Plugin can communicate with the WEKA filesystem using REST API and correlate between a specific persistent volume and the WEKA cluster serving this volume.
 
-In the [API-Based communication model](storage-class-configurations.md#api-based-communication-model), Kubernetes StorageClass refers to a secret that specifies all the required parameters for API calls to the WEKA cluster. However, this is different from the situation in the legacy communication model, where the storage class doesn't specify the API credentials.&#x20;
+In the API-based communication model, Kubernetes StorageClass refers to a secret that specifies all the required parameters for API calls to the WEKA cluster. However, this is different from the situation in the legacy communication model, where the storage class doesn't specify the API credentials. For details, see [API-based communication model] (../docs/storage-class-configurations.md) 
 
 Kubernetes does not allow modifying the StorageClass parameters; hence every volume created with the legacy-model storage class never reports its credentials.
 
 WEKA CSI Plugin **0.7.0** provides a unique configuration mode in which legacy volumes can be bound to a single secret, referring to a single WEKA cluster API connection parameters. In this configuration mode, every request to serve, such as create, delete, and expand, a legacy Persistent Volume (or Persistent Volume Claim) that originates from a Legacy Storage Class (without reference to an API secret) communicates to that cluster.
 
-{% hint style="info" %}
-Volumes provisioned by the CSI Plugin of version **0.7.0** in the API-Based communication model, but on older versions of the WEKA cluster (below version **3.13.0**), are still in legacy mode. However, because the storage class already contains the secret reference, specifying the `legacyVolumeSecretName` parameter is unnecessary, and you can safely skip to the next procedure [#migrate-legacy-volumes](upgrade-legacy-persistent-volumes-for-capacity-enforcement.md#migrate-legacy-volumes "mention").
-{% endhint %}
+**Note**:
+Volumes provisioned by the CSI Plugin of version **0.7.0** in the API-based communication model, but on older versions of the WEKA cluster (below version **3.13.0**), are still in legacy mode. However, because the storage class already contains the secret reference, specifying the `legacyVolumeSecretName` parameter is unnecessary, and you can safely skip to the **Migrate legacy volumes** procedure below.
 
 To bind legacy volumes to a single secret, perform the following:
 
 1. Create a Kubernetes secret that describes the API communication parameters for legacy volumes. Adhere to the following:
-   * The format of the secret is identical to the secret defined in the [API-Based Communication Model](upgrade-legacy-persistent-volumes-for-capacity-enforcement.md#api-based-communication-model) section.
+   * The format of the secret is identical to the secret.
    * This secret must be located in the same Kubernetes namespace of the WEKA CSI Plugin.
 2. Set the `legacyVolumeSecretName` parameter to match the secret's name above during the plugin upgrade or installation. Do one of the following:
    * You can modify the `values.yaml` directly.
@@ -33,13 +32,12 @@ helm upgrade csi-wekafs --namespace csi-wekafs csi-wekafs/csi-wekafsplugin \
 
 ```
 
-{% hint style="warning" %}
+**Warning**:
 If you do not create the Kubernetes secret before executing the helm upgrade, the CSI Plugin components remain `Pending` after the upgrade.
-{% endhint %}
 
 ## Migrate legacy volumes
 
-Once you bind legacy volumes to a single secret procedure, you can migrate the volumes by binding a new WEKA filesystem directory quota object to an existing persistent volume.&#x20;
+Once you bind legacy volumes to a single secret procedure, you can migrate the volumes by binding a new WEKA filesystem directory quota object to an existing persistent volume.
 
 WEKA provides a migration script that automates the process.
 
@@ -72,9 +70,8 @@ Where:
 * `<filesystem_name>`: Specifies the filesystem name on which the  CSI volumes are located.
 * `<csi_volumes_dir>`: Optional parameter. Specifies the directory in the filesystem where the CSI volumes are stored. Set this parameter only if the directory differs from default values.
 
-{% hint style="info" %}
+**Note**:
 On a stateless client, you must specify the `--endpoint-address` to successfully mount a filesystem. However, if the container is part of the WEKA cluster (either client or backend), this is not necessary.
-{% endhint %}
 
 Example:
 
