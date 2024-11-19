@@ -43,7 +43,6 @@ Adhere to the following:
 
 <summary>Example: csi-wekafs-api-secret.yaml file</summary>
 
-{% code title="csi-wekafs/examples/dynamic_api/csi-wekafs-api-secret.yaml" %}
 ```
 apiVersion: v1
 kind: Secret
@@ -83,7 +82,6 @@ data:
   caCertificate: ""
 
 ```
-{% endcode %}
 
 </details>
 
@@ -140,7 +138,6 @@ A single K8s worker node can be connected to multiple WEKA clusters (maximum 7 c
 
 <summary>Example: storageclass-wekafs-dir-api.yaml</summary>
 
-{% code title="csi-wekafs/examples/dynamic_api/storageclass-wekafs-dir-api.yaml" %}
 ```yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -177,7 +174,6 @@ parameters:
   csi.storage.k8s.io/node-publish-secret-namespace: *secretNamespace
 
 ```
-{% endcode %}
 
 </details>
 
@@ -218,7 +214,6 @@ Adhere to the following:
 
 <summary>Example: storageclass-wekafs-snap-api.yaml</summary>
 
-{% code title="csi-wekafs/examples/dynamic_snapshot/storageclass-wekafs-snap-api.yaml" %}
 ```yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -249,7 +244,6 @@ parameters:
   csi.storage.k8s.io/node-publish-secret-name: *secretName
   csi.storage.k8s.io/node-publish-secret-namespace: *secretNamespace
 ```
-{% endcode %}
 
 </details>
 
@@ -290,7 +284,6 @@ Adhere to the following:
 
 <summary>Example: storageclass-wekafs-fs-api.yaml</summary>
 
-{% code title="csi-wekafs/examples/dynamic_filesystem/storageclass-wekafs-fs-api.yaml" %}
 ```yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -324,7 +317,6 @@ parameters:
   csi.storage.k8s.io/node-publish-secret-namespace: *secretNamespace
 
 ```
-{% endcode %}
 
 </details>
 
