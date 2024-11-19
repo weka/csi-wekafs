@@ -128,7 +128,7 @@ A single K8s worker node can be connected to multiple WEKA clusters (maximum 7 c
 
 **Related topic**
 
-[Mount filesystems from multiple clusters on a single client](https://docs.weka.io/weka-filesystems-and-object-stores/mounting-filesystems/mount-filesystems-from-multiple-clusters-on-a-single-client)]
+[Mount filesystems from multiple clusters on a single client](https://docs.weka.io/weka-filesystems-and-object-stores/mounting-filesystems/mount-filesystems-from-multiple-clusters-on-a-single-client)
 
 ## Configure directory-backed StorageClass
 
