@@ -13,7 +13,7 @@ While using the native WekaFS driver as the storage connectivity layer is the re
 
 ### Limitations and constraints
 
-**Warning**:**
+**Warning**:
 As of version 2.5.0 and until further notice, publishing snapshot-backed volumes via NFS transport is not recommended. This is an open issue currently under investigation.
 
 * **Feature parity**: Certain features and capabilities available with the native WekaFS driver may be absent when using the WEKA CSI Plugin with NFS transport.
@@ -149,11 +149,11 @@ By default, the WEKA CSI Plugin components do not start if a WEKA driver is dete
 
 **Procedure**
 
-1. **Configure NFS failback:** Explicitly configure the WEKA CSI Plugin to use NFS failback by setting the `pluginConfig.mountProtocol.allowNfsFailback` parameter to `true` in the `values.yaml` file.
-2. **Set NFS transport enforcement (optional):** If you want to enforce the use of NFS transport even when the WEKA client is installed on the node, set the `pluginConfig.mountProtocol.useNfs` parameter to `true`. This option is recommended for testing purposes only.
-3. **Follow Helm installation instructions:** Follow the [Helm installation instructions](../charts/csi-wekafsplugin/README.md) to install the WEKA CSI Plugin. Most installation steps are similar to those for the native WekaFS driver.
-4. **Set additional parameters:** You can set any additional parameters in the `values.yaml` file or pass them as command-line arguments to the Helm install command.
-5. **Run the Helm install command:** Run the following example Helm install command for using NFS transport:
+1. **Configure NFS failback**: Explicitly configure the WEKA CSI Plugin to use NFS failback by setting the `pluginConfig.mountProtocol.allowNfsFailback` parameter to `true` in the `values.yaml` file.
+2. **Set NFS transport enforcement (optional)**: If you want to enforce the use of NFS transport even when the WEKA client is installed on the node, set the `pluginConfig.mountProtocol.useNfs` parameter to `true`. This option is recommended for testing purposes only.
+3. **Follow Helm installation instructions**: Follow the [Helm installation instructions](../charts/csi-wekafsplugin/README.md) to install the WEKA CSI Plugin. Most installation steps are similar to those for the native WekaFS driver.
+4. **Set additional parameters**: You can set any additional parameters in the `values.yaml` file or pass them as command-line arguments to the Helm install command.
+5. **Run the Helm install command**: Run the following example Helm install command for using NFS transport:
 
 ```bash
 helm upgrade csi-wekafs -n csi-wekafs --create-namespace --install csi-wekafs/csi-wekafsplugin csi-wekafs \
