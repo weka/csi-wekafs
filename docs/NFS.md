@@ -1,181 +1,166 @@
-# Weka CSI Plugin with NFS transport
+# WEKA CSI Plugin with NFS transport
 
 ## Overview
-Although using native WekaFS driver as the underlying storage connectivity layer is recommended way to use WekaFS with Kubernetes, 
-it is also possible to use the Weka CSI Plugin over NFS transport. 
-This allows you to use WekaFS as a storage backend for your Kubernetes cluster without the need to install the Weka client on each Kubernetes node.
+While using the native WekaFS driver as the storage connectivity layer is the recommended approach for integrating WekaFS with Kubernetes, version 2.5.0 introduces the option to utilize the WEKA CSI Plugin over NFS transport. This allows you to employ WekaFS as a storage backend for your Kubernetes cluster without requiring the installation of the WEKA client on every Kubernetes node.
 
-### Benefits of using Weka CSI Plugin with NFS transport
-- **Simplified deployment**: No need to install the Weka client on each Kubernetes node
-- **Interoperability**: Use Weka CSI Plugin on nodes where the Weka client is not yet installed, or is not currently supported
-- **Flexibility**: Use Weka CSI Plugin with NFS transport for specific use-cases, while using the native WekaFS driver for other use-cases
-- **Performance**: Pods are mounted across multiple IPs on the same NFS interface group, maximizing performance and simplifying management
-- **Ease of migration**: Use Weka CSI Plugin with NFS transport as a stepping stone to migrate to the native WekaFS driver.  
-    After deployment of the Weka client on all nodes, you can switch to the native WekaFS driver without changing the storage configuration 
-    by simply rebooting the node.
+### Benefits of using WEKA CSI Plugin with NFS transport
 
-### Limitations and Constraints
-- **Performance**: NFS transport is not as performant as the native WekaFS driver and it is not recommended for high-performance workloads
-- **Feature Parity**: Some features and capabilities of the native WekaFS driver are not available when using the Weka CSI Plugin with NFS transport
-- **Complexity**: NFS transport requires additional configuration on the Weka cluster, and may require additional networking configuration on the Kubernetes cluster
-- **Interoperability**: Same Kubernetes node cannot use both NFS and WekaFS transport at the same time
-- **Migration**: Migrating from NFS transport to WekaFS transport requires rebooting the Kubernetes nodes (after Weka client deployment)
-- **Network Configuration**: NFS interface group IP addresses must be accessible from the Kubernetes cluster nodes
-- **Security**: NFS transport is less secure than the native WekaFS driver, and may require additional security considerations
-- **QoS**: QoS is not supported for NFS transport
-- **Organizations and Multitenancy**: NFS transport can be used only for filesystems in `Root` organization. 
-    If you need to use a filesystem in a different organization, you must use the native WekaFS driver.
+* **Simplified deployment**: Eliminate the need to install the WEKA client on each Kubernetes node.
+* **Interoperability**: Use the WEKA CSI Plugin on nodes where the WEKA client is not yet installed or unsupported.
+* **Flexibility**: For specific use cases, leverage the WEKA CSI Plugin with NFS transport while continuing to use the native WekaFS driver for others.
+* **Performance**: Mount pods across multiple IPs within the same NFS interface group, maximizing performance and simplifying management.
+* **Ease of migration**: Use the WEKA CSI Plugin with NFS transport as an interim solution while transitioning to the native WekaFS driver. Once the WEKA client is deployed on all nodes, you can switch to the native WekaFS driver without altering the storage configuration—reboot the node.
 
-### Host Network Mode
-Weka CSI Plugin will automatically install in `hostNetwork` mode when using NFS transport. 
-Since hostNetwork mode is required for NFS transport, the `hostNetwork` parameter in the `values.yaml` file is ignored in such case.
+### Limitations and constraints
 
-### Security Considerations
-- The Weka CSI Plugin with NFS transport uses NFSv4.1 protocol to connect to the Weka cluster.
-- Support for Kerberos authentication is not available in this version of Weka CSI Plugin.
-- It is recommended to use NFS transport only in secure and trusted networks.
+**Warning**:**
+As of version 2.5.0 and until further notice, publishing snapshot-backed volumes via NFS transport is not recommended. This is an open issue currently under investigation.
 
-## Interoperability with WekaFS driver
-The Weka CSI Plugin with NFS transport is fully interoperable with the native WekaFS driver.
+* **Feature parity**: Certain features and capabilities available with the native WekaFS driver may be absent when using the WEKA CSI Plugin with NFS transport.
+* **Complexity**: NFS transport necessitates additional configuration on the WEKA cluster and may require further networking setup on the Kubernetes cluster.
+* **Interoperability**: A single Kubernetes node cannot simultaneously use NFS and WekaFS transport.
+* **Migration**: Transitioning from NFS transport to WekaFS transport requires rebooting the Kubernetes nodes after deploying the WEKA client.
+* **Network configuration**: NFS interface group IP addresses must be accessible from the Kubernetes cluster nodes.
+* **Security**: NFS transport is generally less secure than the native WekaFS driver and may necessitate additional security measures.
+* **Quality of Service (QoS)**: QoS is not supported with NFS transport.
 
-This means that you can use both WekaFS transport and NFS in the same Kubernetes cluster, 
-and even for publishing the same volume to different pods using different transport layers (from different nodes).  
-However, only one transport layer can be used on a single node at a time.
+### Host Network mode
 
-### Mount options
-Mount options for the NFS transport are set automatically by the Weka CSI Plugin. When custom mount options are used in storage class,
-the Weka CSI Plugin will translate them to NFS alternatives. Unknown or unsupported mount options will be ignored.
+The WEKA CSI Plugin installs automatically in `hostNetwork` mode when using NFS transport. `hostNetwork` mode is required for NFS transport, so the `hostNetwork` parameter in the `values.yaml` file is ignored.
 
-### QoS and Performance
-QoS is not supported for NFS transport. Performance is limited by the NFS protocol and the network configuration.
+### Security considerations
 
-### Scheduling Workloads by Transport Protocol
-Weka CSI Plugin node server populates the transport protocol in the node topology.
-This allows you to use node affinity rules to force workloads to use WekaFS transport on nodes where the Weka client is installed.
-For example, in hybrid deployments where some nodes have the Weka client installed and some do not, 
-the administrator would prefer storage-intensive workloads to run on nodes with the Weka client installed, while more generic workloads can run on other nodes.
+The WEKA CSI Plugin with NFS transport uses NFSv4.1 (default) or NFSv3 protocols to connect to the WEKA cluster. However, support for Kerberos authentication is not available in this version of the WEKA CSI Plugin. Therefore, using NFS transport only in secure and trusted networks is recommended.
 
-In order to force a workload to a certain transport type, a nodeSelector can be applied to the workload manifest.
-#### An example of a nodeSelector for WekaFS transport:
+### Interoperability with WekaFS driver
+
+The WEKA CSI Plugin with NFS transport is fully interoperable with the native WekaFS driver. This allows you to use WekaFS transport and NFS within the same Kubernetes cluster, including publishing the same volume to different pods using different transport layers from different nodes. However, only one transport layer can be used on a single node at any time.
+
+#### Mount options
+
+The WEKA CSI Plugin automatically sets mount options for NFS transport. When custom mount options are specified in the storage class, the WEKA CSI Plugin translates them into NFS alternatives. Any unknown or unsupported mount options are ignored.
+
+#### QoS and performance
+
+NFS transport does not support quality of Service (QoS). The NFS protocol and the network configuration constrain performance.
+
+#### Scheduling workloads by transport protocol
+
+The WEKA CSI Plugin node server populates the transport protocol in the node topology. This feature enables node affinity rules to direct workloads to use WekaFS transport on nodes where the WEKA client is installed. For example, in hybrid deployments where some nodes have the WEKA client installed while others do not, administrators may prefer to run storage-intensive workloads on nodes with the WEKA client, allowing more generic workloads to operate on other nodes.
+
+A `nodeSelector` can be applied in the workload manifest to enforce a specific transport type for a workload.
+
+**Example: a nodeSelector for WekaFS transport**
+
 ```yaml
 nodeSelector:
   topology.weka.com/transport: wekafs
 ```
-#### An example of a nodeSelector for NFS transport:
+
+**Example: a nodeSelector for NFS transport**
+
 ```yaml
 nodeSelector:
   topology.weka.com/transport: nfs
-```
 
-### Switching from NFS to WekaFS transport
-To switch between NFS and WekaFS transport, you need to:
-1. Install the Weka client on Kubernetes node
-2. Reboot the Kubernetes node
+#### Switching from NFS to WekaFS transport
 
-After the node is rebooted, the Weka CSI Plugin will automatically switch to using the WekaFS transport.
-Existing volumes can be reattached to the pods without any changes.
+To switch from NFS to WekaFS transport, follow these steps:
 
-## Prerequisites
-Those are the minimum prerequisites for using Weka CSI Plugin with NFS transport:
+1. Install the WEKA client on the Kubernetes node.
+2. Reboot the Kubernetes node.
 
-- Weka cluster must be installed and configured
-- NFS protocol must be configured on the Weka cluster
-- NFS interface group must be created on the Weka cluster
-- NFS interface group IP addresses must be accessible from the Kubernetes cluster nodes
+After rebooting, the WEKA CSI Plugin automatically switches to WekaFS transport. Existing volumes can be reattached to the pods without any changes.
 
-> **WARNING:** When multiple NFS interface groups are defined on Weka clusters, 
-> the `pluginConfig.mountProtocol.interfaceGroupName` parameter must be set to the desired NFS interface group name in the `values.yaml` file.  
-> If the parameter is not set, an arbitrary NFS interface group will be used, that could potentially cause performance or networking issues.
+## Minimum prerequisites for using WEKA CSI Plugin with NFS transport
 
-> **NOTE**: NFS Client group called `WekaCSIPluginClients` is created automatically by the Weka CSI Plugin. 
-> Then, upon each volume creation or publishing, the Kubernetes node IP address is added to the NFS Client group automatically.
-> 
-> Although, adding the node IP addresses one by one is the most secure way to configure the NFS Client group, this could become cumbersome in large deployments.
-> In such case, using a network range (CIDR) is recommended.
-> You may predefine the NFS Client group with a network range (CIDR) in the Weka cluster, and then use the `pluginConfig.mountProtocol.nfsClientGroupName` 
-> parameter in the `values.yaml` file to specify the NFS Client group name.
+* **WEKA cluster installation**: The WEKA cluster must be installed and configured.
+* **NFS protocol configuration**: The NFS protocol must be configured on the WEKA cluster.
+* **NFS interface group creation**: An NFS interface group must be created on the WEKA cluster.
+* **Accessibility of IP addresses**: NFS interface group IP addresses must be accessible from the Kubernetes cluster nodes.
 
-## Way of Operation
-The Weka CSI Plugin with NFS transport operates in the following way:
-Upon start of the Weka CSI Plugin, the plugin will:
-1. Check if the Weka client is installed on the Kubernetes node
-2. If client is not set up, the plugin will check whether NFS failback is enabled
-3. If NFS failback is enabled, the plugin will use NFS transport for volume provisioning and publishing
-4. If NFS failback is disabled, the plugin will not start and will log an error message.  
-   Refer to the [Installation](#installation) section for enabling NFS failback.
+Adhere to the following considerations:
 
-Once NFS mode is enabled, the Weka CSI Plugin will use NFS transport for all volume operations. 
-In such case, upon any volume create or publish request, the Weka CSI Plugin will:
-1. Connect to Weka cluster API and fetch interface groups (and their IP addresses)
-   If interface group name is specified in the `values.yaml` file, 
-   the plugin will use the specified interface group, otherwise an arbitraty interface group will be used. 
-2. Ensure that Client Group is created on the Weka cluster. 
-   If the Client Group is not created, the plugin will create it.  
-   > **NOTE:** If client group name is specified in the `values.yaml` file, the plugin will use the specified client group name, 
-   > otherwise `WekaCSIPluginClients` client group will be used.
-3. Determine the node IP address facing the inteface group IP addresses. This will be done by checking the network configuration of the node
-   Then, the Weka CSI plugin will issue a UDP connection towards one of the IP addresses of the interface group, 
-   The source IP address of the connection will be determined by the plugin and will be used as the `node IP address`.
-4. Ensure that the `node IP address` is added to the Client Group. 
-   If the node IP address is not added, the plugin will add it to the Client Group.
-   If client group already has the node IP address (or it has a matching CIDR definition), the plugin will skip this step.
-   > **EXAMPLE:** If the node IP address is `192.168.100.1` and the client group is defined with a network range `192.168.100.0/255.255.255.0`, 
-   > node IP address will not be added
-5. Identify the filesystem name to be mounted, either from StorageClass parameters (provisioning), 
-   or from Volume Handle (for publishing an existing volume).
-6. Ensure that NFS permission exists for the Client Group to access the filesystem.
-   If the permission is not set, the plugin will set it. If the permission is already set, the plugin will skip this step.
-7. Pick up a random IP address from the selected NFS interface group. 
-   This IP address will be used for mounting the filesystem.
-8. Perform NFS mount operation on the Kubernetes node using the selected IP address and the filesystem name.
-9. Rest of the operations will be performed in a similar way as with the native WekaFS driver.
+* **Interface group name configuration**: If multiple NFS interface groups are defined, set the `pluginConfig.mountProtocol.interfaceGroupName` parameter to the desired NFS interface group name in the `values.yaml` file. An arbitrary NFS interface group is used if this parameter is not set, which may lead to performance or networking issues.
+* **NFS client group**: The plugin automatically creates an NFS client group called `WekaCSIPluginClients`. The Kubernetes node IP address is added to this group during each volume creation or publishing.
+* **IP address configuration**: While adding node IP addresses one by one is the most secure method for configuring the NFS client group, it can be cumbersome for large deployments. In such cases, a network range (CIDR) is recommended. Predefine the NFS client group with a network range in the WEKA cluster, then specify the NFS client group name using the `pluginConfig.mountProtocol.nfsClientGroupName` parameter in the `values.yaml` file.
 
-## NFS Permissions Required for Weka CSI Plugin
-The Weka CSI Plugin requires AND will set the following NFS permissions on the Weka cluster:
-1. **Client Group**: `WekaCSIPluginClients` (or custom client group name if set in the `values.yaml` file)
+## WEKA CSI Plugin operation over NFS transport
+
+Upon starting, the WEKA CSI Plugin performs the following steps:
+
+1. **Check WEKA client installation**: Verifies if the WEKA client is installed on the Kubernetes node.
+2. **NFS failback check**:
+   * If the WEKA client is not set up, the plugin checks if NFS failback is enabled or if NFS use is forced.
+   * If NFS failback is enabled, the plugin uses NFS transport for volume provisioning and publishing.
+   * If NFS failback is disabled, the plugin does not start and logs an error message. See the section to enable NFS failback.
+
+The plugin uses NFS transport for all volume operations when NFS mode is enabled. For any volume creation or publishing request, the WEKA CSI plugin performs the following:
+
+1. **Connect to WEKA Cluster API**: Fetch interface groups and their IP addresses. If an interface group name is specified in the `values.yaml` file, the plugin uses that; otherwise, it selects an arbitrary interface group.
+2. **Client group verification**: Ensure the Client Group exists on the WEKA cluster. If it does not, the plugin creates it.
+3. **Determine node IP address**: Identify the IP address facing the interface group IP addresses by checking the node's network configuration. The plugin issues a UDP connection to one of the interface group IP addresses, using the determined source IP address as the node IP address.
+4. **Add node IP to client group**: Confirm the node IP address is included in the Client Group. If not, the plugin adds it. This step is skipped if the Client Group already contains the node IP address or a matching CIDR definition.
+   * **Example**: For two nodes with IP addresses 192.168.100.1 and 192.168.200.1, if the Client Group has a rule for 192.168.100.0/255.255.255.0, no new rule is added for the first node. However, a new rule 192.168.200.1/255.255.255.255 is created for the second node.
+5. **Identify filesystem**: Determine the filesystem name to be mounted from StorageClass parameters (during provisioning) or the Volume Handle (when publishing an existing volume).
+6. **NFS permissions**: Ensure that NFS permissions are granted for the Client Group to access the filesystem. If permissions are not set, the plugin establishes them. If permissions are already in place, this step is skipped.
+7. **Select random IP address**: Select a random IP address from the selected NFS interface group to mount the filesystem.
+8. **NFS mount operation**: Perform the NFS mount operation on the Kubernetes node using the selected IP address and filesystem name.
+9. **Subsequent operations**:
+   * Execute remaining operations similarly to how they would be done with the native WekaFS driver.
+   * If a client group name is specified in the `values.yaml` file, the plugin uses that name; otherwise, it defaults to the `WekaCSIPluginClients` client group.
+
+## NFS permissions required for WEKA CSI Plugin
+
+The WEKA CSI Plugin requires specific NFS permissions, which it automatically configures on the WEKA cluster. These permissions are as follows:
+
+1. **Client Group**: `WekaCSIPluginClients` (or a custom client group name if specified in the `values.yaml` file)
 2. **Filesystem**: The filesystem name to be mounted
-3. **Path**: `/` (root of the filesystem)
+3. **Path**: `/` (root directory of the filesystem)
 4. **Type**: `RW`
-5. **Priority**: No priority set
-6. **Supported Versions**: `V4`
+5. **Priority**: No priority is set
+6. **Supported Versions**: `V3, V4`
 7. **User Squash**: `None`
 8. **Authentication Types**: `NONE`, `SYS`
 
-> **WARNING:** Weka NFS servers will evaluate permissions based on the order of the permissions list.  
-> If multiple permissions matching the IP address of the Kubernetes node and the filesystem are set, a conflict might occur.  
-> Hence, it is **highly recommended** not creating additional permissions for the same filesystem 
-> Also, if multiple client groups are used, it is highly recommended to make sure that IP addresses are not overlapping between client groups. 
+**Warning**:
+WEKA NFS servers evaluate permissions based on the order in the permissions list.
+If multiple permissions match the IP address of the Kubernetes node and filesystem, a conflict may occur.
+Therefore, it is strongly recommended not to create additional permissions for the same filesystem.
+Additionally, if multiple client groups are used, ensure that the IP addresses of the groups do not overlap.
 
-## WEKA Cluster Preparation
-Before using the Weka CSI Plugin with NFS transport, the Weka cluster must be prepared for NFS access.
-This includes configuring the NFS protocol on the Weka cluster, creating an NFS interface group, and configuring at least 1 Group IP address
+## WEKA cluster preparation
 
-Alternatively, in cloud deployments where setting a Group IP address is not possible, the Weka server IP addresses can be used instead.
-In such case, the IP addresses may be set via the API secret and will be used instead of the Group IP addresses.
+Before using the WEKA CSI Plugin with NFS transport, prepare the WEKA cluster for NFS access. This preparation involves:
 
-This can be set up by providing `nfsTargetIps` parameter in the API secret. Refer to the [API secret example](../examples/common/csi-wekafs-api-secret.yaml) for more information.
-> **WARNING:** Using an NFS load balancer that forwards NFS connection to multiple Weka servers is not supported at this moment.
+* Configuring the NFS protocol on the WEKA cluster.
+* Creating an NFS interface group.
+* Configuring at least one Group IP address.
 
-## Installation
-By default, Weka CSI Plugin components will not start unless Weka driver is not detected on Kubernetes node.
-This is to prevent a potential misconfiguration where volumes are attempted to be provisioned or published on node while no Weka client is installed.
+In cloud deployments where setting a Group IP address is impossible, you can use the WEKA server IP addresses instead. In this case, set the IP addresses through the API secret to replace the Group IP addresses. This configuration can be done by providing the `nfsTargetIps` parameter in the API secret. For more details, see [API secret example](../examples/common/csi-wekafs-api-secret.yaml).
 
-To enable NFS transport, Weka CSI plugin must be explicitly configured for using NFS failback.
-This is done by setting the `pluginConfig.mountProtocol.allowNfsFailback` parameter to `true` in the `values.yaml` file.
+**Note**:**
+Using an NFS load balancer that redirects NFS connections to multiple WEKA servers (also known as NFSv4 directory referrals) is not supported.
 
-The parameter `pluginConfig.mountProtocol.useNfs` enforces the use of NFS transport even if Weka client is installed on the node, 
-and recommended to be set to `true` ONLY for testing.
+## Install the WEKA CSI Plugin with NFS transport
 
-Follow the [Helm installation instructions](../charts/csi-wekafsplugin/README.md) to install the Weka CSI Plugin. 
-Most of the installation steps are the same as for the native WekaFS driver, however, additional parameters should be set in the `values.yaml` file,
-or passed as command line arguments to the `helm install` command.
+By default, the WEKA CSI Plugin components do not start if a WEKA driver is detected on a Kubernetes node. This prevents potential misconfigurations where volumes may be provisioned or published on a node without an installed WEKA client.
 
-This is the example Helm install command for using NFS transport:
-```console
-helm upgrade csi-wekafs -n csi-wekafs --create-namespace --install csi-wekafs/csi-wekafsplugin csi-wekafs\
+**Procedure**
+
+1. **Configure NFS failback:** Explicitly configure the WEKA CSI Plugin to use NFS failback by setting the `pluginConfig.mountProtocol.allowNfsFailback` parameter to `true` in the `values.yaml` file.
+2. **Set NFS transport enforcement (optional):** If you want to enforce the use of NFS transport even when the WEKA client is installed on the node, set the `pluginConfig.mountProtocol.useNfs` parameter to `true`. This option is recommended for testing purposes only.
+3. **Follow Helm installation instructions:** Follow the [Helm installation instructions](../charts/csi-wekafsplugin/README.md) to install the WEKA CSI Plugin. Most installation steps are similar to those for the native WekaFS driver.
+4. **Set additional parameters:** You can set any additional parameters in the `values.yaml` file or pass them as command-line arguments to the Helm install command.
+5. **Run the Helm install command:** Run the following example Helm install command for using NFS transport:
+
+```bash
+helm upgrade csi-wekafs -n csi-wekafs --create-namespace --install csi-wekafs/csi-wekafsplugin csi-wekafs \
 --set logLevel=6 \
---set pluginConfig.mountProtocol.alloeNfsFailback=true \
+--set pluginConfig.mountProtocol.allowNfsFailback=true \
 --set pluginConfig.allowInsecureHttps=true \
-[ --set pluginConfig.mountProtocol.interfaceGroupName=MyIntefaceGroup \ ]  # optional, recommended if multiple interface groups are defined
-[ --set pluginConfig.mountProtocol.clientGroupName=MyClientGroup \ ]       # optional, recommended if client group is predefined
+[ --set pluginConfig.mountProtocol.interfaceGroupName=MyInterfaceGroup \ ] 
+# optional, recommended if multiple interface groups are defined
+[ --set pluginConfig.mountProtocol.clientGroupName=MyClientGroup \ ]    
+# optional, recommended if the client group is predefined
 ```
