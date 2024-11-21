@@ -9,9 +9,7 @@ To add SELinux support, perform the following procedures:
 2. [Install and configure the WEKA CSI Plugin](add-selinux-support.md#install-config-csi-plugin).
 3. [Test the WEKA CSI Plugin operation](add-selinux-support.md#test-csi-plugin).
 
-In order to use Weka CSI Plugin with SELinux enforcement, the following steps must be performed:
-
-### Install a custom SELinux policy <a href="#install-a-custom-selink-p" id="install-a-custom-selink-p"></a>
+### Install a custom SELinux policy
 
 The policy comes both as a Type Enforcement file (`csi-wekafs.te`), and as a Common Intermediate Language (`csi-wekafs.cil`) file, which can be installed on the system using `semodule` command.
 
@@ -82,9 +80,9 @@ Follow these considerations:
   * When `selinuxSupport` is `enforced`, only SELinux-enabled CSI plugin node components are installed.
   * When `selinuxSupport` is `mixed`, both non-SELinux and SELinux-enabled components are installed.
   * When `selinuxSupport` is `off`, only non-SELinux CSI plugin node components are installed.
-*   The SELinux status cannot be known from within the CSI plugin pod. Therefore, a way of distinguishing between SELinux-enabled and non-SELinux nodes is required. WEKA CSI Plugin relies on the node affinity mechanism by matching the value of a certain node label in a mutually exclusive way. Only when the label exists and is set to true, an SELinux-enabled node component will start on that node. Otherwise, the non-SELinux node component will start.
+*   The SELinux status cannot be known from within the CSI plugin pod. Therefore, a way of distinguishing between SELinux-enabled and non-SELinux nodes is required. WEKA CSI Plugin relies on the node affinity mechanism by matching the value of a certain node label in a mutually exclusive way. Only when the label exists and is set to true, an SELinux-enabled node component starts on that node. Otherwise, the non-SELinux node component starts.
 
-    To ensure that the plugin starts in compatibility mode, set the following label on each SELinux-enabled Kubernetes node:&#x20;
+To ensure that the plugin starts in compatibility mode, set the following label on each SELinux-enabled Kubernetes node:
 * If a node label is modified after installing the WEKA CSI Plugin node component on that node, terminate the csi-wekafs-node-XXXX component on the affected node. As a result, a replacement pod is automatically scheduled on the node but with the correct SELinux configuration.
 
 ```
@@ -145,12 +143,10 @@ $ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespac
         If the label was missing and added by you during troubleshooting, the CSI node server component must be restarted on the node.\
         Perform the following command to terminate the relevant pod, and another instance will start automatically:
 
-{% code fullWidth="false" %}
 ```
 $ POD=$(kubectl get pod -n csi-wekafs -lcomponent=csi-wekafs-node -o wide | grep -w don-kube-8 | cut -d" " -f1)
 $ kubectl delete pod -n csi-wekafs $POD
 ```
-{% endcode %}
 
 8. Collect CSI node server logs from the matching Kubernetes nodes and contact the [Customer Success Team](https://docs.weka.io/support/getting-support-for-your-weka-system.md#contact-customer-success-team).
 
