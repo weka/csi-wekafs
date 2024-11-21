@@ -140,7 +140,7 @@ Before using the WEKA CSI Plugin with NFS transport, prepare the WEKA cluster fo
 
 In cloud deployments where setting a Group IP address is impossible, you can use the WEKA server IP addresses instead. In this case, set the IP addresses through the API secret to replace the Group IP addresses. This configuration can be done by providing the `nfsTargetIps` parameter in the API secret. For more details, see [API secret example](../examples/common/csi-wekafs-api-secret.yaml).
 
-**Note**:**
+**Note**:
 Using an NFS load balancer that redirects NFS connections to multiple WEKA servers (also known as NFSv4 directory referrals) is not supported.
 
 ## Install the WEKA CSI Plugin with NFS transport
