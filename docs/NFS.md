@@ -62,6 +62,7 @@ nodeSelector:
 ```yaml
 nodeSelector:
   topology.weka.com/transport: nfs
+```
 
 #### Switching from NFS to WekaFS transport
 
