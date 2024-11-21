@@ -5,9 +5,9 @@ Security-Enhanced Linux (SELinux) is a Linux kernel security module that provide
 
 To add SELinux support, perform the following procedures:
 
-1. [Install a custom SELinux policy](add-selinux-support.md#install-a-custom-selink-p).
-2. [Install and configure the WEKA CSI Plugin](add-selinux-support.md#install-config-csi-plugin).
-3. [Test the WEKA CSI Plugin operation](add-selinux-support.md#test-csi-plugin).
+1. Install a custom SELinux policy.
+2. Install and configure the WEKA CSI Plugin.
+3. Test the WEKA CSI Plugin operation.
 
 ### Install a custom SELinux policy
 
@@ -64,7 +64,7 @@ The policy comes both as a Type Enforcement file (`csi-wekafs.te`), and as a Com
 
     The configuration changes are applied immediately.
 
-### Install and configure the WEKA CSI Plugin <a href="#install-config-csi-plugin" id="install-config-csi-plugin"></a>
+### Install and configure the WEKA CSI Plugin
 
 1. To label volumes correctly, install the WEKA CSI Plugin in an SELinux-compatible mode. To do that, set the `selinuxSupport` value to `"enforced"` or `"mixed”` by editing the file `values.yaml` or passing the parameter directly in the `helm` installation command.
 
@@ -97,8 +97,7 @@ csi.weka.io/selinux_enabled="true"
 $ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxSupport=mixed --set selinuxNodeLabel="selinux_enabled"
 ```
 
-### Test the WEKA CSI plugin operation <a href="#test-csi-plugin" id="test-csi-plugin"></a>
-
+### Test the WEKA CSI plugin operation
 1. Make sure you have configured a valid CSI API [`secret`](../examples/common/csi-wekafs-api-secret.yaml). Create a valid WEKA CSI Plugin [`storageClass`](../examples/dynamic/directory/storageclass-wekafs-dir-api.yaml).
 2. Provision a [`PersistentVolumeClaim`](../examples/dynamic/directory/pvc-wekafs-dir-api.yaml).
 3. Provision a [`DaemonSet`](../examples/dynamic/directory/csi-daemonset.app-on-dir-api.yaml) to enable access to all pods on all nodes.
@@ -136,7 +135,7 @@ $ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespac
                  csi.weka.io/selinux_enabled=true
     ```
 
-    *   If the output is empty, Perform the [Install and configure the Weka CSI Plugin](add-selinux-support.md#install-config-csi-plugin) procedure.
+    *   If the output is empty, Perform the **Install and configure the Weka CSI Plugin** procedure.
 
 
 
