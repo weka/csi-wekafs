@@ -59,7 +59,7 @@ spec:
             - bash
           args:
             - -c
-            - kubectl label node $NODENAME "topology.csi.weka.io/transport-" ; kubectl get node $NODENAME -o json | jq '.metadata' > /etc/nodeinfo/metadata
+            - kubectl label node $NODENAME "topology.csi.weka.io/transport-" ; kubectl get node $NODENAME -o json > /etc/nodeinfo/metadata
       containers:
         - name: wekafs
           securityContext:
@@ -169,6 +169,12 @@ spec:
             - mountPath: /etc/nodeinfo
               name: nodeinfo
               readOnly: true
+            - mountPath: /etc/nodeinfo/boot_id
+              name: bootid
+              readOnly: true
+            - mountPath: /var/lib/csi-wekafs/attachmentdb
+              name: attachmentdb
+
 {{- if .Values.legacyVolumeSecretName }}
             - mountPath: /legacy-volume-access
               name: legacy-volume-access
@@ -265,6 +271,16 @@ spec:
       {{- end }}
         - name: nodeinfo
           emptyDir: {}
+        - name: bootid
+          hostPath:
+            path: /proc/sys/kernel/random/boot_id
+            type: File
+        - name: attachmentdb
+          hostPath:
+            path: /tmp/csi-attachmentdb
+            type: DirectoryOrCreate
+
+
 {{- if .Values.legacyVolumeSecretName }}
         - name: legacy-volume-access
           secret:
