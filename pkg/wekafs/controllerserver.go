@@ -108,6 +108,7 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod supoort
 	}
 	if config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
