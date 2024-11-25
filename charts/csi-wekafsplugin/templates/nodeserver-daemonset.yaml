@@ -172,7 +172,7 @@ spec:
             - mountPath: /etc/nodeinfo/boot_id
               name: bootid
               readOnly: true
-            - mountPath: /var/lib/csi-wekafs/attachmentdb
+            - mountPath: /tmp/csi-wekafs-attachments
               name: attachmentdb
 
 {{- if .Values.legacyVolumeSecretName }}
