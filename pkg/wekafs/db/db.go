@@ -8,6 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	_ "modernc.org/sqlite" // Import the modernnc sqlite driver
 	"os"
 	"path/filepath"
 )
@@ -64,7 +65,8 @@ func GetDatabase(ctx context.Context) (Database, error) {
 		logger.Error().Err(err).Msg("Failed to create directory")
 		return nil, err
 	}
-	db, err := gorm.Open(sqlite.Open(DBPath), &gorm.Config{})
+	dsn := "file:" + DBPath
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to connect to the database")
 	}
