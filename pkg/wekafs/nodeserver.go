@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -54,6 +55,7 @@ type NodeServer struct {
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
+	bootId            string
 	sync.Mutex
 }
 
@@ -530,6 +532,65 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		MaxVolumesPerNode:  ns.maxVolumesPerNode,
 		AccessibleTopology: topology,
 	}, nil
+}
+
+func (ns *NodeServer) GetNodeBootId(ctx context.Context) string {
+	if ns.bootId != "" {
+		return ns.bootId
+	}
+
+	// attempt to read boot id from the file
+	bootId, err := os.ReadFile("/etc/nodeinfo/boot_id")
+	if err == nil && len(bootId) > 0 {
+		ns.bootId = string(bootId)
+	} else {
+		// generate a new boot id if failed to read from the file, e.g. in dev mode
+		ns.bootId = uuid.New().String()
+	}
+	return ns.bootId
+}
+
+func (ns *NodeServer) getExistingPvcAttachments(ctx context.Context, volumeId, targetPath *string) (*[]db.PvcAttachment, error) {
+	return ns.database.GetAttachmentsByVolumeIdOrTargetPath(ctx, volumeId, targetPath)
+}
+
+func (ns *NodeServer) SetPvcLock(ctx context.Context, volumeId, targetPath, node, accessType string) error {
+	logger := log.Ctx(ctx)
+	database, err := db.GetDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
+	attachment := &db.PvcAttachment{
+		VolumeId:   volumeId,
+		Node:       node,
+		AccessType: accessType,
+		BootID:     ns.GetNodeBootId(ctx),
+		TargetPath: targetPath,
+	}
+
+	if err := database.CreateOrUpdateAttachment(ctx, attachment); err != nil {
+		logger.Error().Err(err).Str("volume_id", volumeId).Str("target_path", targetPath).Str("node", node).Str("access_type", accessType).Msg("Failed to create or update attachment")
+		return err
+	}
+	return nil
+}
+
+func (ns *NodeServer) ReleasePvcLock(ctx context.Context, volumeId, targetPath string) error {
+	logger := log.Ctx(ctx)
+	database, err := db.GetDatabase(ctx)
+	if err != nil {
+		return err
+	}
+
+	node := ns.getNodeId()
+	bootId := ns.GetNodeBootId(ctx)
+
+	if err := database.DeleteAttachmentDisregardingAccessType(volumeId, targetPath, node, bootId); err != nil {
+		logger.Error().Err(err).Str("volume_id", volumeId).Str("target_path", targetPath).Msg("Failed to delete attachment")
+		return err
+	}
+	return nil
 }
 
 //goland:noinspection GoUnusedParameter
