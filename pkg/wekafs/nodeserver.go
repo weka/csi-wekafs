@@ -57,7 +57,7 @@ type NodeServer struct {
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
 	bootId            string
-	database          db.Database
+	database          *db.SqliteDatabase
 	sync.Mutex
 }
 

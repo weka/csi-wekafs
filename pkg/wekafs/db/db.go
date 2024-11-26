@@ -2,12 +2,15 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/migrator"
+	"gorm.io/gorm/schema"
 	_ "modernc.org/sqlite" // Import the modernnc sqlite driver
 	"os"
 	"path/filepath"
@@ -22,6 +25,72 @@ type PvcAttachment struct {
 	Node       string `json:"node"`
 	BootID     string `json:"boot_id"`
 	AccessType string `json:"access_type"`
+}
+
+type ModerncSQLiteDialector struct {
+	DSN    string
+	Conn   *sql.DB
+	Config *gorm.Config
+}
+
+func (dialector ModerncSQLiteDialector) DefaultValueOf(field *schema.Field) clause.Expression {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dialector ModerncSQLiteDialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dialector ModerncSQLiteDialector) QuoteTo(writer clause.Writer, s string) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dialector ModerncSQLiteDialector) Explain(sql string, vars ...interface{}) string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (dialector ModerncSQLiteDialector) Name() string {
+	return "sqlite"
+}
+
+func (dialector ModerncSQLiteDialector) Initialize(db *gorm.DB) error {
+	// Set up the database/sql connection
+	if dialector.Conn != nil {
+		db.ConnPool = dialector.Conn
+	} else {
+		sqlDB, err := sql.Open("sqlite", dialector.DSN)
+		if err != nil {
+			return err
+		}
+		db.ConnPool = sqlDB
+	}
+
+	// Set up GORM configurations
+	db.Dialector = dialector
+	db.Config = dialector.Config
+	return nil
+}
+
+func (dialector ModerncSQLiteDialector) Migrator(db *gorm.DB) gorm.Migrator {
+	return migrator.Migrator{Config: migrator.Config{DB: db}}
+}
+
+func (dialector ModerncSQLiteDialector) DataTypeOf(field *schema.Field) string {
+	// Basic SQLite type mapping
+	switch field.DataType {
+	case schema.Int:
+		return "INTEGER"
+	case schema.String:
+		return "TEXT"
+	case schema.Bool:
+		return "BOOLEAN"
+	default:
+		return "BLOB"
+	}
 }
 
 func (pal *PvcAttachment) String() string {
@@ -58,26 +127,36 @@ func (pal *PvcAttachment) IsSingleWriter() bool {
 }
 
 // GetDatabase returns a database for pod attachments that will be used on each node to satisfy the ReadWriteOncePod attachment mode
-func GetDatabase(ctx context.Context) (Database, error) {
+func GetDatabase(ctx context.Context) (*SqliteDatabase, error) {
 	logger := log.Ctx(ctx)
 	directory := filepath.Dir(DBPath)
 	if err := EnsureDirectoryExists(directory); err != nil {
 		logger.Error().Err(err).Msg("Failed to create directory")
 		return nil, err
 	}
+
 	dsn := "file:" + DBPath
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	gormDb, err := gorm.Open(
+		ModerncSQLiteDialector{
+			DSN: dsn,
+		},
+		&gorm.Config{
+			NamingStrategy: schema.NamingStrategy{
+				SingularTable: true,
+			},
+		},
+	)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to connect to the database")
 	}
 
 	// Auto-migrate the schema
-	if err := db.AutoMigrate(&PvcAttachment{}); err != nil {
+	if err := gormDb.AutoMigrate(&PvcAttachment{}); err != nil {
 		logger.Error().Err(err).Msg("Failed to migrate the database")
 	}
 
 	return &SqliteDatabase{
-		db,
+		gormDb,
 	}, nil
 }
 

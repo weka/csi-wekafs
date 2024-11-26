@@ -7,19 +7,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func setupTestDB(t *testing.T) *SqliteDatabase {
 	_ = os.Remove(DBPath)
-	db, err := gorm.Open(sqlite.Open("file:"+DBPath), &gorm.Config{})
+	db, err := GetDatabase(context.Background())
 	assert.NoError(t, err)
-
-	err = db.AutoMigrate(&PvcAttachment{})
-	assert.NoError(t, err)
-
-	return &SqliteDatabase{db}
+	return db
 }
 
 func TestDatabaseWrapper_GetAttachmentsByVolumeIdOrTargetPath(t *testing.T) {
