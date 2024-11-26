@@ -13,7 +13,7 @@ import (
 
 func setupTestDB(t *testing.T) *SqliteDatabase {
 	_ = os.Remove(DBPath)
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open("file:"+DBPath), &gorm.Config{})
 	assert.NoError(t, err)
 
 	err = db.AutoMigrate(&PvcAttachment{})
