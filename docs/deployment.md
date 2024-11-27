@@ -1,7 +1,5 @@
 # Deployment
 
-You can deploy the WEKA CSI Plugin using the helm chart from the official [WEKA ArtifactHub repository](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin).
-
 ## Prerequisites
 
 Ensure the following prerequisites are met:
@@ -17,7 +15,7 @@ Ensure the following prerequisites are met:
 
 The WEKA client must be installed on the Kubernetes worker nodes. Follow these guidelines:
 
-* It is recommended to use a WEKA persistent client (a client that is part of the cluster) rather than a stateless client. See [adding-clients-bare-metal.md](../../planning-and-installation/bare-metal/adding-clients-bare-metal.md "mention").
+* It is recommended to use a WEKA persistent client (a client that is part of the cluster) rather than a stateless client. See [Add clients to an on-premises WEKA cluster](https://docs.weka.io/planning-and-installation/bare-metal/adding-clients-bare-metal).
 * If the Kubernetes worker nodes are running on WEKA cluster backends (converged mode), ensure the WEKA processes are running before the `kubelet` process starts.
 
 ### **Prerequisites for Using NFS transport**
@@ -40,11 +38,10 @@ The WEKA client must be installed on the Kubernetes worker nodes. Follow these g
 
 ### Install CSI Snapshot Controller and Snapshot CRDs
 
-To enable Kubernetes-controlled snapshots, install the CSI Snapshot Controller and the [CSI external-snapshotter](#user-content-fn-1)[^1] CRD manifests.
+To enable Kubernetes-controlled snapshots, install the CSI Snapshot Controller and the CSI external-snapshotter CRD manifests.
+**Note**: The CSI external-snapshotter is a sidecar container in Kubernetes. It monitors for VolumeSnapshot and VolumeSnapshotContent objects and triggers snapshot operations against a CSI endpoint. It’s part of the Kubernetes’ CSI implementation.
 
-{% hint style="info" %}
-On RedHat OpenShift Container Platform (OCP) those definitions might be preinstalled.
-{% endhint %}
+**Note**: On RedHat OpenShift Container Platform (OCP) those definitions might be preinstalled.
 
 1. On the workstation you manage Kubernetes from, clone the CSI external-snapshotter from its GitHub repository.
 
@@ -81,9 +78,7 @@ helm install csi-wekafs csi-wekafs/csi-wekafsplugin --namespace csi-wekafs --cre
 
 ```
 
-{% hint style="info" %}
-If you need SELinux support, see the [SELinux support](add-selinux-support.md) section.
-{% endhint %}
+**Note**: If you need SELinux support, see the [SELinux](../selinux/readme.md) section.
 
 <details>
 
@@ -109,10 +104,7 @@ To learn more about the release, try:
   $ helm status -n csi-wekafs csi-wekafs
   $ helm get all -n csi-wekafs csi-wekafs
 
-Official Weka CSI Plugin documentation can be found here: https://docs.weka.io/appendix/weka-csi-plugin
-
-Examples of how to configure a storage class and start using the driver are here:
-https://github.com/weka/csi-wekafs/tree/master/examples
+To configure a storage class and start using the driver, see the [Examples](../examples/readme.md) section.
 
 -------------------------------------------------- NOTICE --------------------------------------------------
 | THIS VERSION INTRODUCES SUPPORT FOR ADDITIONAL VOLUME TYPES, AS WELL AS SNAPSHOT AND VOLUME CLONING CAPS |
@@ -135,9 +127,7 @@ https://github.com/weka/csi-wekafs/tree/master/examples
 
 In WEKA CSI Plugin v2.0, the CSIDriver object has undergone changes. Specifically, CSIDriver objects are now immutable. Consequently, the upgrade process involves uninstalling the previous CSI version using Helm and subsequently installing the new version. It is important to note that the uninstall operation does not delete any existing secrets, StorageClasses, or PVC configurations.
 
-{% hint style="danger" %}
-If you plan to upgrade the existing WEKA CSI Plugin and enable directory quota enforcement for already existing volumes, bind the legacy volumes to a single secret. See the [Bind legacy volumes to API](upgrade-legacy-persistent-volumes-for-capacity-enforcement.md#bind-legacy-volumes-to-api) section.
-{% endhint %}
+**Warning**: If you plan to upgrade the existing WEKA CSI Plugin and enable directory quota enforcement for already existing volumes, bind the legacy volumes to a single secret. See the [Bind legacy volumes to API](../migration/upgrade-legacy-pv.md) section.
 
 #### 1. Prepare for the upgrade
 
@@ -225,14 +215,12 @@ If the Kubernetes worker nodes run on RHEL and use OpenShift, elevate the OpenSh
 
 To elevate the OpenShift privileges, run the following command lines:
 
-{% code overflow="wrap" %}
 ```
 oc create namespace csi-wekafs
 oc adm policy add-scc-to-user privileged system:serviceaccount:csi-wekafs:csi-wekafs-node
 oc adm policy add-scc-to-user privileged system:serviceaccount:csi-wekafs:csi-wekafs-controller
 
 ```
-{% endcode %}
 
 #### 4. Delete the CSI Plugin pods
 
