@@ -1,0 +1,22 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: csi-app-rwo-pod-02
+spec:
+  # make sure that pod is scheduled only on node having weka CSI node running
+  nodeSelector:
+    topology.csi.weka.io/global: "true"
+    kubernetes.io/hostname: MY_NODE_HOSTNAME
+
+  containers:
+    - name: my-frontend
+      image: ubuntu
+      volumeMounts:
+      - mountPath: "/data"
+        name: my-csi-volume
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do echo `date` hello >> /data/temp.txt; sleep 10;done"]
+  volumes:
+    - name: my-csi-volume
+      persistentVolumeClaim:
+        claimName: pvc-wekafs-rwo-pod # defined in pvc-wekafs-rwo-pod.yaml

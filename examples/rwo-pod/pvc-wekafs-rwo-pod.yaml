@@ -1,0 +1,12 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-rwo-pod
+spec:
+  accessModes:
+    - ReadWriteOncePod
+  storageClassName: storageclass-wekafs-dir-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
