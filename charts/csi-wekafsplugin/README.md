@@ -36,15 +36,11 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 >
 > However, for sake of more convenient migration, a `legacySecretName` parameter can be set that will
 > bind existing legacy volumes to a Weka cluster API and allow volume expansion.
->
-> For further information, refer [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
+
 
 ## Usage
 - [Deploy an Example application](https://github.com/weka/csi-wekafs/blob/master/docs/usage.md)
 - [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md)
-
-## Additional Documentation
-- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
 ## Values
 
