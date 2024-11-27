@@ -78,7 +78,7 @@ helm install csi-wekafs csi-wekafs/csi-wekafsplugin --namespace csi-wekafs --cre
 
 ```
 
-**Note**: If you need SELinux support, see the [SELinux](../selinux/readme.md) section.
+**Note**: If you need SELinux support, see the [SELinux](../selinux/README.md) section.
 
 <details>
 
@@ -104,7 +104,7 @@ To learn more about the release, try:
   $ helm status -n csi-wekafs csi-wekafs
   $ helm get all -n csi-wekafs csi-wekafs
 
-To configure a storage class and start using the driver, see the [Examples](../examples/readme.md) section.
+To configure a storage class and start using the driver, see the [Examples](../examples/README.md) section.
 
 -------------------------------------------------- NOTICE --------------------------------------------------
 | THIS VERSION INTRODUCES SUPPORT FOR ADDITIONAL VOLUME TYPES, AS WELL AS SNAPSHOT AND VOLUME CLONING CAPS |
