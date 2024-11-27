@@ -203,8 +203,6 @@ To learn more about the release, try:
   $ helm status csi-wekafs
   $ helm get all csi-wekafs
 
-Official Weka CSI Plugin documentation can be found here: https://docs.weka.io/appendix/weka-csi-plugin
-
 ```
 
 </details>
