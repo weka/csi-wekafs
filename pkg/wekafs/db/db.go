@@ -7,118 +7,30 @@ import (
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-	"gorm.io/gorm/migrator"
-	"gorm.io/gorm/schema"
-	_ "modernc.org/sqlite" // Import the modernnc sqlite driver
 	"os"
 	"path/filepath"
+	"strings"
+
+	_ "modernc.org/sqlite" // Import the modernc sqlite driver
 )
 
 const DBPath = "/tmp/csi-wekafs-attachments/csi-attachments.db"
 
 type PvcAttachment struct {
-	ID         uint   `gorm:"primaryKey"` // Auto-incrementing ID
-	VolumeId   string `gorm:"index:idx_volume_target,unique"`
-	TargetPath string `gorm:"index:idx_volume_target,unique"`
-	Node       string `json:"node"`
-	BootID     string `json:"boot_id"`
-	AccessType string `json:"access_type"`
+	ID         int64
+	VolumeId   string
+	TargetPath string
+	Node       string
+	BootID     string
+	AccessType string
 }
 
-type ModerncSQLiteDialector struct {
-	DSN    string
-	Conn   *sql.DB
-	Config *gorm.Config
-}
-
-func (dialector ModerncSQLiteDialector) DefaultValueOf(field *schema.Field) clause.Expression {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (dialector ModerncSQLiteDialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (dialector ModerncSQLiteDialector) QuoteTo(writer clause.Writer, s string) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (dialector ModerncSQLiteDialector) Explain(sql string, vars ...interface{}) string {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (dialector ModerncSQLiteDialector) Name() string {
-	return "sqlite"
-}
-
-func (dialector ModerncSQLiteDialector) Initialize(db *gorm.DB) error {
-	// Set up the database/sql connection
-	if dialector.Conn != nil {
-		db.ConnPool = dialector.Conn
-	} else {
-		sqlDB, err := sql.Open("sqlite", dialector.DSN)
-		if err != nil {
-			return err
-		}
-		db.ConnPool = sqlDB
-	}
-
-	// Set up GORM configurations
-	db.Dialector = dialector
-	db.Config = dialector.Config
-	return nil
-}
-
-func (dialector ModerncSQLiteDialector) Migrator(db *gorm.DB) gorm.Migrator {
-	return migrator.Migrator{Config: migrator.Config{DB: db}}
-}
-
-func (dialector ModerncSQLiteDialector) DataTypeOf(field *schema.Field) string {
-	// Basic SQLite type mapping
-	switch field.DataType {
-	case schema.Int:
-		return "INTEGER"
-	case schema.String:
-		return "TEXT"
-	case schema.Bool:
-		return "BOOLEAN"
-	default:
-		return "BLOB"
-	}
-}
-
-func (pal *PvcAttachment) String() string {
-	return fmt.Sprintf("PVC: %s, Node: %s, TargetPath: %s, BootID: %s, AccessType: %s", pal.VolumeId, pal.Node, pal.TargetPath, pal.BootID, pal.AccessType)
-}
-
-func (pal *PvcAttachment) MatchesBootId(bootID string) bool {
-	return pal.BootID == bootID
-}
-
-func (pal *PvcAttachment) MatchesNode(node string) bool {
-	return pal.Node == node
-}
-
-func (pal *PvcAttachment) MatchesVolumeId(volumeId string) bool {
-	return pal.VolumeId == volumeId
-}
-
-func (pal *PvcAttachment) MatchesAccessType(accessType string) bool {
-	return pal.AccessType == accessType
-}
-
-func (pal *PvcAttachment) MatchesTargetPath(path string) bool {
-	return pal.TargetPath == path
-}
-
-func (pal *PvcAttachment) Matches(volumeId, path, node, accessType string, bootId string) bool {
-	return pal.MatchesVolumeId(volumeId) && pal.MatchesTargetPath(path) && pal.MatchesNode(node) && pal.MatchesBootId(bootId) && pal.MatchesAccessType(accessType)
+func (pal *PvcAttachment) Matches(volumeId, path, node, accessType, bootId string) bool {
+	return pal.VolumeId == volumeId &&
+		pal.TargetPath == path &&
+		pal.Node == node &&
+		pal.AccessType == accessType &&
+		pal.BootID == bootId
 }
 
 func (pal *PvcAttachment) IsSingleWriter() bool {
@@ -126,38 +38,8 @@ func (pal *PvcAttachment) IsSingleWriter() bool {
 		pal.AccessType == csi.VolumeCapability_AccessMode_SINGLE_NODE_SINGLE_WRITER.String()
 }
 
-// GetDatabase returns a database for pod attachments that will be used on each node to satisfy the ReadWriteOncePod attachment mode
-func GetDatabase(ctx context.Context) (*SqliteDatabase, error) {
-	logger := log.Ctx(ctx)
-	directory := filepath.Dir(DBPath)
-	if err := EnsureDirectoryExists(directory); err != nil {
-		logger.Error().Err(err).Msg("Failed to create directory")
-		return nil, err
-	}
-
-	dsn := "file:" + DBPath
-	gormDb, err := gorm.Open(
-		ModerncSQLiteDialector{
-			DSN: dsn,
-		},
-		&gorm.Config{
-			NamingStrategy: schema.NamingStrategy{
-				SingularTable: true,
-			},
-		},
-	)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to connect to the database")
-	}
-
-	// Auto-migrate the schema
-	if err := gormDb.AutoMigrate(&PvcAttachment{}); err != nil {
-		logger.Error().Err(err).Msg("Failed to migrate the database")
-	}
-
-	return &SqliteDatabase{
-		gormDb,
-	}, nil
+type SqliteDatabase struct {
+	db *sql.DB
 }
 
 func EnsureDirectoryExists(directory string) error {
@@ -174,92 +56,202 @@ func EnsureDirectoryExists(directory string) error {
 	return nil
 }
 
-type SqliteDatabase struct {
-	*gorm.DB
-}
+func GetDatabase(ctx context.Context) (*SqliteDatabase, error) {
+	logger := log.Ctx(ctx)
+	directory := filepath.Dir(DBPath)
+	if err := EnsureDirectoryExists(directory); err != nil {
+		logger.Error().Err(err).Msg("Failed to create directory")
+		return nil, err
+	}
 
-func (d *SqliteDatabase) GetAttachmentsByVolumeIdOrTargetPath(ctx context.Context, volumeId, targetPath *string) (*[]PvcAttachment, error) {
-	if d == nil {
-		return nil, errors.New("database is nil")
-	}
-	query := d.Model(&PvcAttachment{})
-	if volumeId != nil {
-		query = query.Where("volume_id = ?", *volumeId)
-	}
-	if targetPath != nil {
-		query = query.Where("target_path = ?", *targetPath)
-	}
-	locks := &[]PvcAttachment{}
-
-	err := query.Find(locks).Error
+	dsn := "file:" + DBPath
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup records: %w", err)
+		logger.Error().Err(err).Msg("Failed to connect to the database")
+		return nil, err
 	}
 
-	return locks, nil
+	// Ensure table creation
+	query := `
+	CREATE TABLE IF NOT EXISTS pvc_attachments (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		volume_id TEXT NOT NULL,
+		target_path TEXT NOT NULL,
+		node TEXT,
+		boot_id TEXT,
+		access_type TEXT,
+		UNIQUE(volume_id, target_path)
+	);`
+	if _, err := db.Exec(query); err != nil {
+		logger.Error().Err(err).Msg("Failed to create table")
+		return nil, err
+	}
+
+	return &SqliteDatabase{db: db}, nil
 }
 
 func (d *SqliteDatabase) CreateAttachment(ctx context.Context, attachment *PvcAttachment) error {
-	if d == nil {
-		return errors.New("database is nil")
+	query := `
+	INSERT INTO pvc_attachments (volume_id, target_path, node, boot_id, access_type)
+	VALUES (?, ?, ?, ?, ?);
+	`
+	result, err := d.db.ExecContext(ctx, query, attachment.VolumeId, attachment.TargetPath, attachment.Node, attachment.BootID, attachment.AccessType)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return errors.New("attachment already exists")
+		}
+		return fmt.Errorf("failed to create attachment: %w", err)
 	}
-	if err := d.Create(attachment).Error; err != nil {
-		return fmt.Errorf("failed to create record: %w", err)
-	}
+	attachment.ID, _ = result.LastInsertId()
 	return nil
 }
 
-func (d *SqliteDatabase) UpdateAttachment(ctx context.Context, attachment *PvcAttachment) error {
-	if d == nil {
-		return errors.New("database is nil")
-	}
-	existing, err := d.GetAttachmentsByVolumeIdOrTargetPath(ctx, &attachment.VolumeId, &attachment.TargetPath)
+func (d *SqliteDatabase) GetAttachments(ctx context.Context, volumeId, targetPath *string) ([]PvcAttachment, error) {
+	query := `
+	SELECT id, volume_id, target_path, node, boot_id, access_type
+	FROM pvc_attachments
+	WHERE (? IS NULL OR volume_id = ?) AND (? IS NULL OR target_path = ?);
+	`
+	rows, err := d.db.QueryContext(ctx, query, volumeId, volumeId, targetPath, targetPath)
 	if err != nil {
-		return fmt.Errorf("failed to lookup existing record: %w", err)
+		return nil, fmt.Errorf("failed to fetch attachments: %w", err)
 	}
-	if len(*existing) == 0 {
-		return errors.New("no record found")
-	}
-	attachment.ID = (*existing)[0].ID
+	defer rows.Close()
 
-	if err := d.Save(attachment).Error; err != nil {
-		return fmt.Errorf("failed to update record: %w", err)
+	var attachments []PvcAttachment
+	for rows.Next() {
+		var attachment PvcAttachment
+		if err := rows.Scan(&attachment.ID, &attachment.VolumeId, &attachment.TargetPath, &attachment.Node, &attachment.BootID, &attachment.AccessType); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		attachments = append(attachments, attachment)
+	}
+	return attachments, nil
+}
+
+func (d *SqliteDatabase) UpdateAttachment(ctx context.Context, attachment *PvcAttachment) error {
+	query := `
+	UPDATE pvc_attachments
+	SET node = ?, boot_id = ?, access_type = ?
+	WHERE volume_id = ? AND target_path = ?;
+	`
+	result, err := d.db.ExecContext(ctx, query, attachment.Node, attachment.BootID, attachment.AccessType, attachment.VolumeId, attachment.TargetPath)
+	if err != nil {
+		return fmt.Errorf("failed to update attachment: %w", err)
+	}
+	if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+		return errors.New("no matching record found")
 	}
 	return nil
 }
 
 func (d *SqliteDatabase) CreateOrUpdateAttachment(ctx context.Context, attachment *PvcAttachment) error {
-	if d == nil {
-		return errors.New("database is nil")
-	}
-	existing, err := d.GetAttachmentsByVolumeIdOrTargetPath(ctx, &attachment.VolumeId, &attachment.TargetPath)
+	// First, check if the record exists
+	query := `
+	SELECT id 
+	FROM pvc_attachments 
+	WHERE volume_id = ? AND target_path = ?;
+	`
+	var existingID int64
+	err := d.db.QueryRowContext(ctx, query, attachment.VolumeId, attachment.TargetPath).Scan(&existingID)
+
 	if err != nil {
-		return fmt.Errorf("failed to lookup existing record: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			// If no rows are found, create a new attachment
+			return d.CreateAttachment(ctx, attachment)
+		}
+		return fmt.Errorf("failed to check existing attachment: %w", err)
 	}
-	if len(*existing) == 0 {
-		return d.CreateAttachment(ctx, attachment)
+
+	// If the record exists, update it
+	attachment.ID = existingID
+	updateQuery := `
+	UPDATE pvc_attachments 
+	SET node = ?, boot_id = ?, access_type = ? 
+	WHERE id = ?;
+	`
+	_, err = d.db.ExecContext(ctx, updateQuery, attachment.Node, attachment.BootID, attachment.AccessType, attachment.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update attachment: %w", err)
 	}
-	return d.UpdateAttachment(ctx, attachment)
+
+	return nil
 }
 
 func (d *SqliteDatabase) DeleteAttachment(ctx context.Context, attachment *PvcAttachment) error {
-	if d == nil {
-		return errors.New("database is nil")
+	query := `
+	DELETE FROM pvc_attachments
+	WHERE volume_id = ? AND target_path = ?;
+	`
+	result, err := d.db.ExecContext(ctx, query, attachment.VolumeId, attachment.TargetPath)
+	if err != nil {
+		return fmt.Errorf("failed to delete attachment: %w", err)
 	}
-	if err := d.Delete(attachment).Error; err != nil {
-		return fmt.Errorf("failed to delete record: %w", err)
+	if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+		return errors.New("no matching record found")
 	}
 	return nil
 }
 
-func (d *SqliteDatabase) DeleteAttachmentDisregardingAccessType(volumeId, targetPath, node, bootId string) error {
-	// Build the delete query
-	result := d.Where("volume_id = ? AND target_path = ? AND node = ? AND boot_id = ?", volumeId, targetPath, node, bootId).Delete(&PvcAttachment{})
-	if result.Error != nil {
-		return fmt.Errorf("failed to delete record: %w", result.Error)
+func (d *SqliteDatabase) DeleteByAttributes(ctx context.Context, volumeId, targetPath, node, bootId string) error {
+	query := `
+	DELETE FROM pvc_attachments
+	WHERE volume_id = ? AND target_path = ? AND node = ? AND boot_id = ?;
+	`
+	result, err := d.db.ExecContext(ctx, query, volumeId, targetPath, node, bootId)
+	if err != nil {
+		return fmt.Errorf("failed to delete attachment: %w", err)
 	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("no record found for VolumeId: %s and TargetPath: %s", volumeId, targetPath)
+	if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+		return fmt.Errorf("no matching record found")
 	}
 	return nil
+}
+
+func (d *SqliteDatabase) GetAttachmentsByVolumeIdOrTargetPath(ctx context.Context, volumeId, targetPath *string) (*[]PvcAttachment, error) {
+	var (
+		query  strings.Builder
+		args   []interface{}
+		result []PvcAttachment
+	)
+
+	// Base query
+	query.WriteString(`
+		SELECT id, volume_id, target_path, node, boot_id, access_type
+		FROM pvc_attachments
+		WHERE 1=1
+	`)
+
+	// Dynamically add conditions based on input parameters
+	if volumeId != nil {
+		query.WriteString(" AND volume_id = ?")
+		args = append(args, *volumeId)
+	}
+	if targetPath != nil {
+		query.WriteString(" AND target_path = ?")
+		args = append(args, *targetPath)
+	}
+
+	// Execute the query
+	rows, err := d.db.QueryContext(ctx, query.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query attachments: %w", err)
+	}
+	defer rows.Close()
+
+	// Iterate through rows and map to PvcAttachment structs
+	for rows.Next() {
+		var attachment PvcAttachment
+		if err := rows.Scan(&attachment.ID, &attachment.VolumeId, &attachment.TargetPath, &attachment.Node, &attachment.BootID, &attachment.AccessType); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		result = append(result, attachment)
+	}
+
+	// Check for iteration errors
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during row iteration: %w", err)
+	}
+
+	return &result, nil
 }
