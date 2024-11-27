@@ -18,4 +18,4 @@ spec:
   volumes:
     - name: my-csi-volume
       persistentVolumeClaim:
-        claimName: pvc-wekafs-fs-api # defined in pvc-wekafs-dir-api.yaml
+        claimName: pvc-wekafs-fs-api # defined in pvc-wekafs-fs-api.yaml
