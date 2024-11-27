@@ -104,7 +104,7 @@ To learn more about the release, try:
   $ helm status -n csi-wekafs csi-wekafs
   $ helm get all -n csi-wekafs csi-wekafs
 
-To configure a storage class and start using the driver, see the [Examples](../examples/README.md) section.
+To configure a storage class and start using the driver, see the [Examples](../examples/) directory.
 
 -------------------------------------------------- NOTICE --------------------------------------------------
 | THIS VERSION INTRODUCES SUPPORT FOR ADDITIONAL VOLUME TYPES, AS WELL AS SNAPSHOT AND VOLUME CLONING CAPS |
