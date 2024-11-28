@@ -15,9 +15,9 @@ https://github.com/weka/csi-wekafs
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
 ## Pre-requisite
-- Kubernetes cluster of version 1.18 and up, 1.19 and up recommended
-- Helm v3 must be installed and configured properly
-- Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
+- **Kubernetes cluster**: Version 1.18 or later (version 1.19 or later is recommended).  
+- **Helm**: Helm v3 must be installed and properly configured.  
+- **WEKA system**: The WEKA system must be pre-configured, with the WEKA client installed and registered on each Kubernetes node within the cluster.
 
 ## Deployment
 ```shell
@@ -25,17 +25,17 @@ helm repo add csi-wekafs https://weka.github.io/csi-wekafs
 helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
 ```
 
-> **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
-> Refer to [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md) for additional information
+> **NOTE:** As of version 0.8.0, the WEKA CSI plugin supports installation on Kubernetes clusters with SELinux enabled.
+> For more details, refer to the [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md).
 
-> **NOTE:** Since version 0.7.0, Weka CSI plugin transitions to API-based deployment model which requires API
-> connectivity and credentials parameters to be set in Storage Class.
+> **NOTE:** Starting with version 0.7.0, the WEKA CSI plugin adopts an API-based deployment model.
+> This model requires API connectivity and the configuration of credential parameters within the Storage Class.
 >
-> Kubernetes does not allow storage class modification for existing volumes, hence the
-> recommended upgrade process is re-deploying new persistent volumes based on new storage class format.
+> Kubernetes does not support modifying the storage class of existing volumes.
+> Therefore, the recommended upgrade process involves re-deploying new persistent volumes using the updated storage class format.
 >
-> However, for sake of more convenient migration, a `legacySecretName` parameter can be set that will
-> bind existing legacy volumes to a Weka cluster API and allow volume expansion.
+> To facilitate a smoother migration process, the legacySecretName parameter can be configured.
+> This parameter binds existing legacy volumes to the Weka Cluster API, enabling volume expansion.
 
 
 ## Usage
