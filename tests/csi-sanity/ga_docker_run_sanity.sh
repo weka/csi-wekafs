@@ -17,8 +17,8 @@ legacy_sanity() {
     --csi.controllerendpoint /tmp/weka-csi-test/controller-no-snaps.sock \
     --csi.endpoint /tmp/weka-csi-test/node-no-snaps.sock \
     -csi.mountdir=/tmp/weka-csi-test/sanity-workspace \
-    -ginkgo.always-emit-ginkgo-writer \
-    -ginkgo.progress $1\
+    -ginkgo.vv \
+    -ginkgo.poll-progress-after 3s \
     -ginkgo.seed 0 \
     -ginkgo.skip="NodeExpandVolume" \
     -ginkgo.skip="NodeStageVolume" \
@@ -39,7 +39,8 @@ directory_volume_no_snapshots() {
     -ginkgo.skip="NodeExpandVolume" \
     -ginkgo.skip="NodeStageVolume" \
     -ginkgo.skip="NodeUnstageVolume" \
-    -ginkgo.progress $1\
+    -ginkgo.vv \
+    -ginkgo.poll-progress-after 3s \
     -csi.testvolumeparameters /test/wekafs-dirv1.yaml
 }
 
@@ -56,8 +57,7 @@ fs_volume_no_snapshots() {
     -ginkgo.seed 0 \
     -ginkgo.skip="NodeExpandVolume" \
     -ginkgo.skip="NodeStageVolume" \
-    -ginkgo.skip="NodeUnstageVolume" \
-    -ginkgo.progress $1
+    -ginkgo.skip="NodeUnstageVolume"
 }
 
 # ---------------------- DIR VOLUME WITH API BINDING AND SNAPSHOTS ----------------------
@@ -73,7 +73,8 @@ directory_volume_and_snapshots() {
     -ginkgo.skip="NodeExpandVolume" \
     -ginkgo.skip="NodeStageVolume" \
     -ginkgo.skip="NodeUnstageVolume" \
-    -ginkgo.progress $1\
+    -ginkgo.vv \
+    -ginkgo.poll-progress-after 3s \
     -csi.testvolumeparameters /test/wekafs-dirv1.yaml
 }
 
@@ -95,7 +96,8 @@ snaphot_volumes_with_2nd_level_shapshots() {
     -ginkgo.skip="NodeExpandVolume" \
     -ginkgo.skip="NodeStageVolume" \
     -ginkgo.skip="NodeUnstageVolume" \
-    -ginkgo.progress $1\
+    -ginkgo.vv \
+    -ginkgo.poll-progress-after 3s \
     -csi.testvolumeparameters /test/wekafs-snapvol.yaml
 }
 # ---------------------- SNAPSHOT VOLUME WITH API BINDING AND SNAPSHOTS ----------------------
@@ -117,7 +119,8 @@ filesystem_volumes() {
     -ginkgo.skip="NodeExpandVolume" \
     -ginkgo.skip="NodeStageVolume" \
     -ginkgo.skip="NodeUnstageVolume" \
-    -ginkgo.progress $1\
+    -ginkgo.vv \
+    -ginkgo.poll-progress-after 3s \
     -csi.testvolumeparameters /test/wekafs-fs.yaml
 }
 
