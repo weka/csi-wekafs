@@ -21,7 +21,7 @@ Only one of the pods will be able to attach to the volume. The other pod will fa
 In the logs of the second pod, you will see an error message similar to this:
 
    ```
-   kubectl describe pod csi-app-fs-rwo-pod-02
+   kubectl get pod csi-app-rwo-pod-02 -o json | jq .status.conditions
    ```
 The output should resemble this: 
 ```
@@ -37,7 +37,6 @@ The output should resemble this:
 ]
 ```
 The error message indicates that the pod is unschedulable because the volume is already attached to another pod.
-
 
 > **Note:** If both pods were created on the same time or in close adjacency, 
 > a possibility exists that the second pod will attach to volume instead. 
