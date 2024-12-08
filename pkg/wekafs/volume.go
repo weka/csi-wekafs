@@ -102,6 +102,10 @@ func (v *Volume) pruneUnsupportedMountOptions(ctx context.Context) {
 		logger.Error().Str("mount_option", MountOptionReadOnly).Msg("Mount option is not supported via custom mount options, use readOnly volume attachments instead")
 		v.mountOptions = v.mountOptions.RemoveOption(MountOptionReadOnly)
 	}
+	if v.mountOptions.hasOption(MountOptionContainerName) {
+		logger.Error().Str("mount_option", MountOptionContainerName).Msg("Mount option is not supported via custom mount options, container name should only be set via API secret")
+		v.mountOptions = v.mountOptions.RemoveOption(MountOptionContainerName)
+	}
 }
 
 //goland:noinspection GoUnusedParameter

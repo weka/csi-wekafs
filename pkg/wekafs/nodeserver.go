@@ -290,6 +290,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		if mountOptions, ok := params["mountOptions"]; ok {
 			logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
 			volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
+			volume.pruneUnsupportedMountOptions(ctx)
 		}
 	}
 

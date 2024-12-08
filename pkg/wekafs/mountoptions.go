@@ -8,19 +8,21 @@ import (
 )
 
 const (
-	selinuxContextWekaFs   = "wekafs_csi_volume_t"
-	selinuxContextNfs      = "nfs_t"
-	MountOptionSyncOnClose = "sync_on_close"
-	MountOptionReadOnly    = "ro"
-	MountOptionWriteCache  = "writecache"
-	MountOptionCoherent    = "coherent"
-	MountOptionNfsAsync    = "async"
-	MountOptionNfsHard     = "hard"
-	MountOptionNfsRdirPlus = "rdirplus"
-	MountOptionReadCache   = "readcache"
-	MountProtocolWekafs    = "wekafs"
-	MountProtocolNfs       = "nfs"
-	DefaultNfsMountOptions = MountOptionNfsHard + "," + MountOptionNfsAsync + "," + MountOptionNfsRdirPlus
+	selinuxContextWekaFs     = "wekafs_csi_volume_t"
+	selinuxContextNfs        = "nfs_t"
+	MountOptionSyncOnClose   = "sync_on_close"
+	MountOptionReadOnly      = "ro"
+	MountOptionWriteCache    = "writecache"
+	MountOptionCoherent      = "coherent"
+	MountOptionContainerName = "container_name"
+	MountOptionAcl           = "acl"
+	MountOptionNfsAsync      = "async"
+	MountOptionNfsHard       = "hard"
+	MountOptionNfsRdirPlus   = "rdirplus"
+	MountOptionReadCache     = "readcache"
+	MountProtocolWekafs      = "wekafs"
+	MountProtocolNfs         = "nfs"
+	DefaultNfsMountOptions   = MountOptionNfsHard + "," + MountOptionNfsAsync + "," + MountOptionNfsRdirPlus
 )
 
 type mountOption struct {
@@ -165,6 +167,15 @@ func (opts MountOptions) AsMapKey() string {
 	ret := opts
 	// TODO: if adding any other version-agnostic options, add them here
 	excludedOpts := []string{MountOptionSyncOnClose}
+	for _, o := range excludedOpts {
+		ret = ret.RemoveOption(o)
+	}
+	return ret.String()
+}
+
+func (opts MountOptions) AsVolumeContext() string {
+	ret := opts
+	excludedOpts := []string{MountOptionSyncOnClose, MountOptionContainerName}
 	for _, o := range excludedOpts {
 		ret = ret.RemoveOption(o)
 	}
