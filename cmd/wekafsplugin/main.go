@@ -227,6 +227,7 @@ func handle() {
 		*interfaceGroupName,
 		*clientGroupName,
 		*nfsProtocolVersion,
+		version,
 	)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
