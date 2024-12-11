@@ -1,5 +1,4 @@
 ARG KUBECTL_VERSION=1.31.2
-ARG UBI_HASH=9ac75c1a392429b4a087971cdf9190ec42a854a169b6835bc9e25eecaf851258
 FROM golang:1.22-alpine AS go-builder
 ARG TARGETARCH
 ARG TARGETOS
@@ -30,11 +29,15 @@ RUN echo Building package
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o "/bin/wekafsplugin" /src/cmd/*
 FROM registry.k8s.io/kubernetes/kubectl:v${KUBECTL_VERSION} AS kubectl
 
-FROM registry.access.redhat.com/ubi9/ubi@sha256:${UBI_HASH}
+FROM alpine:3.18
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 
-RUN  dnf install -y util-linux libselinux-utils pciutils binutils jq
+RUN apk add --no-cache util-linux libselinux libselinux-utils util-linux  \
+    pciutils usbutils coreutils binutils findutils  \
+    grep bash nfs-utils rpcbind ca-certificates jq
+# Update CA certificates
+RUN update-ca-certificates
 COPY --from=kubectl /bin/kubectl /bin/kubectl
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 COPY --from=go-builder /src/locar /locar
