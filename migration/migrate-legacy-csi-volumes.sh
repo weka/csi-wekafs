@@ -31,7 +31,7 @@ Optional parameters:
 --------------------
 --debug             Execute with debug level logging
 --csi-volumes-dir   Assume CSI volumes are stored in different directory on the filesystem. Default is "csi-volumes"
---endpoint-address  API_ADDRESS:PORT of a WEKA backend server for stateless clients.
+--endpoint-address  API_ADDRESS:PORT of a WEKA backend server for stateless clients. Specify the port if the host is not connected to the cluster.
 
 DELIM
 }
