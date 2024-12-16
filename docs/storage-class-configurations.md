@@ -26,7 +26,8 @@ Adhere to the following:
 * Snapshot quota integration requires WEKA cluster version **4.2** and higher.
 * Authenticated mounts for filesystems set with `auth-required=true`, and filesystems in the non-root organization, require WEKA cluster version **3.14.0** and higher.
 
-**Note**: The legacy communication model is deprecated and will be removed in the next release. If you are using the legacy communication model, replacing it with the API-based one is recommended.
+>**Note**:
+>The legacy communication model is deprecated and will be removed in the next release. If you are using the legacy communication model, replacing it with the API-based one is recommended.
 
 
 ## Prerequisites
@@ -103,7 +104,8 @@ csi-wekafs-api-secret   Opaque   5      7m
 
 </details>
 
-**Note**: To provision CSI volumes on filesystems residing in non-root organizations or filesystems, set with `auth-required=true`. A CSI Plugin of version **0.8.4** and higher and WEKA cluster version **3.14** and higher are required.
+>**Note**:
+>To provision CSI volumes on filesystems residing in non-root organizations or filesystems, set with `auth-required=true`. A CSI Plugin of version **0.8.4** and higher and WEKA cluster version **3.14** and higher are required.
 
 #### Secret data parameters
 
@@ -125,7 +127,8 @@ k8s worker nodes connected to multiple WEKA clusters
 2. Create secret data files for each WEKA cluster. In the `localContainerName` set the relevant client container name. For example, for client 1 set the name of the client container connected to cluster 1.
 3. Configure storage classes using the relevant secret data file.
 
-**Note**: Filesystem names used for k8s (defined in the storage classes) must be unique across all clusters.
+>**Note**:
+>Filesystem names used for k8s (defined in the storage classes) must be unique across all clusters.
 
 **Related topic**
 
