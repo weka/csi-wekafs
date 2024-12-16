@@ -38,7 +38,10 @@ The WEKA CSI Plugin with NFS transport is fully interoperable with the native We
 
 #### Mount options
 
-The WEKA CSI Plugin automatically sets mount options for NFS transport. When custom mount options are specified in the storage class, the WEKA CSI Plugin translates them into NFS alternatives. Any unknown or unsupported mount options are ignored.
+The WEKA CSI Plugin automatically sets mount options for NFS transport. When custom mount options are specified in the storage class, the WEKA CSI Plugin translates them into NFS alternatives.
+>**Note**:
+>To customize mount behavior, always specify options in the storage class. The WEKA CSI Plugin ensures compatibility by translating these options to NFS-supported alternatives.
+>Directly setting NFS mount options is not supported. Any unknown or unsupported mount options are ignored.
 
 #### QoS and performance
 
@@ -94,7 +97,7 @@ Upon starting, the WEKA CSI Plugin performs the following steps:
 2. **NFS failback check**:
    * If the WEKA client is not set up, the plugin checks if NFS failback is enabled or if NFS use is forced.
    * If NFS failback is enabled, the plugin uses NFS transport for volume provisioning and publishing.
-   * If NFS failback is disabled, the plugin does not start and logs an error message. See the section to enable NFS failback.
+   * If NFS failback is disabled, the plugin does not start and logs an error message. To enable NFS failback, see [Install the WEKA CSI Plugin with NFS transport](#install-the-weka-csi-plugin-with-nfs-transport).
 
 The plugin uses NFS transport for all volume operations when NFS mode is enabled. For any volume creation or publishing request, the WEKA CSI plugin performs the following:
 
