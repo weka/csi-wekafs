@@ -13,8 +13,8 @@ While using the native WekaFS driver as the storage connectivity layer is the re
 
 ### Limitations and constraints
 
-**Warning**:
-As of version 2.5.0 and until further notice, publishing snapshot-backed volumes via NFS transport is not recommended. This is an open issue currently under investigation.
+>**Warning**:
+>As of version 2.5.0 and until further notice, publishing snapshot-backed volumes via NFS transport is not recommended. This is an open issue currently under investigation.
 
 * **Feature parity**: Certain features and capabilities available with the native WekaFS driver may be absent when using the WEKA CSI Plugin with NFS transport.
 * **Complexity**: NFS transport necessitates additional configuration on the WEKA cluster and may require further networking setup on the Kubernetes cluster.
@@ -140,8 +140,8 @@ Before using the WEKA CSI Plugin with NFS transport, prepare the WEKA cluster fo
 
 In cloud deployments where setting a Group IP address is impossible, you can use the WEKA server IP addresses instead. In this case, set the IP addresses through the API secret to replace the Group IP addresses. This configuration can be done by providing the `nfsTargetIps` parameter in the API secret. For more details, see [API secret example](../examples/common/csi-wekafs-api-secret.yaml).
 
-**Note**:
-Using an NFS load balancer that redirects NFS connections to multiple WEKA servers (also known as NFSv4 directory referrals) is not supported.
+>**Note**:
+>Using an NFS load balancer that redirects NFS connections to multiple WEKA servers (also known as NFSv4 directory referrals) is not supported.
 
 ## Install the WEKA CSI Plugin with NFS transport
 
