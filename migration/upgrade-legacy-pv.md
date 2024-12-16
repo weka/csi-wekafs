@@ -14,8 +14,9 @@ Kubernetes does not allow modifying the StorageClass parameters; hence every vol
 
 WEKA CSI Plugin **0.7.0** provides a unique configuration mode in which legacy volumes can be bound to a single secret, referring to a single WEKA cluster API connection parameters. In this configuration mode, every request to serve, such as create, delete, and expand, a legacy Persistent Volume (or Persistent Volume Claim) that originates from a Legacy Storage Class (without reference to an API secret) communicates to that cluster.
 
-**Note**:
-Volumes provisioned by the CSI Plugin of version **0.7.0** in the API-based communication model, but on older versions of the WEKA cluster (below version **3.13.0**), are still in legacy mode. However, because the storage class already contains the secret reference, specifying the `legacyVolumeSecretName` parameter is unnecessary, and you can safely skip to the **Migrate legacy volumes** procedure below.
+>**Note**:
+>* This fallback mode of version **0.7.0** is discouraged as it will be deprecated and removed starting with CSI 3.0.
+>* Volumes provisioned by the CSI Plugin of version **0.7.0** in the API-based communication model, but on older versions of the WEKA cluster (below version **3.13.0**), are still in legacy mode. However, because the storage class already contains the secret reference, specifying the `legacyVolumeSecretName` parameter is unnecessary, and you can safely skip to the **Migrate legacy volumes** procedure below.
 
 To bind legacy volumes to a single secret, perform the following:
 
@@ -32,8 +33,8 @@ helm upgrade csi-wekafs --namespace csi-wekafs csi-wekafs/csi-wekafsplugin \
 
 ```
 
-**Warning**:
-If you do not create the Kubernetes secret before executing the helm upgrade, the CSI Plugin components remain `Pending` after the upgrade.
+>**Warning**:
+>If you do not create the Kubernetes secret before executing the helm upgrade, the CSI Plugin components remain `Pending` after the upgrade.
 
 ## Migrate legacy volumes
 
@@ -70,8 +71,8 @@ Where:
 * `<filesystem_name>`: Specifies the filesystem name on which the  CSI volumes are located.
 * `<csi_volumes_dir>`: Optional parameter. Specifies the directory in the filesystem where the CSI volumes are stored. Set this parameter only if the directory differs from default values.
 
-**Note**:
-On a stateless client, you must specify the `--endpoint-address` to successfully mount a filesystem. However, if the container is part of the WEKA cluster (either client or backend), this is not necessary.
+>**Note**:
+>On a stateless client, you must specify the `--endpoint-address` to successfully mount a filesystem. However, if the container is part of the WEKA cluster (either client or backend), this is not necessary.
 
 Example:
 
