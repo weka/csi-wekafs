@@ -12,11 +12,11 @@ In the API-based communication model, Kubernetes StorageClass refers to a secret
 
 Kubernetes does not allow modifying the StorageClass parameters; hence every volume created with the legacy-model storage class never reports its credentials.
 
-WEKA CSI Plugin **0.7.0** provides a unique configuration mode in which legacy volumes can be bound to a single secret, referring to a single WEKA cluster API connection parameters. In this configuration mode, every request to serve, such as create, delete, and expand, a legacy Persistent Volume (or Persistent Volume Claim) that originates from a Legacy Storage Class (without reference to an API secret) communicates to that cluster.
+The Weka CSI Plugin 0.7.0 includes a configuration mode that binds legacy volumes to a single secret, which refers to the WekaFS cluster API connection parameters. In this mode, all requests to manage (create, delete, expand, etc.) legacy Persistent Volumes (PVs) or Persistent Volume Claims (PVCs) from a Legacy Storage Class (without an API secret reference) are directed to that cluster.
 
 >**Note**:
 >* This fallback mode of version **0.7.0** is discouraged as it will be deprecated and removed starting with CSI 3.0.
->* Volumes provisioned by the CSI Plugin of version **0.7.0** in the API-based communication model, but on older versions of the WEKA cluster (below version **3.13.0**), are still in legacy mode. However, because the storage class already contains the secret reference, specifying the `legacyVolumeSecretName` parameter is unnecessary, and you can safely skip to the **Migrate legacy volumes** procedure below.
+>* Volumes provisioned by the CSI Plugin of version **0.7.0** in the API-based communication modelon Weka cluster versions earlier than 3.13.0 are still provisioned in legacy mode. The storage class already includes the secret reference. As a result, specifying the `legacyVolumeSecretName` parameter is unnecessary. You can proceed to [Migrate legacy volumes](#migrate-legacy-volumes).
 
 To bind legacy volumes to a single secret, perform the following:
 
