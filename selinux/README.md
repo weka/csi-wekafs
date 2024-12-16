@@ -1,7 +1,11 @@
 # Add SELinux support
 
 ## Overview
-Security-Enhanced Linux (SELinux) is a Linux kernel security module that provides a mechanism for supporting access control security policies, including mandatory access controls (MAC).
+Security-Enhanced Linux (SELinux) is a Linux kernel security module designed to enforce access control security policies, including Mandatory Access Controls (MAC).
+
+This section applies exclusively to SELinux-enabled deployments that are not based on the Red Hat OpenShift Container Platform (OCP). In OCP environments, all required configurations are automatically handled.
+
+The purpose of this section is to address permission issues that prevent containers from accessing objects stored on the WEKA cluster.
 
 To add SELinux support, perform the following procedures:
 
