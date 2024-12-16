@@ -124,11 +124,11 @@ The WEKA CSI Plugin requires specific NFS permissions, which it automatically co
 7. **User Squash**: `None`
 8. **Authentication Types**: `NONE`, `SYS`
 
-**Warning**:
-WEKA NFS servers evaluate permissions based on the order in the permissions list.
-If multiple permissions match the IP address of the Kubernetes node and filesystem, a conflict may occur.
-Therefore, it is strongly recommended not to create additional permissions for the same filesystem.
-Additionally, if multiple client groups are used, ensure that the IP addresses of the groups do not overlap.
+>**Warning**:
+>WEKA NFS servers evaluate permissions based on the order in the permissions list.
+>If multiple permissions match the IP address of the Kubernetes node and filesystem, a conflict may occur.
+>Therefore, it is strongly recommended not to create additional permissions for the same filesystem.
+>Additionally, if multiple client groups are used, ensure that the IP addresses of the groups do not overlap.
 
 ## WEKA cluster preparation
 
