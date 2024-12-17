@@ -129,8 +129,6 @@ Kubernetes storage integration with WEKA: WekaFS and NFS transport modes
 
 #### Prerequisites
 For NFS transport, the WEKA cluster must support NFS. Refer to the documentation at [Additional protocol containers](https://docs.weka.io/additional-protocols/additional-protocols-overview).
->**Note**:
->Filesystem names used for k8s (defined in the storage classes) must be unique across all clusters.
 
 #### Procedure
 
