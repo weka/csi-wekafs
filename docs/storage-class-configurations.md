@@ -124,7 +124,7 @@ This approach allows multiple Kubernetes worker nodes to access the same WEKA st
 >**Note**:
 >NFS has limitations, such as .snapshots not being supported with Ganesha, which blocks snapshot-backed volumes and creating volumes from snapshots.
 
-<img src="csi-images/CSI-k8s-wekafs-nfs.png">
+<img src="csi-images/csi-k8s-wekafs-nfs.png">
 Kubernetes storage integration with WEKA: WekaFS and NFS transport modes
 
 #### Prerequisites
@@ -138,10 +138,6 @@ For NFS transport, the WEKA cluster must support NFS. Refer to the documentation
    The WEKA client container name must be according to the WEKA cluster that is connected to. For example, to connect to 7 WEKA clusters, it is required to create 7 WEKA client containers named client 1, client 2, and so on.
 2. Create secret data files for each WEKA cluster. In the `localContainerName` set the relevant client container name. For example, for client 1 set the name of the client container connected to cluster 1.
 3. Configure storage classes using the relevant secret data file.
-
-**Related topic**
-
-[Mount filesystems from multiple clusters on a single client](https://docs.weka.io/weka-filesystems-and-object-stores/mounting-filesystems/mount-filesystems-from-multiple-clusters-on-a-single-client)
 
 ## Configure directory-backed StorageClass
 
