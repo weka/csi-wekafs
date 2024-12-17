@@ -113,12 +113,24 @@ All values in the secret data file must be in base64-encoded format.
 
 <table><thead><tr><th width="232">Key</th><th>Description</th><th>Comments</th></tr></thead><tbody><tr><td><code>username</code></td><td>The user name for API access to the WEKA cluster.</td><td><p>To run the CSI Plugin in a non-default organization, OrgAdmin permission is required. In other cases, ClusterAdmin permission is required.</p><p>It is recommended that you create a separate user for the CSI Plugin. See https://docs.weka.io/operation-guide/user-management/.</p></td></tr><tr><td><code>password</code></td><td>The user password for API access to the WEKA cluster.</td><td></td></tr><tr><td><code>organization</code></td><td>The WEKA organization name for the user.<br>For a single organization, use <code>Root</code>.</td><td>You can use multiple secrets to access multiple organizations, which are specified in different storage classes.</td></tr><tr><td><code>scheme</code></td><td>The URL scheme that is used for communicating with the WEKA cluster API.</td><td><code>http</code> or <code>https</code> can be used. The user must ensure that the Weka cluster was configured to use the same connection scheme.</td></tr><tr><td><code>endpoints</code></td><td><p>Comma-separated list of endpoints consisting of IP address and port. For example, </p><p><code>172.31.15.113:14000,172.31.12.91:14000</code></p></td><td>For redundancy, specify the management IP addresses of at least 2 backend servers.</td></tr><tr><td><code>localContainerName</code></td><td>WEKA client container name for the client connected to the relevant WEKA cluster.<br><strong>Only required when connecting a K8s worker node to multiple WEKA clusters</strong>.<br>For a single cluster, do not set this parameter.</td><td><p>All local container names relevant to a specific WEKA cluster must be the same across all k8s worker nodes.</p><p>For details, see <a href="storage-class-configurations.md#connect-k8s-worker-nodes-to-multiple-weka-clusters">Connect k8s worker nodes to multiple WEKA clusters</a></p></td></tr><tr><td><code>autoUpdateEndpoints</code></td><td>Specify whether the WEKA CSI Plugin performs automatic periodic updates of API endpoints (<code>true</code> or <code>false</code>).</td><td><p>In cloud-based clusters with automatic scaling and healing, the IP addresses of management containers can change over time. To prevent losing API connectivity, the plugin can automatically retrieve all management container IP addresses from the cluster at login.</p><p>If using an external load balancer, set this option to <code>false</code>.</p></td></tr><tr><td><code>nfsTargetIps</code></td><td>A comma-separated list of IP addresses to use when publishing volumes over NFS.</td><td>Normally, the system automatically retrieves IP addresses from the interface group defined on the WEKA cluster, leaving this parameter empty. However, if no Virtual IP addresses are set on the interface group (for example, in cloud environments), manually provide the IP addresses in this parameter.</td></tr><tr><td><code>caCertificate</code></td><td>custom CA certificate used to generate the HTTPS certificate for the WEKA cluster. The certificate must be in PEM format and Base64-encoded. </td><td>As of WEKA version 4.3.0, HTTPS communication is mandatory. To ensure a secure connection without bypassing certificate checks, it's recommended to provide the certificate file within a secret.</td></tr></tbody></table>
 
-## Connect K8s worker nodes to multiple WEKA clusters
+## Kubernetes storage integration with WEKA: WekaFS and NFS transport modes
 
-A single K8s worker node can be connected to multiple WEKA clusters (maximum 7 clusters) simultaneously.
+The architecture diagram illustrates two Kubernetes (k8s) worker nodes connected to a WEKA cluster via different data transport mechanisms. The first node uses the WEKA CSI Plugin with seven WEKA clients, communicating through WekaFS. The second node uses a kernel NFS driver to connect to the WEKA cluster via an NFS protocol server (gateway).
 
-<img src="csi-images/k8s-multiple-clusters.png">
-k8s worker nodes connected to multiple WEKA clusters
+When the WEKA CSI Plugin uses a WEKA client, WekaFS is the data transport. If the WEKA driver cannot be installed, the CSI Plugin switches to NFS failback mode. In this mode, the CSI Plugin retains its functionality but uses NFS for data transport.
+
+This approach allows multiple Kubernetes worker nodes to access the same WEKA storage cluster, even when using different transport modes. It ensures flexibility, supporting environments where WekaFS is not feasible.
+
+>**Note**:
+>NFS has limitations, such as .snapshots not being supported with Ganesha, which blocks snapshot-backed volumes and creating volumes from snapshots.
+
+<img src="csi-images/CSI-k8s-wekafs-nfs.png">
+Kubernetes storage integration with WEKA: WekaFS and NFS transport modes
+
+#### Prerequisites
+For NFS transport, the WEKA cluster must support NFS. Refer to the documentation at [Additional protocol containers](https://docs.weka.io/additional-protocols/additional-protocols-overview).
+>**Note**:
+>Filesystem names used for k8s (defined in the storage classes) must be unique across all clusters.
 
 #### Procedure
 
@@ -126,9 +138,6 @@ k8s worker nodes connected to multiple WEKA clusters
    The WEKA client container name must be according to the WEKA cluster that is connected to. For example, to connect to 7 WEKA clusters, it is required to create 7 WEKA client containers named client 1, client 2, and so on.
 2. Create secret data files for each WEKA cluster. In the `localContainerName` set the relevant client container name. For example, for client 1 set the name of the client container connected to cluster 1.
 3. Configure storage classes using the relevant secret data file.
-
->**Note**:
->Filesystem names used for k8s (defined in the storage classes) must be unique across all clusters.
 
 **Related topic**
 
