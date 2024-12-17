@@ -115,11 +115,11 @@ All values in the secret data file must be in base64-encoded format.
 
 ## Kubernetes storage integration with WEKA: WekaFS and NFS transport modes
 
-The architecture diagram illustrates two Kubernetes (k8s) worker nodes connected to a WEKA cluster via different data transport mechanisms. The first node uses the WEKA CSI Plugin with seven WEKA clients, communicating through WekaFS. The second node uses a kernel NFS driver to connect to the WEKA cluster via an NFS protocol server (gateway).
+The architecture diagram illustrates two Kubernetes (k8s) worker nodes connected to a WEKA cluster via the WEKA CSI Plugin, each using different transport mechanisms. The first node includes up to seven WEKA clients, communicating with the WEKA cluster through WekaFS. The second node uses a kernel NFS driver, which interacts with the WEKA cluster via an NFS protocol server (gateway).
 
-When the WEKA CSI Plugin uses a WEKA client, WekaFS is the data transport. If the WEKA driver cannot be installed, the CSI Plugin switches to NFS failback mode. In this mode, the CSI Plugin retains its functionality but uses NFS for data transport.
+The WEKA CSI Plugin enables seamless communication with the WEKA cluster, regardless of the transport mode. When using WEKA clients, WekaFS serves as the data transport. If the WEKA driver is not applicable, the CSI Plugin detects this and automatically switches to NFS failback mode. In this configuration, the CSI Plugin retains full functionality but uses NFS for data transport instead of WekaFS.
 
-This approach allows multiple Kubernetes worker nodes to access the same WEKA storage cluster, even when using different transport modes. It ensures flexibility, supporting environments where WekaFS is not feasible.
+This architecture allows multiple Kubernetes worker nodes to work with the same WEKA storage cluster, leveraging different transport modes as needed. It provides flexibility for environments where WekaFS installation may not be feasible.
 
 >**Note**:
 >NFS has limitations, such as .snapshots not being supported with Ganesha, which blocks snapshot-backed volumes and creating volumes from snapshots.
