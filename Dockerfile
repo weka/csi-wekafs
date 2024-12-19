@@ -1,6 +1,13 @@
 ARG KUBECTL_VERSION=1.31.2
 ARG UBI_HASH=9ac75c1a392429b4a087971cdf9190ec42a854a169b6835bc9e25eecaf851258
 FROM golang:1.22-alpine AS go-builder
+LABEL maintainer="sergey@weka.io"
+LABEL name="wekaCSI"
+LABEL vendor="WEKA.io"
+LABEL release="certification-test"
+LABEL summary="The image for the WEKA CSI module"
+LABEL version="2.6"
+LABEL description="WEKA CSI image"
 ARG TARGETARCH
 ARG TARGETOS
 # https://stackoverflow.com/questions/36279253/go-compiled-binary-wont-run-in-an-alpine-docker-container-on-ubuntu-host
