@@ -1,10 +1,12 @@
-# csi-wekafsplugin
+# CSI WekaFS Driver
+Helm chart for deploying the WEKA Container Storage Interface (CSI) plugin for WekaFS, the world's fastest filesystem.
 
-![Version: 2.8.0-SNAPSHOT.186.sha.40d7d14](https://img.shields.io/badge/Version-2.8.0--SNAPSHOT.186.sha.40d7d14-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.0-SNAPSHOT.186.sha.40d7d14](https://img.shields.io/badge/AppVersion-v2.8.0--SNAPSHOT.186.sha.40d7d14-informational?style=flat-square)
+![Version: 2.5.1-SNAPSHOT.44.0a35d77](https://img.shields.io/badge/Version-2.5.1--SNAPSHOT.44.0a35d77-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.5.1-SNAPSHOT.44.0a35d77](https://img.shields.io/badge/AppVersion-v2.5.1--SNAPSHOT.44.0a35d77-informational?style=flat-square)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
 
-Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
-
-**Homepage:** <https://github.com/weka/csi-wekafs>
+## Homepage
+https://github.com/weka/csi-wekafs
 
 ## Maintainers
 
@@ -12,9 +14,31 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 | ---- | ------ | --- |
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
-## Source Code
+## Pre-requisite
+- Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
+- Access to terminal with `kubectl` installed
+- WEKA system pre-configured and WEKA client installed and registered in cluster for each Kubernetes node
+- Both AMD64 and ARM64 platforms are supported
 
+## Deployment
+- [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
+- [Deployment and upgrade workflows](docs/deployment-and-upgrade-workflows.md)
+- [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
+
+## Source Code
 * <https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin>
+
+## Usage
+- [Deploy an Example application](docs/usage.md)
+- [SELinux Support & Installation Notes](selinux/README.md)
+- [WEKA CSI Plugin with NFS transport](docs/NFS.md)
+
+## Building the binaries
+To build the driver, run the following command from the root directory:
+
+```console
+make build
+```
 
 ## Values
 
