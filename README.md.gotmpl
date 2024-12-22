@@ -14,13 +14,11 @@
 - Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
 - Access to terminal with `kubectl` installed
 - Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
-- Starting with version 2.6.0 of WEKA CSI Plugin, both AMD64 and ARM64 platforms are supported.
-  > **NOTE**: For more information on WEKA client software support state of ARM64, please refer to the [WEKA documentation revision history](https://docs.weka.io/readme/documentation-revision-history).
-  >
-  > On platforms not currently supported by WEKA software, NFS failback mode can be used. For additional information on NFS transport configuration, please refer to the [NFS documentation](docs/NFS.md)
+- Both AMD64 and ARM64 platforms are supported
 
 ## Deployment
 - [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
+- [Deployment and upgrade workflows](docs/deployment-and-upgrade-workflows.md)
 - [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
 
 ## Usage
@@ -29,7 +27,7 @@
 - [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
 
 ## Building the binaries
-If you want to build the driver yourself, you can do so with the following command from the root directory:
+To build the driver, run the following command from the root directory:
 
 ```console
 make build
