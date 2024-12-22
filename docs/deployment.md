@@ -10,6 +10,7 @@ Ensure the following prerequisites are met:
 * For snapshot and directory backing, a filesystem must be pre-defined on the WEKA cluster.
 * For filesystem backing, a filesystem group must be pre-defined on the WEKA cluster.
 * Your workstation has a valid connection to the Kubernetes worker nodes.
+* The WEKA CSI container must run as the root user to enable the management of WEKA filesystem mounts at the Worker Node level.
 
 ### Prerequisites for using WekaFS transport
 
