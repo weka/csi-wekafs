@@ -1,5 +1,5 @@
 # CSI WekaFS Driver
-Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
+Helm chart for deploying the WEKA Container Storage Interface (CSI) plugin for WekaFS, the world's fastest filesystem.
 
 ![Version: 2.5.1-SNAPSHOT.44.0a35d77](https://img.shields.io/badge/Version-2.5.1--SNAPSHOT.44.0a35d77-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.5.1-SNAPSHOT.44.0a35d77](https://img.shields.io/badge/AppVersion-v2.5.1--SNAPSHOT.44.0a35d77-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
@@ -17,20 +17,21 @@ https://github.com/weka/csi-wekafs
 ## Pre-requisite
 - Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
 - Access to terminal with `kubectl` installed
-- Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
+- WEKA system pre-configured and WEKA client installed and registered in cluster for each Kubernetes node
 - Both AMD64 and ARM64 platforms are supported
 
 ## Deployment
 - [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
+- [Deployment and upgrade workflows](docs/deployment-and-upgrade-workflows.md)
 - [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
 
 ## Usage
 - [Deploy an Example application](docs/usage.md)
 - [SELinux Support & Installation Notes](selinux/README.md)
-- [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
+- [WEKA CSI Plugin with NFS transport](docs/NFS.md)
 
 ## Building the binaries
-If you want to build the driver yourself, you can do so with the following command from the root directory:
+To build the driver, run the following command from the root directory:
 
 ```console
 make build
