@@ -1,4 +1,4 @@
-# Deployment
+# Deployment and upgrade workflows
 
 ## Prerequisites
 
