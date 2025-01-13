@@ -97,6 +97,9 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not obtain volume parameters from request")
 	}
+
+	volume.pruneUnsupportedMountOptions(ctx)
+
 	logger.Trace().Object("volume_info", volume).Str("origin", origin).Msg("Successfully initialized object")
 	return volume, nil
 }

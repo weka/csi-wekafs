@@ -262,7 +262,8 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	volExists, volMatchesCapacity, err := volumeExistsAndMatchesCapacity(ctx, volume, capacity)
 
 	// set params to have all relevant mount options (default + those received in params) to be passed as part of volumeContext
-	params["mountOptions"] = volume.getMountOptions(ctx).String()
+	// omit the container_name though as it should only be set via API secret and not via mount options
+	params["mountOptions"] = volume.getMountOptions(ctx).AsVolumeContext()
 
 	if err != nil {
 		if !volExists {
