@@ -34,7 +34,7 @@ FROM registry.access.redhat.com/ubi9/ubi:${UBI_HASH}
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 
-RUN  dnf install -y util-linux libselinux-utils pciutils binutils jq
+RUN dnf install -y util-linux libselinux-utils pciutils binutils jq procps less
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
 COPY --from=kubectl /bin/kubectl /bin/kubectl
