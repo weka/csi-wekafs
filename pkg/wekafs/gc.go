@@ -100,12 +100,14 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 
 	if fileExists("/locar") {
 		logger.Debug().Msg("Using locar for fast deletion")
-		deleteCmd := exec.Command("bash", "-c", fmt.Sprintf("/locar --type dir %s | /usr/bin/xargs -P32 -n128 rm -rf", volumeTrashLoc))
+		deleteCmd := exec.Command("bash", "-c",
+			fmt.Sprintf("/locar --type file %s | xargs -P128 -n128 rm -f 2>&1 | wc -l; /locar --type dir %s | /usr/bin/xargs -P128 -n128 rm -rf 2>&1 | wc -l", volumeTrashLoc, volumeTrashLoc),
+		)
 		output, err := deleteCmd.CombinedOutput()
 		if err != nil {
 			logger.Error().Err(err).Msg("Error running locar")
-			logger.Trace().Str("output", string(output)).Msg("Locar output")
 		}
+		logger.Trace().Str("output", string(output)).Msg("Locar output")
 	} else {
 		logger.Debug().Msg("Using default deletion method")
 		if err := os.RemoveAll(volumeTrashLoc); err != nil {
