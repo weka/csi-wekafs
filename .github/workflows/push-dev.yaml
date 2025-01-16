@@ -62,6 +62,8 @@ jobs:
           cache-to: type=gha,mode=max
           labels: |
             revision=${{ steps.auto_version.outputs.version }}
+            version=${{ steps.auto_version.outputs.version }}
+            release=${{ steps.auto_version.outputs.version }}
             quay.expires-after=14d
           provenance: false # https://issues.redhat.com/browse/PROJQUAY-5013 quay doesn't support it
           build-args: |
