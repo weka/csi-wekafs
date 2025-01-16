@@ -275,14 +275,16 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			logger.Error().Msg("Failed to fetch volume capacity, assuming it was not set")
 		}
 	}
+
 	if volExists && volMatchesCapacity {
 		result = "SUCCESS"
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId:      volume.GetId(),
-				CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
-				VolumeContext: params,
-				ContentSource: volume.getCsiContentSource(ctx),
+				VolumeId:           volume.GetId(),
+				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
+				VolumeContext:      params,
+				ContentSource:      volume.getCsiContentSource(ctx),
+				AccessibleTopology: generateAccessibleTopology(),
 			},
 		}, nil
 	} else if volExists && err == nil {
@@ -294,10 +296,11 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			result = "SUCCESS"
 			return &csi.CreateVolumeResponse{
 				Volume: &csi.Volume{
-					VolumeId:      volume.GetId(),
-					CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
-					VolumeContext: params,
-					ContentSource: volume.getCsiContentSource(ctx),
+					VolumeId:           volume.GetId(),
+					CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
+					VolumeContext:      params,
+					ContentSource:      volume.getCsiContentSource(ctx),
+					AccessibleTopology: generateAccessibleTopology(),
 				},
 			}, nil
 
@@ -315,12 +318,23 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	result = "SUCCESS"
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      volume.GetId(),
-			CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
-			VolumeContext: params,
-			ContentSource: volume.getCsiContentSource(ctx),
+			VolumeId:           volume.GetId(),
+			CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
+			VolumeContext:      params,
+			ContentSource:      volume.getCsiContentSource(ctx),
+			AccessibleTopology: generateAccessibleTopology(),
 		},
 	}, nil
+}
+
+func generateAccessibleTopology() []*csi.Topology {
+	accessibleTopology := make(map[string]string)
+	accessibleTopology[TopologyLabelWeka] = "true"
+	return []*csi.Topology{
+		{
+			Segments: accessibleTopology,
+		},
+	}
 }
 
 func DeleteVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.DeleteVolumeResponse, error) {
