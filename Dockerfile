@@ -37,6 +37,12 @@ LABEL description="Weka CSI Driver"
 RUN dnf install -y util-linux libselinux-utils pciutils binutils jq procps less
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
+LABEL maintainer="csi@weka.io"
+LABEL name="WEKA CSI Plugin"
+LABEL vendor="weka.io"
+LABEL summary="This image is used by WEKA CSI Plugin and incorporates both Controller and Node modules"
+LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data platform for AI"
+LABEL url="https://www.weka.io"
 COPY --from=kubectl /bin/kubectl /bin/kubectl
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 COPY --from=go-builder /src/locar /locar
