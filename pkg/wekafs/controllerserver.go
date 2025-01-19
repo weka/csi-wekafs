@@ -108,6 +108,7 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
+		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod supoort
 	}
 	if config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
@@ -261,7 +262,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	volExists, volMatchesCapacity, err := volumeExistsAndMatchesCapacity(ctx, volume, capacity)
 
 	// set params to have all relevant mount options (default + those received in params) to be passed as part of volumeContext
-	params["mountOptions"] = volume.getMountOptions(ctx).String()
+	// omit the container_name though as it should only be set via API secret and not via mount options
+	params["mountOptions"] = volume.getMountOptions(ctx).AsVolumeContext()
+	params["provisionedByCsiVersion"] = cs.getConfig().GetVersion()
 
 	if err != nil {
 		if !volExists {
@@ -272,14 +275,16 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			logger.Error().Msg("Failed to fetch volume capacity, assuming it was not set")
 		}
 	}
+
 	if volExists && volMatchesCapacity {
 		result = "SUCCESS"
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
-				VolumeId:      volume.GetId(),
-				CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
-				VolumeContext: params,
-				ContentSource: volume.getCsiContentSource(ctx),
+				VolumeId:           volume.GetId(),
+				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
+				VolumeContext:      params,
+				ContentSource:      volume.getCsiContentSource(ctx),
+				AccessibleTopology: generateAccessibleTopology(),
 			},
 		}, nil
 	} else if volExists && err == nil {
@@ -291,10 +296,11 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			result = "SUCCESS"
 			return &csi.CreateVolumeResponse{
 				Volume: &csi.Volume{
-					VolumeId:      volume.GetId(),
-					CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
-					VolumeContext: params,
-					ContentSource: volume.getCsiContentSource(ctx),
+					VolumeId:           volume.GetId(),
+					CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
+					VolumeContext:      params,
+					ContentSource:      volume.getCsiContentSource(ctx),
+					AccessibleTopology: generateAccessibleTopology(),
 				},
 			}, nil
 
@@ -312,12 +318,23 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	result = "SUCCESS"
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      volume.GetId(),
-			CapacityBytes: req.GetCapacityRange().GetRequiredBytes(),
-			VolumeContext: params,
-			ContentSource: volume.getCsiContentSource(ctx),
+			VolumeId:           volume.GetId(),
+			CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
+			VolumeContext:      params,
+			ContentSource:      volume.getCsiContentSource(ctx),
+			AccessibleTopology: generateAccessibleTopology(),
 		},
 	}, nil
+}
+
+func generateAccessibleTopology() []*csi.Topology {
+	accessibleTopology := make(map[string]string)
+	accessibleTopology[TopologyLabelWeka] = "true"
+	return []*csi.Topology{
+		{
+			Segments: accessibleTopology,
+		},
+	}
 }
 
 func DeleteVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.DeleteVolumeResponse, error) {

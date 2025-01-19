@@ -292,6 +292,9 @@
                             "type": "string"
                         }
                     }
+                },
+                "skipGarbageCollection": {
+                    "type": "boolean"
                 }
             }
         },

@@ -36,6 +36,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 	}
 	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
 	mounter.gc = initInnerPathVolumeGc(mounter)
+	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc()
 	mounter.interfaceGroupName = driver.config.interfaceGroupName
 	mounter.clientGroupName = driver.config.clientGroupName
@@ -100,10 +101,10 @@ func (m *nfsMounter) Mount(ctx context.Context, fs string, apiClient *apiclient.
 }
 
 func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
-	opts := options
 	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	options = options.AsNfs()
 	options.Merge(options, m.exclusiveMountOptions)
+	log.Ctx(ctx).Trace().Strs("mount_options", options.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
 	mnt := m.NewMount(fsName, options).(*nfsMount)
 	// since we are not aware of the IP address of the mount, we need to find the mount point by listing the mounts
 	err := mnt.locateMountIP()
@@ -112,7 +113,6 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 		return err
 	}
 
-	log.Ctx(ctx).Trace().Strs("mount_options", opts.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
 	return mnt.decRef(ctx)
 }
 

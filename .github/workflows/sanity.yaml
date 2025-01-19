@@ -1,8 +1,9 @@
 name: sanity
 on:
   pull_request:
-    paths-ignore:
+    paths-exclude:
       - '.github/**'
+      - '!.github/workflows/**'
 
 concurrency:
   group: ${{ github.ref }}
@@ -19,6 +20,7 @@ env:
 
 jobs:
   build:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') }}
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -38,6 +40,7 @@ jobs:
           load: true
 
   legacy_sanity:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') }}
     needs: build
     runs-on: self-hosted
     steps:
@@ -45,9 +48,9 @@ jobs:
       - run: docker-compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: legacy_sanity
-            
+
   directory_volume_and_snapshots:
-    if: success() || failure()
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') }}
     needs: legacy_sanity
     runs-on: self-hosted
     steps:
@@ -57,7 +60,7 @@ jobs:
           SANITY_FUNCTION: directory_volume_and_snapshots
 
   directory_volume_and_snapshots_nfs:
-    if: success() || failure()
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') }}
     needs: directory_volume_and_snapshots
     runs-on: self-hosted
     steps:
@@ -67,37 +70,37 @@ jobs:
           SANITY_FUNCTION: directory_volume_and_snapshots_nfs
 
   snaphot_volumes_with_2nd_level_shapshots:
-    if: success() || failure()
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') }}
     needs: directory_volume_and_snapshots_nfs
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
-          SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots  
+          SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots
 
   snaphot_volumes_with_2nd_level_shapshots_nfs:
-      if: success() || failure()
-      needs: snaphot_volumes_with_2nd_level_shapshots
-      runs-on: self-hosted
-      steps:
-        - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        - run: docker-compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
-          env:
-            SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots_nfs
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') }}
+    needs: snaphot_volumes_with_2nd_level_shapshots
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - run: docker-compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots_nfs
 
   filesystem_volumes:
-    if: success() || failure()
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') }}
     needs: snaphot_volumes_with_2nd_level_shapshots_nfs
     runs-on: self-hosted
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
-          SANITY_FUNCTION: filesystem_volumes 
+          SANITY_FUNCTION: filesystem_volumes
 
   filesystem_volumes_nfs:
-    if: success() || failure()
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') }}
     needs: filesystem_volumes
     runs-on: self-hosted
     steps:

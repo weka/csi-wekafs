@@ -22,6 +22,7 @@ type innerPathVolGc struct {
 	isDeferred map[string]bool
 	sync.Mutex
 	mounter AnyMounter
+	config  *DriverConfig
 }
 
 func initInnerPathVolumeGc(mounter AnyMounter) *innerPathVolGc {
@@ -47,9 +48,15 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
-	logger.Debug().Msg("Starting garbage collection of volume")
 	fsName := volume.FilesystemName
-	defer gc.initiateGarbageCollection(ctx, fsName, volume.apiClient)
+
+	if gc.config.skipGarbageCollection {
+		logger.Debug().Msg("Moving volume to trash, skipping garbage collection according to configuration")
+	} else {
+		logger.Debug().Msg("Moving volume to trash and starting garbage collection")
+		defer gc.initiateGarbageCollection(ctx, fsName, volume.apiClient)
+	}
+
 	path, err, unmount := gc.mounter.Mount(ctx, fsName, volume.apiClient)
 	defer unmount()
 	if err != nil {
@@ -100,12 +107,14 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 
 	if fileExists("/locar") {
 		logger.Debug().Msg("Using locar for fast deletion")
-		deleteCmd := exec.Command("bash", "-c", fmt.Sprintf("/locar --type dir %s | /usr/bin/xargs -P32 -n128 rm -rf", volumeTrashLoc))
+		deleteCmd := exec.Command("bash", "-c",
+			fmt.Sprintf("/locar --type file %s | xargs -P128 -n128 rm -f 2>&1 | wc -l; /locar --type dir %s | /usr/bin/xargs -P128 -n128 rm -rf 2>&1 | wc -l", volumeTrashLoc, volumeTrashLoc),
+		)
 		output, err := deleteCmd.CombinedOutput()
 		if err != nil {
 			logger.Error().Err(err).Msg("Error running locar")
-			logger.Trace().Str("output", string(output)).Msg("Locar output")
 		}
+		logger.Trace().Str("output", string(output)).Msg("Locar output")
 	} else {
 		logger.Debug().Msg("Using default deletion method")
 		if err := os.RemoveAll(volumeTrashLoc); err != nil {

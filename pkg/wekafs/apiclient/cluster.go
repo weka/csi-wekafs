@@ -54,6 +54,7 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for authenticated filesystem mounts: %t", a.SupportsAuthenticatedMounts()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for new filesystem from snapshot: %t", a.SupportsNewFileSystemFromSnapshot()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for cloning filesystems: %t", a.SupportsFilesystemCloning()))
+	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for sync_on_close mount option: %t", a.SupportsSyncOnCloseMountOption()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for supporting multiple connections: %t", a.SupportsMultipleClusters()))
 	logger.Info().Msg(fmt.Sprintf("Cluster requires using new API path for nodes (nodes->processes): %t", a.RequiresNewNodePath()))
 	return nil
@@ -218,6 +219,31 @@ func (a *ApiClient) GetLocalContainer(ctx context.Context, allowProtocolContaine
 	}
 }
 
+func (a *ApiClient) EnsureLocalContainer(ctx context.Context, allowProtocolContainers bool) (string, error) {
+	// already have the container name set either via secret or via API call
+	if a.containerName != "" {
+		return a.containerName, nil
+	}
+	// if having a local container name set in secrets
+	if a.Credentials.LocalContainerName != "" {
+		a.containerName = a.Credentials.LocalContainerName
+		return a.containerName, nil
+	}
+
+	// if the cluster does not support multiple clusters, we must omit the container name since we can't pass it as a mount option
+	if !a.SupportsMultipleClusters() {
+		return a.containerName, nil
+	}
+
+	// fetch the container name from the API
+	container, err := a.GetLocalContainer(ctx, allowProtocolContainers)
+	if err != nil {
+		return "", err
+	}
+	a.containerName = container.ContainerName
+	return a.containerName, nil
+}
+
 func filterFrontendContainers(ctx context.Context, hostname string, containerList []Container, allowProtocolContainers bool) []Container {
 	logger := log.Ctx(ctx)
 	var ret []Container
@@ -233,7 +259,11 @@ func filterFrontendContainers(ctx context.Context, hostname string, containerLis
 				continue
 			}
 			if container.State != "ACTIVE" || container.Status != "UP" {
-				logger.Trace().Str("container_hostname", container.Hostname).Msg("Skipping an INACTIVE container")
+				logger.Trace().Str("container_hostname", container.Hostname).
+					Str("container_state", container.State).
+					Str("container_status", container.Status).
+					Str("container_id", container.Id).
+					Msg("Skipping an INACTIVE container")
 				continue
 			}
 			logger.Debug().Str("container_hostname", container.Hostname).Str("container_name", container.ContainerName).Msg("Found a valid container")

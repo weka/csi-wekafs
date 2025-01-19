@@ -75,6 +75,7 @@ type ApiClient struct {
 	NfsInterfaceGroups         map[string]*InterfaceGroup
 	ApiUserRole                ApiUserRole
 	ApiOrgId                   int
+	containerName              string
 }
 
 type ApiEndPoint struct {

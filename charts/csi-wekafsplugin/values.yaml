@@ -5,20 +5,20 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.5.1
+csiDriverVersion: &csiDriverVersion 2.6.0-SNAPSHOT.76.1bf2221
 images:
   # -- CSI liveness probe sidecar image URL
-  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.14.0
+  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.15.0
   # -- CSI attacher sidecar image URL
-  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.7.0
+  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.8.0
   # -- CSI provisioner sidecar image URL
   provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v5.1.0
   # -- CSI registrar sidercar
-  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.12.0
+  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.13.0
   # -- CSI resizer sidecar image URL
-  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.12.0
+  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.13.1
   # -- CSI snapshotter sidecar image URL
-  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.1.0
+  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.2.0
   # -- CSI nodeinfo sidecar image URL, used for reading node metadata
   nodeinfo: quay.io/weka.io/csi-wekafs
   # -- CSI driver main image URL
@@ -174,3 +174,5 @@ pluginConfig:
     clientGroupName: ""
     # -- Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions
     nfsProtocolVersion: "4.1"
+  # -- Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false
+  skipGarbageCollection: false

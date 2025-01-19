@@ -1,5 +1,6 @@
 ARG KUBECTL_VERSION=1.31.2
-FROM golang:1.22-alpine AS go-builder
+ARG UBI_HASH=9.5-1736404036
+FROM golang:1.23-alpine AS go-builder
 ARG TARGETARCH
 ARG TARGETOS
 # https://stackoverflow.com/questions/36279253/go-compiled-binary-wont-run-in-an-alpine-docker-container-on-ubuntu-host
@@ -29,15 +30,19 @@ RUN echo Building package
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o "/bin/wekafsplugin" /src/cmd/*
 FROM registry.k8s.io/kubernetes/kubectl:v${KUBECTL_VERSION} AS kubectl
 
-FROM alpine:3.18
+FROM registry.access.redhat.com/ubi9/ubi:${UBI_HASH}
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 
-RUN apk add --no-cache util-linux libselinux libselinux-utils util-linux  \
-    pciutils usbutils coreutils binutils findutils  \
-    grep bash nfs-utils rpcbind ca-certificates jq
-# Update CA certificates
-RUN update-ca-certificates
+RUN dnf install -y util-linux libselinux-utils pciutils binutils jq procps less
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
+LABEL maintainer="csi@weka.io"
+LABEL name="WEKA CSI Plugin"
+LABEL vendor="weka.io"
+LABEL summary="This image is used by WEKA CSI Plugin and incorporates both Controller and Node modules"
+LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data platform for AI"
+LABEL url="https://www.weka.io"
 COPY --from=kubectl /bin/kubectl /bin/kubectl
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 COPY --from=go-builder /src/locar /locar
