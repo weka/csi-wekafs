@@ -1,25 +1,28 @@
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
 
 ## What's Changed
+### New features
+* feat(CSI-300): add arm64 support by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/379* 
+* feat(CSI-312): add topology awareness by providing accessibleTopology in PV creation by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/426
+* feat(CSI-313): add configuration for skipping out-of-band volume garbage collection by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/427
 ### Improvements
-* feat(CSI-295): add affinity for controller and separated nodeSelector for controller and node by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/377
-* feat(CSI-302): convert controller StatefulSet to Deployment by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/381
-* feat(CSI-303): add livenessProbe to attacher sidecar by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/382
-### Bug Fixes
-* fix(CSI-294): caCertificate, NfsTargetIps, localContainerName are not hashed in API client by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/371
-* fix(CSI-292): parse NFS version 3.0 to correctly pass it to mountoption by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/372
-* fix(CSI-297): nfsTargetIps override is handled incorreclty when empty by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/374
-* fix(CSI-296): node registration fails after switch transport from NFS to Wekafs due to label conflict by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/375
-* feat(CSI-301): bump locar to version 0.4.2 by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/380
+* feat(CSI-310): drop container_name mount option from volume context by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/408
+* feat(CSI-311): add CSI driver version used for provisioning a PV into volumeContext by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/409
+* feat(CSI-308): add support for ReadWriteOncePod, ReadOnlyOncePod by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/399
+* feat(CSI-309): migrate from Alpine to RedHat UBI9 base image by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/400
+### Bug fixes
+* refactor(CSI-305): change mount Map logic for WEKAFS to align with NFS and support same fs name on SCMC by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/383
+* chore(deps): improve the way of locar to delete multi-depth directories by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/422
+* fix(CSI-306): compatibility for sync_on_close not logged by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/395
 ### Miscellaneous
-* docs: fix the example of static provisioning of directory-backed volume by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/370
-* chore(deps): update actions/checkout digest to 11bd719 by @renovate in https://github.com/weka/csi-wekafs/pull/352
-* fix(deps): update kubernetes packages to v0.31.2 by @renovate in https://github.com/weka/csi-wekafs/pull/376
-* chore(deps): update registry.k8s.io/kubernetes/kubectl to v1.31.2 by @renovate in https://github.com/weka/csi-wekafs/pull/373
-* fix(deps): update golang.org/x/exp digest to f66d83c by @renovate in https://github.com/weka/csi-wekafs/pull/349
-* fix(deps): update module github.com/prometheus/client_golang to v1.20.5 by @renovate in https://github.com/weka/csi-wekafs/pull/369
+* chore(deps): add LICENSE to UBI /licenses by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/418
+* chore(deps): update golang dependencies as of 2024-12-09 by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/410
+* chore(deps): update helm/kind-action action to v1.12.0 by @renovate in https://github.com/weka/csi-wekafs/pull/414
+* chore(deps): update registry.access.redhat.com/ubi9/ubi to v9.5-1736404036 by @renovate in https://github.com/weka/csi-wekafs/pull/421
+* fix(deps): update golang.org/x/exp digest to 7588d65 by @renovate in https://github.com/weka/csi-wekafs/pull/407
+* fix(deps): update module google.golang.org/grpc to v1.69.4 by @renovate in https://github.com/weka/csi-wekafs/pull/406
+* fix(deps): update module google.golang.org/protobuf to v1.36.2 by @renovate in https://github.com/weka/csi-wekafs/pull/415
+* chore(deps): add labels to CSI Docker image by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/425
+* chore(deps): update go dependencies as of 2025-01-19 by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/429
 
-### Known limitations
-* Due to current limitation of WEKA software, publishing snapshot-backed volumes via NFS transport is not supported and could result in `stale file handle` error when trying to access the volume contents from within the pod. 
-  This limitation applies to both new snapshot-backed volumes and to any volumes that were cloned from existing PersistentVolume or Snapshot.
 
