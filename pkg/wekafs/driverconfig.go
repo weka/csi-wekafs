@@ -39,6 +39,7 @@ type DriverConfig struct {
 	clientGroupName               string
 	nfsProtocolVersion            string
 	csiVersion                    string
+	skipGarbageCollection         bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -74,6 +75,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowNfsFailback, useNfs bool,
 	interfaceGroupName, clientGroupName, nfsProtocolVersion string,
 	version string,
+	skipGarbageCollection bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -119,6 +121,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		clientGroupName:               clientGroupName,
 		nfsProtocolVersion:            nfsProtocolVersion,
 		csiVersion:                    version,
+		skipGarbageCollection:         skipGarbageCollection,
 	}
 }
 

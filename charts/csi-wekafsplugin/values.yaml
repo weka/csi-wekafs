@@ -174,3 +174,5 @@ pluginConfig:
     clientGroupName: ""
     # -- Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions
     nfsProtocolVersion: "4.1"
+  # -- Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false
+  skipGarbageCollection: false
