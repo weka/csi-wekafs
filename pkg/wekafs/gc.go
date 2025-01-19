@@ -22,6 +22,7 @@ type innerPathVolGc struct {
 	isDeferred map[string]bool
 	sync.Mutex
 	mounter AnyMounter
+	config  *DriverConfig
 }
 
 func initInnerPathVolumeGc(mounter AnyMounter) *innerPathVolGc {
@@ -47,9 +48,15 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
-	logger.Debug().Msg("Starting garbage collection of volume")
 	fsName := volume.FilesystemName
-	defer gc.initiateGarbageCollection(ctx, fsName, volume.apiClient)
+
+	if gc.config.skipGarbageCollection {
+		logger.Debug().Msg("Moving volume to trash, skipping garbage collection according to configuration")
+	} else {
+		logger.Debug().Msg("Moving volume to trash and starting garbage collection")
+		defer gc.initiateGarbageCollection(ctx, fsName, volume.apiClient)
+	}
+
 	path, err, unmount := gc.mounter.Mount(ctx, fsName, volume.apiClient)
 	defer unmount()
 	if err != nil {

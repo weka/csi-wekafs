@@ -36,6 +36,7 @@ func newWekafsMounter(driver *WekaFsDriver) *wekafsMounter {
 	}
 	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
 	mounter.gc = initInnerPathVolumeGc(mounter)
+	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc()
 
 	return mounter

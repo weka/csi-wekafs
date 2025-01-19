@@ -36,6 +36,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 	}
 	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
 	mounter.gc = initInnerPathVolumeGc(mounter)
+	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc()
 	mounter.interfaceGroupName = driver.config.interfaceGroupName
 	mounter.clientGroupName = driver.config.clientGroupName
