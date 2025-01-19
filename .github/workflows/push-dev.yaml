@@ -67,7 +67,7 @@ jobs:
             quay.expires-after=14d
           provenance: false # https://issues.redhat.com/browse/PROJQUAY-5013 quay doesn't support it
           build-args: |
-            VERSION='${{ steps.auto_version.outputs.version }}'
+            VERSION=${{ steps.auto_version.outputs.version }}
           platforms: linux/amd64,linux/arm64
 
       # HELM
