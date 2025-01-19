@@ -11,7 +11,7 @@ RUN go install -v github.com/kubernetes-csi/csi-test/v5/cmd/csi-sanity@v5.3.1
 COPY cmd cmd
 COPY pkg pkg
 
-RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags '-X main.version='$VERSION' -extldflags "-static"' -o wekafsplugin ./cmd/wekafsplugin/main.go
+RUN CGO_ENABLED=0 GOOS="linux" GOARCH="amd64" go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o wekafsplugin ./cmd/wekafsplugin/main.go
 
 
 FROM golang:1.23-alpine

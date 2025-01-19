@@ -148,12 +148,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: |
-            revision='${{ steps.set_version.outputs.version }}'
+            revision=${{ steps.set_version.outputs.version }}
             version=${{ steps.set_version.outputs.version }}
             release=${{ steps.set_version.outputs.version }}
 
           build-args: |
-            VERSION='${{ steps.set_version.outputs.version }}'
+            VERSION=${{ steps.set_version.outputs.version }}
           platforms: linux/amd64,linux/arm64
 
       - name: helm-docs
