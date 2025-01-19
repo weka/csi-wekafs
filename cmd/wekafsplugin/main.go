@@ -96,6 +96,7 @@ var (
 	interfaceGroupName                   = flag.String("interfacegroupname", "", "Name of the NFS interface group to use for mounting volumes")
 	clientGroupName                      = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
 	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
+	skipGarbageCollection                = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
 	// Set by the build process
 	version = ""
 )
@@ -228,6 +229,7 @@ func handle() {
 		*clientGroupName,
 		*nfsProtocolVersion,
 		version,
+		*skipGarbageCollection,
 	)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)

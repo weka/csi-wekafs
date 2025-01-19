@@ -112,6 +112,9 @@ spec:
           {{- if .Values.pluginConfig.mountProtocol.nfsProtocolVersion }}
             - "--nfsprotocolversion={{ .Values.pluginConfig.mountProtocol.nfsProtocolVersion | toString}}"
           {{- end }}
+          {{- if (.Values.pluginConfig.skipGarbageCollection | default false) }}
+            - "--skipgarbagecollection"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
