@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -30,8 +29,6 @@ const (
 
 var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
 var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
-var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
-var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
 
 var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
 
@@ -461,19 +458,12 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 
-	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && !v.server.isInDevMode() {
-		size, err := v.getSizeFromQuota(ctx)
-		if err == nil {
-			logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
-			return int64(size), nil
-		}
-	}
-	logger.Trace().Msg("Volume appears to be a legacy volume, failing back to Xattr")
-	size, err := v.getSizeFromXattr(ctx)
+	size, err := v.getSizeFromQuota(ctx)
 	if err != nil {
 		return 0, err
 	}
-	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "xattr").Msg("Resolved current capacity")
+
+	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
 	return int64(size), nil
 }
 
@@ -578,35 +568,19 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 		return err
 	}
 
-	// update capacity of the volume by updating quota object on its root directory (or XATTR)
 	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
-	primaryFunc := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
-	fallbackFunc := func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
-	capacityEntity := "quota"
-	if v.server.isInDevMode() {
-		logger.Trace().Msg("Updating quota via API is not possible since running in DEV mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if v.apiClient == nil {
-		logger.Trace().Msg("Volume has no API client bound, updating capacity in legacy mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		logger.Warn().Msg("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
-		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode. Upgrade to latest version of Weka software to enable quota enforcement")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
-		logger.Warn().Msg("Quota enforcement is not supported for snapshot-backed volumes on current version of Weka software. Upgrade to latest version of Weka software to enable quota enforcement")
+	if v.apiClient == nil {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as it is not bound to API client", v.GetId())
 	}
-	err := primaryFunc()
+	if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as its underlying filesystem is located in non-default organization and authenticated mounts are not supported by current version of Weka software. Upgrade to latest version of Weka software to enable this feature", v.GetId())
+	}
+	if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as quotas on snapshots are not supported by current version of Weka software. Upgrade to latest version of Weka software to enable this feature", v.GetId())
+	}
+	err := v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit)
 	if err == nil {
-		logger.Info().Int64("new_capacity", capacityLimit).Str("capacity_entity", capacityEntity).Msg("Successfully updated capacity for volume")
-	} else {
-		logger.Error().Err(err).Str("capacity_entity", capacityEntity).Msg("Failed to set volume capacity")
+		logger.Info().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
 	}
 	return err
 }
@@ -652,34 +626,6 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 	_, err = v.setQuota(ctx, enforceCapacity, uint64(capacityLimit))
 	return err
 
-}
-
-func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool, capacityLimit int64) error {
-	op := "updateCapacityXattr"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-
-	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-
-	if !v.isMounted(ctx) {
-		err, unmountFunc := v.MountUnderlyingFS(ctx)
-		if err != nil {
-			return err
-		} else {
-			defer unmountFunc()
-		}
-	}
-
-	logger.Trace().Int64("desired_capacity", capacityLimit).Msg("Updating xattrs on volume")
-	if enforceCapacity != nil && *enforceCapacity {
-		logger.Warn().Msg("Legacy volume does not support enforce capacity")
-	}
-	err := setVolumeProperties(v.GetFullPath(ctx), capacityLimit, v.innerPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to update xattrs on volume, capacity is not set")
-	}
-	return err
 }
 
 func (v *Volume) Trash(ctx context.Context) error {
@@ -851,24 +797,6 @@ func (v *Volume) getSizeFromQuota(ctx context.Context) (uint64, error) {
 	return 0, errors.New("could not fetch quota from API")
 }
 
-// getSizeFromXattr returns volume size from extended attributes, mostly fallback for very old pre-API Weka clusters
-func (v *Volume) getSizeFromXattr(ctx context.Context) (uint64, error) {
-
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
-	if err != nil {
-		return 0, err
-	}
-
-	if capacityString, err := xattr.Get(v.GetFullPath(ctx), xattrCapacity); err == nil {
-		if capacity, err := strconv.ParseInt(string(capacityString), 10, 64); err == nil {
-			return uint64(capacity), nil
-		}
-		return 0, ErrBadXattrOnVolume
-	}
-	return 0, ErrNoXattrOnVolume
-}
-
 // getFilesystemObj returns the Weka filesystem object
 func (v *Volume) getFilesystemObj(ctx context.Context, fromCache bool) (*apiclient.FileSystem, error) {
 	if v.fileSystemObject != nil && fromCache && !v.fileSystemObject.IsRemoving {
@@ -905,8 +833,8 @@ func (v *Volume) getSnapshotObj(ctx context.Context, fromCache bool) (*apiclient
 	return snapObj, nil // no snapshot found
 }
 
-// MountUnderlyingFS creates a mount using the volume mount options (plus specifically xattr true/false) and increases refcount to its path
-// returns UmnountFunc that can be executed to decrese refCount / unmount
+// MountUnderlyingFS creates a mount using the volume mount options and increases refcount to its path
+// returns UmnountFunc that can be executed to decrease refCount / unmount
 // NOTE: it always mounts only the filesystem directly. Any navigation inside should be done on the mount
 func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	op := "MountUnderlyingFS"
@@ -1807,15 +1735,12 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, er
 
 // CanBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
 func (v *Volume) CanBeOperated() error {
-	if v.isOnSnapshot() || v.isFilesystem() {
-		if v.apiClient == nil && !v.server.isInDevMode() {
-			return errors.New("Could not obtain a valid API secret configuration for operation")
-		}
-
-		if !v.apiClient.SupportsFilesystemAsVolume() {
-			return errors.New(fmt.Sprintf("volume of type Filesystem is not supported on current version of Weka cluster. A version %s and up is required ",
-				apiclient.MinimumSupportedWekaVersions.FilesystemAsVolume))
-		}
+	if v.apiClient == nil {
+		return errors.New("Could not obtain a valid API secret configuration for operation")
+	}
+	if !v.apiClient.SupportsFilesystemAsVolume() {
+		return errors.New(fmt.Sprintf("volume of type Filesystem is not supported on current version of Weka cluster. A version %s and up is required ",
+			apiclient.MinimumSupportedWekaVersions.FilesystemAsVolume))
 	}
 	return nil
 }
