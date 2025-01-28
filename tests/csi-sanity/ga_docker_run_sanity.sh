@@ -9,23 +9,6 @@ cleanup() {
   rm -rf /tmp/csi-test-staging
 }
 
-# ---------------------- LEGACY DIR VOLUME NO API BINDING (NO SNAPSHOT SUPPORT) ----------------------
-legacy_sanity() {
-  echo "LEGACY SANITY STARTED"
-  cleanup
-  csi-sanity -csi.stagingdir /tmp/csi-test-staging \
-    --csi.controllerendpoint /tmp/weka-csi-test/controller-no-snaps.sock \
-    --csi.endpoint /tmp/weka-csi-test/node-no-snaps.sock \
-    -csi.mountdir=/tmp/weka-csi-test/sanity-workspace \
-    -ginkgo.vv \
-    -ginkgo.poll-progress-after 3s \
-    -ginkgo.seed 0 \
-    -ginkgo.skip="NodeExpandVolume" \
-    -ginkgo.skip="NodeStageVolume" \
-    -ginkgo.skip="NodeUnstageVolume" \
-    -csi.testvolumeparameters /test/wekafs-dirv1.yaml
-}
-
 # ---------------------- DIR VOLUME WITH API BINDING EXCLUDING SNAPSHOTS ----------------------
 directory_volume_no_snapshots() {
   echo "DIRECTORY VOLUME NO SNAPSHOTS STARTED"
