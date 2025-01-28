@@ -40,7 +40,6 @@ directory_volume_no_snapshots() {
     -ginkgo.skip="NodeStageVolume" \
     -ginkgo.skip="NodeUnstageVolume" \
     -ginkgo.vv \
-    -ginkgo.poll-progress-after 3s \
     -csi.testvolumeparameters /test/wekafs-dirv1.yaml
 }
 
@@ -74,7 +73,6 @@ directory_volume_and_snapshots() {
     -ginkgo.skip="NodeStageVolume" \
     -ginkgo.skip="NodeUnstageVolume" \
     -ginkgo.vv \
-    -ginkgo.poll-progress-after 3s \
     -csi.testvolumeparameters /test/wekafs-dirv1.yaml
 }
 
@@ -97,7 +95,6 @@ snaphot_volumes_with_2nd_level_shapshots() {
     -ginkgo.skip="NodeStageVolume" \
     -ginkgo.skip="NodeUnstageVolume" \
     -ginkgo.vv \
-    -ginkgo.poll-progress-after 3s \
     -csi.testvolumeparameters /test/wekafs-snapvol.yaml
 }
 # ---------------------- SNAPSHOT VOLUME WITH API BINDING AND SNAPSHOTS ----------------------
@@ -120,7 +117,6 @@ filesystem_volumes() {
     -ginkgo.skip="NodeStageVolume" \
     -ginkgo.skip="NodeUnstageVolume" \
     -ginkgo.vv \
-    -ginkgo.poll-progress-after 3s \
     -csi.testvolumeparameters /test/wekafs-fs.yaml
 }
 
