@@ -2,9 +2,10 @@ package wekafs
 
 import (
 	"context"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"sync"
 	"time"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 const (
@@ -41,6 +42,11 @@ type AnyMounter interface {
 type nfsMountsMap map[string]int // we only follow the mountPath and number of references
 type wekafsMountsMap map[string]int
 type DataTransport string
+
+func (d DataTransport) Unknown() bool {
+	return d == ""
+}
+
 type UnmountFunc func() error
 
 // NoOpUnmount is a no-op UnmountFunc returned on error paths where no mount succeeded.

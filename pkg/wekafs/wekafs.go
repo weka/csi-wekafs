@@ -93,10 +93,9 @@ var (
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
 	sync.Mutex
-	apis          map[uint32]*apiclient.ApiClient
-	legacySecrets *map[string]string
-	config        *DriverConfig
-	Hostname      string
+	apis     map[uint32]*apiclient.ApiClient
+	config   *DriverConfig
+	Hostname string
 }
 
 // Die used to intentionally panic and exit, while updating termination log
@@ -250,46 +249,15 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	return newClient, nil
 }
 
-func (api *ApiStore) GetDefaultSecrets() (*map[string]string, error) {
-	err := pathIsDirectory(LegacySecretPath)
-	if err != nil {
-		return nil, errors.New("no legacy secret exists")
-	}
-	KEYS := []string{"scheme", "endpoints", "organization", "username", "password"}
-	ret := make(map[string]string)
-	for _, k := range KEYS {
-		filePath := fmt.Sprintf("%s/%s", LegacySecretPath, k)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			return nil, errors.New(fmt.Sprintf("Missing key %s in legacy secret configuration", k))
-		}
-		contents, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Could not read key %s from legacy secret configuration", k))
-		}
-		ret[k] = string(contents)
-	}
-	return &ret, nil
-}
-
 func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
 	logger := log.Ctx(ctx)
 	if len(secrets) == 0 {
-		if api.legacySecrets != nil {
-			logger.Trace().Msg("No explicit API service for request, using legacySecrets")
-			secrets = *api.legacySecrets
-		} else {
-			logger.Trace().Msg("No API service for request, switching to legacy mode")
-			return nil, nil
-		}
+		return nil, errors.New("no secrets provided to get API client")
 	}
 	client, err := api.fromSecrets(ctx, secrets, api.Hostname)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize API client from secret, cannot proceed")
 		return nil, err
-	}
-	if client == nil {
-		logger.Trace().Msg("API service was not found for request, switching to legacy mode")
-		return nil, nil
 	}
 	logger.Trace().Msg("Successfully initialized API backend for request")
 	return client, nil
@@ -301,13 +269,6 @@ func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
 		apis:     make(map[uint32]*apiclient.ApiClient),
 		config:   config,
 		Hostname: hostname,
-	}
-	secrets, err := s.GetDefaultSecrets()
-	if err != nil {
-		log.Trace().Msg("No global API secret defined")
-	} else {
-		log.Info().Msg("Initialized API with global API secret")
-		s.legacySecrets = secrets
 	}
 	return s
 }
@@ -823,8 +784,6 @@ const (
 	VolumeTypeUnified VolumeType = "weka/v2" // no need to specify this in storageClass
 	VolumeTypeUNKNOWN VolumeType = "AMBIGUOUS_VOLUME_TYPE"
 	VolumeTypeEmpty   VolumeType = ""
-
-	LegacySecretPath = "/legacy-volume-access"
 
 	CsiModeNode       CsiPluginMode = "node"
 	CsiModeController CsiPluginMode = "controller"

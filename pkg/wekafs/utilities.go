@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/constraints"
@@ -456,27 +455,6 @@ func validateSnapshotId(snapshotId string) error {
 	}
 }
 
-func updateXattrs(volPath string, attrs map[string][]byte) error {
-	for key, val := range attrs {
-		if err := xattr.Set(volPath, key, val); err != nil {
-			return status.Errorf(codes.Internal, "failed to update volume attribute %s: %s, %s", key, val, err.Error())
-		}
-	}
-	return nil
-}
-
-func setVolumeProperties(volPath string, capacity int64, volName string) error {
-	// assumes that volPath is already mounted and accessible
-	xattrs := make(map[string][]byte)
-	if volName != "" {
-		xattrs[xattrVolumeName] = []byte(volName)
-	}
-	if capacity > 0 {
-		xattrs[xattrCapacity] = []byte(fmt.Sprint(capacity))
-	}
-	return updateXattrs(volPath, xattrs)
-}
-
 func pathIsDirectory(filename string) error {
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -584,6 +562,7 @@ func isWekaRunning(ctx context.Context) bool {
 		if !frontend.Connected {
 			disconnected = append(disconnected, fmt.Sprintf("%s/FE%d", frontend.ContainerName, frontend.ContainerId))
 		}
+		log.Error().Msg("Client software is not running on host and NFS is not enabled")
 	}
 
 	if len(disconnected) > 0 {
@@ -623,4 +602,27 @@ func getSelinuxStatus(ctx context.Context) bool {
 		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
 	}
 	return false
+}
+
+func getDataTransportFromMountPath(ctx context.Context, path string) DataTransport {
+	logger := log.Ctx(ctx)
+	file, err := os.Open(ProcMountsPath)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to open procfs and check for mount path")
+		return ""
+	}
+	defer func() { _ = file.Close() }()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) >= 3 && fields[1] == path {
+			if fields[2] == "wekafs" {
+				return dataTransportWekafs
+			} else if strings.HasPrefix(fields[2], "nfs") {
+				return dataTransportNfs
+			}
+		}
+	}
+	logger.Warn().Str("path", path).Msg("Mount path not found in mounts list")
+	return ""
 }
