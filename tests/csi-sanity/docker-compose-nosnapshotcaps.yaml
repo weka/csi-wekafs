@@ -3,7 +3,7 @@ version: '3.8'
 services:
   plugin_controller_no_snaps:
     image: sanity
-    command: wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/controller-no-snaps.sock --debugpath=/tmp/weka-csi-test/filesystems -metricsport=9091 --csimode=controller -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -suppresssnapshotcapability -suppressrvolumeclonecapability -alwaysallowsnapshotvolumes
+    command: wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/controller-no-snaps.sock --debugpath=/tmp/weka-csi-test/filesystems -metricsport=9091 --csimode=controller -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsofdirectoryvolumes -suppresssnapshotcapability -suppressrvolumeclonecapability -alwaysallowsnapshotvolumes
     volumes:
       - test-volume:/tmp/weka-csi-test
     privileged: true
@@ -17,7 +17,7 @@ services:
 
   plugin_node_no_snaps:
     image: sanity
-    command: wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/node-no-snaps.sock --debugpath=/tmp/weka-csi-test/filesystems -metricsport=9092  --csimode=node -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -suppresssnapshotcapability -suppressrvolumeclonecapability -alwaysallowsnapshotvolumes
+    command: wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/node-no-snaps.sock --debugpath=/tmp/weka-csi-test/filesystems -metricsport=9092  --csimode=node -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsofdirectoryvolumes -suppresssnapshotcapability -suppressrvolumeclonecapability -alwaysallowsnapshotvolumes
     volumes:
       - test-volume:/tmp/weka-csi-test
     privileged: true
