@@ -42,20 +42,8 @@ jobs:
           tags: sanity:latest
           load: true
 
-  legacy_sanity:
-    needs: build
-    runs-on: self-hosted
-    steps:
-      - name: Set up Docker Compose
-        uses: docker/setup-compose-action@v1
-
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: docker compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
-        env:
-          SANITY_FUNCTION: legacy_sanity
-
   directory_volume_and_snapshots:
-    needs: legacy_sanity
+    needs: build
     runs-on: self-hosted
     steps:
       - name: Set up Docker Compose
