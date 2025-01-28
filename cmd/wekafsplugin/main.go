@@ -72,7 +72,7 @@ var (
 	seedSnapshotPrefix                   = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
 	allowAutoFsExpansion                 = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
 	allowAutoFsCreation                  = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
-	allowSnapshotsOfLegacyVolumes        = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
+	allowSnapshotsOfDirectoryVolumes     = flag.Bool("allowsnapshotsofdirectoryvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
 	suppressSnapshotsCapability          = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
 	suppressVolumeCloneCapability        = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
 	enableMetrics                        = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
@@ -212,7 +212,7 @@ func handle(ctx context.Context) {
 		*debugPath,
 		*allowAutoFsCreation,
 		*allowAutoFsExpansion,
-		*allowSnapshotsOfLegacyVolumes,
+		*allowSnapshotsOfDirectoryVolumes,
 		*suppressSnapshotsCapability,
 		*suppressVolumeCloneCapability,
 		*allowInsecureHttps,
