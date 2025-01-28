@@ -60,10 +60,10 @@ var (
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
 	sync.Mutex
-	apis               map[uint32]*apiclient.ApiClient
+	apis     map[uint32]*apiclient.ApiClient
 	legacySecrets      *map[string]string
-	allowInsecureHttps bool
-	Hostname           string
+	config   *DriverConfig
+	Hostname string
 }
 
 // Die used to intentionally panic and exit, while updating termination log
@@ -152,7 +152,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	logger := log.Ctx(ctx)
 	logger.Trace().Str("api_client", credentials.String()).Msg("Creating new Weka API client")
 	// doing this to fetch a client hash
-	newClient, err := apiclient.NewApiClient(ctx, credentials, api.allowInsecureHttps, hostname)
+	newClient, err := apiclient.NewApiClient(ctx, credentials, api.config.allowInsecureHttps, hostname)
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
 	}
@@ -177,7 +177,17 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 				"To support organization other than Root please upgrade to version %s or higher",
 			credentials.Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
 	}
+	if (api.config.allowNfsFailback || api.config.useNfs) && !api.config.isInDevMode() {
+		newClient.NfsInterfaceGroupName = api.config.interfaceGroupName
+		newClient.NfsClientGroupName = api.config.clientGroupName
+		err := newClient.RegisterNfsClientGroup(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to register NFS client group")
+			return nil, err
+		}
+	}
 	api.apis[hash] = newClient
+
 	return newClient, nil
 }
 
@@ -226,12 +236,12 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 	return client, nil
 }
 
-func NewApiStore(allowInsecureHttps bool, hostname string) *ApiStore {
+func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
 	s := &ApiStore{
-		Mutex:              sync.Mutex{},
-		apis:               make(map[uint32]*apiclient.ApiClient),
-		allowInsecureHttps: allowInsecureHttps,
-		Hostname:           hostname,
+		Mutex:    sync.Mutex{},
+		apis:     make(map[uint32]*apiclient.ApiClient),
+		config:   config,
+		Hostname: hostname,
 	}
 	secrets, err := s.GetDefaultSecrets()
 	if err != nil {
@@ -273,7 +283,7 @@ func NewWekaFsDriver(
 		version:           vendorVersion,
 		endpoint:          endpoint,
 		maxVolumesPerNode: maxVolumesPerNode,
-		api:               NewApiStore(config.allowInsecureHttps, nodeID),
+		api:               NewApiStore(config, nodeID),
 		debugPath:         debugPath,
 		csiMode:           csiMode, // either "controller", "node", "all"
 		selinuxSupport:    selinuxSupport,

@@ -14,17 +14,16 @@ import (
 )
 
 type nfsMount struct {
-	mounter            *nfsMounter
-	fsName             string
-	mountPoint         string
-	kMounter           mount.Interface
-	debugPath          string
-	mountOptions       MountOptions
-	lastUsed           time.Time
-	mountIpAddress     string
-	interfaceGroupName string
-	clientGroupName    string
-	protocolVersion    apiclient.NfsVersionString
+	mounter         *nfsMounter
+	fsName          string
+	mountPoint      string
+	kMounter        mount.Interface
+	debugPath       string
+	mountOptions    MountOptions
+	lastUsed        time.Time
+	mountIpAddress  string
+	clientGroupName string
+	protocolVersion apiclient.NfsVersionString
 }
 
 func (m *nfsMount) getMountPoint() string {
@@ -153,7 +152,7 @@ func (m *nfsMount) doUnmount(ctx context.Context) error {
 
 func (m *nfsMount) ensureMountIpAddress(ctx context.Context, apiClient *apiclient.ApiClient) error {
 	if m.mountIpAddress == "" {
-		ip, err := apiClient.GetNfsMountIp(ctx, m.interfaceGroupName)
+		ip, err := apiClient.GetNfsMountIp(ctx)
 		if err != nil {
 			return err
 		}
@@ -178,14 +177,8 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 	}
 
 	if !m.isInDevMode() {
-
-		nodeIP, err := apiclient.GetNodeIpAddressByRouting(m.mountIpAddress)
+		err := apiClient.EnsureNfsPermissions(ctx, m.fsName, apiclient.NfsVersionV4, m.clientGroupName)
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to get routed node IP address, relying on node IP")
-			nodeIP = apiclient.GetNodeIpAddress()
-		}
-
-		if apiClient.EnsureNfsPermissions(ctx, nodeIP, m.fsName, apiclient.NfsVersionV4, m.clientGroupName) != nil {
 			logger.Error().Err(err).Msg("Failed to ensure NFS permissions")
 			return errors.New("failed to ensure NFS permissions")
 		}

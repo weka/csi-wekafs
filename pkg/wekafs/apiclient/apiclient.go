@@ -76,6 +76,8 @@ type ApiClient struct {
 	ApiUserRole                ApiUserRole
 	ApiOrgId                   int
 	containerName              string
+	NfsInterfaceGroupName      string
+	NfsClientGroupName         string
 }
 
 type ApiEndPoint struct {
@@ -812,6 +814,52 @@ func (a *ApiClient) HasCSIPermissions() bool {
 		return a.ApiUserRole == ApiUserRoleCSI || a.ApiUserRole == ApiUserRoleClusterAdmin || a.ApiUserRole == ApiUserRoleOrgAdmin
 	}
 	return false
+}
+
+func (a *ApiClient) RegisterNfsClientGroup(ctx context.Context) error {
+	logger := log.Ctx(ctx)
+	targetIp, err := a.GetNfsMountIp(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get NFS mount IP")
+		return err
+	}
+
+	nodeIP, err := GetNodeIpAddressByRouting(targetIp)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get routed node IP address, relying on node IP")
+		nodeIP = GetNodeIpAddress()
+	}
+
+	logger.Debug().Str("target_ip", targetIp).Str("client_ip", nodeIP).Msg("Registering IP address in NFS client group")
+	updatedConfig := false
+
+	logger.Trace().Msg("Ensuring CSI Plugin NFS Client Group")
+	cg, created, err := a.EnsureCsiPluginNfsClientGroup(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to ensure NFS client group")
+		return err
+	}
+
+	if created {
+		a.NfsClientGroupName = cg.Name
+	}
+
+	updatedConfig = updatedConfig || created
+
+	// Ensure client group rule
+	logger.Trace().Str("ip_address", nodeIP).Str("client_group", cg.Name).Msg("Ensuring NFS Client Group Rule for IP")
+	created, err = a.EnsureNfsClientGroupRuleForIp(ctx, cg, nodeIP)
+	if err != nil {
+		logger.Error().Err(err).Str("ip_address", nodeIP).Msg("Failed to ensure NFS client group rule for IP")
+		return err
+	}
+	updatedConfig = updatedConfig || created
+
+	if updatedConfig {
+		logger.Trace().Msg("Waiting for NFS configuration to be applied")
+		time.Sleep(5 * time.Second)
+	}
+	return nil
 }
 
 func maskPayload(payload string) string {
