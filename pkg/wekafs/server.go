@@ -31,11 +31,6 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
-const (
-	xattrCapacity   = "user.weka_capacity"
-	xattrVolumeName = "user.weka_k8s_volname"
-)
-
 //goland:noinspection GoExportedFuncWithUnexportedType
 func NewNonBlockingGRPCServer(mode CsiPluginMode) *nonBlockingGRPCServer {
 	return &nonBlockingGRPCServer{
