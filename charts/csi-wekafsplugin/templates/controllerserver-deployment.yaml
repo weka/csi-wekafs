@@ -82,7 +82,7 @@ spec:
             - "--allowautofsexpansion"
           {{- end }}
           {{- if .Values.pluginConfig.allowedOperations.snapshotDirectoryVolumes }}
-            - "--allowsnapshotsoflegacyvolumes"
+            - "--allowsnapshotsofdirectoryvolumes"
           {{- end }}
           {{- if .Values.pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement }}
             - "--alwaysallowsnapshotvolumes"
