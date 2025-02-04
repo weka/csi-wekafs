@@ -126,6 +126,9 @@ spec:
           {{- if (.Values.pluginConfig.waitForObjectDeletion | default false) }}
             - "--waitforobjectdeletion"
           {{- end }}
+          {{- if .Values.pluginConfig.encryption.allowEncryptionWithoutKms}}
+            - "--allowencryptionwithoutkms"
+          {{- end}}
           ports:
             - containerPort: 9898
               name: healthz

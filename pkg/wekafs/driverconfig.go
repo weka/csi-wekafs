@@ -41,6 +41,7 @@ type DriverConfig struct {
 	csiVersion                       string
 	skipGarbageCollection            bool
 	waitForObjectDeletion            bool
+	allowEncryptionWithoutKms        bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -79,6 +80,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	interfaceGroupName, clientGroupName, nfsProtocolVersion string,
 	version string,
 	skipGarbageCollection, waitForObjectDeletion bool,
+	allowEncryptionWithoutKms bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -126,6 +128,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		csiVersion:                       version,
 		skipGarbageCollection:            skipGarbageCollection,
 		waitForObjectDeletion:            waitForObjectDeletion,
+		allowEncryptionWithoutKms:        allowEncryptionWithoutKms,
 	}
 }
 
