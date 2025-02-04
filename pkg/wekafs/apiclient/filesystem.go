@@ -350,12 +350,18 @@ func (fsc *FileSystemCreateRequest) String() string {
 	return fmt.Sprintln("FileSystemCreateRequest(name:", fsc.Name, "groupName:", fsc.GroupName, "capacity:", fsc.TotalCapacity, ")")
 }
 
-func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64, isEncrypted bool) (*FileSystemCreateRequest, error) {
+func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64, encrytionParams EncryptionParams) (*FileSystemCreateRequest, error) {
+
 	ret := &FileSystemCreateRequest{
-		Name:          name,
-		GroupName:     groupName,
-		TotalCapacity: totalCapacity,
-		Encrypted:     isEncrypted,
+		Name:                  name,
+		GroupName:             groupName,
+		TotalCapacity:         totalCapacity,
+		Encrypted:             encrytionParams.Encrypted,
+		AllowNoKms:            encrytionParams.AllowNoKms,
+		KmsVaultKeyIdentifier: encrytionParams.KmsVaultKeyIdentifier,
+		KmsVaultNamespace:     encrytionParams.KmsVaultNamespace,
+		KmsVaultRoleId:        encrytionParams.KmsVaultRoleId,
+		KmsVaultSecretId:      encrytionParams.KmsVaultSecretId,
 	}
 	return ret, nil
 }

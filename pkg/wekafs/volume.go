@@ -1194,7 +1194,17 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 		// this is a new blank volume by definition
 		// create the filesystem actually
-		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize, v.isEncrypted())
+		encryptionParams := apiclient.EncryptionParams{
+			Encrypted:  v.isEncrypted(),
+			AllowNoKms: v.encryptWithoutKms,
+			//TODO: add KMS keys on Phase 2
+		}
+
+		if !v.server.getConfig().allowEncryptionWithoutKms && v.encryptWithoutKms {
+			return status.Errorf(codes.Internal, "Creating filesystems without KMS server is prohibited")
+		}
+
+		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize, encryptionParams)
 		if err != nil {
 			return status.Errorf(codes.Internal, "Failed to create filesystem %s: %s", v.FilesystemName, err.Error())
 		}
