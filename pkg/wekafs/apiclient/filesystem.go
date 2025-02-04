@@ -39,8 +39,12 @@ type FileSystem struct {
 	AvailableSsd         int64     `json:"available_ssd" url:"-"`
 	FreeSsd              int64     `json:"free_ssd" url:"-"`
 
-	ObsBuckets     []interface{} `json:"obs_buckets"`
-	ObjectStorages []interface{} `json:"object_storages"`
+	ObsBuckets     []interface{} `json:"obs_buckets" url"-"`
+	ObjectStorages []interface{} `json:"object_storages" url:"-"`
+
+	KmsKeyIdentifier string `json:"kms_key_identifier,omitempty" url:"-"`
+	KmsNamespace     string `json:"kms_namespace,omitempty" url:"-"`
+	KmsRole          string `json:"kms_role,omitempty" url:"-"`
 }
 
 type FileSystemMountToken struct {
@@ -321,6 +325,11 @@ type FileSystemCreateRequest struct {
 	Encrypted     bool   `json:"encrypted,omitempty"`
 	AuthRequired  bool   `json:"auth_required,omitempty"`
 	AllowNoKms    bool   `json:"allow_no_kms,omitempty"`
+
+	KmsVaultKeyIdentifier string `json:"kms_vault_key_identifier,omitempty"`
+	KmsVaultNamespace     string `json:"kms_vault_namespace,omitempty"`
+	KmsVaultRoleId        string `json:"kms_vault_role_id,omitempty"`
+	KmsVaultSecretId      string `json:"kms_vault_secret_id,omitempty"`
 }
 
 func (fsc *FileSystemCreateRequest) getApiUrl(a *ApiClient) string {
@@ -341,11 +350,12 @@ func (fsc *FileSystemCreateRequest) String() string {
 	return fmt.Sprintln("FileSystemCreateRequest(name:", fsc.Name, "groupName:", fsc.GroupName, "capacity:", fsc.TotalCapacity, ")")
 }
 
-func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64) (*FileSystemCreateRequest, error) {
+func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64, isEncrypted bool) (*FileSystemCreateRequest, error) {
 	ret := &FileSystemCreateRequest{
 		Name:          name,
 		GroupName:     groupName,
 		TotalCapacity: totalCapacity,
+		Encrypted:     isEncrypted,
 	}
 	return ret, nil
 }
