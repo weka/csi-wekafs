@@ -32,12 +32,12 @@ func TestGetNfsMountIp(t *testing.T) {
 	// Mock GetInterfaceGroupsByType method
 
 	// Test case: Valid interface group
-	ip, err := apiClient.GetNfsMountIp(context.Background(), "")
+	ip, err := apiClient.GetNfsMountIp(context.Background())
 	assert.NoError(t, err)
 	assert.NotEmpty(t, ip)
 
 	// Test case: Valid interface group
-	ip, err = apiClient.GetNfsMountIp(context.Background(), "NFS")
+	ip, err = apiClient.GetNfsMountIp(context.Background())
 	assert.NoError(t, err)
 	assert.NotEmpty(t, ip)
 
