@@ -168,10 +168,6 @@ func (v *Volume) isFilesystem() bool {
 	return !v.isOnSnapshot() && !v.hasInnerPath()
 }
 
-func (v *Volume) canBeEncrypted() bool {
-	return v.isFilesystem()
-}
-
 // isEncrypted returns true if the volume is encrypted
 func (v *Volume) isEncrypted() bool {
 	return v.encrypted
@@ -1620,9 +1616,7 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		if err != nil {
 			return errors.Join(err, errors.New("failed to parse 'encrypted' parameter"))
 		}
-		if v.canBeEncrypted() {
-			v.encrypted = encrypted
-		}
+		v.encrypted = encrypted
 	}
 	if val, ok := params["manageEncryptionKeys"]; ok {
 		if v.encrypted {
