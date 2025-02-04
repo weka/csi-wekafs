@@ -54,6 +54,7 @@ type Volume struct {
 	mountOptions          MountOptions
 	encrypted             bool
 	manageEncryptionKeys  bool
+	encryptWithoutKms     bool
 
 	srcVolume   *Volume
 	srcSnapshot *Snapshot
@@ -1626,7 +1627,15 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 			return errors.New("manageEncryptionKeys is not supported at this moment")
 		}
 	}
-
+	if val, ok := params["encryptWithoutKms"]; ok {
+		if v.encrypted {
+			encryptWithoutKms, err := strconv.ParseBool(val)
+			if err != nil {
+				return errors.Join(err, errors.New("failed to parse 'encryptWithoutKms' parameter"))
+			}
+			v.encryptWithoutKms = encryptWithoutKms
+		}
+	}
 	return nil
 }
 
