@@ -171,6 +171,10 @@ pluginConfig:
     - "readcache,writecache,coherent,forcedirect"
     - "sync,async"
     - "ro,rw"
+  encryption:
+    # -- Allow encryption of Weka filesystems associated with CSI volumes without using external KMS server.
+    #    Should never be run in production, only for testing purposes
+    allowEncryptionWithoutKms: false
   mountProtocol:
     # -- Use NFS transport for mounting Weka filesystems, off by default
     useNfs: false
