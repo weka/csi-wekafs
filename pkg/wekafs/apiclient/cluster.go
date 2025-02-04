@@ -57,6 +57,11 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for sync_on_close mount option: %t", a.SupportsSyncOnCloseMountOption()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for supporting multiple connections: %t", a.SupportsMultipleClusters()))
 	logger.Info().Msg(fmt.Sprintf("Cluster requires using new API path for nodes (nodes->processes): %t", a.RequiresNewNodePath()))
+	logger.Info().Msg(fmt.Sprintf("Cluster supports URL query parameters: %t", a.SupportsUrlQueryParams()))
+	logger.Info().Msg(fmt.Sprintf("Cluster supports quotas on snapshots: %t", a.SupportsQuotaOnSnapshots()))
+	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption without KMS: %t", a.SupportsEncryptionWithNoKms()))
+	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption of filesystems with commomn key: %t", a.SupportsEncryptionWithCommonKey()))
+	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption of filesystems with key per filesystem: %t", a.SupportsEncryptionWithKeyPerFilesystem()))
 	return nil
 }
 
