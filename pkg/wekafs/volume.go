@@ -1165,17 +1165,9 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		return status.Errorf(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
 
-	if v.isEncrypted() {
-		if !v.canBeEncrypted() {
-			return status.Errorf(codes.InvalidArgument, "Encryption is supported only for filesystem-backed volumes")
-		}
-		if !v.apiClient.SupportsEncryptionWithCommonKey() {
-			return status.Errorf(codes.InvalidArgument, "Encryption is not supported on the cluster")
-		}
-		if !v.apiClient.IsEncryptionEnabled() {
-			return status.Errorf(codes.InvalidArgument, "Encryption is not enabled on the cluster")
-		}
-
+	encryptionParams, err := v.ensureEncryptionParams()
+	if err != nil {
+		return err
 	}
 
 	if v.isFilesystem() {
@@ -1190,15 +1182,6 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 		// this is a new blank volume by definition
 		// create the filesystem actually
-		encryptionParams := apiclient.EncryptionParams{
-			Encrypted:  v.isEncrypted(),
-			AllowNoKms: v.encryptWithoutKms,
-			//TODO: add KMS keys on Phase 2
-		}
-
-		if !v.server.getConfig().allowEncryptionWithoutKms && v.encryptWithoutKms {
-			return status.Errorf(codes.Internal, "Creating filesystems without KMS server is prohibited")
-		}
 
 		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize, encryptionParams)
 		if err != nil {
@@ -1292,6 +1275,37 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	}
 	logger.Info().Str("filesystem", v.FilesystemName).Msg("Created volume successfully")
 	return nil
+}
+
+func (v *Volume) ensureEncryptionParams() (apiclient.EncryptionParams, error) {
+	encryptionParams := apiclient.EncryptionParams{
+		Encrypted:  v.isEncrypted(),
+		AllowNoKms: v.encryptWithoutKms,
+		//TODO: add KMS keys on Phase 2
+	}
+
+	if v.isEncrypted() {
+		if !v.isFilesystem() {
+			return apiclient.EncryptionParams{}, status.Errorf(codes.InvalidArgument, "Encryption is supported only for filesystem-backed volumes")
+		}
+		if !v.server.getConfig().allowEncryptionWithoutKms && v.encryptWithoutKms {
+			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Creating filesystems without KMS server is prohibited")
+		}
+		if !v.apiClient.SupportsEncryptionWithCommonKey() {
+			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption is not supported on the cluster")
+		}
+		if !v.apiClient.IsEncryptionEnabled() && !v.encryptWithoutKms {
+			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption is not enabled on the cluster")
+		}
+		if !v.apiClient.SupportsEncryptionWithKeyPerFilesystem() && v.manageEncryptionKeys {
+			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption with key per filesystem is not supported on the cluster")
+		}
+		if v.manageEncryptionKeys {
+			//TODO: add KMS keys support on Phase 2
+			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption with key per filesystem is not supported in current version of CSI driver")
+		}
+	}
+	return encryptionParams, nil
 }
 
 func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
@@ -1611,6 +1625,7 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		v.initialFilesystemSize = int64(raw) * int64(math.Pow10(9))
 	}
 
+	// obtain encryption parameters
 	if val, ok := params["encryptionEnabled"]; ok {
 		encrypted, err := strconv.ParseBool(val)
 		if err != nil {
@@ -1619,26 +1634,25 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		v.encrypted = encrypted
 	}
 	if val, ok := params["manageEncryptionKeys"]; ok {
-		if v.encrypted {
-			manageKeys, err := strconv.ParseBool(val)
-			if err != nil {
-				return errors.Join(err, errors.New("failed to parse 'manageEncryptionKeys' parameter"))
-			}
-			v.manageEncryptionKeys = manageKeys
+		if !v.encrypted {
+			return errors.New("manageEncryptionKeys is only supported for encrypted volumes")
 		}
-		if v.manageEncryptionKeys {
-			// TODO: implement key management on phase2
-			return errors.New("manageEncryptionKeys is not supported at this moment")
+		manageKeys, err := strconv.ParseBool(val)
+		if err != nil {
+			return errors.Join(err, errors.New("failed to parse 'manageEncryptionKeys' parameter"))
 		}
+		v.manageEncryptionKeys = manageKeys
 	}
 	if val, ok := params["encryptWithoutKms"]; ok {
-		if v.encrypted {
-			encryptWithoutKms, err := strconv.ParseBool(val)
-			if err != nil {
-				return errors.Join(err, errors.New("failed to parse 'encryptWithoutKms' parameter"))
-			}
-			v.encryptWithoutKms = encryptWithoutKms
+		if !v.encrypted {
+			return errors.New("manageEncryptionKeys is only supported for encrypted volumes")
 		}
+
+		encryptWithoutKms, err := strconv.ParseBool(val)
+		if err != nil {
+			return errors.Join(err, errors.New("failed to parse 'encryptWithoutKms' parameter"))
+		}
+		v.encryptWithoutKms = encryptWithoutKms
 	}
 	return nil
 }
