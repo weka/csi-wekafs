@@ -52,6 +52,8 @@ type Volume struct {
 	enforceCapacity       bool
 	initialFilesystemSize int64
 	mountOptions          MountOptions
+	encrypted             bool
+	manageEncryptionKeys  bool
 
 	srcVolume   *Volume
 	srcSnapshot *Snapshot
@@ -163,6 +165,15 @@ func (v *Volume) hasInnerPath() bool {
 // isFilesystem returns true if the volume is an FS (not snapshot or directory)
 func (v *Volume) isFilesystem() bool {
 	return !v.isOnSnapshot() && !v.hasInnerPath()
+}
+
+func (v *Volume) canBeEncrypted() bool {
+	return v.isFilesystem()
+}
+
+// isEncrypted returns true if the volume is encrypted
+func (v *Volume) isEncrypted() bool {
+	return v.encrypted
 }
 
 // hasUnderlyingSnapshots returns True if volume is a FS (not its snapshot) and has any weka snapshots beneath it
@@ -1156,6 +1167,20 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	if capacity > maxStorageCapacity {
 		return status.Errorf(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
+
+	if v.isEncrypted() {
+		if !v.canBeEncrypted() {
+			return status.Errorf(codes.InvalidArgument, "Encryption is supported only for filesystem-backed volumes")
+		}
+		if !v.apiClient.SupportsEncryptionWithCommonKey() {
+			return status.Errorf(codes.InvalidArgument, "Encryption is not supported on the cluster")
+		}
+		if !v.apiClient.IsEncryptionEnabled() {
+			return status.Errorf(codes.InvalidArgument, "Encryption is not enabled on the cluster")
+		}
+
+	}
+
 	if v.isFilesystem() {
 		// filesystem size might be larger than free space, check it
 		fsSize := Max(capacity, v.initialFilesystemSize)
@@ -1168,7 +1193,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 		// this is a new blank volume by definition
 		// create the filesystem actually
-		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize)
+		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize, v.isEncrypted())
 		if err != nil {
 			return status.Errorf(codes.Internal, "Failed to create filesystem %s: %s", v.FilesystemName, err.Error())
 		}
@@ -1578,6 +1603,30 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		}
 		v.initialFilesystemSize = int64(raw) * int64(math.Pow10(9))
 	}
+
+	if val, ok := params["encryptionEnabled"]; ok {
+		encrypted, err := strconv.ParseBool(val)
+		if err != nil {
+			return errors.Join(err, errors.New("failed to parse 'encrypted' parameter"))
+		}
+		if v.canBeEncrypted() {
+			v.encrypted = encrypted
+		}
+	}
+	if val, ok := params["manageEncryptionKeys"]; ok {
+		if v.encrypted {
+			manageKeys, err := strconv.ParseBool(val)
+			if err != nil {
+				return errors.Join(err, errors.New("failed to parse 'manageEncryptionKeys' parameter"))
+			}
+			v.manageEncryptionKeys = manageKeys
+		}
+		if v.manageEncryptionKeys {
+			// TODO: implement key management on phase2
+			return errors.New("manageEncryptionKeys is not supported at this moment")
+		}
+	}
+
 	return nil
 }
 
