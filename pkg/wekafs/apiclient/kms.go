@@ -11,6 +11,7 @@ type KmsAuthMethod string
 const (
 	KmsTypeLocal          KmsType       = "Local"
 	KmsTypeHashicorpVault KmsType       = "HashiCorpVault"
+	KmsTypeKMIP           KmsType       = "KMIP"
 	KmsAuthMethodToken    KmsAuthMethod = "token"
 	KmsAuthMethodAppRole  KmsAuthMethod = "RoleId/SecretId"
 )
@@ -60,12 +61,16 @@ func (k *Kms) IsHashicorpVault() bool {
 	return k.KmsType == KmsTypeHashicorpVault
 }
 
-func (k *Kms) SupportsPerFilesystemEncryptionKey() bool {
-	return k.Params.AuthMethod == KmsAuthMethodAppRole
+func (k *Kms) IsKMIP() bool {
+	return k.KmsType == KmsTypeKMIP
 }
 
-func (k *Kms) IsSupported() bool {
-	return k.IsHashicorpVault()
+func (k *Kms) IsSupportedForEncryptionKeyPerFilesystem() bool {
+	return k.IsHashicorpVault() && k.Params.AuthMethod == KmsAuthMethodAppRole
+}
+
+func (k *Kms) IsSupportedForCommonEncryptionKey() bool {
+	return k.IsHashicorpVault() || k.IsKMIP()
 }
 
 func (a *ApiClient) getKms(ctx context.Context) (*Kms, error) {
@@ -82,7 +87,7 @@ func (a *ApiClient) GetKmsConfiguration(ctx context.Context) (*Kms, error) {
 	if err != nil {
 		return nil, err
 	}
-	if kms.IsSupported() {
+	if kms.IsSupportedForCommonEncryptionKey() {
 		return kms, nil
 	}
 	return nil, fmt.Errorf("KMS configuration is not supported")
@@ -90,11 +95,5 @@ func (a *ApiClient) GetKmsConfiguration(ctx context.Context) (*Kms, error) {
 
 func (a *ApiClient) HasKmsConfiguration(ctx context.Context) bool {
 	kms, err := a.GetKmsConfiguration(ctx)
-	if err != nil {
-		return false
-	}
-	if kms.IsSupported() {
-		return true
-	}
-	return false
+	return err == nil && kms != nil
 }

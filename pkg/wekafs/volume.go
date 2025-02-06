@@ -1294,17 +1294,24 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 		if !v.apiClient.SupportsEncryptionWithCommonKey() {
 			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption is not supported on the cluster")
 		}
-		if !v.apiClient.IsEncryptionEnabled(ctx) {
-			if !v.encryptWithoutKms {
-				return apiclient.EncryptionParams{}, status.Errorf(codes.InvalidArgument, "Encryption is not enabled on the cluster")
-			}
-		}
-		if !v.apiClient.SupportsEncryptionWithKeyPerFilesystem() && v.manageEncryptionKeys {
-			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption with key per filesystem is not supported on the cluster")
-		}
+
 		if v.manageEncryptionKeys {
-			//TODO: add KMS keys support on Phase 2
-			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption with key per filesystem is not supported in current version of CSI driver")
+			// TODO: remove this line when encryption keys per filesystem is supported
+			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported yet")
+
+			// flow for encryption keys per filesystem
+			if !v.apiClient.SupportsEncryptionWithKeyPerFilesystem() {
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported on the cluster")
+			}
+			if !v.apiClient.IsEncryptionEnabledWithKeyPerFilesystem(ctx) {
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support encryption keys per filesystem")
+			}
+		} else {
+			if !v.apiClient.IsEncryptionEnabled(ctx) {
+				if !v.encryptWithoutKms {
+					return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption is not enabled on the cluster")
+				}
+			}
 		}
 	}
 	return encryptionParams, nil
