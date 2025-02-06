@@ -259,7 +259,7 @@ func (a *ApiClient) WaitForQuotaActive(ctx context.Context, q *Quota) error {
 	f := wait.ConditionFunc(func() (bool, error) {
 		return a.IsQuotaActive(ctx, q)
 	})
-	err := wait.Poll(5*time.Second, time.Hour*24, f)
+	err := wait.Poll(1*time.Second, time.Hour*24, f)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("")
 		return err
