@@ -53,6 +53,11 @@ type Volume struct {
 	manageEncryptionKeys  bool
 	encryptWithoutKms     bool
 
+	kmsVaultNamespace     string
+	kmsVaultKeyIdentifier string
+	kmsVaultRoleId        string
+	KmsVaultSecretId      string
+
 	srcVolume   *Volume
 	srcSnapshot *Snapshot
 
@@ -60,6 +65,10 @@ type Volume struct {
 
 	fileSystemObject *apiclient.FileSystem
 	snapshotObject   *apiclient.Snapshot
+}
+
+func (v *Volume) hasCustomEncryptionSettings() bool {
+	return v.kmsVaultNamespace != "" || v.kmsVaultKeyIdentifier != "" || v.kmsVaultRoleId != "" || v.KmsVaultSecretId != ""
 }
 
 //goland:noinspection GoUnusedParameter
@@ -1266,9 +1275,12 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.EncryptionParams, error) {
 	encryptionParams := apiclient.EncryptionParams{
-		Encrypted:  v.isEncrypted(),
-		AllowNoKms: v.encryptWithoutKms,
-		//TODO: add KMS keys on Phase 2
+		Encrypted:             v.isEncrypted(),
+		AllowNoKms:            v.encryptWithoutKms,
+		KmsVaultRoleId:        v.kmsVaultRoleId,
+		KmsVaultSecretId:      v.KmsVaultSecretId,
+		KmsVaultNamespace:     v.kmsVaultNamespace,
+		KmsVaultKeyIdentifier: v.kmsVaultKeyIdentifier,
 	}
 
 	if v.isEncrypted() {
@@ -1284,15 +1296,17 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 		}
 
 		if v.manageEncryptionKeys {
-			// TODO: remove this line when encryption keys per filesystem is supported
-			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported yet")
+			// TODO: remove this line when CSI automatically supports provisioning of new keys on vault.
+			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Automatic management of encryption keys is not supported by current version of WEKA CSI Plugin")
+		}
 
-			// flow for encryption keys per filesystem
+		if v.hasCustomEncryptionSettings() {
+			// flow for custom encryption settings, e.g. key per filesystem
 			if !v.apiClient.SupportsCustomEncryptionSettings() {
-				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported on the cluster")
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with custom settings per filesystem is not supported by current version of WEKA cluster")
 			}
 			if !v.apiClient.AllowsCustomEncryptionSettings(ctx) {
-				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support encryption keys per filesystem")
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support custom encryption settings per filesystem")
 			}
 		} else {
 			if !v.apiClient.IsEncryptionEnabled(ctx) {
@@ -1644,6 +1658,36 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		}
 		v.encryptWithoutKms = encryptWithoutKms
 	}
+
+	// obtain advanced KMS parameters
+	if val, ok := params["kmsVaultNamespace"]; ok {
+		if !v.encrypted {
+			return errors.New("kmsVaultNamespace is only supported for encrypted volumes")
+		}
+		v.kmsVaultNamespace = val
+	}
+	if val, ok := params["kmsVaultKeyIdentifier"]; ok {
+		if !v.encrypted {
+			return errors.New("kmsVaultKeyIdentifier is only supported for encrypted volumes")
+		}
+		v.kmsVaultKeyIdentifier = val
+	}
+	// TODO: check if it is secure to pass those via storageClass
+	if val, ok := params["kmsVaultRoleId"]; ok {
+		if !v.encrypted {
+			return errors.New("kmsVaultRoleId is only supported for encrypted volumes")
+		}
+		v.kmsVaultRoleId = val
+	}
+
+	// TODO: check if it is secure to pass those via storageClass
+	if val, ok := params["kmsVaultSecretId"]; ok {
+		if !v.encrypted {
+			return errors.New("kmsVaultSecretId is only supported for encrypted volumes")
+		}
+		v.KmsVaultSecretId = val
+	}
+
 	return nil
 }
 
