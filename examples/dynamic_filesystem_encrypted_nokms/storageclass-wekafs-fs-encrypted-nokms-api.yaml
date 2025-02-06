@@ -1,7 +1,7 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: storageclass-wekafs-fs-encrypted-api
+  name: storageclass-wekafs-fs-encrypted-nokms-api
 provisioner: csi.weka.io
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
@@ -11,6 +11,7 @@ parameters:
 
   encryptionEnabled: "true"
   manageEncryptionKeys: "false"  # this is not currently supported
+  encryptWithoutKms: "true"  # this is not for production use, only for testing.
 
   # name of the filesystem group to create FS in.
   filesystemGroupName: default
