@@ -21,8 +21,8 @@ func (a *ApiClient) IsEncryptionEnabled(ctx context.Context) bool {
 	return true
 }
 
-func (a *ApiClient) IsEncryptionEnabledWithKeyPerFilesystem(ctx context.Context) bool {
-	if !a.SupportsEncryptionWithKeyPerFilesystem() {
+func (a *ApiClient) AllowsCustomEncryptionSettings(ctx context.Context) bool {
+	if !a.SupportsCustomEncryptionSettings() {
 		return false
 	}
 	kms, err := a.GetKmsConfiguration(ctx)

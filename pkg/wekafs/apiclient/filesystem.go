@@ -39,7 +39,7 @@ type FileSystem struct {
 	AvailableSsd         int64     `json:"available_ssd" url:"-"`
 	FreeSsd              int64     `json:"free_ssd" url:"-"`
 
-	ObsBuckets     []interface{} `json:"obs_buckets" url"-"`
+	ObsBuckets     []interface{} `json:"obs_buckets" url:"-"`
 	ObjectStorages []interface{} `json:"object_storages" url:"-"`
 
 	KmsKeyIdentifier string `json:"kms_key_identifier,omitempty" url:"-"`

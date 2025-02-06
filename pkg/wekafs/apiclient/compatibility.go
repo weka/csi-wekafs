@@ -19,8 +19,8 @@ type WekaCompatibilityRequiredVersions struct {
 	SingleClientMultipleClusters   string
 	NewNodeApiObjectPath           string
 	EncryptionWithNoKms            string
-	EncryptionWithCommonKey        string
-	EncryptionWithManagedKeys      string
+	EncryptionWithClusterKey       string
+	EncryptionWithCustomSettings   string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
@@ -36,8 +36,8 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	SingleClientMultipleClusters:   "v4.2",   // single client can have multiple Weka cluster connections
 	NewNodeApiObjectPath:           "v4.2",   // new API object paths (processes, containers, etc.)
 	EncryptionWithNoKms:            "v4.0",   // can create encrypted filesystems without KMS
-	EncryptionWithCommonKey:        "v4.0",   // can create encrypted filesystems with common key (no specific key per filesystem)
-	EncryptionWithManagedKeys:      "v4.4.0", // can create encrypted filesystems with key per filesystem
+	EncryptionWithClusterKey:       "v4.0",   // can create encrypted filesystems with common cluster-wide key
+	EncryptionWithCustomSettings:   "v4.4.0", // can create encrypted filesystems with custom settings (key per filesystem(s))
 }
 
 type WekaCompatibilityMap struct {
@@ -53,8 +53,8 @@ type WekaCompatibilityMap struct {
 	SingleClientMultipleClusters    bool
 	NewNodeApiObjectPath            bool
 	EncryptionWithNoKms             bool
-	EncryptionWithCommonKey         bool
-	EncryptionWithKeyPerFilesystem  bool
+	EncryptionWithClusterKey        bool
+	EncryptionWithCustomSettings    bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -73,8 +73,8 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.SingleClientMultipleClusters = false
 		cm.NewNodeApiObjectPath = false
 		cm.EncryptionWithNoKms = false
-		cm.EncryptionWithCommonKey = false
-		cm.EncryptionWithKeyPerFilesystem = false
+		cm.EncryptionWithClusterKey = false
+		cm.EncryptionWithCustomSettings = false
 
 		return
 	}
@@ -90,8 +90,8 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	mc, _ := version.NewVersion(MinimumSupportedWekaVersions.SingleClientMultipleClusters)
 	nn, _ := version.NewVersion(MinimumSupportedWekaVersions.NewNodeApiObjectPath)
 	en, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithNoKms)
-	ec, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithCommonKey)
-	epf, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithManagedKeys)
+	ec, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithClusterKey)
+	ecc, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithCustomSettings)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
@@ -105,8 +105,8 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.SingleClientMultipleClusters = v.GreaterThanOrEqual(mc)
 	cm.NewNodeApiObjectPath = v.GreaterThanOrEqual(nn)
 	cm.EncryptionWithNoKms = v.GreaterThanOrEqual(en)
-	cm.EncryptionWithCommonKey = v.GreaterThanOrEqual(ec)
-	cm.EncryptionWithKeyPerFilesystem = v.GreaterThanOrEqual(epf)
+	cm.EncryptionWithClusterKey = v.GreaterThanOrEqual(ec)
+	cm.EncryptionWithCustomSettings = v.GreaterThanOrEqual(ecc)
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
@@ -154,11 +154,11 @@ func (a *ApiClient) SupportsEncryptionWithNoKms() bool {
 }
 
 func (a *ApiClient) SupportsEncryptionWithCommonKey() bool {
-	return a.CompatibilityMap.EncryptionWithCommonKey
+	return a.CompatibilityMap.EncryptionWithClusterKey
 }
 
-func (a *ApiClient) SupportsEncryptionWithKeyPerFilesystem() bool {
-	return a.CompatibilityMap.EncryptionWithKeyPerFilesystem
+func (a *ApiClient) SupportsCustomEncryptionSettings() bool {
+	return a.CompatibilityMap.EncryptionWithCustomSettings
 }
 
 func (a *ApiClient) RequiresNewNodePath() bool {

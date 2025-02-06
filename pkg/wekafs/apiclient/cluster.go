@@ -49,7 +49,6 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 		Str("cluster_version", clusterVersion).Msg("Successfully connected to cluster")
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for filesystem as CSI volume: %t", a.SupportsFilesystemAsVolume()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for quota directory as CSI volume: %t", a.SupportsQuotaDirectoryAsVolume()))
-	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for quota on non-empty CSI volume: %t", a.SupportsQuotaOnNonEmptyDirs()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for regular directory as CSI volume: %t", a.SupportsDirectoryAsVolume()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for authenticated filesystem mounts: %t", a.SupportsAuthenticatedMounts()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for new filesystem from snapshot: %t", a.SupportsNewFileSystemFromSnapshot()))
@@ -60,8 +59,8 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	logger.Info().Msg(fmt.Sprintf("Cluster supports URL query parameters: %t", a.SupportsUrlQueryParams()))
 	logger.Info().Msg(fmt.Sprintf("Cluster supports quotas on snapshots: %t", a.SupportsQuotaOnSnapshots()))
 	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption without KMS: %t", a.SupportsEncryptionWithNoKms()))
-	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption of filesystems with commomn key: %t", a.SupportsEncryptionWithCommonKey()))
-	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption of filesystems with key per filesystem: %t", a.SupportsEncryptionWithKeyPerFilesystem()))
+	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption of filesystems with a cluster-wide key: %t", a.SupportsEncryptionWithCommonKey()))
+	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption of filesystems with custom keys: %t", a.SupportsCustomEncryptionSettings()))
 	return nil
 }
 
