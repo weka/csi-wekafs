@@ -1,10 +1,24 @@
 package apiclient
 
-func (a *ApiClient) IsEncryptionEnabled() bool {
-	if !a.SupportsEncryptionWithNoKms() {
+import "context"
+
+func (a *ApiClient) IsEncryptionEnabled(ctx context.Context) bool {
+	if !a.SupportsEncryptionWithCommonKey() {
 		return false
 	}
-	return true // TODO: implement the rest of the function to actually fetch the data
+
+	kms, err := a.GetKmsConfiguration(ctx)
+	if err != nil {
+		return false
+	}
+	if kms == nil {
+		return false
+	}
+	if !kms.IsSupported() {
+		return false
+	}
+
+	return true
 }
 
 type EncryptionParams struct {
