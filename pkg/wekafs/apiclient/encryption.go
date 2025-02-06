@@ -14,10 +14,30 @@ func (a *ApiClient) IsEncryptionEnabled(ctx context.Context) bool {
 	if kms == nil {
 		return false
 	}
-	if !kms.IsSupported() {
+	if !kms.IsSupportedForCommonEncryptionKey() {
 		return false
 	}
 
+	return true
+}
+
+func (a *ApiClient) IsEncryptionEnabledWithKeyPerFilesystem(ctx context.Context) bool {
+	if !a.SupportsEncryptionWithKeyPerFilesystem() {
+		return false
+	}
+	kms, err := a.GetKmsConfiguration(ctx)
+	if err != nil {
+		return false
+	}
+	if kms == nil {
+		return false
+	}
+	if !kms.IsSupportedForCommonEncryptionKey() {
+		return false
+	}
+	if !kms.IsSupportedForEncryptionKeyPerFilesystem() {
+		return false
+	}
 	return true
 }
 
