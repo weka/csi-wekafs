@@ -1,0 +1,40 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: storageclass-wekafs-fs-encrypted-key-per-filesystem-api
+provisioner: csi.weka.io
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+parameters:
+  volumeType: weka/v2  # this line can be ommitted completely
+
+  # encrypt the filesystems created by the CSI plugin
+  encryptionEnabled: "true"
+  # CSI plugin will automatically create a new key on the KMS for each filesystem. Currently not supported
+  manageEncryptionKeys: "false"
+
+  # Namespace on KMS to read and create the new keys in. If not specified, a default namespace is used.
+  kmsVaultNamespace: ""
+  # Key identifier on the KMS server to be used for encrypting filesystems.
+  # If not specified, a new key will be created for each filesystem (if manageEncryptionKeys is set to true). Otherwise, the default key will be used.
+  kmsVaultKeyIdentifier: ""
+
+  # name of the filesystem group to create FS in.
+  filesystemGroupName: default
+  # minimum size of filesystem to create (preallocate space for snapshots and derived volumes)
+  initialFilesystemSizeGB: "100"
+  # name of the secret that stores API credentials for a cluster
+  # change the name of secret to match secret of a particular cluster (if you have several Weka clusters)
+  csi.storage.k8s.io/provisioner-secret-name: &secretName weka-csi-cluster-dev
+  # change the name of the namespace in which the cluster API credentials
+  csi.storage.k8s.io/provisioner-secret-namespace: &secretNamespace default
+  # do not change anything below this line, or set to same parameters as above
+  csi.storage.k8s.io/controller-publish-secret-name: *secretName
+  csi.storage.k8s.io/controller-publish-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/controller-expand-secret-name: *secretName
+  csi.storage.k8s.io/controller-expand-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/node-stage-secret-name: *secretName
+  csi.storage.k8s.io/node-stage-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/node-publish-secret-name: *secretName
+  csi.storage.k8s.io/node-publish-secret-namespace: *secretNamespace
