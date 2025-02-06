@@ -69,7 +69,6 @@ func TestWekaCompatibilityMap_fillIn(t *testing.T) {
 				DirectoryAsCSIVolume:            true,
 				FilesystemAsCSIVolume:           true,
 				QuotaOnDirectoryVolume:          true,
-				QuotaSetOnNonEmptyVolume:        true,
 				QuotaOnSnapshot:                 true,
 				MountFilesystemsUsingAuthToken:  true,
 				CreateNewFilesystemFromSnapshot: true,

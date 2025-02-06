@@ -1300,10 +1300,10 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported yet")
 
 			// flow for encryption keys per filesystem
-			if !v.apiClient.SupportsEncryptionWithKeyPerFilesystem() {
+			if !v.apiClient.SupportsCustomEncryptionSettings() {
 				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported on the cluster")
 			}
-			if !v.apiClient.IsEncryptionEnabledWithKeyPerFilesystem(ctx) {
+			if !v.apiClient.AllowsCustomEncryptionSettings(ctx) {
 				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support encryption keys per filesystem")
 			}
 		} else {
