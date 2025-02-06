@@ -1,0 +1,12 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-wekafs-fs-encrypted-nokms-api
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-fs-encrypted-nokms-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
