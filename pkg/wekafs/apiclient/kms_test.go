@@ -24,6 +24,7 @@ func TestHasKmsConfigurationWhenNotPresent(t *testing.T) {
 
 func TestIsEncryptionEnabledWhenNotPresent(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
-	isEnabled := apiClient.IsEncryptionEnabled()
+	ctx := context.Background()
+	isEnabled := apiClient.IsEncryptionEnabled(ctx)
 	assert.False(t, isEnabled, "Expected encryption to be disabled")
 }

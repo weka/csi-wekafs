@@ -6,10 +6,13 @@ import (
 )
 
 type KmsType string
+type KmsAuthMethod string
 
 const (
-	KmsTypeLocal          KmsType = "Local"
-	KmsTypeHashicorpVault KmsType = "HashiCorpVault"
+	KmsTypeLocal          KmsType       = "Local"
+	KmsTypeHashicorpVault KmsType       = "HashiCorpVault"
+	KmsAuthMethodToken    KmsAuthMethod = "token"
+	KmsAuthMethodAppRole  KmsAuthMethod = "RoleId/SecretId"
 )
 
 type Kms struct {
@@ -18,9 +21,9 @@ type Kms struct {
 }
 
 type KmsParams struct {
-	MasterKeyName string `json:"master_key_name"`
-	BaseUrl       string `json:"base_url"`
-	AuthMethod    string `json:"auth_method"`
+	MasterKeyName string        `json:"master_key_name"`
+	BaseUrl       string        `json:"base_url"`
+	AuthMethod    KmsAuthMethod `json:"auth_method"`
 }
 
 func (k *Kms) GetType() string {
@@ -55,6 +58,10 @@ func (k *Kms) IsLocal() bool {
 
 func (k *Kms) IsHashicorpVault() bool {
 	return k.KmsType == KmsTypeHashicorpVault
+}
+
+func (k *Kms) SupportsPerFilesystemEncryptionKey() bool {
+	return k.Params.AuthMethod == KmsAuthMethodAppRole
 }
 
 func (k *Kms) IsSupported() bool {
