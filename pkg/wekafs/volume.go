@@ -1165,7 +1165,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		return status.Errorf(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
 
-	encryptionParams, err := v.ensureEncryptionParams()
+	encryptionParams, err := v.ensureEncryptionParams(ctx)
 	if err != nil {
 		return err
 	}
@@ -1277,7 +1277,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	return nil
 }
 
-func (v *Volume) ensureEncryptionParams() (apiclient.EncryptionParams, error) {
+func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.EncryptionParams, error) {
 	encryptionParams := apiclient.EncryptionParams{
 		Encrypted:  v.isEncrypted(),
 		AllowNoKms: v.encryptWithoutKms,
@@ -1289,13 +1289,15 @@ func (v *Volume) ensureEncryptionParams() (apiclient.EncryptionParams, error) {
 			return apiclient.EncryptionParams{}, status.Errorf(codes.InvalidArgument, "Encryption is supported only for filesystem-backed volumes")
 		}
 		if !v.server.getConfig().allowEncryptionWithoutKms && v.encryptWithoutKms {
-			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Creating filesystems without KMS server is prohibited")
+			return apiclient.EncryptionParams{}, status.Errorf(codes.InvalidArgument, "Creating encrypted filesystems without KMS server configuration is prohibited")
 		}
 		if !v.apiClient.SupportsEncryptionWithCommonKey() {
 			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption is not supported on the cluster")
 		}
-		if !v.apiClient.IsEncryptionEnabled() && !v.encryptWithoutKms {
-			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption is not enabled on the cluster")
+		if !v.apiClient.IsEncryptionEnabled(ctx) {
+			if !v.encryptWithoutKms {
+				return apiclient.EncryptionParams{}, status.Errorf(codes.InvalidArgument, "Encryption is not enabled on the cluster")
+			}
 		}
 		if !v.apiClient.SupportsEncryptionWithKeyPerFilesystem() && v.manageEncryptionKeys {
 			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption with key per filesystem is not supported on the cluster")
