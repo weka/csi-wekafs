@@ -3,16 +3,28 @@ apiVersion: apps/v1
 metadata:
   name: {{ .Release.Name }}-node
   namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-node
+    component: {{ .Release.Name }}-node
+    release: {{ .Release.Name }}
+    {{- if .Values.node.labels }}
+    {{- toYaml .Values.node.labels | nindent 4 }}
+    {{- end }}
 spec:
   selector:
     matchLabels:
       app: {{ .Release.Name }}-node
+      component: {{ .Release.Name }}-node
+      release: {{ .Release.Name }}
   template:
     metadata:
       labels:
         app: {{ .Release.Name }}-node
         component: {{ .Release.Name }}-node
         release: {{ .Release.Name }}
+        {{- if .Values.node.podLabels }}
+        {{- toYaml .Values.node.podLabels | nindent 8 }}
+        {{- end }}
     {{- if .Values.metrics.enabled }}
       annotations:
         prometheus.io/scrape: 'true'
