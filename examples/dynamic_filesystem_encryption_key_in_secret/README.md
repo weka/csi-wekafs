@@ -22,15 +22,17 @@ Encryption is not supported on the cluster
 - Storage class includes a parameter `parameters.encryption` that defines whether the filesystem should be encrypted or not. This is a string and not boolean
     - `true` - filesystem is encrypted using WEKA-managed encryption keys.
     - `false` - filesystem is not encrypted
-- Storage class includes a parameter `parameters.manageEncryptionKeys` that is currently not supported. This parameter is reserved for future use
 
 ## Notes regarding object deletion:
 1. Filesystem-backed volume maps directly to Weka filesystem. 
 2. Filesystem is encrypted
+3. Encryption key is stored in a KMS server
+4. The encryption key identifier, KMS namespace, role ID and secret ID must be specified in the API secret
+5. Only kmsKeyIdentifier and kmsNamespace
 
 # Workflow
 > All commands below may be executed by `kubectl apply -f <FILE>.yaml`
-1. Create storageclass `storageclass-wekafs-fs-encrypted-key-per-filesystem-api`
-2. Create CSI secret `csi-wekafs-api-secret`  (Located in [../common/csi-wekafs-api-secret.yaml](../common/csi-wekafs-api-secret.yaml)) 
-3. Provision a new filesystem volume `pvc-wekafs-fs-encrypted-key-per-filesystem-api`
-4. Create a pod `csi-app-on-fs-encrypted-key-per-filesystem-api` that uses the volume
+1. Create storageclass `storageclass-wekafs-fs-encryption-key-in-secret`
+2. Create CSI secret `csi-wekafs-api-secret-kms-encryption-key-in-secret` 
+3. Provision a new filesystem volume `pvc-wekafs-fs-encryption-key-in-secret`
+4. Create a pod `csi-app-on-fs-encryption-key-in-secret` that uses the volume
