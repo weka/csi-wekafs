@@ -1383,12 +1383,12 @@ func (v *Volume) enrichWithEncryptionParams(ctx context.Context) {
 			changed = true
 		}
 		// this param can be overridden by storage class
-		if v.kmsVaultNamespace != "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace != "" {
+		if v.kmsVaultNamespace == "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace != "" {
 			v.kmsVaultNamespace = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace
 			changed = true
 		}
 		// this param can be overridden by storage class
-		if v.kmsVaultKeyIdentifier != "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier != "" {
+		if v.kmsVaultKeyIdentifier == "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier != "" {
 			v.kmsVaultKeyIdentifier = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier
 			changed = true
 		}
