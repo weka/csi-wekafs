@@ -46,10 +46,16 @@
                 "grpcRequestTimeoutSeconds": {
                     "type": "integer"
                 },
+                "labels": {
+                    "type": "object"
+                },
                 "maxConcurrentRequests": {
                     "type": "integer"
                 },
                 "nodeSelector": {
+                    "type": "object"
+                },
+                "podLabels": {
                     "type": "object"
                 },
                 "replicas": {
@@ -199,10 +205,16 @@
                 "grpcRequestTimeoutSeconds": {
                     "type": "integer"
                 },
+                "labels": {
+                    "type": "object"
+                },
                 "maxConcurrentRequests": {
                     "type": "integer"
                 },
                 "nodeSelector": {
+                    "type": "object"
+                },
+                "podLabels": {
                     "type": "object"
                 }
             }
