@@ -75,6 +75,10 @@ controller:
   nodeSelector: {}
   # -- optional affinity for controller components only
   affinity: {}
+  # -- optional labels to add to controller deployment
+  labels: {}
+  # -- optional labels to add to controller pods
+  podLabels: {}
 # Node-specific parameters, please do not change unless explicitly guided
 node:
   # -- Maximum concurrent requests from sidecars (global)
@@ -89,6 +93,10 @@ node:
   nodeSelector: {}
   # -- optional affinity for node components only
   affinity: {}
+  # -- optional labels to add to node daemonset
+  labels: {}
+  # -- optional labels to add to node pods
+  podLabels: {}
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)

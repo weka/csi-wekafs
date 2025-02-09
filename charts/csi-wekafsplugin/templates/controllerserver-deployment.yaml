@@ -7,10 +7,15 @@ metadata:
     app: {{ .Release.Name }}-controller
     component: {{ .Release.Name }}-controller
     release: {{ .Release.Name }}
+    {{- if .Values.controller.labels }}
+    {{- toYaml .Values.controller.labels | nindent 4 }}
+    {{- end }}
 spec:
   selector:
     matchLabels:
       app: {{ .Release.Name }}-controller
+      component: {{ .Release.Name }}-controller
+      release: {{ .Release.Name }}
   replicas: {{ .Values.controller.replicas | default 1 }}
   template:
     metadata:
@@ -18,6 +23,9 @@ spec:
         app: {{ .Release.Name }}-controller
         component: {{ .Release.Name }}-controller
         release: {{ .Release.Name }}
+        {{- if .Values.controller.podLabels }}
+        {{- toYaml .Values.controller.podLabels | nindent 8 }}
+        {{- end }}
     {{- if .Values.metrics.enabled }}
       annotations:
         prometheus.io/scrape: 'true'
