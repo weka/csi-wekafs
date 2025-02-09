@@ -211,6 +211,8 @@ func (v *Volume) isEncrypted(ctx context.Context) (bool, error) {
 							v.kmsVaultRoleId = fsObj.KmsRole
 						}
 					}
+				} else {
+					v.encrypted = &[]bool{false}[0]
 				}
 			}
 		}
