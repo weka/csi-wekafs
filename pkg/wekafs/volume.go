@@ -1375,6 +1375,55 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 	return encryptionParams, nil
 }
 
+func (v *Volume) enrichWithEncryptionParams(ctx context.Context) {
+	op := "enrichWithEncryptionParams"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	changed := false
+	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
+	if v.isEncryptedSafe(ctx) && v.apiClient != nil {
+		c := v.apiClient
+		if c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.RoleId != "" {
+			v.kmsVaultRoleId = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.RoleId
+			changed = true
+		}
+		if c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.SecretId != "" {
+			v.KmsVaultSecretId = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.SecretId
+			changed = true
+		}
+		// this param can be overridden by storage class
+		if v.kmsVaultNamespace != "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace != "" {
+			v.kmsVaultNamespace = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace
+			changed = true
+		}
+		// this param can be overridden by storage class
+		if v.kmsVaultKeyIdentifier != "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier != "" {
+			v.kmsVaultKeyIdentifier = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier
+			changed = true
+		}
+	}
+	if changed {
+		logger.Debug().Str("kms_namespace", v.kmsVaultNamespace).
+			Str("kms_key_identifier", v.kmsVaultKeyIdentifier).
+			Str("kms_role_id", func() string {
+				if v.kmsVaultRoleId != "" {
+					return "***masked***"
+				} else {
+					return ""
+				}
+			}()).
+			Str("kms_secret_id", func() string {
+				if v.KmsVaultSecretId != "" {
+					return "***masked***"
+				} else {
+					return ""
+				}
+			}()).
+			Msg("Enriched volume with encryption parameters")
+	}
+}
+
 func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
 	logger := log.Ctx(ctx)
 	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside filesystem .fsnapshots to mimic Weka snapshot behavior")
@@ -1734,21 +1783,6 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 			return errors.New("kmsVaultKeyIdentifier is only supported for encrypted volumes")
 		}
 		v.kmsVaultKeyIdentifier = val
-	}
-	// TODO: check if it is secure to pass those via storageClass
-	if val, ok := params["kmsVaultRoleId"]; ok {
-		if !v.isEncryptedSafe(ctx) {
-			return errors.New("kmsVaultRoleId is only supported for encrypted volumes")
-		}
-		v.kmsVaultRoleId = val
-	}
-
-	// TODO: check if it is secure to pass those via storageClass
-	if val, ok := params["kmsVaultSecretId"]; ok {
-		if !v.isEncryptedSafe(ctx) {
-			return errors.New("kmsVaultSecretId is only supported for encrypted volumes")
-		}
-		v.KmsVaultSecretId = val
 	}
 
 	return nil
