@@ -68,6 +68,8 @@ jobs:
           provenance: false # https://issues.redhat.com/browse/PROJQUAY-5013 quay doesn't support it
           build-args: |
             VERSION=${{ steps.auto_version.outputs.version }}
+            RHACTIVATIONORGID=${{ secrets.RHACTIVATIONORGID }}
+            RHACTIVATIONKEY=${{ secrets.RHACTIVATIONORGID }}
           platforms: linux/amd64,linux/arm64
 
       # HELM
