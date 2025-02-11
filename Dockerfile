@@ -37,7 +37,7 @@ RUN test -n $RHACTIVATIONORGID || (echo "RHACTIVATIONORGID is required" && false
 RUN test -n $RHACTIVATIONKEY || (echo "RHACTIVATIONKEY is required" && false)
 RUN subscription-manager register --org=$RHACTIVATIONORGID --activationkey=$RHACTIVATIONKEY
 RUN subscription-manager repos --disable=*
-RUN subscription-manager repos --enable=rhel-9-for-x86_64-baseos-rpms --enable=rhel-9-for-x86_64-appstream-rpms
+RUN subscription-manager repos --enable=rhel-9-for-$(uname -m)-baseos-rpms --enable=rhel-9-for-$(uname -m)-appstream-rpms
 RUN dnf install -y util-linux libselinux-utils pciutils binutils jq procps less selinux-policy-devel container-selinux
 RUN subscription-manager unregister
 RUN subscription-manager clean
