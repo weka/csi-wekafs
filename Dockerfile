@@ -48,7 +48,6 @@ ADD selinux/csi-wekafs.te /tmp/csi-wekafs.te
 RUN checkmodule -M -m -C -o /tmp/csi-wekafs.cil /tmp/csi-wekafs.te
 RUN semodule -i /tmp/csi-wekafs.cil
 RUN rm -f /tmp/csi-wekafs.te /tmp/csi-wekafs.cil
-RUN setsebool container_use_wekafs=on
 
 FROM selinux
 LABEL maintainers="WekaIO, LTD"
