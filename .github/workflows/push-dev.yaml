@@ -69,7 +69,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.auto_version.outputs.version }}
             RHACTIVATIONORGID=${{ secrets.RHACTIVATIONORGID }}
-            RHACTIVATIONKEY=${{ secrets.RHACTIVATIONORGID }}
+            RHACTIVATIONKEY=${{ secrets.RHACTIVATIONKEY }}
           platforms: linux/amd64,linux/arm64
 
       # HELM

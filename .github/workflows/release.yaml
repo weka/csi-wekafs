@@ -155,7 +155,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.set_version.outputs.version }}
             RHACTIVATIONORGID=${{ secrets.RHACTIVATIONORGID }}
-            RHACTIVATIONKEY=${{ secrets.RHACTIVATIONORGID }}
+            RHACTIVATIONKEY=${{ secrets.RHACTIVATIONKEY }}
           platforms: linux/amd64,linux/arm64
 
       - name: helm-docs

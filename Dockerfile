@@ -31,11 +31,11 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X mai
 FROM registry.k8s.io/kubernetes/kubectl:v${KUBECTL_VERSION} AS kubectl
 
 FROM registry.access.redhat.com/ubi9/ubi:${UBI_HASH} AS ubibuilder
-ARG RHACTIVATIONORGID=""
-ARG RHACTIVATIONKEY=""
-RUN test -n "$RHACTIVATIONORGID" || (echo "RHACTIVATIONORGID is required" && false)
-RUN test -n "$RHACTIVATIONKEY" || (echo "RHACTIVATIONKEY is required" && false)
-RUN subscription-manager register --org="$RHACTIVATIONORGID" --activationkey="$RHACTIVATIONKEY"
+ARG RHACTIVATIONORGID
+ARG RHACTIVATIONKEY
+RUN test -n $RHACTIVATIONORGID || (echo "RHACTIVATIONORGID is required" && false)
+RUN test -n $RHACTIVATIONKEY || (echo "RHACTIVATIONKEY is required" && false)
+RUN subscription-manager register --org=$RHACTIVATIONORGID --activationkey=$RHACTIVATIONKEY
 RUN subscription-manager repos --disable=*
 RUN subscription-manager repos --enable=rhel-9-for-x86_64-baseos-rpms --enable=rhel-9-for-x86_64-appstream-rpms
 RUN dnf install -y util-linux libselinux-utils pciutils binutils jq procps less selinux-policy-devel container-selinux

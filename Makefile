@@ -23,8 +23,8 @@ DOCKER_IMAGE_NAME=csi-wekafs
 
 $(CMDS:%=build-%): build-%:
 	docker buildx build --build-arg VERSION=$(VERSION) \
-		--build-arg RHACTIVATIONORGID="$(RHACTIVATIONORGID)" \
-		--build-arg RHACTIVATIONKEY="$(RHACTIVATIONKEY)" \
+		--build-arg RHACTIVATIONORGID=$(RHACTIVATIONORGID) \
+		--build-arg RHACTIVATIONKEY=$(RHACTIVATIONKEY) \
 		-t $(DOCKER_IMAGE_NAME):$(VERSION) \
 		-f Dockerfile --label revision=$(VERSION) .
 
