@@ -473,26 +473,26 @@ func (a *ApiClient) CreateNfsClientGroup(ctx context.Context, r *NfsClientGroupC
 	return err
 }
 
-func (a *ApiClient) EnsureCsiPluginNfsClientGroup(ctx context.Context, clientGroupName string) (grp *NfsClientGroup, created bool, err error) {
+func (a *ApiClient) EnsureCsiPluginNfsClientGroup(ctx context.Context) (grp *NfsClientGroup, created bool, err error) {
 	op := "EnsureCsiPluginNfsClientGroup"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	var ret *NfsClientGroup
-	if clientGroupName == "" {
-		clientGroupName = NfsClientGroupName
+	if a.NfsClientGroupName == "" {
+		a.NfsClientGroupName = NfsClientGroupName
 	}
-	logger.Trace().Str("client_group_name", clientGroupName).Msg("Getting client group by name")
-	ret, err = a.GetNfsClientGroupByName(ctx, clientGroupName)
+	logger.Trace().Str("client_group_name", a.NfsClientGroupName).Msg("Getting client group by name")
+	ret, err = a.GetNfsClientGroupByName(ctx, a.NfsClientGroupName)
 	if err != nil {
 		if err != ObjectNotFoundError {
 			logger.Error().Err(err).Msg("Failed to get client group by name")
 			return ret, false, err
 		} else {
-			logger.Trace().Str("client_group_name", clientGroupName).Msg("Existing client group not found, creating client group")
+			logger.Trace().Str("client_group_name", a.NfsClientGroupName).Msg("Existing client group not found, creating client group")
 
-			err = a.CreateNfsClientGroup(ctx, NewNfsClientGroupCreateRequest(clientGroupName), ret)
+			err = a.CreateNfsClientGroup(ctx, NewNfsClientGroupCreateRequest(a.NfsClientGroupName), ret)
 			return ret, err == nil, nil
 		}
 	}
@@ -655,12 +655,12 @@ func (r *NfsClientGroupRule) IsEligibleForIP(ip string) bool {
 	return network.ContainsIPAddress(ip)
 }
 
-func (a *ApiClient) GetNfsClientGroupRules(ctx context.Context, clientGroupName string, rules *[]NfsClientGroupRule) error {
+func (a *ApiClient) GetNfsClientGroupRules(ctx context.Context, rules *[]NfsClientGroupRule) error {
 	op := "GetNfsClientGroupRules"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	cg, _, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
+	cg, _, err := a.EnsureCsiPluginNfsClientGroup(ctx)
 	if err != nil {
 		return err
 	}
@@ -821,7 +821,7 @@ func (a *ApiClient) EnsureNfsClientGroupRuleForIp(ctx context.Context, cg *NfsCl
 	return false, err
 }
 
-func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName string, version NfsVersionString, clientGroupName string) error {
+func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, fsName string, version NfsVersionString, clientGroupName string) error {
 	op := "EnsureNfsPermissions"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -834,31 +834,64 @@ func (a *ApiClient) EnsureNfsPermissions(ctx context.Context, ip string, fsName 
 	}
 	var created bool
 
-	logger.Debug().Str("ip", ip).Str("filesystem", fsName).Str("client_group_name", clientGroupCaption).Msg("Ensuring NFS permissions")
-	// Ensure client group
-	logger.Trace().Msg("Ensuring CSI Plugin NFS Client Group")
-	cg, created, err := a.EnsureCsiPluginNfsClientGroup(ctx, clientGroupName)
+	cg, err := a.GetNfsClientGroupByName(ctx, clientGroupCaption)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to ensure NFS client group")
+		logger.Error().Err(err).Str("client_group_name", clientGroupCaption).Msg("Failed to get NFS client group by name")
 		return err
 	}
-	updateConfigRequired = updateConfigRequired || created
 
-	// Ensure client group rule
-	logger.Trace().Str("ip_address", ip).Msg("Ensuring NFS Client Group Rule for IP")
-	created, err = a.EnsureNfsClientGroupRuleForIp(ctx, cg, ip)
-	if err != nil {
-		logger.Error().Err(err).Str("ip_address", ip).Msg("Failed to ensure NFS client group rule for IP")
-		return err
-	}
-	updateConfigRequired = updateConfigRequired || created
 	// Ensure NFS permission
 	logger.Trace().Str("filesystem", fsName).Str("client_group", cg.Name).Msg("Ensuring NFS Export for client group")
 	created, err = EnsureNfsPermission(ctx, fsName, cg.Name, version, a)
-	updateConfigRequired = updateConfigRequired || created
-	if updateConfigRequired {
+	if created {
 		logger.Trace().Msg("Waiting for NFS configuration to be applied")
 		time.Sleep(5 * time.Second)
 	}
 	return err
+}
+
+func (a *ApiClient) RegisterNfsClientGroup(ctx context.Context) error {
+	logger := log.Ctx(ctx)
+	targetIp, err := a.GetNfsMountIp(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get NFS mount IP")
+		return err
+	}
+
+	nodeIP, err := GetNodeIpAddressByRouting(targetIp)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get routed node IP address, relying on node IP")
+		nodeIP = GetNodeIpAddress()
+	}
+
+	logger.Debug().Str("target_ip", targetIp).Str("client_ip", nodeIP).Msg("Registering IP address in NFS client group")
+	updatedConfig := false
+
+	logger.Trace().Msg("Ensuring CSI Plugin NFS Client Group")
+	cg, created, err := a.EnsureCsiPluginNfsClientGroup(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to ensure NFS client group")
+		return err
+	}
+
+	if created {
+		a.NfsClientGroupName = cg.Name
+	}
+
+	updatedConfig = updatedConfig || created
+
+	// Ensure client group rule
+	logger.Trace().Str("ip_address", nodeIP).Str("client_group", cg.Name).Msg("Ensuring NFS Client Group Rule for IP")
+	created, err = a.EnsureNfsClientGroupRuleForIp(ctx, cg, nodeIP)
+	if err != nil {
+		logger.Error().Err(err).Str("ip_address", nodeIP).Msg("Failed to ensure NFS client group rule for IP")
+		return err
+	}
+	updatedConfig = updatedConfig || created
+
+	if updatedConfig {
+		logger.Trace().Msg("Waiting for NFS configuration to be applied")
+		time.Sleep(5 * time.Second)
+	}
+	return nil
 }

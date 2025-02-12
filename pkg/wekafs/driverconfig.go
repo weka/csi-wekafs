@@ -17,29 +17,30 @@ func (i *MutuallyExclusiveMountOptsStrings) Set(value string) error {
 }
 
 type DriverConfig struct {
-	DynamicVolPath                string
-	VolumePrefix                  string
-	SnapshotPrefix                string
-	SeedSnapshotPrefix            string
-	allowAutoFsCreation           bool
-	allowAutoFsExpansion          bool
-	allowSnapshotsOfLegacyVolumes bool
-	advertiseSnapshotSupport      bool
-	advertiseVolumeCloneSupport   bool
-	debugPath                     string
-	allowInsecureHttps            bool
-	alwaysAllowSnapshotVolumes    bool
-	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
-	maxConcurrencyPerOp           map[string]int64
-	grpcRequestTimeout            time.Duration
-	allowProtocolContainers       bool
-	allowNfsFailback              bool
-	useNfs                        bool
-	interfaceGroupName            string
-	clientGroupName               string
-	nfsProtocolVersion            string
-	csiVersion                    string
-	skipGarbageCollection         bool
+	DynamicVolPath                   string
+	VolumePrefix                     string
+	SnapshotPrefix                   string
+	SeedSnapshotPrefix               string
+	allowAutoFsCreation              bool
+	allowAutoFsExpansion             bool
+	allowSnapshotsOfDirectoryVolumes bool
+	advertiseSnapshotSupport         bool
+	advertiseVolumeCloneSupport      bool
+	debugPath                        string
+	allowInsecureHttps               bool
+	alwaysAllowSnapshotVolumes       bool
+	mutuallyExclusiveOptions         []mutuallyExclusiveMountOptionSet
+	maxConcurrencyPerOp              map[string]int64
+	grpcRequestTimeout               time.Duration
+	allowProtocolContainers          bool
+	allowNfsFailback                 bool
+	useNfs                           bool
+	interfaceGroupName               string
+	clientGroupName                  string
+	nfsProtocolVersion               string
+	csiVersion                       string
+	skipGarbageCollection            bool
+	waitForObjectDeletion            bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -62,11 +63,13 @@ func (dc *DriverConfig) Log() {
 		Bool("use_nfs", dc.useNfs).
 		Str("interface_group_name", dc.interfaceGroupName).
 		Str("client_group_name", dc.clientGroupName).
+		Bool("skip_garbage_collection", dc.skipGarbageCollection).
+		Bool("wait_for_object_deletion", dc.waitForObjectDeletion).
 		Msg("Starting driver with the following configuration")
 
 }
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
-	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfLegacyVolumes bool,
+	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfDirectoryVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
 	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
@@ -75,7 +78,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowNfsFailback, useNfs bool,
 	interfaceGroupName, clientGroupName, nfsProtocolVersion string,
 	version string,
-	skipGarbageCollection bool,
+	skipGarbageCollection, waitForObjectDeletion bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -99,29 +102,30 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
 
 	return &DriverConfig{
-		DynamicVolPath:                dynamicVolPath,
-		VolumePrefix:                  VolumePrefix,
-		SnapshotPrefix:                SnapshotPrefix,
-		SeedSnapshotPrefix:            SeedSnapshotPrefix,
-		allowAutoFsCreation:           allowAutoFsCreation,
-		allowAutoFsExpansion:          allowAutoFsExpansion,
-		allowSnapshotsOfLegacyVolumes: allowSnapshotsOfLegacyVolumes,
-		advertiseSnapshotSupport:      !suppressnapshotSupport,
-		advertiseVolumeCloneSupport:   !suppressVolumeCloneSupport,
-		debugPath:                     debugPath,
-		allowInsecureHttps:            allowInsecureHttps,
-		alwaysAllowSnapshotVolumes:    alwaysAllowSnapshotVolumes,
-		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
-		maxConcurrencyPerOp:           concurrency,
-		grpcRequestTimeout:            grpcRequestTimeout,
-		allowProtocolContainers:       allowProtocolContainers,
-		allowNfsFailback:              allowNfsFailback,
-		useNfs:                        useNfs,
-		interfaceGroupName:            interfaceGroupName,
-		clientGroupName:               clientGroupName,
-		nfsProtocolVersion:            nfsProtocolVersion,
-		csiVersion:                    version,
-		skipGarbageCollection:         skipGarbageCollection,
+		DynamicVolPath:                   dynamicVolPath,
+		VolumePrefix:                     VolumePrefix,
+		SnapshotPrefix:                   SnapshotPrefix,
+		SeedSnapshotPrefix:               SeedSnapshotPrefix,
+		allowAutoFsCreation:              allowAutoFsCreation,
+		allowAutoFsExpansion:             allowAutoFsExpansion,
+		allowSnapshotsOfDirectoryVolumes: allowSnapshotsOfDirectoryVolumes,
+		advertiseSnapshotSupport:         !suppressnapshotSupport,
+		advertiseVolumeCloneSupport:      !suppressVolumeCloneSupport,
+		debugPath:                        debugPath,
+		allowInsecureHttps:               allowInsecureHttps,
+		alwaysAllowSnapshotVolumes:       alwaysAllowSnapshotVolumes,
+		mutuallyExclusiveOptions:         MutuallyExclusiveMountOptions,
+		maxConcurrencyPerOp:              concurrency,
+		grpcRequestTimeout:               grpcRequestTimeout,
+		allowProtocolContainers:          allowProtocolContainers,
+		allowNfsFailback:                 allowNfsFailback,
+		useNfs:                           useNfs,
+		interfaceGroupName:               interfaceGroupName,
+		clientGroupName:                  clientGroupName,
+		nfsProtocolVersion:               nfsProtocolVersion,
+		csiVersion:                       version,
+		skipGarbageCollection:            skipGarbageCollection,
+		waitForObjectDeletion:            waitForObjectDeletion,
 	}
 }
 

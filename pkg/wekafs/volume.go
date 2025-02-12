@@ -1374,7 +1374,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 	fsObj, err := v.getFilesystemObj(ctx)
 	if err != nil {
 		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to fetch filesystem for deletion")
-		return status.Errorf(codes.Internal, "Failed to fetch filesystem for deletion %s", v.FilesystemName)
+		return status.Errorf(codes.Internal, "Failed to fetch filesystem for deletion: %s, %e", v.FilesystemName, err)
 	}
 	if fsObj == nil || fsObj.Uid == uuid.Nil {
 		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Apparently filesystem not exists, returning OK")
@@ -1412,14 +1412,15 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		}
 	}
 	fsUid := fsObj.Uid
-	err, done := v.waitForFilesystemDeletion(ctx, logger, fsUid)
-	if done {
-		return err
+	if v.server.getConfig().waitForObjectDeletion {
+		return v.waitForFilesystemDeletion(ctx, logger, fsUid)
 	}
+
+	go func() { _ = v.waitForFilesystemDeletion(ctx, logger, fsUid) }()
 	return nil
 }
 
-func (v *Volume) waitForFilesystemDeletion(ctx context.Context, logger zerolog.Logger, fsUid uuid.UUID) (error, bool) {
+func (v *Volume) waitForFilesystemDeletion(ctx context.Context, logger zerolog.Logger, fsUid uuid.UUID) error {
 	logger.Trace().Msg("Waiting for filesystem deletion to complete")
 	for start := time.Now(); time.Since(start) < MaxSnapshotDeletionDuration; {
 		fsObj := &apiclient.FileSystem{}
@@ -1427,22 +1428,22 @@ func (v *Volume) waitForFilesystemDeletion(ctx context.Context, logger zerolog.L
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
 				logger.Trace().Str("filesystem", v.FilesystemName).Msg("Filesystem was removed successfully")
-				return nil, true
+				return nil
 			}
-			return err, true
 		}
 		if fsObj.Uid != uuid.Nil {
 			if fsObj.IsRemoving {
 				logger.Trace().Str("filesystem", v.FilesystemName).Msg("Filesystem is still being removed")
+				time.Sleep(time.Second)
 			} else {
-				return errors.New(fmt.Sprintf("FilesystemName %s not marked for deletion but it should", v.FilesystemName)), true
+				logger.Error().Str("filesystem", v.FilesystemName).Msg("Filesystem not marked for deletion but it should")
+				return errors.New(fmt.Sprintf("FilesystemName %s not marked for deletion but it should", v.FilesystemName))
 			}
 		}
-		time.Sleep(time.Second)
 	}
 
-	logger.Error().Str("filesystem", v.FilesystemName).Msg("Timeout deleting volume")
-	return nil, false
+	logger.Error().Str("filesystem", v.FilesystemName).Str("volume_id", v.GetId()).Msg("Timeout deleting filesystem associated with volume")
+	return errors.New("Timeout deleting volume")
 }
 
 func (v *Volume) deleteSnapshot(ctx context.Context) error {
@@ -1454,8 +1455,8 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	snapObj, err := v.getSnapshotObj(ctx)
 	if err != nil {
-		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Msg("Failed to delete snapshot")
-		return status.Errorf(codes.Internal, "Failed to delete snapshot %s", v.SnapshotName)
+		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Msg("Failed to fetch snapshot for deletion")
+		return status.Errorf(codes.Internal, "Failed to fetch snapshot for deletion: %s: %e", v.SnapshotName, err)
 	}
 	if snapObj == nil || snapObj.Uid == uuid.Nil {
 		logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot not found, assuming repeating request")
@@ -1483,41 +1484,41 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 			Msg("Failed to delete snapshot")
 		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 	}
-	err2, done := v.waitForSnapshotDeletion(ctx, logger, snapUid)
-	if done {
-		return err2
+	if v.server.getConfig().waitForObjectDeletion {
+		return v.waitForSnapshotDeletion(ctx, logger, snapUid)
 	}
+	go func() { _ = v.waitForSnapshotDeletion(ctx, logger, snapUid) }()
 	return nil
 }
 
-func (v *Volume) waitForSnapshotDeletion(ctx context.Context, logger zerolog.Logger, snapUid uuid.UUID) (error, bool) {
+func (v *Volume) waitForSnapshotDeletion(ctx context.Context, logger zerolog.Logger, snapUid uuid.UUID) error {
 	logger.Trace().Msg("Waiting for snapshot deletion to complete")
 	for start := time.Now(); time.Since(start) < MaxSnapshotDeletionDuration; {
 		snapObj := &apiclient.Snapshot{}
 		err := v.apiClient.GetSnapshotByUid(ctx, snapUid, snapObj)
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
-				logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot deleted successfully")
-				return nil, true
+				logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot deleted successfully")
+				return nil
 			}
 			if _, ok := err.(*apiclient.ApiNotFoundError); ok {
 				logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot deleted successfully")
-				return nil, true
+				return nil
 			}
-			return err, true
 		}
 		if snapObj.Uid != uuid.Nil {
 			if snapObj.IsRemoving {
 				logger.Trace().Msg("Snapshot is still being removed")
+				time.Sleep(time.Second)
+				continue
 			} else {
-				return errors.New(fmt.Sprintf("Snapshot %s not marked for deletion but it should", v.SnapshotUuid.String())), true
+				logger.Error().Str("filesystem", v.FilesystemName).Msg("Filesystem not marked for deletion but it should")
+				return errors.New(fmt.Sprintf("Snapshot %s not marked for deletion but it should", v.SnapshotUuid.String()))
 			}
 		}
-		time.Sleep(time.Second)
 	}
-
-	logger.Info().Str("filesystem", v.FilesystemName).Str("snapshot", v.SnapshotName).Msg("Snapshot deleted successfully")
-	return nil, false
+	logger.Error().Str("filesystem", v.FilesystemName).Str("snapshot", v.SnapshotName).Str("volume_id", v.GetId()).Msg("Timeout deleting snapshot associated with volume")
+	return nil
 }
 
 // ObtainRequestParams takes additional optional params from storage class params and applies them to Volume object

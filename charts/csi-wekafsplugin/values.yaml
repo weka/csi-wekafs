@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.6.1
+csiDriverVersion: &csiDriverVersion 2.6.2-SNAPSHOT.24.28f28e5
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.15.0
@@ -184,3 +184,5 @@ pluginConfig:
     nfsProtocolVersion: "4.1"
   # -- Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false
   skipGarbageCollection: false
+  # -- Wait for WEKA filesystem / snapshot deletion before acknowledging the corresponding CSI volume deletion. Default false
+  waitForObjectDeletion: false

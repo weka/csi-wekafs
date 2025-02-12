@@ -123,6 +123,9 @@ spec:
           {{- if (.Values.pluginConfig.skipGarbageCollection | default false) }}
             - "--skipgarbagecollection"
           {{- end }}
+          {{- if (.Values.pluginConfig.waitForObjectDeletion | default false) }}
+            - "--waitforobjectdeletion"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
