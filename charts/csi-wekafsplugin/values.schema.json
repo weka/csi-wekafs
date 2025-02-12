@@ -307,6 +307,9 @@
                 },
                 "skipGarbageCollection": {
                     "type": "boolean"
+                },
+                "waitForObjectDeletion": {
+                    "type": "boolean"
                 }
             }
         },
