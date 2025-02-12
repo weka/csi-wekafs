@@ -1202,6 +1202,10 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 			return err
 		}
 
+		if v.isEncrypted() && fsObj != nil && !fsObj.IsEncrypted {
+			return status.Errorf(codes.InvalidArgument, "Cannot create encrypted snapshot-backed volume on unencrypted filesystem")
+		}
+
 		// create the snapshot actually
 		sr, err := apiclient.NewSnapshotCreateRequest(v.SnapshotName, v.SnapshotAccessPoint, fsObj.Uid, snapSrcUid, true)
 		if err != nil {
@@ -1227,6 +1231,21 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 		// if it was a snapshot and had inner path, it anyway should already exist.
 		// So creating inner path only in such case
+
+		if v.isEncrypted() {
+			if v.apiClient == nil {
+				return errors.New("cannot create encrypted volume without API binding")
+			}
+
+			fsObj, err := v.getFilesystemObj(ctx)
+
+			if err != nil {
+				return err
+			}
+			if !fsObj.IsEncrypted {
+				return status.Errorf(codes.InvalidArgument, "Cannot create encrypted directory-backed volume on unencrypted filesystem")
+			}
+		}
 
 		err, unmount := v.MountUnderlyingFS(ctx)
 		defer unmount()
@@ -1286,7 +1305,8 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 
 	if v.isEncrypted() {
 		if !v.isFilesystem() {
-			return apiclient.EncryptionParams{}, status.Errorf(codes.InvalidArgument, "Encryption is supported only for filesystem-backed volumes")
+			// encryption is only set for filesystems, snapshot- and directory-backed volumes are not setting those params
+			return encryptionParams, nil
 		}
 		if !v.server.getConfig().allowEncryptionWithoutKms && v.encryptWithoutKms {
 			return apiclient.EncryptionParams{}, status.Errorf(codes.InvalidArgument, "Creating encrypted filesystems without KMS server configuration is prohibited")
