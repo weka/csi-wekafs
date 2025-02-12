@@ -184,3 +184,5 @@ pluginConfig:
     nfsProtocolVersion: "4.1"
   # -- Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false
   skipGarbageCollection: false
+  # -- Wait for WEKA filesystem / snapshot deletion before acknowledging the corresponding CSI volume deletion. Default false
+  waitForObjectDeletion: false
