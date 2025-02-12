@@ -8,10 +8,8 @@ volumeBindingMode: Immediate
 allowVolumeExpansion: true
 parameters:
   volumeType: weka/v2  # this line can be ommitted completely
-
+  # encrypt the filesystems created by the CSI plugin. Requires KMS server to be configured on the WEKA cluster
   encryptionEnabled: "true"
-  manageEncryptionKeys: "false"  # this is not currently supported
-
   # name of the filesystem group to create FS in.
   filesystemGroupName: default
   # minimum size of filesystem to create (preallocate space for snapshots and derived volumes)
