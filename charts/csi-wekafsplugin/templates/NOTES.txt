@@ -43,3 +43,12 @@ https://github.com/weka/csi-wekafs/tree/master/examples
 | REFER TO WEKA CUSTOMER SUCCESS TEAM FOR RECOMMENDED CONFIGURATION AND BEST PRACTICES                     |
 ------------------------------------------------------------------------------------------------------------
 {{- end }}
+{{- if .Values.pluginConfig.encryption.allowEncryptionWithoutKms }}
+
+-------------------------------------------------- WARNING -------------------------------------------------
+| WARNING: FILESYSTEM ENCRYPTION IS ALLOWED WITHOUT KMS SERVER CONFIGURATION.                              |
+| THIS CONFIGURATION IS STRONGLY DISCOURAGED AND SHOULD BE USED FOR TESTING PURPOSES ONLY.                 |
+| RUNNING PRODUCTION WORKLOADS WITH FILESYSTEMS ENCRYPTED WITHOUT A KMS SERVER CONFIGURED ON WEKA CLUSTER  |
+| IS NOT CONSIDERED SECURE, NOT SUPPORTED AND MAY LEAD TO DATA LOSS IN CASE OF A CLUSTER RECOVERY          |
+------------------------------------------------------------------------------------------------------------
+{{- end }}
