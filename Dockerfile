@@ -29,7 +29,7 @@ RUN echo Building package
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/*
 FROM registry.k8s.io/kubernetes/kubectl:v${KUBECTL_VERSION} AS kubectl
 
-FROM alpine:3.18
+FROM alpine:3.21
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 
