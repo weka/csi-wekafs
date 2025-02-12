@@ -45,6 +45,7 @@ jobs:
           # These are regex patterns auto-wrapped in `^ $`.
           scopes: |
             deps
+            ci
             CSI-\d+
             WEKAPP-\d+
           # Configure that a scope must always be provided.
