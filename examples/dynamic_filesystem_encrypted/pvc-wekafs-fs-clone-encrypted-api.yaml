@@ -1,7 +1,7 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: pvc-wekafs-fs-snapshot-encrypted-api
+  name: pvc-wekafs-fs-clone-encrypted-api
 spec:
   accessModes:
     - ReadWriteMany
@@ -11,6 +11,6 @@ spec:
     requests:
       storage: 1Gi
   dataSource:
-    kind: VolumeSnapshot
-    name: snapshot-pvc-wekafs-fs-encrypted-api
-    apiGroup: snapshot.storage.k8s.io
+    kind: PersistentVolumeClaim
+    name: pvc-wekafs-fs-encrypted-api
+    apiGroup: ""
