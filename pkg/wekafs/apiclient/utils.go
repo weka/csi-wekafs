@@ -2,13 +2,16 @@ package apiclient
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
+	"github.com/showa-93/go-mask"
 	"hash/fnv"
 	"net"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -177,4 +180,54 @@ func GetNodeIpAddressByRouting(targetHost string) (string, error) {
 	}
 
 	return localIP, nil
+}
+
+func isValidIPv6Address(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	return ip != nil && ip.To4() == nil && ip.To16() != nil
+}
+
+func isValidIPv4Address(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	return ip != nil && ip.To4() != nil
+}
+
+func isValidHostname(hostname string) bool {
+	if len(hostname) > 253 {
+		return false
+	}
+
+	// Regex to match the general structure of a hostname.
+	// Each label must start and end with an alphanumeric character,
+	// may contain hyphens, and be 1 to 63 characters long.
+	hostnameRegex := regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$`)
+
+	return hostnameRegex.MatchString(hostname)
+}
+
+// marshalRequest converts interface to bytes
+func marshalRequest(r interface{}) (*[]byte, error) {
+	j, err := json.Marshal(r)
+	if err != nil {
+		return nil, err
+	}
+	return &j, nil
+}
+
+func maskPayload(payload string) string {
+	masker := mask.NewMasker()
+	masker.RegisterMaskStringFunc(mask.MaskTypeFilled, masker.MaskFilledString)
+	masker.RegisterMaskField("username", "filled4")
+	masker.RegisterMaskField("password", "filled4")
+	masker.RegisterMaskField("access_token", "filled4")
+	masker.RegisterMaskField("mount_token", "filled4")
+	masker.RegisterMaskField("refresh_token", "filled4")
+	var target any
+	err := json.Unmarshal([]byte(payload), &target)
+	if err != nil {
+		return payload
+	}
+	masked, _ := masker.Mask(target)
+	ret, _ := json.Marshal(masked)
+	return string(ret)
 }
