@@ -49,7 +49,6 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 		Str("cluster_version", clusterVersion).Msg("Successfully connected to cluster")
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for filesystem as CSI volume: %t", a.SupportsFilesystemAsVolume()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for quota directory as CSI volume: %t", a.SupportsQuotaDirectoryAsVolume()))
-	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for quota on non-empty CSI volume: %t", a.SupportsQuotaOnNonEmptyDirs()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for regular directory as CSI volume: %t", a.SupportsDirectoryAsVolume()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for authenticated filesystem mounts: %t", a.SupportsAuthenticatedMounts()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for new filesystem from snapshot: %t", a.SupportsNewFileSystemFromSnapshot()))

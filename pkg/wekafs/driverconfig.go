@@ -17,29 +17,29 @@ func (i *MutuallyExclusiveMountOptsStrings) Set(value string) error {
 }
 
 type DriverConfig struct {
-	DynamicVolPath                string
-	VolumePrefix                  string
-	SnapshotPrefix                string
-	SeedSnapshotPrefix            string
-	allowAutoFsCreation           bool
-	allowAutoFsExpansion          bool
-	allowSnapshotsOfLegacyVolumes bool
-	advertiseSnapshotSupport      bool
-	advertiseVolumeCloneSupport   bool
-	debugPath                     string
-	allowInsecureHttps            bool
-	alwaysAllowSnapshotVolumes    bool
-	mutuallyExclusiveOptions      []mutuallyExclusiveMountOptionSet
-	maxConcurrencyPerOp           map[string]int64
-	grpcRequestTimeout            time.Duration
-	allowProtocolContainers       bool
-	allowNfsFailback              bool
-	useNfs                        bool
-	interfaceGroupName            string
-	clientGroupName               string
-	nfsProtocolVersion            string
-	csiVersion                    string
-	skipGarbageCollection         bool
+	DynamicVolPath                   string
+	VolumePrefix                     string
+	SnapshotPrefix                   string
+	SeedSnapshotPrefix               string
+	allowAutoFsCreation              bool
+	allowAutoFsExpansion             bool
+	allowSnapshotsOfDirectoryVolumes bool
+	advertiseSnapshotSupport         bool
+	advertiseVolumeCloneSupport      bool
+	debugPath                        string
+	allowInsecureHttps               bool
+	alwaysAllowSnapshotVolumes       bool
+	mutuallyExclusiveOptions         []mutuallyExclusiveMountOptionSet
+	maxConcurrencyPerOp              map[string]int64
+	grpcRequestTimeout               time.Duration
+	allowProtocolContainers          bool
+	allowNfsFailback                 bool
+	useNfs                           bool
+	interfaceGroupName               string
+	clientGroupName                  string
+	nfsProtocolVersion               string
+	csiVersion                       string
+	skipGarbageCollection            bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -66,7 +66,7 @@ func (dc *DriverConfig) Log() {
 
 }
 func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
-	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfLegacyVolumes bool,
+	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfDirectoryVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
 	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
@@ -99,29 +99,29 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
 
 	return &DriverConfig{
-		DynamicVolPath:                dynamicVolPath,
-		VolumePrefix:                  VolumePrefix,
-		SnapshotPrefix:                SnapshotPrefix,
-		SeedSnapshotPrefix:            SeedSnapshotPrefix,
-		allowAutoFsCreation:           allowAutoFsCreation,
-		allowAutoFsExpansion:          allowAutoFsExpansion,
-		allowSnapshotsOfLegacyVolumes: allowSnapshotsOfLegacyVolumes,
-		advertiseSnapshotSupport:      !suppressnapshotSupport,
-		advertiseVolumeCloneSupport:   !suppressVolumeCloneSupport,
-		debugPath:                     debugPath,
-		allowInsecureHttps:            allowInsecureHttps,
-		alwaysAllowSnapshotVolumes:    alwaysAllowSnapshotVolumes,
-		mutuallyExclusiveOptions:      MutuallyExclusiveMountOptions,
-		maxConcurrencyPerOp:           concurrency,
-		grpcRequestTimeout:            grpcRequestTimeout,
-		allowProtocolContainers:       allowProtocolContainers,
-		allowNfsFailback:              allowNfsFailback,
-		useNfs:                        useNfs,
-		interfaceGroupName:            interfaceGroupName,
-		clientGroupName:               clientGroupName,
-		nfsProtocolVersion:            nfsProtocolVersion,
-		csiVersion:                    version,
-		skipGarbageCollection:         skipGarbageCollection,
+		DynamicVolPath:                   dynamicVolPath,
+		VolumePrefix:                     VolumePrefix,
+		SnapshotPrefix:                   SnapshotPrefix,
+		SeedSnapshotPrefix:               SeedSnapshotPrefix,
+		allowAutoFsCreation:              allowAutoFsCreation,
+		allowAutoFsExpansion:             allowAutoFsExpansion,
+		allowSnapshotsOfDirectoryVolumes: allowSnapshotsOfDirectoryVolumes,
+		advertiseSnapshotSupport:         !suppressnapshotSupport,
+		advertiseVolumeCloneSupport:      !suppressVolumeCloneSupport,
+		debugPath:                        debugPath,
+		allowInsecureHttps:               allowInsecureHttps,
+		alwaysAllowSnapshotVolumes:       alwaysAllowSnapshotVolumes,
+		mutuallyExclusiveOptions:         MutuallyExclusiveMountOptions,
+		maxConcurrencyPerOp:              concurrency,
+		grpcRequestTimeout:               grpcRequestTimeout,
+		allowProtocolContainers:          allowProtocolContainers,
+		allowNfsFailback:                 allowNfsFailback,
+		useNfs:                           useNfs,
+		interfaceGroupName:               interfaceGroupName,
+		clientGroupName:                  clientGroupName,
+		nfsProtocolVersion:               nfsProtocolVersion,
+		csiVersion:                       version,
+		skipGarbageCollection:            skipGarbageCollection,
 	}
 }
 

@@ -24,7 +24,6 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	DirectoryAsCSIVolume:           "v3.0",  // can create CSI volume from directory, without quota support
 	FilesystemAsVolume:             "v3.13", // can create CSI volume from filesystem
 	QuotaDirectoryAsVolume:         "v3.13", // can create CSI volume from directory with quota support
-	QuotaOnNonEmptyDirs:            "v9.99", // can enable quota on legacy CSI volume (directory) without quota support
 	QuotaOnSnapshot:                "v4.2",  // can create a valid quota on snapshot
 	MountFilesystemsUsingAuthToken: "v3.14", // can mount filesystems that require authentication (and non-root orgID)
 	NewFilesystemFromSnapshot:      "v9.99", // can create new filesystem from snapshot on storage side
@@ -39,7 +38,6 @@ type WekaCompatibilityMap struct {
 	FilesystemAsCSIVolume           bool
 	DirectoryAsCSIVolume            bool
 	QuotaOnDirectoryVolume          bool
-	QuotaSetOnNonEmptyVolume        bool
 	QuotaOnSnapshot                 bool
 	MountFilesystemsUsingAuthToken  bool
 	CreateNewFilesystemFromSnapshot bool
@@ -57,7 +55,6 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.DirectoryAsCSIVolume = true
 		cm.FilesystemAsCSIVolume = false
 		cm.QuotaOnDirectoryVolume = false
-		cm.QuotaSetOnNonEmptyVolume = false
 		cm.MountFilesystemsUsingAuthToken = false
 		cm.CreateNewFilesystemFromSnapshot = false
 		cm.CloneFilesystem = false
@@ -71,7 +68,6 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	d, _ := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
 	f, _ := version.NewVersion(MinimumSupportedWekaVersions.FilesystemAsVolume)
 	q, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
-	n, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnNonEmptyDirs)
 	a, _ := version.NewVersion(MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken)
 	s, _ := version.NewVersion(MinimumSupportedWekaVersions.NewFilesystemFromSnapshot)
 	c, _ := version.NewVersion(MinimumSupportedWekaVersions.CloneFilesystem)
@@ -84,7 +80,6 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
 	cm.QuotaOnDirectoryVolume = v.GreaterThanOrEqual(q)
-	cm.QuotaSetOnNonEmptyVolume = v.GreaterThanOrEqual(n)
 	cm.MountFilesystemsUsingAuthToken = v.GreaterThanOrEqual(a)
 	cm.CreateNewFilesystemFromSnapshot = v.GreaterThanOrEqual(s)
 	cm.CloneFilesystem = v.GreaterThanOrEqual(c)
@@ -97,10 +92,6 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
 	return a.CompatibilityMap.QuotaOnDirectoryVolume
-}
-
-func (a *ApiClient) SupportsQuotaOnNonEmptyDirs() bool {
-	return a.CompatibilityMap.QuotaSetOnNonEmptyVolume
 }
 
 func (a *ApiClient) SupportsQuotaOnSnapshots() bool {
