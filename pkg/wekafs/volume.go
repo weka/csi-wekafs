@@ -1654,7 +1654,7 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 	}
 	if val, ok := params["encryptWithoutKms"]; ok {
 		if !v.encrypted {
-			return errors.New("manageEncryptionKeys is only supported for encrypted volumes")
+			return errors.New("encryptWithoutKms is only supported for encrypted volumes")
 		}
 
 		encryptWithoutKms, err := strconv.ParseBool(val)

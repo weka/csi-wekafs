@@ -37,7 +37,7 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	NewNodeApiObjectPath:           "v4.2",   // new API object paths (processes, containers, etc.)
 	EncryptionWithNoKms:            "v4.0",   // can create encrypted filesystems without KMS
 	EncryptionWithClusterKey:       "v4.0",   // can create encrypted filesystems with common cluster-wide key
-	EncryptionWithCustomSettings:   "v4.4.0", // can create encrypted filesystems with custom settings (key per filesystem(s))
+	EncryptionWithCustomSettings:   "v4.4.1", // can create encrypted filesystems with custom settings (key per filesystem(s))
 }
 
 type WekaCompatibilityMap struct {
