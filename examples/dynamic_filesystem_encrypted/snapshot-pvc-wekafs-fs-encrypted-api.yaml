@@ -3,6 +3,6 @@ kind: VolumeSnapshot
 metadata:
   name: snapshot-pvc-wekafs-fs-encrypted-api
 spec:
-  volumeSnapshotClassName: snapshotclass-csi-wekafs
+  volumeSnapshotClassName: snapshotclass-csi-wekafs-encrypted
   source:
     persistentVolumeClaimName: pvc-wekafs-fs-encrypted-api
