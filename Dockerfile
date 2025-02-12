@@ -1,4 +1,5 @@
 ARG KUBECTL_VERSION=1.31.2
+ARG UBI_HASH=9.5-1736404036
 FROM golang:1.23-alpine AS go-builder
 ARG TARGETARCH
 ARG TARGETOS
@@ -29,15 +30,29 @@ RUN echo Building package
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/*
 FROM registry.k8s.io/kubernetes/kubectl:v${KUBECTL_VERSION} AS kubectl
 
-FROM alpine:3.18
+FROM registry.access.redhat.com/ubi9/ubi:${UBI_HASH} AS ubibuilder
+ARG RHACTIVATIONORGID
+ARG RHACTIVATIONKEY
+RUN test -n $RHACTIVATIONORGID || (echo "RHACTIVATIONORGID is required" && false)
+RUN test -n $RHACTIVATIONKEY || (echo "RHACTIVATIONKEY is required" && false)
+RUN subscription-manager register --org=$RHACTIVATIONORGID --activationkey=$RHACTIVATIONKEY
+RUN subscription-manager repos --disable=*
+RUN subscription-manager repos --enable=rhel-9-for-$(uname -m)-baseos-rpms --enable=rhel-9-for-$(uname -m)-appstream-rpms
+RUN dnf install -y util-linux libselinux-utils pciutils binutils jq procps less selinux-policy-devel container-selinux nfs-utils
+RUN subscription-manager unregister
+RUN subscription-manager clean
+RUN dnf clean all && rm -rf /var/cache/dnf
+
+FROM ubibuilder AS selinux
+ADD selinux/csi-wekafs.te /tmp/csi-wekafs.te
+RUN checkmodule -M -m -C -o /tmp/csi-wekafs.cil /tmp/csi-wekafs.te
+RUN semodule -i /tmp/csi-wekafs.cil
+RUN rm -f /tmp/csi-wekafs.te /tmp/csi-wekafs.cil
+
+FROM selinux
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 
-RUN apk add --no-cache util-linux libselinux libselinux-utils util-linux  \
-    pciutils usbutils coreutils binutils findutils  \
-    grep bash nfs-utils rpcbind ca-certificates jq
-# Update CA certificates
-RUN update-ca-certificates
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
 LABEL maintainer="csi@weka.io"
