@@ -279,7 +279,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 	}
 	if sourceVol.hasInnerPath() && !server.getConfig().allowSnapshotsOfDirectoryVolumes {
 		// block cloning of snapshots from legacy volumes, as it wastes space
-		return nil, status.Errorf(codes.FailedPrecondition, "Cloning is not supported for Legacy CSI volumes")
+		return nil, status.Errorf(codes.FailedPrecondition, "Cloning is prohibited for directory-backed volumes, refer to WEKA CSI Plugin documentation for additional information")
 	}
 
 	// we assume the following when cloning a volume from existing volume:
