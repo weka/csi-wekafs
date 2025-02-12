@@ -97,6 +97,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not obtain volume parameters from request")
 	}
+	volume.enrichWithEncryptionParams(ctx)
 
 	volume.pruneUnsupportedMountOptions(ctx)
 
