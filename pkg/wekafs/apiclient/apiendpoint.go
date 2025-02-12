@@ -52,7 +52,8 @@ func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
 		}
 
 		if !isValidIPv4Address(ip) && !isValidIPv6Address(ip) && !isValidHostname(ip) {
-			log.Ctx(ctx).Error().Str("ip", ip).Msg("Cannot determine a valid hostname, IPv4 or IPv6 address, skipping endpoint")
+			log.Ctx(ctx).Error().Str("ip", ip).Str("port", port).Str("raw_endpoint", e).
+				Msg("Cannot determine a valid hostname, IPv4 or IPv6 address, skipping endpoint")
 			continue
 		}
 
