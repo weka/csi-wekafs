@@ -321,6 +321,14 @@ func (driver *WekaFsDriver) Run() {
 		// bring up node part
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+		defer stop()
+		go func() {
+			<-ctx.Done()
+			log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
+			driver.CleanupNodeLabels()
+			log.Info().Msg("Cleanup completed.")
+		}()
 	} else {
 		driver.ns = &NodeServer{}
 	}
@@ -328,6 +336,21 @@ func (driver *WekaFsDriver) Run() {
 	s := NewNonBlockingGRPCServer(driver.csiMode)
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
+}
+
+func (d *WekaFsDriver) CleanupNodeLabels() {
+	if d.config.isInDevMode() {
+		return
+	}
+	nodeLabelsToRemove := []string{TopologyLabelWeka, TopologyLabelNode, TopologyKeyNode, d.GetTopologyLabel()}
+	for i, label := range nodeLabelsToRemove {
+		nodeLabelsToRemove[i] = fmt.Sprintf("%s-", label)
+	}
+	labelsString := strings.Join(nodeLabelsToRemove, " ")
+	output, err := exec.Command("/bin/kubectl", "label", "node", d.nodeID, labelsString).Output()
+	if err != nil {
+		log.Error().Err(err).Str("output", string(output)).Msg("Failed to remove labels from node")
+	}
 }
 
 type CsiPluginMode string
