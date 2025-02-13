@@ -71,7 +71,7 @@ spec:
             - bash
           args:
             - -c
-            - kubectl label node $NODENAME "topology.csi.weka.io/transport-" &> /dev/null; kubectl get node $NODENAME -o json | jq '.metadata' > /etc/nodeinfo/metadata
+            - kubectl label node "$NODENAME" $(kubectl get node "$NODENAME" --show-labels | tr ',' '\n' | grep '^topology.csi.weka.io' | sed 's/=.*/-/') &> /dev/null; kubectl get node $NODENAME -o json | jq '.metadata' > /etc/nodeinfo/metadata
       containers:
         - name: wekafs
           securityContext:
