@@ -52,6 +52,9 @@ type Volume struct {
 	enforceCapacity       bool
 	initialFilesystemSize int64
 	mountOptions          MountOptions
+	encrypted             bool
+	manageEncryptionKeys  bool
+	encryptWithoutKms     bool
 
 	srcVolume   *Volume
 	srcSnapshot *Snapshot
@@ -163,6 +166,11 @@ func (v *Volume) hasInnerPath() bool {
 // isFilesystem returns true if the volume is an FS (not snapshot or directory)
 func (v *Volume) isFilesystem() bool {
 	return !v.isOnSnapshot() && !v.hasInnerPath()
+}
+
+// isEncrypted returns true if the volume is encrypted
+func (v *Volume) isEncrypted() bool {
+	return v.encrypted
 }
 
 // hasUnderlyingSnapshots returns True if volume is a FS (not its snapshot) and has any weka snapshots beneath it
@@ -1156,6 +1164,12 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	if capacity > maxStorageCapacity {
 		return status.Errorf(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
 	}
+
+	encryptionParams, err := v.ensureEncryptionParams(ctx)
+	if err != nil {
+		return err
+	}
+
 	if v.isFilesystem() {
 		// filesystem size might be larger than free space, check it
 		fsSize := Max(capacity, v.initialFilesystemSize)
@@ -1168,7 +1182,8 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 		// this is a new blank volume by definition
 		// create the filesystem actually
-		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize)
+
+		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize, encryptionParams)
 		if err != nil {
 			return status.Errorf(codes.Internal, "Failed to create filesystem %s: %s", v.FilesystemName, err.Error())
 		}
@@ -1185,6 +1200,10 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		fsObj, err := v.getFilesystemObj(ctx)
 		if err != nil {
 			return err
+		}
+
+		if v.isEncrypted() && fsObj != nil && !fsObj.IsEncrypted {
+			return status.Errorf(codes.InvalidArgument, "Cannot create encrypted snapshot-backed volume on unencrypted filesystem")
 		}
 
 		// create the snapshot actually
@@ -1212,6 +1231,21 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 		// if it was a snapshot and had inner path, it anyway should already exist.
 		// So creating inner path only in such case
+
+		if v.isEncrypted() {
+			if v.apiClient == nil {
+				return errors.New("cannot create encrypted volume without API binding")
+			}
+
+			fsObj, err := v.getFilesystemObj(ctx)
+
+			if err != nil {
+				return err
+			}
+			if !fsObj.IsEncrypted {
+				return status.Errorf(codes.InvalidArgument, "Cannot create encrypted directory-backed volume on unencrypted filesystem")
+			}
+		}
 
 		err, unmount := v.MountUnderlyingFS(ctx)
 		defer unmount()
@@ -1260,6 +1294,47 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	}
 	logger.Info().Str("filesystem", v.FilesystemName).Msg("Created volume successfully")
 	return nil
+}
+
+func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.EncryptionParams, error) {
+	encryptionParams := apiclient.EncryptionParams{
+		Encrypted:  v.isEncrypted(),
+		AllowNoKms: v.encryptWithoutKms,
+		//TODO: add KMS keys on Phase 2
+	}
+
+	if v.isEncrypted() {
+		if !v.isFilesystem() {
+			// encryption is only set for filesystems, snapshot- and directory-backed volumes are not setting those params
+			return encryptionParams, nil
+		}
+		if !v.server.getConfig().allowEncryptionWithoutKms && v.encryptWithoutKms {
+			return apiclient.EncryptionParams{}, status.Errorf(codes.InvalidArgument, "Creating encrypted filesystems without KMS server configuration is prohibited")
+		}
+		if !v.apiClient.SupportsEncryptionWithCommonKey() {
+			return apiclient.EncryptionParams{}, status.Errorf(codes.Internal, "Encryption is not supported on the cluster")
+		}
+
+		if v.manageEncryptionKeys {
+			// TODO: remove this line when encryption keys per filesystem is supported
+			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported yet")
+
+			// flow for encryption keys per filesystem
+			if !v.apiClient.SupportsCustomEncryptionSettings() {
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported on the cluster")
+			}
+			if !v.apiClient.AllowsCustomEncryptionSettings(ctx) {
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support encryption keys per filesystem")
+			}
+		} else {
+			if !v.apiClient.IsEncryptionEnabled(ctx) {
+				if !v.encryptWithoutKms {
+					return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption is not enabled on the cluster")
+				}
+			}
+		}
+	}
+	return encryptionParams, nil
 }
 
 func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
@@ -1577,6 +1652,36 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 			return err
 		}
 		v.initialFilesystemSize = int64(raw) * int64(math.Pow10(9))
+	}
+
+	// obtain encryption parameters
+	if val, ok := params["encryptionEnabled"]; ok {
+		encrypted, err := strconv.ParseBool(val)
+		if err != nil {
+			return errors.Join(err, errors.New("failed to parse 'encrypted' parameter"))
+		}
+		v.encrypted = encrypted
+	}
+	if val, ok := params["manageEncryptionKeys"]; ok {
+		if !v.encrypted {
+			return errors.New("manageEncryptionKeys is only supported for encrypted volumes")
+		}
+		manageKeys, err := strconv.ParseBool(val)
+		if err != nil {
+			return errors.Join(err, errors.New("failed to parse 'manageEncryptionKeys' parameter"))
+		}
+		v.manageEncryptionKeys = manageKeys
+	}
+	if val, ok := params["encryptWithoutKms"]; ok {
+		if !v.encrypted {
+			return errors.New("encryptWithoutKms is only supported for encrypted volumes")
+		}
+
+		encryptWithoutKms, err := strconv.ParseBool(val)
+		if err != nil {
+			return errors.Join(err, errors.New("failed to parse 'encryptWithoutKms' parameter"))
+		}
+		v.encryptWithoutKms = encryptWithoutKms
 	}
 	return nil
 }

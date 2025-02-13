@@ -98,6 +98,7 @@ var (
 	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
 	skipGarbageCollection                = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
 	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
+	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	// Set by the build process
 	version = ""
 )
@@ -232,6 +233,7 @@ func handle() {
 		version,
 		*skipGarbageCollection,
 		*waitForObjectDeletion,
+		*allowEncryptionWithoutKms,
 	)
 	driver, err := wekafs.NewWekaFsDriver(
 		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
