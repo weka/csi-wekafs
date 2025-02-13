@@ -228,7 +228,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: KUBELET_REGISTRATION_PATH
-              value: "{{ (.Values.kubeletPath | default "/var/lib/kubelet") | toString }}/plugins/csi-wekafs-node/csi.sock"
+              value: "{{ (.Values.kubeletPath | default "/var/lib/kubelet") | toString }}/plugins/{{ .Release.Name }}-node/csi.sock"
 
           volumeMounts:
             - mountPath: /csi
@@ -255,7 +255,7 @@ spec:
             type: Directory
           name: plugins-dir
         - hostPath:
-            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/csi-wekafs-node
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/{{ .Release.Name }}-node
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:
