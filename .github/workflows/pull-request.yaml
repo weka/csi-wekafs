@@ -69,6 +69,21 @@ jobs:
         run: |
           out="$(echo "${{ steps.auto_version.outputs.version }}" | sed 's/^v//1')"
           echo "helm_version=$out" >> $GITHUB_OUTPUT
+      - name: Prepare changes list
+        id: prepare_changes
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0)
+          TAG_DATE=$(git log -1 --format=%aI $LATEST_TAG)
+          out="$(gh pr list --base dev --state merged --json number,title,mergedAt,labels --limit 100 | \
+          jq -r --arg TAG_DATE "$TAG_DATE" '.[] | select(.mergedAt > $TAG_DATE) |
+          . as $pr |
+          ($pr.labels | map(select(.name == "fix" or .name == "enhancement" or .name == "documentation" or .name == "feature" or .name == "dependencies")) | map(.name) | join(",")) as $filtered_labels |
+          if $filtered_labels != "" then
+          "\($pr.title)|\($pr.number)|\($filtered_labels)"
+          else empty end')" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+
       - name: Update Helm chart version
         uses: mikefarah/yq@master
         with:
@@ -81,6 +96,34 @@ jobs:
             yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
             yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
+            idx=0
+            for line in "${{ steps.prepare_changes.outputs.changes }}"; do
+              labels=$(echo $line | cut -d '|' -f3 | tr ',' ' ')
+              description=$(echo $line | cut -d '|' -f1)
+              pr_url_base=https://github.com/weka/csi-wekafs/pull/
+              pr_id=$(echo $line | cut -d '|' -f2)
+              kind=
+              for label in $labels; do
+                case $label in
+                  enhancement|feature)
+                    kind=added;;
+                  fix)
+                    kind=fixed;;
+                  documentation|ci|dependencies|refactor)
+                    kind=changed;;
+                  breaking)
+                    kind=removed;;
+                  *)
+                    continue;;
+                esac
+                yq -i '.annotations."artifacthub.io/changes['$idx'].description" = "'$description'"' $BASEDIR/Chart.yaml
+                yq -i '.annotations."artifacthub.io/changes['$idx'].kind" = "'$kind'"' $BASEDIR/Chart.yaml
+                yq -i '.annotations."artifacthub.io/changes['$idx'].links[0].url" = "'$pr_url_base/$pr_id'"' $BASEDIR/Chart.yaml
+                yq -i '.annotations."artifacthub.io/changes['$idx'].links[0].name" = "PR #$pr_id"' $BASEDIR/Chart.yaml
+
+              done
+              idx=$(($idx+1))
+            done
             echo ------------------ values ------------------
             cat $BASEDIR/values.yaml
             echo --------------------chart ------------------
