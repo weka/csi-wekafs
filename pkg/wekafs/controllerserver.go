@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -284,7 +285,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 				VolumeContext:      params,
 				ContentSource:      volume.getCsiContentSource(ctx),
-				AccessibleTopology: generateAccessibleTopology(),
+				AccessibleTopology: cs.generateAccessibleTopology(),
 			},
 		}, nil
 	} else if volExists && err == nil {
@@ -300,7 +301,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 					CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 					VolumeContext:      params,
 					ContentSource:      volume.getCsiContentSource(ctx),
-					AccessibleTopology: generateAccessibleTopology(),
+					AccessibleTopology: cs.generateAccessibleTopology(),
 				},
 			}, nil
 
@@ -322,14 +323,16 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 			VolumeContext:      params,
 			ContentSource:      volume.getCsiContentSource(ctx),
-			AccessibleTopology: generateAccessibleTopology(),
+			AccessibleTopology: cs.generateAccessibleTopology(),
 		},
 	}, nil
 }
 
-func generateAccessibleTopology() []*csi.Topology {
+func (cs *ControllerServer) generateAccessibleTopology() []*csi.Topology {
 	accessibleTopology := make(map[string]string)
 	accessibleTopology[TopologyLabelWeka] = "true"
+	TopologyLabelForCurrentDriver := path.Join(TopologyLabelPrefixDriver, cs.getConfig().GetDriver().name)
+	accessibleTopology[TopologyLabelForCurrentDriver] = "true"
 	return []*csi.Topology{
 		{
 			Segments: accessibleTopology,
