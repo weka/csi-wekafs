@@ -18,28 +18,32 @@ type WekaCompatibilityRequiredVersions struct {
 	SyncOnCloseMountOption         string
 	SingleClientMultipleClusters   string
 	NewNodeApiObjectPath           string
+	EncryptionWithNoKms            string
+	EncryptionWithClusterKey       string
+	EncryptionWithCustomSettings   string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
-	DirectoryAsCSIVolume:           "v3.0",  // can create CSI volume from directory, without quota support
-	FilesystemAsVolume:             "v3.13", // can create CSI volume from filesystem
-	QuotaDirectoryAsVolume:         "v3.13", // can create CSI volume from directory with quota support
-	QuotaOnNonEmptyDirs:            "v9.99", // can enable quota on legacy CSI volume (directory) without quota support
-	QuotaOnSnapshot:                "v4.2",  // can create a valid quota on snapshot
-	MountFilesystemsUsingAuthToken: "v3.14", // can mount filesystems that require authentication (and non-root orgID)
-	NewFilesystemFromSnapshot:      "v9.99", // can create new filesystem from snapshot on storage side
-	CloneFilesystem:                "v9.99", // can clone a volume directly on storage side
-	UrlQueryParams:                 "v4.0",  // can perform URL query by fields
-	SyncOnCloseMountOption:         "v4.2",  // can perform sync_on_close mount option
-	SingleClientMultipleClusters:   "v4.2",  // single client can have multiple Weka cluster connections
-	NewNodeApiObjectPath:           "v4.2",  // new API object paths (processes, containers, etc.)
+	DirectoryAsCSIVolume:           "v3.0",   // can create CSI volume from directory, without quota support
+	FilesystemAsVolume:             "v3.13",  // can create CSI volume from filesystem
+	QuotaDirectoryAsVolume:         "v3.13",  // can create CSI volume from directory with quota support
+	QuotaOnSnapshot:                "v4.2",   // can create a valid quota on snapshot
+	MountFilesystemsUsingAuthToken: "v3.14",  // can mount filesystems that require authentication (and non-root orgID)
+	NewFilesystemFromSnapshot:      "v9.99",  // can create new filesystem from snapshot on storage side
+	CloneFilesystem:                "v9.99",  // can clone a volume directly on storage side
+	UrlQueryParams:                 "v4.0",   // can perform URL query by fields
+	SyncOnCloseMountOption:         "v4.2",   // can perform sync_on_close mount option
+	SingleClientMultipleClusters:   "v4.2",   // single client can have multiple Weka cluster connections
+	NewNodeApiObjectPath:           "v4.2",   // new API object paths (processes, containers, etc.)
+	EncryptionWithNoKms:            "v4.0",   // can create encrypted filesystems without KMS
+	EncryptionWithClusterKey:       "v4.0",   // can create encrypted filesystems with common cluster-wide key
+	EncryptionWithCustomSettings:   "v4.4.1", // can create encrypted filesystems with custom settings (key per filesystem(s))
 }
 
 type WekaCompatibilityMap struct {
 	FilesystemAsCSIVolume           bool
 	DirectoryAsCSIVolume            bool
 	QuotaOnDirectoryVolume          bool
-	QuotaSetOnNonEmptyVolume        bool
 	QuotaOnSnapshot                 bool
 	MountFilesystemsUsingAuthToken  bool
 	CreateNewFilesystemFromSnapshot bool
@@ -48,6 +52,9 @@ type WekaCompatibilityMap struct {
 	SyncOnCloseMountOption          bool
 	SingleClientMultipleClusters    bool
 	NewNodeApiObjectPath            bool
+	EncryptionWithNoKms             bool
+	EncryptionWithClusterKey        bool
+	EncryptionWithCustomSettings    bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -57,7 +64,6 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.DirectoryAsCSIVolume = true
 		cm.FilesystemAsCSIVolume = false
 		cm.QuotaOnDirectoryVolume = false
-		cm.QuotaSetOnNonEmptyVolume = false
 		cm.MountFilesystemsUsingAuthToken = false
 		cm.CreateNewFilesystemFromSnapshot = false
 		cm.CloneFilesystem = false
@@ -66,12 +72,15 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.SyncOnCloseMountOption = false
 		cm.SingleClientMultipleClusters = false
 		cm.NewNodeApiObjectPath = false
+		cm.EncryptionWithNoKms = false
+		cm.EncryptionWithClusterKey = false
+		cm.EncryptionWithCustomSettings = false
+
 		return
 	}
 	d, _ := version.NewVersion(MinimumSupportedWekaVersions.DirectoryAsCSIVolume)
 	f, _ := version.NewVersion(MinimumSupportedWekaVersions.FilesystemAsVolume)
 	q, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
-	n, _ := version.NewVersion(MinimumSupportedWekaVersions.QuotaOnNonEmptyDirs)
 	a, _ := version.NewVersion(MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken)
 	s, _ := version.NewVersion(MinimumSupportedWekaVersions.NewFilesystemFromSnapshot)
 	c, _ := version.NewVersion(MinimumSupportedWekaVersions.CloneFilesystem)
@@ -80,11 +89,13 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	sc, _ := version.NewVersion(MinimumSupportedWekaVersions.SyncOnCloseMountOption)
 	mc, _ := version.NewVersion(MinimumSupportedWekaVersions.SingleClientMultipleClusters)
 	nn, _ := version.NewVersion(MinimumSupportedWekaVersions.NewNodeApiObjectPath)
+	en, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithNoKms)
+	ec, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithClusterKey)
+	ecc, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithCustomSettings)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
 	cm.QuotaOnDirectoryVolume = v.GreaterThanOrEqual(q)
-	cm.QuotaSetOnNonEmptyVolume = v.GreaterThanOrEqual(n)
 	cm.MountFilesystemsUsingAuthToken = v.GreaterThanOrEqual(a)
 	cm.CreateNewFilesystemFromSnapshot = v.GreaterThanOrEqual(s)
 	cm.CloneFilesystem = v.GreaterThanOrEqual(c)
@@ -93,14 +104,13 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.SyncOnCloseMountOption = v.GreaterThanOrEqual(sc)
 	cm.SingleClientMultipleClusters = v.GreaterThanOrEqual(mc)
 	cm.NewNodeApiObjectPath = v.GreaterThanOrEqual(nn)
+	cm.EncryptionWithNoKms = v.GreaterThanOrEqual(en)
+	cm.EncryptionWithClusterKey = v.GreaterThanOrEqual(ec)
+	cm.EncryptionWithCustomSettings = v.GreaterThanOrEqual(ecc)
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
 	return a.CompatibilityMap.QuotaOnDirectoryVolume
-}
-
-func (a *ApiClient) SupportsQuotaOnNonEmptyDirs() bool {
-	return a.CompatibilityMap.QuotaSetOnNonEmptyVolume
 }
 
 func (a *ApiClient) SupportsQuotaOnSnapshots() bool {
@@ -137,6 +147,18 @@ func (a *ApiClient) SupportsSyncOnCloseMountOption() bool {
 
 func (a *ApiClient) SupportsMultipleClusters() bool {
 	return a.CompatibilityMap.SingleClientMultipleClusters
+}
+
+func (a *ApiClient) SupportsEncryptionWithNoKms() bool {
+	return a.CompatibilityMap.EncryptionWithNoKms
+}
+
+func (a *ApiClient) SupportsEncryptionWithCommonKey() bool {
+	return a.CompatibilityMap.EncryptionWithClusterKey
+}
+
+func (a *ApiClient) SupportsCustomEncryptionSettings() bool {
+	return a.CompatibilityMap.EncryptionWithCustomSettings
 }
 
 func (a *ApiClient) RequiresNewNodePath() bool {

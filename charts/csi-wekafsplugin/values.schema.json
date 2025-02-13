@@ -262,6 +262,14 @@
                         }
                     }
                 },
+                "encryption": {
+                    "type": "object",
+                    "properties": {
+                        "allowEncryptionWithoutKms": {
+                            "type": "boolean"
+                        }
+                    }
+                },
                 "fsGroupPolicy": {
                     "type": "string"
                 },

@@ -126,6 +126,9 @@ spec:
           {{- if (.Values.pluginConfig.waitForObjectDeletion | default false) }}
             - "--waitforobjectdeletion"
           {{- end }}
+          {{- if .Values.pluginConfig.encryption.allowEncryptionWithoutKms}}
+            - "--allowencryptionwithoutkms"
+          {{- end}}
           ports:
             - containerPort: 9898
               name: healthz
@@ -343,7 +346,7 @@ spec:
       {{- end }}
       volumes:
         - hostPath:
-            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/csi-wekafs-controller
+            path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/{{ .Release.Name }}-controller
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:
