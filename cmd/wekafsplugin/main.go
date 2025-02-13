@@ -235,11 +235,11 @@ func handle() {
 		*waitForObjectDeletion,
 		*allowEncryptionWithoutKms,
 	)
-	driver, err := wekafs.NewWekaFsDriver(
-		*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)
 	}
+	config.SetDriver(driver)
 	driver.Run()
 }

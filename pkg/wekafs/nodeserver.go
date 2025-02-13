@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -41,6 +42,7 @@ const (
 	TopologyLabelNode                = "topology.csi.weka.io/node"
 	TopologyLabelWeka                = "topology.csi.weka.io/global"
 	TopologyLabelTransport           = "topology.csi.weka.io/transport"
+	TopologyLabelPrefixDriver        = "topology.csi.weka.io/driver"
 	WekaKernelModuleName             = "wekafsgw"
 	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
 )
@@ -517,12 +519,14 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+	TopologyLabelForCurrentDriver := path.Join(TopologyLabelPrefixDriver, ns.getConfig().GetDriver().name)
 	topology := &csi.Topology{
 		Segments: map[string]string{
-			TopologyKeyNode:        ns.nodeID, // required exactly same way as this is how node is accessed by K8s
-			TopologyLabelNode:      ns.nodeID,
-			TopologyLabelWeka:      "true",
-			TopologyLabelTransport: string(ns.getMounter().getTransport()),
+			TopologyKeyNode:               ns.nodeID, // required exactly same way as this is how node is accessed by K8s
+			TopologyLabelNode:             ns.nodeID,
+			TopologyLabelWeka:             "true",
+			TopologyLabelTransport:        string(ns.getMounter().getTransport()),
+			TopologyLabelForCurrentDriver: "true",
 		},
 	}
 
