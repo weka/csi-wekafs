@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
