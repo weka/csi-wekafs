@@ -519,14 +519,13 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
-	TopologyLabelForCurrentDriver := path.Join(TopologyLabelPrefixDriver, ns.getConfig().GetDriver().name)
 	topology := &csi.Topology{
 		Segments: map[string]string{
-			TopologyKeyNode:               ns.nodeID, // required exactly same way as this is how node is accessed by K8s
-			TopologyLabelNode:             ns.nodeID,
-			TopologyLabelWeka:             "true",
-			TopologyLabelTransport:        string(ns.getMounter().getTransport()),
-			TopologyLabelForCurrentDriver: "true",
+			TopologyKeyNode:        ns.nodeID, // required exactly same way as this is how node is accessed by K8s
+			TopologyLabelNode:      ns.nodeID,
+			TopologyLabelWeka:      "true",
+			TopologyLabelTransport: string(ns.getMounter().getTransport()),
+			ns.getConfig().GetDriver().GetTopologyLabel(): "true",
 		},
 	}
 

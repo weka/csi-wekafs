@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
-	"path"
 	"strings"
 	"sync"
 	"time"
@@ -331,8 +330,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 func (cs *ControllerServer) generateAccessibleTopology() []*csi.Topology {
 	accessibleTopology := make(map[string]string)
 	accessibleTopology[TopologyLabelWeka] = "true"
-	TopologyLabelForCurrentDriver := path.Join(TopologyLabelPrefixDriver, cs.getConfig().GetDriver().name)
-	accessibleTopology[TopologyLabelForCurrentDriver] = "true"
+	accessibleTopology[cs.getConfig().GetDriver().GetTopologyLabel()] = "true"
 	return []*csi.Topology{
 		{
 			Segments: accessibleTopology,

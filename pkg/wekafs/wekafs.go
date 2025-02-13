@@ -25,8 +25,12 @@ import (
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
 	"os"
+	"os/exec"
+	"os/signal"
+	"path"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 var DefaultVolumePermissions fs.FileMode = 0750
@@ -50,6 +54,10 @@ type WekaFsDriver struct {
 	config         *DriverConfig
 }
 
+func (d *WekaFsDriver) GetTopologyLabel() string {
+	return path.Join(TopologyLabelPrefixDriver, d.name)
+}
+
 type VolumeType string
 
 var (
@@ -60,10 +68,10 @@ var (
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
 	sync.Mutex
-	apis     map[uint32]*apiclient.ApiClient
-	legacySecrets      *map[string]string
-	config   *DriverConfig
-	Hostname string
+	apis          map[uint32]*apiclient.ApiClient
+	legacySecrets *map[string]string
+	config        *DriverConfig
+	Hostname      string
 }
 
 // Die used to intentionally panic and exit, while updating termination log
