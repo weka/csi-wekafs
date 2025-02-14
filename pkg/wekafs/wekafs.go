@@ -375,7 +375,7 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 
 	for _, label := range labelsToRemove {
 		delete(node.Labels, label)
-		log.Info().Str("label", label).Msg("Removing label from node")
+		log.Info().Str("label", label).Str("node", node.Name).Msg("Removing label from node")
 	}
 
 	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
