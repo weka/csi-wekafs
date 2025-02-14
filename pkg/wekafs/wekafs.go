@@ -54,10 +54,6 @@ type WekaFsDriver struct {
 	config         *DriverConfig
 }
 
-func (d *WekaFsDriver) GetTopologyLabel() string {
-	return path.Join(TopologyLabelPrefixDriver, d.name)
-}
-
 type VolumeType string
 
 var (
