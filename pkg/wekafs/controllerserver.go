@@ -329,8 +329,10 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 func (cs *ControllerServer) generateAccessibleTopology() []*csi.Topology {
 	accessibleTopology := make(map[string]string)
-	accessibleTopology[TopologyLabelWeka] = "true"
-	accessibleTopology[cs.getConfig().GetDriver().GetTopologyLabel()] = "true"
+	driverName := cs.getConfig().GetDriver().name
+	localWekaLabel := fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)
+	accessibleTopology[TopologyLabelWekaGlobal] = "true"
+	accessibleTopology[localWekaLabel] = "true"
 	return []*csi.Topology{
 		{
 			Segments: accessibleTopology,
