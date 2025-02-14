@@ -24,10 +24,11 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"os"
-	"os/exec"
 	"os/signal"
-	"path"
 	"strings"
 	"sync"
 	"syscall"
@@ -340,15 +341,50 @@ func (d *WekaFsDriver) CleanupNodeLabels() {
 	if d.config.isInDevMode() {
 		return
 	}
-	nodeLabelsToRemove := []string{TopologyLabelWeka, TopologyLabelNode, TopologyKeyNode, d.GetTopologyLabel()}
+	nodeLabelPatternsToRemove := []string{TopologyLabelNodePattern, TopologyLabelTransportPattern, TopologyLabelWekaLocalPattern}
+	nodeLabelsToRemove := []string{TopologyLabelTransportGlobal, TopologyLabelNodeGlobal, TopologyKeyNode}
 	for i, label := range nodeLabelsToRemove {
 		nodeLabelsToRemove[i] = fmt.Sprintf("%s-", label)
 	}
-	labelsString := strings.Join(nodeLabelsToRemove, " ")
-	output, err := exec.Command("/bin/kubectl", "label", "node", d.nodeID, labelsString).Output()
-	if err != nil {
-		log.Error().Err(err).Str("output", string(output)).Msg("Failed to remove labels from node")
+	for i, labelPattern := range nodeLabelPatternsToRemove {
+		nodeLabelPatternsToRemove[i] = fmt.Sprintf("%s-", fmt.Sprintf(labelPattern, d.name))
 	}
+	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create in-cluster config")
+		return
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create Kubernetes client")
+		return
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(context.TODO(), d.nodeID, metav1.GetOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get node")
+		return
+	}
+
+	for _, label := range labelsToRemove {
+		delete(node.Labels, label)
+	}
+
+	_, err = clientset.CoreV1().Nodes().Update(context.TODO(), node, metav1.UpdateOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update node labels")
+		return
+	}
+
+	log.Info().Msg("Successfully removed labels from node")
+
+	//output, err := exec.Command("/bin/kubectl", "label", "node", d.nodeID, labelsString).Output()
+	//if err != nil {
+	//	log.Error().Err(err).Str("output", string(output)).Msg("Failed to remove labels from node")
+	//}
 }
 
 type CsiPluginMode string
