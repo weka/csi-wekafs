@@ -346,11 +346,9 @@ func (d *WekaFsDriver) CleanupNodeLabels() {
 	}
 	nodeLabelPatternsToRemove := []string{TopologyLabelNodePattern, TopologyLabelTransportPattern, TopologyLabelWekaLocalPattern}
 	nodeLabelsToRemove := []string{TopologyLabelTransportGlobal, TopologyLabelNodeGlobal, TopologyKeyNode}
-	for i, label := range nodeLabelsToRemove {
-		nodeLabelsToRemove[i] = fmt.Sprintf("%s-", label)
-	}
+
 	for i, labelPattern := range nodeLabelPatternsToRemove {
-		nodeLabelPatternsToRemove[i] = fmt.Sprintf("%s-", fmt.Sprintf(labelPattern, d.name))
+		nodeLabelPatternsToRemove[i] = fmt.Sprintf(labelPattern, d.name)
 	}
 	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
 
