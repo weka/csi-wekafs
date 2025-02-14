@@ -315,6 +315,8 @@ func (driver *WekaFsDriver) Run() {
 	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
 
 		// bring up node part
+		log.Info().Msg("Cleaning up node labels...")
+		driver.CleanupNodeLabels()
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
