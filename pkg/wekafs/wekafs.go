@@ -320,19 +320,22 @@ func (driver *WekaFsDriver) Run() {
 		driver.CleanupNodeLabels()
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-		defer stop()
-		go func() {
-			<-ctx.Done()
-			log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
-			driver.CleanupNodeLabels()
-			log.Info().Msg("Cleanup completed.")
-		}()
 	} else {
 		driver.ns = &NodeServer{}
 	}
 
 	s := NewNonBlockingGRPCServer(driver.csiMode)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
+		driver.CleanupNodeLabels()
+		log.Info().Msg("Cleanup completed.")
+		s.Stop()
+	}()
+
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
 }
