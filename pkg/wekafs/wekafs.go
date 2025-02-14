@@ -296,7 +296,7 @@ func NewWekaFsDriver(
 	}, nil
 }
 
-func (driver *WekaFsDriver) Run() {
+func (driver *WekaFsDriver) Run(ctx context.Context) {
 	mounter := driver.NewMounter()
 
 	// Create GRPC servers
@@ -316,8 +316,8 @@ func (driver *WekaFsDriver) Run() {
 	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
 
 		// bring up node part
-		log.Info().Msg("Cleaning up node labels...")
-		driver.CleanupNodeLabels()
+		log.Info().Msg("Cleaning up node stale labels")
+		driver.CleanupNodeLabels(ctx)
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
 	} else {
@@ -331,16 +331,19 @@ func (driver *WekaFsDriver) Run() {
 	go func() {
 		<-ctx.Done()
 		log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
-		driver.CleanupNodeLabels()
-		log.Info().Msg("Cleanup completed.")
+		driver.CleanupNodeLabels(ctx)
+		log.Info().Msg("Cleanup completed, stopping server")
 		s.Stop()
+		log.Info().Msg("Server stopped")
+		os.Exit(1)
+
 	}()
 
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
 }
 
-func (d *WekaFsDriver) CleanupNodeLabels() {
+func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 	if d.config.isInDevMode() {
 		return
 	}
@@ -364,7 +367,7 @@ func (d *WekaFsDriver) CleanupNodeLabels() {
 		return
 	}
 
-	node, err := clientset.CoreV1().Nodes().Get(context.TODO(), d.nodeID, metav1.GetOptions{})
+	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node")
 		return
@@ -375,7 +378,7 @@ func (d *WekaFsDriver) CleanupNodeLabels() {
 		log.Info().Str("label", label).Msg("Removing label from node")
 	}
 
-	_, err = clientset.CoreV1().Nodes().Update(context.TODO(), node, metav1.UpdateOptions{})
+	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return

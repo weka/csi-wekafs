@@ -198,11 +198,11 @@ func main() {
 		}()
 	}
 
-	handle()
+	handle(ctx)
 	os.Exit(0)
 }
 
-func handle() {
+func handle(ctx context.Context) {
 	config := wekafs.NewDriverConfig(*dynamicSubPath,
 		*newVolumePrefix,
 		*newSnapshotPrefix,
@@ -241,5 +241,5 @@ func handle() {
 		os.Exit(1)
 	}
 	config.SetDriver(driver)
-	driver.Run()
+	driver.Run(ctx)
 }
