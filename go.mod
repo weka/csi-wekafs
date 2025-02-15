@@ -18,7 +18,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.34.0
 	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8
 	golang.org/x/sync v0.10.0
-	google.golang.org/grpc v1.69.4
+	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.3
 	k8s.io/apimachinery v0.32.1
 	k8s.io/helm v2.17.0+incompatible
