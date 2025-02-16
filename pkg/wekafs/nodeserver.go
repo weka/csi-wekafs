@@ -525,10 +525,8 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	driverName := ns.getConfig().GetDriver().name
 	type topologySegments map[string]string
 	segments := topologySegments{
-		TopologyKeyNode:              ns.nodeID,
-		TopologyLabelWekaGlobal:      "true", // for backward compatibility remains as is
-		TopologyLabelTransportGlobal: string(ns.getMounter().getTransport()),
-		TopologyLabelNodeGlobal:      ns.nodeID,
+		TopologyKeyNode:         ns.nodeID,
+		TopologyLabelWekaGlobal: "true", // for backward compatibility remains as is
 	}
 	// this will either overwrite or add the keys based on the driver name
 	segments[fmt.Sprintf(TopologyLabelNodePattern, driverName)] = ns.nodeID
