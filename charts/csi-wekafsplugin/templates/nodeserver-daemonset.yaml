@@ -220,6 +220,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.node.terminationGracePeriodSeconds | default 30 }}
       volumes:
         - hostPath:
             path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/pods
