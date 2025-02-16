@@ -42,6 +42,7 @@ type DriverConfig struct {
 	skipGarbageCollection            bool
 	waitForObjectDeletion            bool
 	allowEncryptionWithoutKms        bool
+	driverRef                        *WekaFsDriver
 }
 
 func (dc *DriverConfig) Log() {
@@ -138,4 +139,12 @@ func (dc *DriverConfig) isInDevMode() bool {
 
 func (dc *DriverConfig) GetVersion() string {
 	return dc.csiVersion
+}
+
+func (dc *DriverConfig) SetDriver(driver *WekaFsDriver) {
+	dc.driverRef = driver
+}
+
+func (dc *DriverConfig) GetDriver() *WekaFsDriver {
+	return dc.driverRef
 }
