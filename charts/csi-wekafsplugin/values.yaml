@@ -79,6 +79,8 @@ controller:
   labels: {}
   # -- optional labels to add to controller pods
   podLabels: {}
+  # -- termination grace period for controller pods
+  terminationGracePeriodSeconds: 10
 # Node-specific parameters, please do not change unless explicitly guided
 node:
   # -- Maximum concurrent requests from sidecars (global)
@@ -97,6 +99,8 @@ node:
   labels: {}
   # -- optional labels to add to node pods
   podLabels: {}
+  # -- termination grace period for node pods
+  terminationGracePeriodSeconds: 10
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)

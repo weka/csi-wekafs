@@ -344,6 +344,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.controller.terminationGracePeriodSeconds | default 30 }}
       volumes:
         - hostPath:
             path: {{ .Values.kubeletPath | default "/var/lib/kubelet" }}/plugins/{{ .Release.Name }}-controller
