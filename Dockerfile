@@ -1,4 +1,3 @@
-ARG KUBECTL_VERSION=1.31.2
 FROM golang:1.23-alpine AS go-builder
 ARG TARGETARCH
 ARG TARGETOS
@@ -27,7 +26,6 @@ RUN true
 
 RUN echo Building package
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/*
-FROM registry.k8s.io/kubernetes/kubectl:v${KUBECTL_VERSION} AS kubectl
 
 FROM alpine:3.18
 LABEL maintainers="WekaIO, LTD"
@@ -46,7 +44,6 @@ LABEL vendor="weka.io"
 LABEL summary="This image is used by WEKA CSI Plugin and incorporates both Controller and Node modules"
 LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data platform for AI"
 LABEL url="https://www.weka.io"
-COPY --from=kubectl /bin/kubectl /bin/kubectl
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 COPY --from=go-builder /src/locar /locar
 ARG binary=/bin/wekafsplugin
