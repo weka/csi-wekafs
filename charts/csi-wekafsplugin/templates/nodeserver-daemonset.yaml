@@ -51,27 +51,6 @@ spec:
       {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}
       hostNetwork: true
       {{- end }}
-      initContainers:
-        - name: init
-          volumeMounts:
-            - mountPath: /etc/nodeinfo
-              name: nodeinfo
-          image: "{{ .Values.images.nodeinfo }}:v{{ .Values.images.csidriverTag}}"
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            # This doesn't need to run as root.
-            runAsUser: 9376
-            runAsGroup: 9376
-          env:
-            - name: NODENAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          command:
-            - bash
-          args:
-            - -c
-            - kubectl label node $NODENAME "topology.csi.weka.io/transport-" &> /dev/null; kubectl get node $NODENAME -o json | jq '.metadata' > /etc/nodeinfo/metadata
       containers:
         - name: wekafs
           securityContext:
