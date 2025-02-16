@@ -326,10 +326,10 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	s := NewNonBlockingGRPCServer(driver.csiMode)
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	termContext, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 	go func() {
-		<-ctx.Done()
+		<-termContext.Done()
 		log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
 		driver.CleanupNodeLabels(ctx)
 		log.Info().Msg("Cleanup completed, stopping server")
