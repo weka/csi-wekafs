@@ -24,9 +24,14 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 var DefaultVolumePermissions fs.FileMode = 0750
@@ -60,10 +65,10 @@ var (
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
 	sync.Mutex
-	apis     map[uint32]*apiclient.ApiClient
-	legacySecrets      *map[string]string
-	config   *DriverConfig
-	Hostname string
+	apis          map[uint32]*apiclient.ApiClient
+	legacySecrets *map[string]string
+	config        *DriverConfig
+	Hostname      string
 }
 
 // Die used to intentionally panic and exit, while updating termination log
@@ -291,7 +296,7 @@ func NewWekaFsDriver(
 	}, nil
 }
 
-func (driver *WekaFsDriver) Run() {
+func (driver *WekaFsDriver) Run(ctx context.Context) {
 	mounter := driver.NewMounter()
 
 	// Create GRPC servers
@@ -311,6 +316,8 @@ func (driver *WekaFsDriver) Run() {
 	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
 
 		// bring up node part
+		log.Info().Msg("Cleaning up node stale labels")
+		driver.CleanupNodeLabels(ctx)
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
 	} else {
@@ -318,8 +325,71 @@ func (driver *WekaFsDriver) Run() {
 	}
 
 	s := NewNonBlockingGRPCServer(driver.csiMode)
+
+	termContext, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	go func() {
+		<-termContext.Done()
+		log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
+		driver.CleanupNodeLabels(ctx)
+		log.Info().Msg("Cleanup completed, stopping server")
+		s.Stop()
+		log.Info().Msg("Server stopped")
+		os.Exit(1)
+
+	}()
+
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
+}
+
+func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
+	if d.config.isInDevMode() {
+		return
+	}
+	nodeLabelPatternsToRemove := []string{TopologyLabelNodePattern, TopologyLabelTransportPattern, TopologyLabelWekaLocalPattern}
+	nodeLabelsToRemove := []string{TopologyLabelTransportGlobal, TopologyLabelNodeGlobal, TopologyKeyNode}
+
+	for i, labelPattern := range nodeLabelPatternsToRemove {
+		nodeLabelPatternsToRemove[i] = fmt.Sprintf(labelPattern, d.name)
+	}
+	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create in-cluster config")
+		return
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create Kubernetes client")
+		return
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get node")
+		return
+	}
+
+	for _, label := range labelsToRemove {
+		delete(node.Labels, label)
+		log.Info().Str("label", label).Str("node", node.Name).Msg("Removing label from node")
+	}
+
+	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update node labels")
+		return
+	}
+
+	log.Info().Msg("Successfully removed labels from node")
+
+	//output, err := exec.Command("/bin/kubectl", "label", "node", d.nodeID, labelsString).Output()
+	//if err != nil {
+	//	log.Error().Err(err).Str("output", string(output)).Msg("Failed to remove labels from node")
+	//}
 }
 
 type CsiPluginMode string
