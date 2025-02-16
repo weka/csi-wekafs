@@ -522,13 +522,19 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+	driverName := ns.getConfig().GetDriver().name
+	type topologySegments map[string]string
+	segments := topologySegments{
+		TopologyKeyNode:         ns.nodeID,
+		TopologyLabelWekaGlobal: "true", // for backward compatibility remains as is
+	}
+	// this will either overwrite or add the keys based on the driver name
+	segments[fmt.Sprintf(TopologyLabelNodePattern, driverName)] = ns.nodeID
+	segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = string(ns.getMounter().getTransport())
+	segments[fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)] = "true"
+
 	topology := &csi.Topology{
-		Segments: map[string]string{
-			TopologyKeyNode:              ns.nodeID, // required exactly same way as this is how node is accessed by K8s
-			TopologyLabelNodeGlobal:      ns.nodeID,
-			TopologyLabelWekaGlobal:      "true",
-			TopologyLabelTransportGlobal: string(ns.getMounter().getTransport()),
-		},
+		Segments: segments,
 	}
 
 	return &csi.NodeGetInfoResponse{
