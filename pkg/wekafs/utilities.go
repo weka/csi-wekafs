@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -322,7 +323,7 @@ func GetMountIpFromActualMountPoint(mountPointBase string) (string, error) {
 		fields := strings.Fields(scanner.Text())
 		if len(fields) >= 3 && strings.HasPrefix(fields[1], fmt.Sprintf("%s-", mountPointBase)) {
 			actualMountPoint = fields[1]
-			return strings.TrimLeft(actualMountPoint, mountPointBase+"-"), nil
+			return strings.TrimLeft(actualMountPoint, string(mountPointBase+"-")), nil
 		}
 	}
 	return "", errors.New("mount point not found")
@@ -601,4 +602,15 @@ func getSelinuxStatus(ctx context.Context) bool {
 		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
 	}
 	return false
+}
+
+func getDataTransportFromMountPath(mountPoint string) DataTransport {
+	if strings.HasPrefix(mountPoint, path.Join(MountBasePath, string(dataTransportNfs))) {
+		return dataTransportWekafs
+	}
+	if strings.HasPrefix(mountPoint, path.Join(MountBasePath, string(dataTransportWekafs))) {
+		return dataTransportWekafs
+	}
+	// just default
+	return dataTransportWekafs
 }
