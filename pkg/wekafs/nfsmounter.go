@@ -22,10 +22,23 @@ type nfsMounter struct {
 	nfsProtocolVersion    string
 	exclusiveMountOptions []mutuallyExclusiveMountOptionSet
 	mountBaseDir          string
+	enabled               bool
 }
 
 func (m *nfsMounter) getGarbageCollector() *innerPathVolGc {
 	return m.gc
+}
+
+func (n *nfsMounter) isEnabled() bool {
+	return n.enabled
+}
+
+func (n *nfsMounter) Enable() {
+	n.enabled = true
+}
+
+func (n *nfsMounter) Disable() {
+	n.enabled = false
 }
 
 func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
@@ -34,7 +47,14 @@ func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions, mountBaseDir: mountBaseDirForRole(driver.csiMode)}
+	mounter := &nfsMounter{
+		mountMap: make(nfsMountsMap),
+		debugPath: driver.debugPath,
+		selinuxSupport: selinuxSupport,
+		exclusiveMountOptions: driver.config.mutuallyExclusiveOptions,
+		mountBaseDir: mountBaseDirForRole(driver.csiMode),
+		enabled: false,
+	}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc(ctx)
