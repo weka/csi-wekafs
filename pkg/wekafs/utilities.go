@@ -324,7 +324,7 @@ func GetMountIpFromActualMountPoint(mountPointBase string) (string, error) {
 		fields := strings.Fields(scanner.Text())
 		if len(fields) >= 3 && strings.HasPrefix(fields[1], fmt.Sprintf("%s-", mountPointBase)) {
 			actualMountPoint = fields[1]
-			return strings.TrimLeft(actualMountPoint, mountPointBase+"-"), nil
+			return strings.TrimLeft(actualMountPoint, string(mountPointBase+"-")), nil
 		}
 	}
 	return "", errors.New("mount point not found")

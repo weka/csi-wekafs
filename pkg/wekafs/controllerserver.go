@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
@@ -68,7 +69,7 @@ type ControllerServer struct {
 	csi.UnimplementedControllerServer
 	caps            []*csi.ControllerServiceCapability
 	nodeID          string
-	mounter         AnyMounter
+	mounters        *MounterGroup
 	api             *ApiStore
 	config          *DriverConfig
 	semaphores      map[string]*semaphore.Weighted
@@ -98,8 +99,12 @@ func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }
 
-func (cs *ControllerServer) getMounter() AnyMounter {
-	return cs.mounter
+func (cs *ControllerServer) getMounter(ctx context.Context) AnyMounter {
+	return cs.mounters.GetPreferredMounter(ctx)
+}
+
+func (cs *ControllerServer) getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter {
+	return cs.mounters.GetMounterByTransport(ctx, transport)
 }
 
 func (cs *ControllerServer) getApiStore() *ApiStore {
@@ -136,7 +141,7 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig, manager ctrl.Manager) *ControllerServer {
+func NewControllerServer(nodeID string, api *ApiStore, mounters *MounterGroup, config *DriverConfig, manager ctrl.Manager) *ControllerServer {
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
@@ -151,10 +156,10 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
-	return &ControllerServer{
+	cs := &ControllerServer{
 		caps:            capabilities,
 		nodeID:          nodeID,
-		mounter:         mounter,
+		mounters:        mounters,
 		api:             api,
 		config:          config,
 		semaphores:      make(map[string]*semaphore.Weighted),

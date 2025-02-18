@@ -2,12 +2,14 @@ package wekafs
 
 import (
 	"context"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"k8s.io/mount-utils"
+	"path"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"k8s.io/mount-utils"
 )
 
 const (
@@ -24,6 +26,19 @@ type wekafsMounter struct {
 	allowProtocolContainers bool
 	config                  *DriverConfig
 	mountBaseDir            string
+	enabled                 bool
+}
+
+func (m *wekafsMounter) isEnabled() bool {
+	return m.enabled
+}
+
+func (m *wekafsMounter) Enable() {
+	m.enabled = true
+}
+
+func (m *wekafsMounter) Disable() {
+	m.enabled = false
 }
 
 func mountBaseDirForRole(mode CsiPluginMode) string {
@@ -47,7 +62,14 @@ func newWekafsMounter(ctx context.Context, driver *WekaFsDriver) *wekafsMounter 
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport, config: driver.config, mountBaseDir: mountBaseDirForRole(driver.csiMode)}
+	mounter := &wekafsMounter{
+		mountMap: wekafsMountsMap{},
+		debugPath: driver.debugPath,
+		selinuxSupport: selinuxSupport,
+		config: driver.config,
+		mountBaseDir: mountBaseDirForRole(driver.csiMode),
+		enabled: true,
+	}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc(ctx)
@@ -65,7 +87,7 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		kMounter:                m.kMounter,
 		fsName:                  fsName,
 		debugPath:               m.debugPath,
-		mountPoint:              m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+		mountPoint:              path.Join(m.mountBaseDir, string(m.getTransport()), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:            options,
 		allowProtocolContainers: m.allowProtocolContainers,
 	}

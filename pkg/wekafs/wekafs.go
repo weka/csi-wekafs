@@ -357,9 +357,11 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		}
 	}
 
-	mounter := driver.NewMounter(ctx)
+	mounters := NewMounterGroup(ctx, driver)
 
-	// Create servers
+	// Create GRPC servers
+
+	// identity server runs always
 	log.Info().Msg("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver.name, driver.version, driver.config)
 
@@ -371,7 +373,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 			log.Warn().Err(err).Msg("Failed to initialize Kubernetes manager, running without leader election")
 		}
 
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config, driver.manager)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounters, driver.config, driver.manager)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -383,8 +385,9 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 			driver.CleanupNodeLabels(ctx)
 		}
 
+		// bring up node part
 		log.Info().Msg("Loading NodeServer")
-		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
+		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounters, driver.config)
 	} else {
 		driver.ns = &NodeServer{}
 	}
