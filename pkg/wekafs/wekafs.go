@@ -34,6 +34,8 @@ import (
 	"syscall"
 )
 
+const MountBasePath = "/run/weka-fs-mounts/"
+
 var DefaultVolumePermissions fs.FileMode = 0750
 
 type WekaFsDriver struct {
@@ -300,7 +302,7 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
-	mounter := driver.NewMounter()
+	mounters := NewMounterGroup(driver)
 
 	// Create GRPC servers
 
@@ -311,7 +313,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
 		// bring up controller part
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounters, driver.config)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -326,7 +328,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 		// bring up node part
 		log.Info().Msg("Loading NodeServer")
-		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
+		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounters, driver.config)
 	} else {
 		driver.ns = &NodeServer{}
 	}

@@ -43,7 +43,7 @@ type ControllerServer struct {
 	csi.UnimplementedControllerServer
 	caps            []*csi.ControllerServiceCapability
 	nodeID          string
-	mounter         AnyMounter
+	mounters   *MounterGroup
 	api             *ApiStore
 	config          *DriverConfig
 	semaphores      map[string]*semaphore.Weighted
@@ -71,8 +71,12 @@ func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }
 
-func (cs *ControllerServer) getMounter() AnyMounter {
-	return cs.mounter
+func (cs *ControllerServer) getMounter(ctx context.Context) AnyMounter {
+	return cs.mounters.GetPreferredMounter(ctx)
+}
+
+func (cs *ControllerServer) getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter {
+	return cs.mounters.GetMounterByTransport(ctx, transport)
 }
 
 func (cs *ControllerServer) getApiStore() *ApiStore {
@@ -109,7 +113,7 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig) *ControllerServer {
+func NewControllerServer(nodeID string, api *ApiStore, mounters *MounterGroup, config *DriverConfig) *ControllerServer {
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
@@ -127,7 +131,7 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 	return &ControllerServer{
 		caps:            capabilities,
 		nodeID:          nodeID,
-		mounter:         mounter,
+		mounters:        mounters,
 		api:             api,
 		config:          config,
 		semaphores:      make(map[string]*semaphore.Weighted),
