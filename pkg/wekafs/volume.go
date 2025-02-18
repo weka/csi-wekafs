@@ -651,7 +651,7 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 
 func (v *Volume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
-		return v.server.getMounter().getGarbageCollector().triggerGcVolume(ctx, v)
+		return v.server.getMounter(ctx).getGarbageCollector().triggerGcVolume(ctx, v)
 	}
 	return v.Delete(ctx)
 }
@@ -881,13 +881,13 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	if v.server.getMounter() == nil {
+	if v.server.getMounter(ctx) == nil {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
 
 	mountOpts := v.getMountOptions(ctx).MergedWith(v.server.getDefaultMountOptions(), v.server.getConfig().mutuallyExclusiveOptions)
 
-	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	mount, err, unmountFunc := v.server.getMounter(ctx).mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := func() {}
 	if err == nil {
 		v.mountPath = mount
@@ -909,12 +909,12 @@ func (v *Volume) UnmountUnderlyingFS(ctx context.Context) error {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	if v.server.getMounter() == nil {
+	if v.server.getMounter(ctx) == nil {
 		Die("Volume unmount could not be done since mounter not defined on it")
 	}
 
 	mountOpts := v.getMountOptions(ctx)
-	err := v.server.getMounter().unmountWithOptions(ctx, v.FilesystemName, mountOpts)
+	err := v.server.getMounter(ctx).unmountWithOptions(ctx, v.FilesystemName, mountOpts)
 
 	if err == nil {
 		v.mountPath = ""
@@ -1500,7 +1500,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 	}
 
 	deleteFunc := func() error {
-		if v.server.getMounter().getTransport() == dataTransportNfs {
+		if v.server.getMounter(ctx).getTransport() == dataTransportNfs {
 			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
 			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
 			if err != nil {
