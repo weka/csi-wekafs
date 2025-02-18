@@ -34,6 +34,8 @@ import (
 	"syscall"
 )
 
+const MountBasePath = "/run/weka-fs-mounts/"
+
 var DefaultVolumePermissions fs.FileMode = 0750
 
 type WekaFsDriver struct {
@@ -297,7 +299,7 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
-	mounter := driver.NewMounter()
+	mounters := NewMounterGroup(driver)
 
 	// Create GRPC servers
 
@@ -308,7 +310,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
 		// bring up controller part
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounters, driver.config)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -319,7 +321,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		log.Info().Msg("Cleaning up node stale labels")
 		driver.CleanupNodeLabels(ctx)
 		log.Info().Msg("Loading NodeServer")
-		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
+		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounters, driver.config)
 	} else {
 		driver.ns = &NodeServer{}
 	}
@@ -420,22 +422,4 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
 		return ""
 	}
-}
-
-func (driver *WekaFsDriver) NewMounter() AnyMounter {
-	log.Info().Msg("Configuring Mounter")
-	if driver.config.useNfs {
-		log.Warn().Msg("Enforcing NFS transport due to configuration")
-		return newNfsMounter(driver)
-	}
-	if driver.config.allowNfsFailback && !isWekaInstalled() {
-		if driver.config.isInDevMode() {
-			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
-		} else {
-			log.Warn().Msg("Weka Driver not found. Failing back to NFS transport")
-			return newNfsMounter(driver)
-		}
-	}
-	log.Info().Msg("Enforcing WekaFS transport")
-	return newWekafsMounter(driver)
 }
