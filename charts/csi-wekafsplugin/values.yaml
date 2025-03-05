@@ -57,6 +57,7 @@ controller:
     createVolume: 5
     deleteVolume: 5
     expandVolume: 5
+    modifyVolume: 5
     createSnapshot: 5
     deleteSnapshot: 5
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)

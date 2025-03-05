@@ -80,8 +80,9 @@ var (
 	alwaysAllowSnapshotVolumes               = flag.Bool("alwaysallowsnapshotvolumes", false, "Allow snapshot-backed volumes even when Weka cluster doesn't support capacity enforcement")
 	usejsonlogging                           = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
 	maxConcurrentCreateVolumeReqs            = flag.Int64("concurrency.createVolume", 1, "Maximum concurrent CreateVolume requests")
-	maxConcurrentExpandVolumeReqs            = flag.Int64("concurrency.expandVolume", 1, "Maximum concurrent ExpandVolume requests")
-	maxConcurrentDeleteVolumeReqs            = flag.Int64("concurrency.deleteVolume", 1, "Maximum concurrent DeleteVolume requests")
+	maxConcurrentExpandVolumeReqs        = flag.Int64("concurrency.expandVolume", 1, "Maximum concurrent ExpandVolume requests")
+	maxConcurrentDeleteVolumeReqs        = flag.Int64("concurrency.deleteVolume", 1, "Maximum concurrent DeleteVolume requests")
+	maxConcurrentModifyVolumeReqs            = flag.Int64("concurrency.modifyVolume", 1, "Maximum concurrent ModifyVolume requests")
 	maxConcurrentCreateSnapshotReqs          = flag.Int64("concurrency.createSnapshot", 1, "Maximum concurrent CreateSnapshot requests")
 	maxConcurrentDeleteSnapshotReqs          = flag.Int64("concurrency.deleteSnapshot", 1, "Maximum concurrent DeleteSnapshot requests")
 	maxConcurrentNodePublishVolumeReqs       = flag.Int64("concurrency.nodePublishVolume", 1, "Maximum concurrent NodePublishVolume requests")
@@ -224,6 +225,7 @@ func handle(ctx context.Context) {
 		*maxConcurrentCreateVolumeReqs,
 		*maxConcurrentDeleteVolumeReqs,
 		*maxConcurrentExpandVolumeReqs,
+		*maxConcurrentModifyVolumeReqs,
 		*maxConcurrentCreateSnapshotReqs,
 		*maxConcurrentDeleteSnapshotReqs,
 		*maxConcurrentNodePublishVolumeReqs,

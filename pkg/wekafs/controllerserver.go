@@ -94,11 +94,6 @@ func (cs *ControllerServer) ControllerGetVolume(context.Context, *csi.Controller
 	panic("implement me")
 }
 
-//goland:noinspection GoUnusedParameter
-func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
-	panic("implement me")
-}
-
 func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
 	if driver == nil {
 		panic("driver is nil")
@@ -581,6 +576,81 @@ func CreateSnapshotError(ctx context.Context, errorCode codes.Code, errorMessage
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
 	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error creating snapshot")
 	return &csi.CreateSnapshotResponse{}, err
+}
+
+func ModifyVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.ControllerModifyVolumeResponse, error) {
+	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error modifying volume")
+	return &csi.ControllerModifyVolumeResponse{}, err
+}
+
+//goland:noinspection GoUnusedParameter
+func (cs *ControllerServer) ControllerModifyVolume(ctx context.Context, req *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
+	op := "ModifyVolume"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	volumeID := req.GetVolumeId()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).
+		Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).
+		Str("volume_id", volumeID).Logger().WithContext(ctx)
+
+	logger := log.Ctx(ctx)
+	result := "FAILURE"
+
+	params := req.GetMutableParameters()
+	logger.Info().Str("volume_id", volumeID).Fields(params).Msg(">>>> Received request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
+
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return ModifyVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
+	if len(req.GetVolumeId()) == 0 {
+		return ModifyVolumeError(ctx, codes.InvalidArgument, "Volume ID not specified")
+	}
+
+	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets)
+
+	if err != nil {
+		// this case can happen only if we had client that failed to initialise, and not if we do not have a client at all
+		return ModifyVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
+	}
+
+	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, cs)
+	if err != nil {
+		return ModifyVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
+	}
+
+	ok, err := volume.Exists(ctx)
+	if err != nil {
+		return ModifyVolumeError(ctx, codes.NotFound, err.Error())
+	}
+	if !ok {
+		return ModifyVolumeError(ctx, codes.NotFound, "Volume does not exist")
+	}
+
+	for param, value := range params {
+		switch param {
+		case "mountOptions":
+			logger.Debug().Str("volume_id", volume.GetId()).Str("mount_options", value).Msg("Modifying volume mount options")
+			// do nothing, this is a read-only parameter
+		default:
+			return ModifyVolumeError(ctx, codes.InvalidArgument, fmt.Sprintf("Cannot modify parameter %s via ModifyVolume", param))
+		}
+	}
+
+	result = "SUCCESS"
+	return &csi.ControllerModifyVolumeResponse{}, nil
 }
 
 func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
