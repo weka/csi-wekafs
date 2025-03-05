@@ -60,6 +60,7 @@ func (dc *DriverConfig) Log() {
 		Int64("max_create_volume_reqs", dc.maxConcurrencyPerOp["CreateVolume"]).
 		Int64("max_delete_volume_reqs", dc.maxConcurrencyPerOp["DeleteVolume"]).
 		Int64("max_expand_volume_reqs", dc.maxConcurrencyPerOp["ExpandVolume"]).
+		Int64("max_modify_volume_reqs", dc.maxConcurrencyPerOp["ModifyVolume"]).
 		Int64("max_create_snapshot_reqs", dc.maxConcurrencyPerOp["CreateSnapshot"]).
 		Int64("max_delete_snapshot_reqs", dc.maxConcurrencyPerOp["DeleteSnapshot"]).
 		Int64("max_node_publish_volume_reqs", dc.maxConcurrencyPerOp["NodePublishVolume"]).
@@ -86,7 +87,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfDirectoryVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
-	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
+	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxModifyVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
 	grpcRequestTimeoutSeconds int,
 	allowProtocolContainers bool,
 	allowNfsFailback, useNfs bool,
@@ -117,6 +118,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	concurrency["CreateVolume"] = maxCreateVolumeReqs
 	concurrency["DeleteVolume"] = maxDeleteVolumeReqs
 	concurrency["ExpandVolume"] = maxExpandVolumeReqs
+	concurrency["ModifyVolume"] = maxModifyVolumeReqs
 	concurrency["CreateSnapshot"] = maxCreateSnapshotReqs
 	concurrency["DeleteSnapshot"] = maxDeleteSnapshotReqs
 	concurrency["NodePublishVolume"] = maxNodePublishVolumeReqs

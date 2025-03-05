@@ -15,7 +15,7 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 	driverConfig := NewDriverConfig("csi-volumes", "csi-vol-", "csi-snap-", "csi-seed-snap-",
 		true, true, true, true, true,
 		true, true, mutuallyExclusive,
-		1, 1, 1, 1, 1, 1, 1, 10,
+		1, 1, 1, 1, 1, 1, 1, 10, 1,
 		true, true, true, "", "", "4.1", "v1", false, false, true,
 		"", false,
 		60, 5, false, 10)
