@@ -31,6 +31,7 @@ func TestMountOptions_Merge(t *testing.T) {
 	}
 
 	opts1.Merge(opts2, exclusives)
+	opts1.AddOption("acl")
 
 	if opts1.hasOption("ro") {
 		t.Errorf("Expected option 'ro' to be removed due to exclusivity")
@@ -38,6 +39,10 @@ func TestMountOptions_Merge(t *testing.T) {
 
 	if !opts1.hasOption("rw") {
 		t.Errorf("Expected option 'rw' to be added")
+	}
+
+	if !opts1.hasOption("acl") {
+		t.Errorf("Expected option 'acl' to be added")
 	}
 }
 
