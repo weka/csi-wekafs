@@ -329,7 +329,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 func generateAccessibleTopology() []*csi.Topology {
 	accessibleTopology := make(map[string]string)
-	accessibleTopology[TopologyLabelWeka] = "true"
+	accessibleTopology[TopologyLabelWekaGlobal] = "true"
 	return []*csi.Topology{
 		{
 			Segments: accessibleTopology,
