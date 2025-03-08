@@ -3,7 +3,7 @@
 kind: MachineConfig
 apiVersion: machineconfiguration.openshift.io/v1
 metadata:
-  name: 50-csi-wekafs-selinux-policy-{{ . }}
+  name: 50-{{ $.Release.Name }}-selinux-policy-{{ . }}
   labels:
     machineconfiguration.openshift.io/role: {{ . }}
 spec:
