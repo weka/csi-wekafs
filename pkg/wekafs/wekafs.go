@@ -330,9 +330,13 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	defer stop()
 	go func() {
 		<-termContext.Done()
-		log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
-		driver.CleanupNodeLabels(ctx)
-		log.Info().Msg("Cleanup completed, stopping server")
+		if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
+			log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
+			driver.CleanupNodeLabels(ctx)
+			log.Info().Msg("Cleanup completed, stopping server")
+		} else {
+			log.Info().Msg("Received SIGTERM/SIGINT, stopping server")
+		}
 		s.Stop()
 		log.Info().Msg("Server stopped")
 		os.Exit(1)
