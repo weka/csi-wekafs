@@ -88,6 +88,9 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
 	a.resetDefaultEndpoints(ctx)
+	if len(a.Credentials.Endpoints) < 1 {
+		return nil, errors.New("no endpoints could be found for API client")
+	}
 
 	logger.Trace().Bool("insecure_skip_verify", allowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
