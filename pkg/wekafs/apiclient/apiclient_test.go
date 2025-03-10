@@ -1,6 +1,8 @@
 package apiclient
 
 import (
+	"context"
+	"flag"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -144,4 +146,39 @@ func TestIsValidHostname(t *testing.T) {
 			assert.Equal(t, tt.expected, isValidHostname(tt.hostname))
 		})
 	}
+}
+
+var creds Credentials
+var endpoint string
+var fsName string
+
+var client *ApiClient
+
+func TestMain(m *testing.M) {
+	flag.StringVar(&endpoint, "api-endpoint", "localhost:14000", "API endpoint for tests")
+	flag.StringVar(&creds.Username, "api-username", "admin", "API username for tests")
+	flag.StringVar(&creds.Password, "api-password", "", "API password for tests")
+	flag.StringVar(&creds.Organization, "api-org", "Root", "API org for tests")
+	flag.StringVar(&creds.HttpScheme, "api-scheme", "https", "API scheme for tests")
+	flag.StringVar(&fsName, "fs-name", "default", "Filesystem name for tests")
+	flag.Parse()
+	m.Run()
+}
+
+func GetApiClientForTest(t *testing.T) *ApiClient {
+	creds.Endpoints = []string{endpoint}
+	if client == nil {
+		apiClient, err := NewApiClient(context.Background(), creds, true, endpoint)
+		if err != nil {
+			t.Fatalf("Failed to create API client: %v", err)
+		}
+		if apiClient == nil {
+			t.Fatalf("Failed to create API client")
+		}
+		if err := apiClient.Login(context.Background()); err != nil {
+			t.Fatalf("Failed to login: %v", err)
+		}
+		client = apiClient
+	}
+	return client
 }
