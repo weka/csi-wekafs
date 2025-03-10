@@ -322,6 +322,10 @@ func (v *Volume) getFilesystemFreeSpace(ctx context.Context) (int64, error) {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
+	if v.apiClient != nil {
+		return v.getFilesystemFreeSpaceByApi(ctx)
+	}
+
 	err, unmount := v.MountUnderlyingFS(ctx)
 	defer unmount()
 	if err != nil {
@@ -338,6 +342,41 @@ func (v *Volume) getFilesystemFreeSpace(ctx context.Context) (int64, error) {
 	// Available blocks * size per block = available space in bytes
 	maxCapacity := int64(stat.Bavail * uint64(stat.Bsize))
 	logger.Debug().Int64("max_capacity", maxCapacity).Msg("Success")
+	return maxCapacity, nil
+}
+
+func (v *Volume) getFilesystemFreeSpaceByApi(ctx context.Context) (int64, error) {
+	op := "getFilesystemFreeSpaceByApi"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+
+	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
+
+	if v.apiClient == nil {
+		return -1, status.Errorf(codes.FailedPrecondition, "Could not bind volume %s to API endpoint", v.FilesystemName)
+	}
+
+	var maxCapacity int64
+	// if support force fresh capacity, make sure we call it this way
+	fsObjWithForceFresh := &apiclient.FileSystem{}
+	fsObj, err := v.getFilesystemObj(ctx, true)
+	if err != nil {
+		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity for filesystem %s: %s", v.FilesystemName, err.Error())
+	}
+	if fsObj == nil {
+		return -1, ErrFilesystemNotFound
+	}
+	err = v.apiClient.GetFileSystemByUid(ctx, fsObj.Uid, fsObjWithForceFresh, true)
+	if err != nil {
+		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain precise capacity for filesystem %s: %s", v.FilesystemName, err.Error())
+	}
+	if fsObjWithForceFresh == nil {
+		return -1, ErrFilesystemNotFound
+	}
+	maxCapacity = fsObjWithForceFresh.FreeTotal
+	logger.Debug().Int64("max_capacity", maxCapacity).Msg("Resolved free capacity")
+
 	return maxCapacity, nil
 }
 
