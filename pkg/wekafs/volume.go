@@ -871,7 +871,7 @@ func (v *Volume) getSizeFromXattr(ctx context.Context) (uint64, error) {
 
 // getFilesystemObj returns the Weka filesystem object
 func (v *Volume) getFilesystemObj(ctx context.Context, fromCache bool) (*apiclient.FileSystem, error) {
-	if v.fileSystemObject != nil && fromCache {
+	if v.fileSystemObject != nil && fromCache && !v.fileSystemObject.IsRemoving {
 		return v.fileSystemObject, nil
 	}
 	if v.apiClient == nil {
@@ -1575,7 +1575,7 @@ func (v *Volume) waitForFilesystemDeletion(ctx context.Context, logger zerolog.L
 	logger.Trace().Msg("Waiting for filesystem deletion to complete")
 	for start := time.Now(); time.Since(start) < MaxSnapshotDeletionDuration; {
 		fsObj := &apiclient.FileSystem{}
-		err := v.apiClient.GetFileSystemByUid(ctx, fsUid, fsObj)
+		err := v.apiClient.GetFileSystemByUid(ctx, fsUid, fsObj, false)
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
 				logger.Trace().Str("filesystem", v.FilesystemName).Msg("Filesystem was removed successfully")
