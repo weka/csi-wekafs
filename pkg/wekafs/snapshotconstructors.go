@@ -23,7 +23,7 @@ func NewSnapshotFromVolumeCreate(ctx context.Context, name string, sourceVolume 
 	snapshotId := generateSnapshotIdFromComponents(SnapshotTypeUnifiedSnap, filesystemName, snapNameHash, snapIntegrityId, innerPath)
 	var sourceSnapUid *uuid.UUID
 	if sourceVolume != nil && sourceVolume.isOnSnapshot() {
-		obj, err := sourceVolume.getSnapshotObj(ctx)
+		obj, err := sourceVolume.getSnapshotObj(ctx, false)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch content object of source volume")
 			return nil, err
