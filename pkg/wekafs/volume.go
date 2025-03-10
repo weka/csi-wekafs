@@ -60,6 +60,9 @@ type Volume struct {
 	srcSnapshot *Snapshot
 
 	server AnyServer
+
+	fileSystemObject *apiclient.FileSystem
+	snapshotObject   *apiclient.Snapshot
 }
 
 //goland:noinspection GoUnusedParameter
@@ -244,7 +247,7 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}
 
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +368,7 @@ func (v *Volume) getFreeSpaceOnStorage(ctx context.Context) (int64, error) {
 
 // getFilesystemTotalCapacity returns maximum capacity that can be obtained by snapshot without resizing the FS, e.g. FS size
 func (v *Volume) getFilesystemTotalCapacity(ctx context.Context) (int64, error) {
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity for filesystem %s: %s", v.FilesystemName, err.Error())
 	}
@@ -441,7 +444,7 @@ func (v *Volume) getCapacityFromFsSize(ctx context.Context) (int64, error) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		return -1, err
 	}
@@ -466,7 +469,7 @@ func (v *Volume) GetCapacity(ctx context.Context) (int64, error) {
 }
 
 func (v *Volume) resizeFilesystem(ctx context.Context, capacity int64) error {
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		return err
 	}
@@ -596,7 +599,7 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 		logger.Error().Err(err).Msg("Failed to fetch inode ID for volume")
 		return err
 	}
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch filesystem object of the volume")
 		return err
@@ -725,7 +728,7 @@ func (v *Volume) getInodeIdFromApi(ctx context.Context) (uint64, error) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		return 0, err
 	}
@@ -762,7 +765,7 @@ func (v *Volume) setQuota(ctx context.Context, enforceCapacity *bool, capacityLi
 	}
 	logger.Trace().Uint64("desired_capacity", capacityLimit).Str("quotaType", string(quotaType)).Msg("Creating a quota for volume")
 
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -788,7 +791,7 @@ func (v *Volume) getQuota(ctx context.Context) (*apiclient.Quota, error) {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Trace().Msg("Getting existing quota for volume")
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -834,7 +837,10 @@ func (v *Volume) getSizeFromXattr(ctx context.Context) (uint64, error) {
 }
 
 // getFilesystemObj returns the Weka filesystem object
-func (v *Volume) getFilesystemObj(ctx context.Context) (*apiclient.FileSystem, error) {
+func (v *Volume) getFilesystemObj(ctx context.Context, fromCache bool) (*apiclient.FileSystem, error) {
+	if v.fileSystemObject != nil && fromCache {
+		return v.fileSystemObject, nil
+	}
 	if v.apiClient == nil {
 		return nil, errors.New("cannot get object of API-unbound volume")
 	}
@@ -845,10 +851,14 @@ func (v *Volume) getFilesystemObj(ctx context.Context) (*apiclient.FileSystem, e
 		}
 		return nil, err
 	}
+	v.fileSystemObject = fsObj
 	return fsObj, nil
 }
 
-func (v *Volume) getSnapshotObj(ctx context.Context) (*apiclient.Snapshot, error) {
+func (v *Volume) getSnapshotObj(ctx context.Context, fromCache bool) (*apiclient.Snapshot, error) {
+	if v.snapshotObject != nil && fromCache {
+		return v.snapshotObject, nil
+	}
 	if v.apiClient == nil {
 		return nil, errors.New("cannot get object of API-unbound snapshot")
 	}
@@ -979,7 +989,7 @@ func (v *Volume) fileSystemExists(ctx context.Context) (bool, error) {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Trace().Msg("Checking if filesystem exists")
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch filesystem from underlying storage")
 		return false, err
@@ -1004,7 +1014,7 @@ func (v *Volume) snapshotExists(ctx context.Context) (bool, error) {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Trace().Msg("Checking if snapshot exists")
-	snapObj, err := v.getSnapshotObj(ctx)
+	snapObj, err := v.getSnapshotObj(ctx, false)
 	if err != nil {
 		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Msg("Failed to fetch snapshot from underlying storage")
 		return false, err
@@ -1062,7 +1072,7 @@ func (v *Volume) createSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 		Str("filesystem", v.FilesystemName).
 		Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1229,7 +1239,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err != nil {
 			return err
 		}
-		fsObj, err := v.getFilesystemObj(ctx)
+		fsObj, err := v.getFilesystemObj(ctx, true)
 		if err != nil {
 			return err
 		}
@@ -1269,7 +1279,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 				return errors.New("cannot create encrypted volume without API binding")
 			}
 
-			fsObj, err := v.getFilesystemObj(ctx)
+			fsObj, err := v.getFilesystemObj(ctx, true)
 
 			if err != nil {
 				return err
@@ -1402,7 +1412,7 @@ func (v *Volume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, error) {
 		srcSnap, err = v.srcSnapshot.getObject(ctx)
 	} else if v.srcVolume != nil && v.srcVolume.isOnSnapshot() {
 		logger.Trace().Msg("Attempting to fetch the Weka snapshot of CSI source volume")
-		srcSnap, err = v.srcVolume.getSnapshotObj(ctx)
+		srcSnap, err = v.srcVolume.getSnapshotObj(ctx, false)
 	} else if v.srcVolume != nil && !v.srcVolume.isOnSnapshot() {
 		logger.Trace().Msg("Volume is cloned from raw Weka filesystem, no source snapshot to originate from")
 		return nil, nil
@@ -1478,7 +1488,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Debug().Str("filesystem", v.FilesystemName).Msg("Deleting filesystem")
-	fsObj, err := v.getFilesystemObj(ctx)
+	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to fetch filesystem for deletion")
 		return status.Errorf(codes.Internal, "Failed to fetch filesystem for deletion: %s, %e", v.FilesystemName, err)
@@ -1499,6 +1509,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		}
 		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")
 		fsd := &apiclient.FileSystemDeleteRequest{Uid: fsObj.Uid}
+		v.fileSystemObject = nil
 		err = v.apiClient.DeleteFileSystem(ctx, fsd)
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
@@ -1560,7 +1571,7 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-	snapObj, err := v.getSnapshotObj(ctx)
+	snapObj, err := v.getSnapshotObj(ctx, true)
 	if err != nil {
 		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Msg("Failed to fetch snapshot for deletion")
 		return status.Errorf(codes.Internal, "Failed to fetch snapshot for deletion: %s: %e", v.SnapshotName, err)
@@ -1572,6 +1583,7 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 	}
 	snapUid := snapObj.Uid
 	logger.Trace().Str("snapshot_uid", snapUid.String()).Msg("Attempting deletion of snapshot")
+	v.snapshotObject = nil
 	fsd := &apiclient.SnapshotDeleteRequest{Uid: snapObj.Uid}
 	err = v.apiClient.DeleteSnapshot(ctx, fsd)
 	if err != nil {
