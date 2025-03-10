@@ -89,7 +89,9 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 	}
 	a.resetDefaultEndpoints(ctx)
 	if len(a.Credentials.Endpoints) < 1 {
-		return nil, errors.New("no endpoints could be found for API client")
+		return nil, &ApiNoEndpointsError{
+			Err: errors.New("no endpoints could be found for API client"),
+		}
 	}
 
 	logger.Trace().Bool("insecure_skip_verify", allowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
