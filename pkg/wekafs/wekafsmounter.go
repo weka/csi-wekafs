@@ -149,7 +149,7 @@ func (m *wekafsMounter) gcInactiveMounts() {
 
 func (m *wekafsMounter) schedulePeriodicMountGc() {
 	go func() {
-		log.Debug().Msg("Initializing periodic mount GC")
+		log.Debug().Msg("Initializing periodic mount GC for wekafs transport")
 		for true {
 			m.LogActiveMounts()
 			m.gcInactiveMounts()
