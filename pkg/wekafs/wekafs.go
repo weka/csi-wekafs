@@ -347,6 +347,45 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	s.Wait()
 }
 
+func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
+	if d.config.isInDevMode() {
+		return
+	}
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create in-cluster config")
+		return
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create Kubernetes client")
+		return
+	}
+
+	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get node")
+		return
+	}
+
+	labelsToSet := make(map[string]string)
+	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, d.name)] = d.nodeID
+	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, d.name)] = "true"
+
+	for label, value := range labelsToSet {
+		node.Labels[label] = value
+		log.Info().Str("label", fmt.Sprintf("%s=%s", label, value)).Str("node", node.Name).Msg("Setting label on node")
+	}
+
+	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update node labels")
+		return
+	}
+
+	log.Info().Msg("Successfully updated labels on node")
+}
 func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 	if d.config.isInDevMode() {
 		return

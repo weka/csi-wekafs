@@ -23,7 +23,11 @@ import (
 	"time"
 )
 
-const SnapshotTypeUnifiedSnap = "wekasnap/v2"
+const (
+	SnapshotTypeUnifiedSnap = "wekasnap/v2"
+	ProcModulesPath         = "/proc/modules"
+	ProcWekafsInterface     = "/proc/wekafs/interface"
+)
 
 var ProcMountsPath = "/proc/mounts"
 
@@ -536,19 +540,38 @@ func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int
 }
 
 func isWekaInstalled() bool {
-	file, err := os.Open("/proc/modules")
+	file, err := os.Open(ProcModulesPath)
 	if err != nil {
 		log.Err(err).Msg("Failed to open procfs and check for existence of Weka kernel module")
 		return false
 	}
+	driverExists := false
 	defer func() { _ = file.Close() }()
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		s := strings.Split(scanner.Text(), " ")
 		name := s[0]
 		if name == WekaKernelModuleName {
-			return true
+			driverExists = true
+			break
 		}
+	}
+	// check if the driver actually runs and connected to Weka software
+	if driverExists {
+		driverInfo, err := os.Open(ProcWekafsInterface)
+		if err != nil {
+			log.Err(err).Msg("Failed to open driver interface and check for existence of Weka client software")
+			return false
+		}
+		defer func() { _ = driverInfo.Close() }()
+		scanner = bufio.NewScanner(driverInfo)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, "Connected frontend pid") {
+				return true
+			}
+		}
+		log.Error().Msg("Client software is not running on host and NFS is not enabled")
 	}
 	return false
 }

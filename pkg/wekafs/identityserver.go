@@ -90,6 +90,11 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 	}
 	if !isReady {
 		logger.Error().Msg("Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
+		if ids.config.driverRef.csiMode == CsiModeNode || ids.config.driverRef.csiMode == CsiModeAll {
+			ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
+		}
+	} else if !ids.getConfig().isInDevMode() {
+		ids.getConfig().GetDriver().SetNodeLabels(ctx)
 	}
 	return &csi.ProbeResponse{
 		Ready: &wrapperspb.BoolValue{
