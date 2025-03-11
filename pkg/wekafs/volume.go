@@ -248,7 +248,7 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}
 
-	fsObj, err := v.getFilesystemObj(ctx, true)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1532,7 +1532,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		return nil
 	}
 
-	deleteFunc := func() error {
+	deleteFunc := func(fsObj *apiclient.FileSystem) error {
 		if v.server.getMounter().getTransport() == dataTransportNfs {
 			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
 			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
@@ -1543,7 +1543,6 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		}
 		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")
 		fsd := &apiclient.FileSystemDeleteRequest{Uid: fsObj.Uid}
-		v.fileSystemObject = nil
 		err = v.apiClient.DeleteFileSystem(ctx, fsd)
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
@@ -1564,13 +1563,14 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		}
 		return v.waitForFilesystemDeletion(ctx, logger, fsObj.Uid)
 	}
+	v.fileSystemObject = nil
 
 	if v.server.getConfig().waitForObjectDeletion {
-		return deleteFunc()
+		return deleteFunc(fsObj)
 	}
 
 	go func() {
-		_ = deleteFunc()
+		_ = deleteFunc(fsObj)
 	}()
 	return nil
 }
