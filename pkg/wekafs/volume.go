@@ -918,16 +918,6 @@ func (v *Volume) Exists(ctx context.Context) (bool, error) {
 			logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist on storage")
 			return false, nil
 		}
-		if v.server.isInDevMode() {
-			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-			// no actual data is copied, only directory structure is created as if it was a real snapshot.
-			// happens only if the real snapshot indeed exists
-			err := v.mimicDirectoryStructureForDebugMode(ctx)
-			if err != nil {
-				return false, err
-			}
-		}
-
 	}
 	if v.hasInnerPath() {
 		err, unmount := v.MountUnderlyingFS(ctx)
@@ -1225,18 +1215,6 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateSnapshot(ctx, sr, snapObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-		if v.server.isInDevMode() {
-			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-			// no actual data is copied, only directory structure is created as if it was a real snapshot.
-			// happens only if the real snapshot indeed exists
-			err := v.mimicDirectoryStructureForDebugMode(ctx)
-			if err != nil {
-				logger.Error().Err(err).Msg("Error happened during snapshot mimicking. Cleaning snapshot up")
-				_ = v.deleteSnapshot(ctx)
-				return err
-			}
-		}
-
 	} else if v.hasInnerPath() { // the last condition is needed for being able to run CSI sanity in docker
 
 		// if it was a snapshot and had inner path, it anyway should already exist.
@@ -1345,25 +1323,6 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 		}
 	}
 	return encryptionParams, nil
-}
-
-func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
-	logger := log.Ctx(ctx)
-	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside filesystem .fsnapshots to mimic Weka snapshot behavior")
-
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
-	if err != nil {
-		return err
-	}
-	volPath := v.GetFullPath(ctx)
-
-	if err := os.MkdirAll(volPath, DefaultVolumePermissions); err != nil {
-		logger.Error().Err(err).Str("volume_path", volPath).Msg("Failed to create volume debug directory")
-		return err
-	}
-	logger.Debug().Str("full_path", v.GetFullPath(ctx)).Msg("Successully created debug directory")
-	return nil
 }
 
 func (v *Volume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, error) {
