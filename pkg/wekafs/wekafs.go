@@ -252,7 +252,8 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
 	logger := log.Ctx(ctx)
 	if len(secrets) == 0 {
-		return nil, errors.New("no secrets provided to get API client")
+		logger.Error().Msg("No secrets provided, cannot proceed")
+		return nil, errors.New("no secrets provided")
 	}
 	client, err := api.fromSecrets(ctx, secrets, api.Hostname)
 	if err != nil {
