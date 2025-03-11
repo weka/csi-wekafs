@@ -1531,7 +1531,8 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		// FS doesn't exist already, return OK for idempotence
 		return nil
 	}
-	if !fsObj.IsRemoving { // if filesystem is already removing, just wait
+
+	deleteFunc := func() error {
 		if v.server.getMounter().getTransport() == dataTransportNfs {
 			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
 			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
@@ -1561,13 +1562,16 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 			return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 
 		}
-	}
-	fsUid := fsObj.Uid
-	if v.server.getConfig().waitForObjectDeletion {
-		return v.waitForFilesystemDeletion(ctx, logger, fsUid)
+		return v.waitForFilesystemDeletion(ctx, logger, fsObj.Uid)
 	}
 
-	go func() { _ = v.waitForFilesystemDeletion(ctx, logger, fsUid) }()
+	if v.server.getConfig().waitForObjectDeletion {
+		return deleteFunc()
+	}
+
+	go func() {
+		_ = deleteFunc()
+	}()
 	return nil
 }
 
