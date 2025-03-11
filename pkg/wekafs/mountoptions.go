@@ -14,10 +14,14 @@ const (
 	MountOptionReadOnly      = "ro"
 	MountOptionWriteCache    = "writecache"
 	MountOptionCoherent      = "coherent"
+	MountOptionForceDirect   = "forcedirect"
 	MountOptionContainerName = "container_name"
 	MountOptionAcl           = "acl"
 	MountOptionNfsAsync      = "async"
+	MountOptionNfsSync       = "async"
 	MountOptionNfsHard       = "hard"
+	MountOptionNfsNoac       = "noac"
+	MountOptionNfsAc         = "ac"
 	MountOptionNfsRdirPlus   = "rdirplus"
 	MountOptionReadCache     = "readcache"
 	MountProtocolWekafs      = "wekafs"
@@ -190,7 +194,8 @@ func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 		} else if mountProtocol == MountProtocolNfs {
 			o = newMountOptionFromString(fmt.Sprintf("context=\"system_u:object_r:%s:s0\"", selinuxContextNfs))
 		}
-		opts.customOptions[o.option] = o
+		opts.AddOption(o.String())
+		opts.AddOption(MountOptionAcl) // due to STIG and other security requirements we need to enable ACLs otherwise mount might fail, CSI-333
 	} else {
 		if mountProtocol == MountProtocolWekafs {
 			delete(opts.customOptions, "fscontext")
@@ -205,14 +210,16 @@ func (opts MountOptions) AsNfs() MountOptions {
 	ret := NewMountOptionsFromString(DefaultNfsMountOptions)
 	for _, o := range opts.getOpts() {
 		switch o.option {
-		case "writecache":
-			ret.AddOption("async")
-		case "coherent":
-			ret.AddOption("sync")
-		case "forcedirect":
-			ret.AddOption("sync")
-		case "readcache":
-			ret.AddOption("noac")
+		case MountOptionWriteCache:
+			ret.AddOption(MountOptionNfsAsync)
+		case MountOptionCoherent:
+			ret.AddOption(MountOptionNfsSync)
+			ret.AddOption(MountOptionNfsNoac)
+		case MountOptionForceDirect:
+			ret.AddOption(MountOptionNfsSync)
+			ret.AddOption(MountOptionNfsNoac)
+		case MountOptionReadCache:
+			ret.AddOption(MountOptionNfsAc)
 		case "dentry_max_age_positive":
 			ret.AddOption(fmt.Sprintf("acdirmax=%s", o.value))
 			ret.AddOption(fmt.Sprintf("acregmax=%s", o.value))
