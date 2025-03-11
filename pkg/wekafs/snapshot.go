@@ -12,10 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"os"
-	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -95,16 +92,6 @@ func (s *Snapshot) Exists(ctx context.Context) (bool, error) {
 		return true, status.Error(codes.AlreadyExists, "Another snapshot with same name already exists")
 	}
 
-	if s.server != nil && s.server.isInDevMode() {
-		// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure as if it was a real snapshot.
-		// no actual data is copied, only directory structure is created
-		// happens only if the real snapshot indeed exists and is valid
-		err := s.mimicDirectoryStructureForDebugMode(ctx)
-		if err != nil {
-			return false, err
-		}
-	}
-
 	logger.Info().Msg("Snapshot exists")
 
 	return true, nil
@@ -154,41 +141,6 @@ func (s *Snapshot) Create(ctx context.Context) error {
 		Str("snapshot_uid", snap.Uid.String()).
 		Str("access_point", s.SnapshotIntegrityId).Msg("Snapshot was created successfully")
 
-	if s.server != nil && s.server.isInDevMode() {
-		// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure as if it was a real snapshot.
-		// no actual data is copied, only directory structure is created
-		// happens only if the real snapshot indeed exists and is valid
-		err := s.mimicDirectoryStructureForDebugMode(ctx)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s *Snapshot) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
-	logger := log.Ctx(ctx)
-	logger.Warn().Bool("debug_mode", true).Msg("Creating directory mimicPath inside filesystem .snapshots to mimic Weka snapshot behavior")
-
-	v := s.SourceVolume
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
-	if err != nil {
-		return err
-	}
-	basePath := v.getMountPath()
-	mimicPath := filepath.Join(basePath, SnapshotsSubDirectory, s.SnapshotIntegrityId)
-	log.Info().Str("mimic_path", mimicPath).Msg("Creating mimicPath")
-	// make sure we don't hit umask upon creating directory
-	oldMask := syscall.Umask(0)
-	defer syscall.Umask(oldMask)
-
-	if err := os.MkdirAll(mimicPath, DefaultVolumePermissions); err != nil {
-		logger.Error().Err(err).Str("volume_path", mimicPath).Msg("Failed to create volume directory")
-		return err
-	}
-	logger.Debug().Str("mimic_path", v.GetFullPath(ctx)).Msg("Successully created directory")
 	return nil
 }
 
