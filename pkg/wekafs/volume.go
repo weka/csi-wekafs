@@ -248,7 +248,7 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}
 
-	fsObj, err := v.getFilesystemObj(ctx, true)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		return nil, err
 	}
