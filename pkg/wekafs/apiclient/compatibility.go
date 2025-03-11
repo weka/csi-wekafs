@@ -21,6 +21,7 @@ type WekaCompatibilityRequiredVersions struct {
 	EncryptionWithNoKms            string
 	EncryptionWithClusterKey       string
 	EncryptionWithCustomSettings   string
+	ResolvePathToInode             string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
@@ -38,6 +39,7 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	EncryptionWithNoKms:            "v4.0",   // can create encrypted filesystems without KMS
 	EncryptionWithClusterKey:       "v4.0",   // can create encrypted filesystems with common cluster-wide key
 	EncryptionWithCustomSettings:   "v4.4.1", // can create encrypted filesystems with custom settings (key per filesystem(s))
+	ResolvePathToInode:             "v4.3",   // can resolve a path to an inode instead of doing it via mount
 }
 
 type WekaCompatibilityMap struct {
@@ -55,6 +57,7 @@ type WekaCompatibilityMap struct {
 	EncryptionWithNoKms             bool
 	EncryptionWithClusterKey        bool
 	EncryptionWithCustomSettings    bool
+	ResolvePathToInode              bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -75,6 +78,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.EncryptionWithNoKms = false
 		cm.EncryptionWithClusterKey = false
 		cm.EncryptionWithCustomSettings = false
+		cm.ResolvePathToInode = false
 
 		return
 	}
@@ -92,6 +96,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	en, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithNoKms)
 	ec, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithClusterKey)
 	ecc, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithCustomSettings)
+	rp, _ := version.NewVersion(MinimumSupportedWekaVersions.ResolvePathToInode)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
@@ -107,6 +112,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.EncryptionWithNoKms = v.GreaterThanOrEqual(en)
 	cm.EncryptionWithClusterKey = v.GreaterThanOrEqual(ec)
 	cm.EncryptionWithCustomSettings = v.GreaterThanOrEqual(ecc)
+	cm.ResolvePathToInode = v.GreaterThanOrEqual(rp)
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
@@ -163,4 +169,8 @@ func (a *ApiClient) SupportsCustomEncryptionSettings() bool {
 
 func (a *ApiClient) RequiresNewNodePath() bool {
 	return a.CompatibilityMap.NewNodeApiObjectPath
+}
+
+func (a *ApiClient) SupportsResolvePathToInode() bool {
+	return a.CompatibilityMap.ResolvePathToInode
 }

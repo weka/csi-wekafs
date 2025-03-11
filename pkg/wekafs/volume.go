@@ -657,11 +657,19 @@ func (v *Volume) getInnerPath() string {
 	return v.innerPath
 }
 
-// GetFullPath returns a full path on which volume is accessible including snapshot subdir and inner path
-//
-//goland:noinspection GoUnusedParameter
+// GetFullPath returns a full path on which volume is accessible including OS mount point, snapshot subdir and inner path
 func (v *Volume) GetFullPath(ctx context.Context) string {
-	mountParts := []string{v.mountPath}
+	mountParts := []string{v.mountPath, v.GetRelativePath(ctx)}
+	fullPath := filepath.Join(mountParts...)
+	return fullPath
+}
+
+// GetRelativePath returns a whole path inside filesystem including snapshots subdir and inner path but excluding mount point
+//
+//goland:noinspection GoUnusedParame
+//goland:noinspection GoUnusedParameter
+func (v *Volume) GetRelativePath(ctx context.Context) string {
+	mountParts := []string{"/"}
 	if v.isOnSnapshot() {
 		mountParts = append(mountParts, []string{SnapshotsSubDirectory, v.SnapshotAccessPoint}...)
 	}
@@ -685,6 +693,9 @@ func (v *Volume) getInodeId(ctx context.Context) (uint64, error) {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
+	if v.apiClient.SupportsResolvePathToInode() {
+		return v.getInodeIdFromApi(ctx)
+	}
 	err, unmount := v.MountUnderlyingFS(ctx)
 	defer unmount()
 	if err != nil {
@@ -705,6 +716,25 @@ func (v *Volume) getInodeId(ctx context.Context) (uint64, error) {
 	}
 	logger.Debug().Uint64("inode_id", stat.Ino).Msg("Succesfully fetched root inode ID")
 	return stat.Ino, nil
+}
+
+func (v *Volume) getInodeIdFromApi(ctx context.Context) (uint64, error) {
+	op := "getInodeIdFromApi"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+
+	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
+	fsObj, err := v.getFilesystemObj(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if fsObj == nil {
+		return 0, ErrFilesystemNotFound
+	}
+	p := v.GetRelativePath(ctx)
+	logger.Trace().Str("full_path", p).Msg("Getting root inode of volume")
+	return v.apiClient.ResolvePathToInode(ctx, fsObj, p)
 }
 
 // GetId returns the ID of the volume
