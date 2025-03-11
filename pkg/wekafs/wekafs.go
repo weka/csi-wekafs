@@ -68,9 +68,9 @@ var (
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
 	sync.Mutex
-	apis               map[uint32]*apiclient.ApiClient
-	config             *DriverConfig
-	Hostname           string
+	apis     map[uint32]*apiclient.ApiClient
+	config   *DriverConfig
+	Hostname string
 }
 
 // Die used to intentionally panic and exit, while updating termination log
@@ -204,13 +204,8 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
 	logger := log.Ctx(ctx)
 	if len(secrets) == 0 {
-		if api.legacySecrets != nil {
-			logger.Trace().Msg("No explicit API service for request, using legacySecrets")
-			secrets = *api.legacySecrets
-		} else {
-			logger.Trace().Msg("No API service for request, switching to legacy mode")
-			return nil, nil
-		}
+		logger.Error().Msg("No secrets provided, cannot proceed")
+		return nil, errors.New("no secrets provided")
 	}
 	client, err := api.fromSecrets(ctx, secrets, api.Hostname)
 	if err != nil {
