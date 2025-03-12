@@ -47,6 +47,8 @@ func TestWekaCompatibilityMap_fillIn(t *testing.T) {
 				SingleClientMultipleClusters:   true,
 				NewNodeApiObjectPath:           true,
 				MountFilesystemsUsingAuthToken: true,
+				EncryptionWithNoKms:            true,
+				EncryptionWithClusterKey:       true,
 			},
 		},
 		{
@@ -61,6 +63,8 @@ func TestWekaCompatibilityMap_fillIn(t *testing.T) {
 				SingleClientMultipleClusters:   true,
 				NewNodeApiObjectPath:           true,
 				MountFilesystemsUsingAuthToken: true,
+				EncryptionWithNoKms:            true,
+				EncryptionWithClusterKey:       true,
 			},
 		},
 		{
@@ -77,6 +81,9 @@ func TestWekaCompatibilityMap_fillIn(t *testing.T) {
 				SyncOnCloseMountOption:          true,
 				SingleClientMultipleClusters:    true,
 				NewNodeApiObjectPath:            true,
+				EncryptionWithNoKms:             true,
+				EncryptionWithClusterKey:        true,
+				EncryptionWithCustomSettings:    true,
 			},
 		},
 	}

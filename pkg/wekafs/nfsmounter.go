@@ -155,7 +155,7 @@ func (m *nfsMounter) gcInactiveMounts() {
 
 func (m *nfsMounter) schedulePeriodicMountGc() {
 	go func() {
-		log.Debug().Msg("Initializing periodic mount GC")
+		log.Debug().Msg("Initializing periodic mount GC for nfs transport")
 		for true {
 			m.LogActiveMounts()
 			m.gcInactiveMounts()
