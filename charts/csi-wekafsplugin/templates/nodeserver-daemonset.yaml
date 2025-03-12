@@ -167,6 +167,8 @@ spec:
             {{- if or (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") (eq .Values.selinuxSupport "enforced") }}
             - mountPath: /etc/selinux/config
               name: selinux-config
+            - mountPath: /sys/fs/selinux
+              name: selinux-fs
             {{- end }}
         - name: liveness-probe
           volumeMounts:
@@ -253,6 +255,10 @@ spec:
             path: /etc/selinux/config
             type: File
           name: selinux-config
+        - hostPath:
+            path: /sys/fs/selinux
+            type: Directory
+          name: selinux-fs
       {{- end }}
         - name: nodeinfo
           emptyDir: {}
