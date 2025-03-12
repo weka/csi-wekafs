@@ -18,7 +18,7 @@ all: build
 .PHONY: build-% build clean
 
 # understand what is the version tag
-VERSION=$(shell cat charts/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
+VERSION?=$(shell cat charts/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
 DOCKER_IMAGE_NAME=csi-wekafs
 
 $(CMDS:%=build-%): build-%:
