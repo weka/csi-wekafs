@@ -351,6 +351,10 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if d.config.isInDevMode() {
 		return
 	}
+
+	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
+		return
+	}
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create in-cluster config")
@@ -365,7 +369,7 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 
 	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get node")
+		log.Error().Err(err).Msg("Failed to get node object from Kubernetes")
 		return
 	}
 
@@ -373,9 +377,19 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, d.name)] = d.nodeID
 	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, d.name)] = "true"
 
+	updateNeeded := false
+
 	for label, value := range labelsToSet {
-		node.Labels[label] = value
-		log.Info().Str("label", fmt.Sprintf("%s=%s", label, value)).Str("node", node.Name).Msg("Setting label on node")
+		existing, ok := node.Labels[label]
+		if !ok || existing != value {
+			log.Info().Str("label", fmt.Sprintf("%s=%s", label, value)).Str("node", node.Name).Msg("Setting label on node")
+			node.Labels[label] = value
+			updateNeeded = true
+		}
+	}
+
+	if !updateNeeded {
+		return
 	}
 
 	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
