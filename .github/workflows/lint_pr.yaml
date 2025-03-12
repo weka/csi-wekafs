@@ -49,7 +49,7 @@ jobs:
             CSI-\d+
             WEKAPP-\d+
           # Configure that a scope must always be provided.
-          requireScope: true
+          requireScope: false
           # Configure which scopes are disallowed in PR titles (newline-delimited).
           # For instance by setting the value below, `chore(release): ...` (lowercase)
           # and `ci(e2e,release): ...` (unknown scope) will be rejected.

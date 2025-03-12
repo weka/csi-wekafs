@@ -2,85 +2,11 @@ package apiclient
 
 import (
 	"context"
-	"flag"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"testing"
 )
-
-var creds Credentials
-var endpoint string
-var fsName string
-
-var client *ApiClient
-
-func TestMain(m *testing.M) {
-	flag.StringVar(&endpoint, "api-endpoint", "localhost:14000", "API endpoint for tests")
-	flag.StringVar(&creds.Username, "api-username", "admin", "API username for tests")
-	flag.StringVar(&creds.Password, "api-password", "Qwerty1@", "API password for tests")
-	flag.StringVar(&creds.Organization, "api-org", "Root", "API org for tests")
-	flag.StringVar(&creds.HttpScheme, "api-scheme", "https", "API scheme for tests")
-	flag.StringVar(&fsName, "fs-name", "default", "Filesystem name for tests")
-	flag.Parse()
-	m.Run()
-}
-
-func GetApiClientForTest(t *testing.T) *ApiClient {
-	creds.Endpoints = []string{endpoint}
-	if client == nil {
-		apiClient, err := NewApiClient(context.Background(), creds, true, "test")
-		if err != nil {
-			t.Fatalf("Failed to create API client: %v", err)
-		}
-		if apiClient == nil {
-			t.Fatalf("Failed to create API client")
-		}
-		if err := apiClient.Login(context.Background()); err != nil {
-			t.Fatalf("Failed to login: %v", err)
-		}
-		client = apiClient
-	}
-	return client
-}
-
-//
-//func TestGetNfsPermissions(t *testing.T) {
-//	apiClient := GetApiClientForTest(t)
-//
-//	var permissions []NfsPermission
-//
-//	req := &NfsPermissionCreateRequest{
-//		Filesystem: fsName,
-//		Group:      "group1",
-//	}
-//	p := &NfsPermission{}
-//	err := apiClient.CreateNfsPermission(context.Background(), &NfsPermissionCreateRequest{}, p)
-//	assert.NoError(t, err)
-//	assert.NotZero(t, p.Uid)
-//
-//	err := apiClient.GetNfsPermissions(context.Background(), &permissions)
-//	assert.NoError(t, err)
-//	assert.NotEmpty(t, permissions)
-//}
-//
-//func TestFindNfsPermissionsByFilter(t *testing.T) {
-//	apiClient := GetApiClientForTest(t)
-//	query := &NfsPermission{Filesystem: "fs1"}
-//	var resultSet []NfsPermission
-//	err := apiClient.FindNfsPermissionsByFilter(context.Background(), query, &resultSet)
-//	assert.NoError(t, err)
-//	assert.NotEmpty(t, resultSet)
-//}
-//
-//func TestGetNfsPermissionByFilter(t *testing.T) {
-//	apiClient := GetApiClientForTest(t)
-//
-//	query := &NfsPermission{Filesystem: "fs1"}
-//	result, err := apiClient.GetNfsPermissionByFilter(context.Background(), query)
-//	assert.NoError(t, err)
-//	assert.NotNil(t, result)
-//}
 
 func TestFindNfsPermissionsByFilesystemName(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
@@ -101,52 +27,6 @@ func TestFindNfsPermissionsByFilesystemName(t *testing.T) {
 	assert.Empty(t, permissions)
 
 }
-
-//
-//func TestGetNfsPermissionByUid(t *testing.T) {
-//	apiClient := GetApiClientForTest(t)
-//	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//		w.WriteHeader(http.StatusOK)
-//		w.Write([]byte(`{"filesystem": "fs1", "group": "group1"}`))
-//	}))
-//	defer server.Close()
-//
-//
-//	uid := uuid.New()
-//	result, err := apiClient.GetNfsPermissionByUid(context.Background(), uid)
-//	assert.NoError(t, err)
-//	assert.NotNil(t, result)
-//}
-//
-//func TestCreateNfsPermission(t *testing.T) {
-//	apiClient := GetApiClientForTest(t)
-//
-//	req := &NfsPermissionCreateRequest{
-//		Filesystem:      "fs1",
-//		Group:           "group1",
-//		SquashMode:      NfsPermissionSquashModeNone,
-//		AnonUid:         1000,
-//		AnonGid:         1000,
-//		EnableAuthTypes: []NfsAuthType{NfsAuthTypeSys},
-//	}
-//	var perm NfsPermission
-//	err := apiClient.CreateNfsPermission(context.Background(), req, &perm)
-//	assert.NoError(t, err)
-//	assert.NotNil(t, perm)
-//}
-//
-//func TestEnsureNfsPermission(t *testing.T) {
-//	apiClient := GetApiClientForTest(t)
-//	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//		w.WriteHeader(http.StatusOK)
-//		w.Write([]byte(`{"filesystem": "fs1", "group": "group1"}`))
-//	}))
-//	defer server.Close()
-//
-//
-//	err := EnsureNfsPermission(context.Background(), "fs1", "group1", apiClient)
-//	assert.NoError(t, err)
-//}
 
 func TestNfsClientGroup(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
@@ -298,33 +178,9 @@ func TestInterfaceGroup(t *testing.T) {
 	err := apiClient.GetInterfaceGroups(context.Background(), &igs)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, igs)
-	assert.NotEmpty(t, igs[0].Ips)
-	//
-	//// Test GetGroupByUid
-	//uid := ig.Uid
-	//err = apiClient.GetInterfaceGroupByUid(context.Background(), uid, ig)
-	//assert.NoError(t, err)
-	//assert.Equal(t, igName, ig.Name)
-	//assert.NotEmpty(t, ig.Uid)
-	//
-	//// Test GetGroupByName
-	//name := ig.Name
-	//ig, err = apiClient.GetInterfaceGroupByName(context.Background(), name)
-	//assert.NoError(t, err)
-	//assert.Equal(t, igName, ig.Name)
-	//assert.NotEmpty(t, ig.Uid)
-	//
-	//// Test Delete
-	//r := &InterfaceGroupDeleteRequest{Uid: ig.Uid}
-	//err = apiClient.DeleteInterfaceGroup(context.Background(), r)
-	//assert.NoError(t, err)
-	//err = apiClient.GetInterfaceGroups(context.Background(), &igs)
-	//assert.NoError(t, err)
-	//for _, r := range igs {
-	//	if r.Uid == ig.Uid {
-	//		t.Errorf("Failed to delete group")
-	//	}
-	//}
+	if len(igs) > 0 {
+		assert.NotEmpty(t, igs[0].Ips)
+	}
 }
 
 func TestIsSupersetOf(t *testing.T) {

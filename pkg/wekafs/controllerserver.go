@@ -36,7 +36,7 @@ const (
 	deviceID                            = "deviceID"
 	maxVolumeIdLength                   = 1920
 	TracerName                          = "weka-csi"
-	ControlServerAdditionalMountOptions = "writecache,acl"
+	ControlServerAdditionalMountOptions = MountOptionAcl + "," + MountOptionWriteCache
 )
 
 type ControllerServer struct {
@@ -284,7 +284,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 				VolumeContext:      params,
 				ContentSource:      volume.getCsiContentSource(ctx),
-				AccessibleTopology: generateAccessibleTopology(),
+				AccessibleTopology: cs.generateAccessibleTopology(),
 			},
 		}, nil
 	} else if volExists && err == nil {
@@ -300,7 +300,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 					CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 					VolumeContext:      params,
 					ContentSource:      volume.getCsiContentSource(ctx),
-					AccessibleTopology: generateAccessibleTopology(),
+					AccessibleTopology: cs.generateAccessibleTopology(),
 				},
 			}, nil
 
@@ -322,14 +322,17 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 			VolumeContext:      params,
 			ContentSource:      volume.getCsiContentSource(ctx),
-			AccessibleTopology: generateAccessibleTopology(),
+			AccessibleTopology: cs.generateAccessibleTopology(),
 		},
 	}, nil
 }
 
-func generateAccessibleTopology() []*csi.Topology {
+func (cs *ControllerServer) generateAccessibleTopology() []*csi.Topology {
 	accessibleTopology := make(map[string]string)
-	accessibleTopology[TopologyLabelWeka] = "true"
+	driverName := cs.getConfig().GetDriver().name
+	localWekaLabel := fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)
+	accessibleTopology[TopologyLabelWekaGlobal] = "true"
+	accessibleTopology[localWekaLabel] = "true"
 	return []*csi.Topology{
 		{
 			Segments: accessibleTopology,

@@ -37,10 +37,15 @@ import (
 )
 
 const (
-	TopologyKeyNode                  = "topology.wekafs.csi/node"
-	TopologyLabelNode                = "topology.csi.weka.io/node"
-	TopologyLabelWeka                = "topology.csi.weka.io/global"
-	TopologyLabelTransport           = "topology.csi.weka.io/transport"
+	TopologyKeyNode              = "topology.wekafs.csi/node"
+	TopologyLabelNodeGlobal      = "topology.csi.weka.io/node"
+	TopologyLabelWekaGlobal      = "topology.csi.weka.io/global"
+	TopologyLabelTransportGlobal = "topology.csi.weka.io/transport"
+
+	TopologyLabelWekaLocalPattern = "topology.%s/accessible"
+	TopologyLabelNodePattern      = "topology.%s/node"
+	TopologyLabelTransportPattern = "topology.%s/transport"
+
 	WekaKernelModuleName             = "wekafsgw"
 	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
 )
@@ -62,7 +67,7 @@ func (ns *NodeServer) getNodeId() string {
 }
 
 func (ns *NodeServer) getDefaultMountOptions() MountOptions {
-	return getDefaultMountOptions().RemoveOption("acl").MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ns.getConfig().mutuallyExclusiveOptions)
+	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ns.getConfig().mutuallyExclusiveOptions)
 }
 
 func (ns *NodeServer) isInDevMode() bool {
@@ -334,7 +339,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	attrib := req.GetVolumeContext()
 	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
-	volume.mountOptions.RemoveOption("acl").Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
+	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
 
 	logger.Debug().Str("target_path", targetPath).
 		Str("fs_type", fsType).
@@ -517,13 +522,19 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+	driverName := ns.getConfig().GetDriver().name
+	type topologySegments map[string]string
+	segments := topologySegments{
+		TopologyKeyNode:         ns.nodeID,
+		TopologyLabelWekaGlobal: "true", // for backward compatibility remains as is
+	}
+	// this will either overwrite or add the keys based on the driver name
+	segments[fmt.Sprintf(TopologyLabelNodePattern, driverName)] = ns.nodeID
+	segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = string(ns.getMounter().getTransport())
+	segments[fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)] = "true"
+
 	topology := &csi.Topology{
-		Segments: map[string]string{
-			TopologyKeyNode:        ns.nodeID, // required exactly same way as this is how node is accessed by K8s
-			TopologyLabelNode:      ns.nodeID,
-			TopologyLabelWeka:      "true",
-			TopologyLabelTransport: string(ns.getMounter().getTransport()),
-		},
+		Segments: segments,
 	}
 
 	return &csi.NodeGetInfoResponse{

@@ -61,6 +61,7 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption without KMS: %t", a.SupportsEncryptionWithNoKms()))
 	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption of filesystems with a cluster-wide key: %t", a.SupportsEncryptionWithCommonKey()))
 	logger.Info().Msg(fmt.Sprintf("Cluster supports encryption of filesystems with custom keys: %t", a.SupportsCustomEncryptionSettings()))
+	logger.Info().Msg(fmt.Sprintf("Cluster supports resolving paths to inodes: %t", a.SupportsResolvePathToInode()))
 	return nil
 }
 

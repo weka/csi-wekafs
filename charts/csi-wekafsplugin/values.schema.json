@@ -60,6 +60,9 @@
                 },
                 "replicas": {
                     "type": "integer"
+                },
+                "terminationGracePeriodSeconds": {
+                    "type": "integer"
                 }
             }
         },
@@ -216,6 +219,9 @@
                 },
                 "podLabels": {
                     "type": "object"
+                },
+                "terminationGracePeriodSeconds": {
+                    "type": "integer"
                 }
             }
         },
