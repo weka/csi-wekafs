@@ -12,12 +12,8 @@ require {
         attribute spoolfile, file_type, non_security_file_type, non_auth_file_type;
 }
 
-bool container_use_wekafs false;
-
 typeattribute wekafs_csi_volume_t spoolfile, file_type, non_security_file_type, non_auth_file_type;
 
 #============= container_t ==============
-if (container_use_wekafs) {
-    allow container_t wekafs_csi_volume_t:file { create open getattr setattr read write append rename link unlink ioctl lock map };
-    allow container_t wekafs_csi_volume_t:dir { add_name create getattr ioctl link lock open read remove_name rename reparent rmdir search setattr unlink write };
-}
+allow container_t wekafs_csi_volume_t:file { create open getattr setattr read write append rename link unlink ioctl lock map};
+allow container_t wekafs_csi_volume_t:dir { add_name create getattr ioctl link lock open read remove_name rename reparent rmdir search setattr unlink write };
