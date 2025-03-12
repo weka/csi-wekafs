@@ -190,7 +190,7 @@ func (v *Volume) isEncrypted(ctx context.Context) (bool, error) {
 		// TODO: maybe we should move it into a separate method that is explicitly invoked when Volume is constructed from VolumeID rather than doing it here
 		if exists, err := v.Exists(ctx); err == nil {
 			if v.apiClient != nil {
-				fsObj, err := v.getFilesystemObj(ctx)
+				fsObj, err := v.getFilesystemObj(ctx, true)
 				if err != nil {
 					return false, err
 				}
@@ -1236,8 +1236,12 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err != nil {
 			return err
 		}
+		isEncrypted, err := v.isEncrypted(ctx)
+		if err != nil {
+			return status.Errorf(codes.Internal, "Failed to check if volume is encrypted: %s", err.Error())
+		}
 
-		if v.isEncrypted() && fsObj != nil && !fsObj.IsEncrypted {
+		if isEncrypted && fsObj != nil && !fsObj.IsEncrypted {
 			return status.Errorf(codes.InvalidArgument, "Cannot create encrypted snapshot-backed volume on unencrypted filesystem")
 		}
 
@@ -1254,8 +1258,12 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 		// if it was a snapshot and had inner path, it anyway should already exist.
 		// So creating inner path only in such case
+		isEncrypted, err := v.isEncrypted(ctx)
+		if err != nil {
+			return status.Errorf(codes.Internal, "Failed to check if volume is encrypted: %s", err.Error())
+		}
 
-		if v.isEncrypted() {
+		if isEncrypted {
 			if v.apiClient == nil {
 				return errors.New("cannot create encrypted volume without API binding")
 			}
