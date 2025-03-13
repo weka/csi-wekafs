@@ -485,7 +485,7 @@ func (driver *WekaFsDriver) NewMounter() AnyMounter {
 		log.Warn().Msg("Enforcing NFS transport due to configuration")
 		return newNfsMounter(driver)
 	}
-	if driver.config.allowNfsFailback && !isWekaInstalled() {
+	if driver.config.allowNfsFailback && !isWekaRunning() {
 		if driver.config.isInDevMode() {
 			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
 		} else {
