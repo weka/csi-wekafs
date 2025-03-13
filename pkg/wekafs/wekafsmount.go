@@ -184,6 +184,10 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 		return err
 	}
 	if !m.isInDevMode() {
+		if !isWekaRunning() {
+			logger.Error().Msg("WEKA is not running, cannot mount. Make sure WEKA client software is running on the host")
+			return errors.New("weka is not running, cannot mount")
+		}
 		if apiClient == nil {
 			// this flow is relevant only for legacy volumes, will not work with SCMC / authenticated mounts / non-root org
 			logger.Trace().Msg("No API client for mount, not requesting mount token")
