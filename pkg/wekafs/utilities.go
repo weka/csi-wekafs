@@ -539,7 +539,7 @@ func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int
 	return exists, matches, err
 }
 
-func isWekaInstalled() bool {
+func isWekaRunning() bool {
 	file, err := os.Open(ProcModulesPath)
 	if err != nil {
 		log.Err(err).Msg("Failed to open procfs and check for existence of Weka kernel module")
@@ -567,6 +567,7 @@ func isWekaInstalled() bool {
 		scanner = bufio.NewScanner(driverInfo)
 		for scanner.Scan() {
 			line := scanner.Text()
+			// TODO: improve it by checking for the explicit client container name rather than just ANY container
 			if strings.Contains(line, "Connected frontend pid") {
 				return true
 			}
