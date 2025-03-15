@@ -140,6 +140,28 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		caCertificate = ""
 	}
 
+	preexistingVaultCreds := apiclient.KmsVaultCredentials{}
+
+	kmsVaultNamespaceForFilesystemEncryption, ok := secrets["kmsVaultNamespaceForFilesystemEncryption"]
+	if ok {
+		preexistingVaultCreds.Namespace = strings.TrimSpace(strings.TrimSuffix(kmsVaultNamespaceForFilesystemEncryption, "\n"))
+	}
+
+	kmsVaultKeyIdentifierForFilesystemEncryption, ok := secrets["kmsVaultKeyIdentifierForFilesystemEncryption"]
+	if ok {
+		preexistingVaultCreds.KeyIdentifier = strings.TrimSpace(strings.TrimSuffix(kmsVaultKeyIdentifierForFilesystemEncryption, "\n"))
+	}
+
+	kmsVaultRoleIdForFilesystemEncryption, ok := secrets["kmsVaultRoleIdForFilesystemEncryption"]
+	if ok {
+		preexistingVaultCreds.RoleId = strings.TrimSpace(strings.TrimSuffix(kmsVaultRoleIdForFilesystemEncryption, "\n"))
+	}
+
+	kmsVaultSecretIdForFilesystemEncryption, ok := secrets["kmsVaultSecretIdForFilesystemEncryption"]
+	if ok {
+		preexistingVaultCreds.SecretId = strings.TrimSpace(strings.TrimSuffix(kmsVaultSecretIdForFilesystemEncryption, "\n"))
+	}
+
 	credentials := apiclient.Credentials{
 		Username:            strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
 		Password:            strings.TrimSuffix(secrets["password"], "\n"),
@@ -150,6 +172,7 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		AutoUpdateEndpoints: autoUpdateEndpoints,
 		CaCertificate:       caCertificate,
 		NfsTargetIPs:        nfsTargetIps,
+		KmsPreexistingCredentialsForVolumeEncryption: preexistingVaultCreds,
 	}
 	return api.fromCredentials(ctx, credentials, hostname)
 }
