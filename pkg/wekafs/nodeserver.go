@@ -70,10 +70,6 @@ func (ns *NodeServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ns.getConfig().mutuallyExclusiveOptions)
 }
 
-func (ns *NodeServer) isInDevMode() bool {
-	return ns.getConfig().isInDevMode()
-}
-
 func (ns *NodeServer) getConfig() *DriverConfig {
 	return ns.config
 }
@@ -112,18 +108,8 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 		}
 	}
 
-	// Check if the volume path exists
-	if ns.getConfig().isInDevMode() {
-		// In dev mode, we don't have the actual Weka mount, so we just check if the path exists
-		if _, err := os.Stat(volumePath); err != nil {
-			return nil, status.Error(codes.NotFound, "Volume path not found")
-		}
-
-	} else {
-		// In production mode, we check if the path is indeed a Weka mount (Either NFS or WekaFS)
-		if !PathIsWekaMount(ctx, volumePath) {
-			return nil, status.Error(codes.NotFound, "Volume path not found")
-		}
+	if !PathIsWekaMount(ctx, volumePath) {
+		return nil, status.Error(codes.NotFound, "Volume path not found")
 	}
 
 	// Validate Weka volume ID
@@ -381,18 +367,12 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
-			if !ns.isInDevMode() {
-				if PathIsWekaMount(ctx, targetPath) {
-					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
-					unmount()
-					return &csi.NodePublishVolumeResponse{}, nil
-				} else {
-					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
-				}
-			} else {
-				log.Ctx(ctx).Trace().Msg("Assuming debug execution and not validating WekaFS mount")
+			if PathIsWekaMount(ctx, targetPath) {
+				log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
 				unmount()
 				return &csi.NodePublishVolumeResponse{}, nil
+			} else {
+				log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
 			}
 
 		} else {
@@ -470,19 +450,17 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 	}
 	// check if this path is a wekafs mount
-	if !ns.isInDevMode() {
-		if PathIsWekaMount(ctx, targetPath) {
-			logger.Debug().Msg("Directory exists and is weka mount")
-		} else {
-			msg := fmt.Sprintf("Directory %s exists, but not a weka mount, assuming already unpublished", targetPath)
-			logger.Warn().Msg(msg)
-			if err := os.Remove(targetPath); err != nil {
-				result = "FAILURE"
-				return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
-			}
-			result = "SUCCESS_WITH_WARNING"
-			return &csi.NodeUnpublishVolumeResponse{}, nil
+	if PathIsWekaMount(ctx, targetPath) {
+		logger.Debug().Msg("Directory exists and is weka mount")
+	} else {
+		msg := fmt.Sprintf("Directory %s exists, but not a weka mount, assuming already unpublished", targetPath)
+		logger.Warn().Msg(msg)
+		if err := os.Remove(targetPath); err != nil {
+			result = "FAILURE"
+			return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 		}
+		result = "SUCCESS_WITH_WARNING"
+		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
 FORCEUMOUNT:
