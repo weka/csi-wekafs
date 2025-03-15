@@ -159,7 +159,6 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	var mountOptionsSensitive []string
 	if apiClient == nil {
-		// this flow is relevant only for legacy volumes, will not work with SCMC
 		logger.Trace().Msg("No API client for mount, cannot proceed")
 		return errors.New("no API client for mount, cannot do NFS mount")
 	}
