@@ -164,11 +164,6 @@ func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *a
 		return nil
 	}
 
-	// legacy flow
-	if apiClient == nil {
-		return nil
-	}
-
 	var err error
 	configuredContainerName := ""
 	if m.mounter.config != nil {
@@ -191,14 +186,13 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 		return errors.New("weka is not running, cannot mount")
 	}
 	if apiClient == nil {
-		// this flow is relevant only for legacy volumes, will not work with SCMC / authenticated mounts / non-root org
-		logger.Trace().Msg("No API client for mount, not requesting mount token")
+		return errors.New("no api client bound, cannot obtain mount token")
+	}
+
+	if mountToken, err := apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
+		return err
 	} else {
-		if mountToken, err := apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
-			return err
-		} else {
-			mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
-		}
+		mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
 	}
 
 	// if needed, add containerName to the mount options
