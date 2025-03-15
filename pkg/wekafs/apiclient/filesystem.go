@@ -45,6 +45,9 @@ type FileSystem struct {
 	KmsKeyIdentifier string `json:"kms_key_identifier,omitempty" url:"-"`
 	KmsNamespace     string `json:"kms_namespace,omitempty" url:"-"`
 	KmsRole          string `json:"kms_role,omitempty" url:"-"`
+
+	// used for internal purposes
+	ForceFresh *bool `json:"-" url:"force_fresh,omitempty"`
 }
 
 type FileSystemMountToken struct {
@@ -59,11 +62,14 @@ func (fs *FileSystem) String() string {
 	return fmt.Sprintln("FileSystem(fsUid:", fs.Uid, "name:", fs.Name, "capacity:", strconv.FormatInt(fs.TotalCapacity, 10), ")")
 }
 
-func (a *ApiClient) GetFileSystemByUid(ctx context.Context, uid uuid.UUID, fs *FileSystem) error {
+func (a *ApiClient) GetFileSystemByUid(ctx context.Context, uid uuid.UUID, fs *FileSystem, forceFresh bool) error {
 	ret := &FileSystem{
-		Uid: uid,
+		Uid:        uid,
+		ForceFresh: &forceFresh,
 	}
-	err := a.Get(ctx, ret.GetApiUrl(a), nil, fs)
+
+	q, _ := qs.Values(ret)
+	err := a.Get(ctx, ret.GetApiUrl(a), q, fs)
 	if err != nil {
 		switch t := err.(type) {
 		case *ApiNotFoundError:
