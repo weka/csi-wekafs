@@ -20,7 +20,6 @@ type wekafsMounter struct {
 	mountMap                wekafsMountsMap
 	lock                    sync.Mutex
 	kMounter                mount.Interface
-	debugPath               string
 	selinuxSupport          *bool
 	gc                      *innerPathVolGc
 	allowProtocolContainers bool
@@ -70,7 +69,6 @@ func newWekafsMounter(ctx context.Context, driver *WekaFsDriver) *wekafsMounter 
 	}
 	mounter := &wekafsMounter{
 		mountMap: wekafsMountsMap{},
-		debugPath: driver.debugPath,
 		selinuxSupport: selinuxSupport,
 		config: driver.config,
 		mountBaseDir: mountBaseDirForRole(driver.csiMode),
@@ -92,7 +90,6 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		mounter:                 m,
 		kMounter:                m.kMounter,
 		fsName:                  fsName,
-		debugPath:               m.debugPath,
 		mountPoint:              path.Join(m.mountBaseDir, string(m.getTransport()), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:            options,
 		allowProtocolContainers: m.allowProtocolContainers,

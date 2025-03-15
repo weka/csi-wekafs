@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +16,6 @@ type nfsMounter struct {
 	mountMap              nfsMountsMap
 	lock                  sync.Mutex
 	kMounter              mount.Interface
-	debugPath             string
 	selinuxSupport        *bool
 	gc                    *innerPathVolGc
 	clientGroupName       string
@@ -55,7 +55,6 @@ func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 	}
 	mounter := &nfsMounter{
 		mountMap: make(nfsMountsMap),
-		debugPath: driver.debugPath,
 		selinuxSupport: selinuxSupport,
 		exclusiveMountOptions: driver.config.mutuallyExclusiveOptions,
 		mountBaseDir: mountBaseDirForRole(driver.csiMode),
@@ -79,8 +78,7 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		mounter:         m,
 		kMounter:        m.kMounter,
 		fsName:          fsName,
-		debugPath:       m.debugPath,
-		mountPoint:      m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+		mountPoint:      path.Join(m.mountBaseDir, string(m.getTransport()), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:    options,
 		clientGroupName: m.clientGroupName,
 		protocolVersion: apiclient.NfsVersionString(fmt.Sprintf("V%s", m.nfsProtocolVersion)),
