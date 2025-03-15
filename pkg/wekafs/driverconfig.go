@@ -43,6 +43,7 @@ type DriverConfig struct {
 	waitForObjectDeletion            bool
 	allowEncryptionWithoutKms        bool
 	driverRef                        *WekaFsDriver
+	tracingUrl                       string
 }
 
 func (dc *DriverConfig) Log() {
@@ -67,6 +68,7 @@ func (dc *DriverConfig) Log() {
 		Str("client_group_name", dc.clientGroupName).
 		Bool("skip_garbage_collection", dc.skipGarbageCollection).
 		Bool("wait_for_object_deletion", dc.waitForObjectDeletion).
+		Str("tracing_url", dc.tracingUrl).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -82,6 +84,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	version string,
 	skipGarbageCollection, waitForObjectDeletion bool,
 	allowEncryptionWithoutKms bool,
+	tracingUrl string,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -130,6 +133,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		skipGarbageCollection:            skipGarbageCollection,
 		waitForObjectDeletion:            waitForObjectDeletion,
 		allowEncryptionWithoutKms:        allowEncryptionWithoutKms,
+		tracingUrl:                       tracingUrl,
 	}
 }
 

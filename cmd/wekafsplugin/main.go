@@ -167,6 +167,7 @@ func main() {
 		log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
 	} else {
 		otel.SetTracerProvider(tp)
+		log.Info().Str("tracing_url", url).Msg("OpenTelemetry tracing initialized")
 		ctx, cancel := context.WithCancel(ctx)
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
@@ -234,6 +235,7 @@ func handle(ctx context.Context) {
 		*skipGarbageCollection,
 		*waitForObjectDeletion,
 		*allowEncryptionWithoutKms,
+		*tracingUrl,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
