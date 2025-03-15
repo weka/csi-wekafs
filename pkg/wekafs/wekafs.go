@@ -98,6 +98,9 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 // fromSecrets returns a pointer to API by secret contents
 func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string, hostname string) (*apiclient.ApiClient, error) {
 	endpointsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["endpoints"], "\n"), "\n", ","))
+	if endpointsRaw == "" {
+		return nil, errors.New("no valid endpoints defined in secret, cannot create API client")
+	}
 	endpoints := func() []string {
 		var ret []string
 		for _, s := range strings.Split(endpointsRaw, ",") {
