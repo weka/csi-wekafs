@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -30,8 +29,6 @@ const (
 
 var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
 var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
-var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
-var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
 
 var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
 
@@ -161,7 +158,7 @@ func (v *Volume) isOnSnapshot() bool {
 	return false
 }
 
-// hasInnerPath returns true for volumes having innerPath (basically either legacy directory OR directory on snapshot)
+// hasInnerPath returns true for volumes having innerPath (basically either directory OR directory on snapshot)
 func (v *Volume) hasInnerPath() bool {
 	return v.getInnerPath() != ""
 }
@@ -382,8 +379,7 @@ func (v *Volume) getFilesystemTotalCapacity(ctx context.Context) (int64, error) 
 func (v *Volume) getMaxCapacity(ctx context.Context) (int64, error) {
 
 	if v.apiClient == nil {
-		// this is a legacy, API-unbound volume
-		return v.getFilesystemFreeSpace(ctx)
+		return 0, errors.New("no API client exists for volume")
 	}
 
 	// max size of the volume is the current size of the filesystem (or 0 if not exists) + free space on storage
@@ -422,19 +418,12 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 
-	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && !v.server.isInDevMode() {
-		size, err := v.getSizeFromQuota(ctx)
-		if err == nil {
-			logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
-			return int64(size), nil
-		}
-	}
-	logger.Trace().Msg("Volume appears to be a legacy volume, failing back to Xattr")
-	size, err := v.getSizeFromXattr(ctx)
+	size, err := v.getSizeFromQuota(ctx)
 	if err != nil {
 		return 0, err
 	}
-	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "xattr").Msg("Resolved current capacity")
+
+	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
 	return int64(size), nil
 }
 
@@ -539,42 +528,19 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 		return err
 	}
 
-	// update capacity of the volume by updating quota object on its root directory (or XATTR)
 	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
-	var fallback = true // whether we should try to use xAttr fallback or not if setting quota was attempted and failed. note that in certain cases a fallbackFunc will be used right away:
-	primaryFunc := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
-	fallbackFunc := func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
-	if v.server.isInDevMode() {
-		logger.Trace().Msg("Updating quota via API is not possible since running in DEV mode")
-		primaryFunc = fallbackFunc
-		fallback = false
-	} else if v.apiClient == nil {
-		logger.Trace().Msg("Volume has no API client bound, updating capacity in legacy mode")
-		primaryFunc = fallbackFunc
-		fallback = false
-	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		logger.Warn().Msg("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
-		primaryFunc = fallbackFunc
-		fallback = false
-	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
-		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode")
-		primaryFunc = fallbackFunc
-		fallback = false
-	} else if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
-		logger.Warn().Msg("Quota enforcement is not supported for snapshot-backed volumes on current version of Weka software. Upgrade to latest version of Weka software to enable quota enforcement")
+	if v.apiClient == nil {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as it is not bound to API client", v.GetId())
 	}
-	err := primaryFunc()
+	if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as its underlying filesystem is located in non-default organization and authenticated mounts are not supported by current version of Weka software. Upgrade to latest version of Weka software to enable this feature", v.GetId())
+	}
+	if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as quotas on snapshots are not supported by current version of Weka software. Upgrade to latest version of Weka software to enable this feature", v.GetId())
+	}
+	err := v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit)
 	if err == nil {
 		logger.Info().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
-	} else if fallback {
-		// it means that fallback is false, and used for updating xattr if quota set failed.
-		// this is not intended to run Xattr for a second time
-		logger.Warn().Err(err).Msg("Failed to set quota via API, failing back to xattr")
-		err := fallbackFunc()
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to set capacity even in failback mode")
-		}
-		return err
 	}
 	return err
 }
@@ -620,34 +586,6 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 	_, err = v.setQuota(ctx, enforceCapacity, uint64(capacityLimit))
 	return err
 
-}
-
-func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool, capacityLimit int64) error {
-	op := "updateCapacityXattr"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-
-	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-
-	if !v.isMounted(ctx) {
-		err, unmountFunc := v.MountUnderlyingFS(ctx)
-		if err != nil {
-			return err
-		} else {
-			defer unmountFunc()
-		}
-	}
-
-	logger.Trace().Int64("desired_capacity", capacityLimit).Msg("Updating xattrs on volume")
-	if enforceCapacity != nil && *enforceCapacity {
-		logger.Warn().Msg("Legacy volume does not support enforce capacity")
-	}
-	err := setVolumeProperties(v.GetFullPath(ctx), capacityLimit, v.innerPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to update xattrs on volume, capacity is not set")
-	}
-	return err
 }
 
 func (v *Volume) Trash(ctx context.Context) error {
@@ -819,24 +757,6 @@ func (v *Volume) getSizeFromQuota(ctx context.Context) (uint64, error) {
 	return 0, errors.New("could not fetch quota from API")
 }
 
-// getSizeFromXattr returns volume size from extended attributes, mostly fallback for very old pre-API Weka clusters
-func (v *Volume) getSizeFromXattr(ctx context.Context) (uint64, error) {
-
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
-	if err != nil {
-		return 0, err
-	}
-
-	if capacityString, err := xattr.Get(v.GetFullPath(ctx), xattrCapacity); err == nil {
-		if capacity, err := strconv.ParseInt(string(capacityString), 10, 64); err == nil {
-			return uint64(capacity), nil
-		}
-		return 0, ErrBadXattrOnVolume
-	}
-	return 0, ErrNoXattrOnVolume
-}
-
 // getFilesystemObj returns the Weka filesystem object
 func (v *Volume) getFilesystemObj(ctx context.Context, fromCache bool) (*apiclient.FileSystem, error) {
 	if v.fileSystemObject != nil && fromCache {
@@ -873,8 +793,8 @@ func (v *Volume) getSnapshotObj(ctx context.Context, fromCache bool) (*apiclient
 	return snapObj, nil // no snapshot found
 }
 
-// MountUnderlyingFS creates a mount using the volume mount options (plus specifically xattr true/false) and increases refcount to its path
-// returns UmnountFunc that can be executed to decrese refCount / unmount
+// MountUnderlyingFS creates a mount using the volume mount options and increases refcount to its path
+// returns UmnountFunc that can be executed to decrease refCount / unmount
 // NOTE: it always mounts only the filesystem directly. Any navigation inside should be done on the mount
 func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	op := "MountUnderlyingFS"
@@ -951,16 +871,6 @@ func (v *Volume) Exists(ctx context.Context) (bool, error) {
 			logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist on storage")
 			return false, nil
 		}
-		if v.server.isInDevMode() {
-			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-			// no actual data is copied, only directory structure is created as if it was a real snapshot.
-			// happens only if the real snapshot indeed exists
-			err := v.mimicDirectoryStructureForDebugMode(ctx)
-			if err != nil {
-				return false, err
-			}
-		}
-
 	}
 	if v.hasInnerPath() {
 		err, unmount := v.MountUnderlyingFS(ctx)
@@ -1158,7 +1068,7 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 			logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
 			return nil, err
 		}
-		if !empty && !v.server.isInDevMode() {
+		if !empty {
 			logger.Error().Err(err).Msg("Cannot create a seed snapshot, filesystem is not empty")
 			return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
 		}
@@ -1168,25 +1078,6 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 		}
 	}
 
-	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-	// no actual data is copied, only directory structure is created as if it was a real snapshot.
-	// happens only if the real snapshot indeed exists
-	if v.server.isInDevMode() {
-		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
-
-		err, unmount := v.MountUnderlyingFS(ctx)
-		defer unmount()
-		if err != nil {
-			return snap, err
-		}
-		seedPath := filepath.Join(v.getMountPath(), SnapshotsSubDirectory, v.getSeedSnapshotAccessPoint())
-
-		if err := os.MkdirAll(seedPath, DefaultVolumePermissions); err != nil {
-			logger.Error().Err(err).Str("seed_path", seedPath).Msg("Failed to create seed snapshot debug directory")
-			return snap, err
-		}
-		logger.Debug().Str("full_path", v.GetFullPath(ctx)).Msg("Successully created seed snapshot debug directory")
-	}
 	return snap, nil
 }
 
@@ -1258,18 +1149,6 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateSnapshot(ctx, sr, snapObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-		if v.server.isInDevMode() {
-			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-			// no actual data is copied, only directory structure is created as if it was a real snapshot.
-			// happens only if the real snapshot indeed exists
-			err := v.mimicDirectoryStructureForDebugMode(ctx)
-			if err != nil {
-				logger.Error().Err(err).Msg("Error happened during snapshot mimicking. Cleaning snapshot up")
-				_ = v.deleteSnapshot(ctx)
-				return err
-			}
-		}
-
 	} else if v.hasInnerPath() { // the last condition is needed for being able to run CSI sanity in docker
 
 		// if it was a snapshot and had inner path, it anyway should already exist.
@@ -1378,25 +1257,6 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 		}
 	}
 	return encryptionParams, nil
-}
-
-func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
-	logger := log.Ctx(ctx)
-	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside filesystem .fsnapshots to mimic Weka snapshot behavior")
-
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
-	if err != nil {
-		return err
-	}
-	volPath := v.GetFullPath(ctx)
-
-	if err := os.MkdirAll(volPath, DefaultVolumePermissions); err != nil {
-		logger.Error().Err(err).Str("volume_path", volPath).Msg("Failed to create volume debug directory")
-		return err
-	}
-	logger.Debug().Str("full_path", v.GetFullPath(ctx)).Msg("Successully created debug directory")
-	return nil
 }
 
 func (v *Volume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, error) {
@@ -1766,17 +1626,10 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, er
 	return s, nil
 }
 
-// CanBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
+// CanBeOperated returns true if the object can be CRUDed (only volumes with API client backing)
 func (v *Volume) CanBeOperated() error {
-	if v.isOnSnapshot() || v.isFilesystem() {
-		if v.apiClient == nil && !v.server.isInDevMode() {
-			return errors.New("Could not obtain a valid API secret configuration for operation")
-		}
-
-		if !v.apiClient.SupportsFilesystemAsVolume() {
-			return errors.New(fmt.Sprintf("volume of type Filesystem is not supported on current version of Weka cluster. A version %s and up is required ",
-				apiclient.MinimumSupportedWekaVersions.FilesystemAsVolume))
-		}
+	if v.apiClient == nil {
+		return errors.New("Could not obtain a valid API secret configuration for operation")
 	}
 	return nil
 }
