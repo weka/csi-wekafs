@@ -188,6 +188,7 @@ func (v *Volume) hasUnderlyingSnapshots(ctx context.Context) (bool, error) {
 	if !v.isFilesystem() {
 		return false, nil
 	}
+	logger.Debug().Str("volume_id", v.GetId()).Msg("Checking if filesystem has underlying snapshots that prevent deletion")
 
 	snapshots, err := v.getUnderlyingSnapshots(ctx)
 	if err != nil {
