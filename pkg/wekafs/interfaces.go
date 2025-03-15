@@ -43,7 +43,6 @@ type DataTransport string
 type UnmountFunc func()
 
 type AnyMount interface {
-	isInDevMode() bool
 	isMounted() bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error

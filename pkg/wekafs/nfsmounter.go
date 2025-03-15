@@ -16,7 +16,6 @@ type nfsMounter struct {
 	mountMap              nfsMountsMap
 	lock                  sync.Mutex
 	kMounter              mount.Interface
-	debugPath             string
 	selinuxSupport        *bool
 	gc                    *innerPathVolGc
 	clientGroupName       string
@@ -53,7 +52,7 @@ func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions, enabled: false}
+	mounter := &nfsMounter{mountMap: make(nfsMountsMap), selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions, enabled: false}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc()
@@ -71,7 +70,6 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		mounter:         m,
 		kMounter:        m.kMounter,
 		fsName:          fsName,
-		debugPath:       m.debugPath,
 		mountPoint:      path.Join(MountBasePath, string(m.getTransport()), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:    options,
 		clientGroupName: m.clientGroupName,
