@@ -57,6 +57,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 	logger := log.Ctx(ctx)
 	cSource := req.GetVolumeContentSource()
 	origin := "blank_volume"
+	srcId := ""
 	if cSource != nil {
 		cSourceVolume = cSource.GetVolume()
 		cSourceSnapshot = cSource.GetSnapshot()
@@ -75,6 +76,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 			if err != nil {
 				return nil, err
 			}
+			srcId = volume.srcVolume.GetId()
 		} else {
 			logger.Warn().Msg("Received a request with content source but without definition")
 			// this is blank volume
@@ -82,6 +84,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 			if err != nil {
 				return nil, err
 			}
+			srcId = volume.srcSnapshot.GetId()
 		}
 
 	} else {
@@ -100,7 +103,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 
 	volume.pruneUnsupportedMountOptions(ctx)
 
-	logger.Trace().Object("volume_info", volume).Str("origin", origin).Msg("Successfully initialized object")
+	logger.Debug().Object("volume_info", volume).Str("origin", origin).Str("src_id", srcId).Msg("Successfully initialized object")
 	return volume, nil
 }
 
