@@ -8,7 +8,6 @@ import (
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -18,7 +17,6 @@ type nfsMount struct {
 	fsName          string
 	mountPoint      string
 	kMounter        mount.Interface
-	debugPath       string
 	mountOptions    MountOptions
 	lastUsed        time.Time
 	mountIpAddress  string
@@ -40,10 +38,6 @@ func (m *nfsMount) getMountOptions() MountOptions {
 
 func (m *nfsMount) getLastUsed() time.Time {
 	return m.lastUsed
-}
-
-func (m *nfsMount) isInDevMode() bool {
-	return m.debugPath != ""
 }
 
 func (m *nfsMount) isMounted() bool {
@@ -176,53 +170,43 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 		return err
 	}
 
-	if !m.isInDevMode() {
-		err := apiClient.EnsureNfsPermissions(ctx, m.fsName, apiclient.NfsVersionV4, m.clientGroupName)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to ensure NFS permissions")
-			return errors.New("failed to ensure NFS permissions")
-		}
-
-		mountTarget := m.mountIpAddress + ":/" + m.fsName
-		logger.Trace().
-			Strs("mount_options", m.getMountOptions().Strings()).
-			Str("mount_target", mountTarget).
-			Str("mount_point", m.getMountPoint()).
-			Str("mount_ip_address", m.mountIpAddress).
-			Msg("Performing mount")
-
-		logger.Trace().Msg("Ensuring mount point exists")
-		if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
-			return err
-		}
-		maxRetries := 3
-		for i := 0; i < maxRetries; i++ {
-			err = m.kMounter.MountSensitive(mountTarget, m.getMountPoint(), "nfs", mountOptions.Strings(), mountOptionsSensitive)
-			if err == nil {
-				logger.Trace().Msg("Mounted successfully")
-				return nil
-			}
-			if os.IsNotExist(err) || strings.Contains(strings.ToLower(err.Error()), "no such file or directory") {
-				logger.Error().Err(err).Msg("Mount point not found")
-			} else if os.IsPermission(err) {
-				logger.Error().Err(err).Msg("Mount failed due to permissions issue")
-			} else if strings.Contains(err.Error(), "invalid argument") {
-				logger.Error().Err(err).Msg("Mount failed due to invalid argument")
-			} else {
-				logger.Error().Err(err).Msg("Mount failed due to unknown issue")
-			}
-			logger.Warn().Int("attempt", i+1).Msg("Retrying mount")
-			time.Sleep(2 * time.Second) // Optional: Add a delay between retries
-		}
-		logger.Error().Err(err).Int("retry_count", maxRetries).Msg("Failed to mount after retries")
-		return err
-	} else {
-		fakePath := filepath.Join(m.debugPath, m.fsName)
-		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
-			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
-		}
-		logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
-
-		return m.kMounter.Mount(fakePath, m.getMountPoint(), "", []string{"bind"})
+	err := apiClient.EnsureNfsPermissions(ctx, m.fsName, apiclient.NfsVersionV4, m.clientGroupName)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to ensure NFS permissions")
+		return errors.New("failed to ensure NFS permissions")
 	}
+
+	mountTarget := m.mountIpAddress + ":/" + m.fsName
+	logger.Trace().
+		Strs("mount_options", m.getMountOptions().Strings()).
+		Str("mount_target", mountTarget).
+		Str("mount_point", m.getMountPoint()).
+		Str("mount_ip_address", m.mountIpAddress).
+		Msg("Performing mount")
+
+	logger.Trace().Msg("Ensuring mount point exists")
+	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
+		return err
+	}
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		err = m.kMounter.MountSensitive(mountTarget, m.getMountPoint(), "nfs", mountOptions.Strings(), mountOptionsSensitive)
+		if err == nil {
+			logger.Trace().Msg("Mounted successfully")
+			return nil
+		}
+		if os.IsNotExist(err) || strings.Contains(strings.ToLower(err.Error()), "no such file or directory") {
+			logger.Error().Err(err).Msg("Mount point not found")
+		} else if os.IsPermission(err) {
+			logger.Error().Err(err).Msg("Mount failed due to permissions issue")
+		} else if strings.Contains(err.Error(), "invalid argument") {
+			logger.Error().Err(err).Msg("Mount failed due to invalid argument")
+		} else {
+			logger.Error().Err(err).Msg("Mount failed due to unknown issue")
+		}
+		logger.Warn().Int("attempt", i+1).Msg("Retrying mount")
+		time.Sleep(2 * time.Second) // Optional: Add a delay between retries
+	}
+	logger.Error().Err(err).Int("retry_count", maxRetries).Msg("Failed to mount after retries")
+	return err
 }
