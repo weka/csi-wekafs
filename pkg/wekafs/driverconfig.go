@@ -72,7 +72,7 @@ func (dc *DriverConfig) Log() {
 		Msg("Starting driver with the following configuration")
 
 }
-func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
+func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfDirectoryVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
@@ -117,7 +117,6 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowSnapshotsOfDirectoryVolumes: allowSnapshotsOfDirectoryVolumes,
 		advertiseSnapshotSupport:         !suppressnapshotSupport,
 		advertiseVolumeCloneSupport:      !suppressVolumeCloneSupport,
-		debugPath:                        debugPath,
 		allowInsecureHttps:               allowInsecureHttps,
 		alwaysAllowSnapshotVolumes:       alwaysAllowSnapshotVolumes,
 		mutuallyExclusiveOptions:         MutuallyExclusiveMountOptions,
