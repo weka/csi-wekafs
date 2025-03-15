@@ -197,7 +197,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 	}
 
 	if sourceSnap.hasInnerPath() && !server.getConfig().allowSnapshotsOfDirectoryVolumes {
-		// block creation of snapshots from legacy volumes, as it wastes space
+		// block creation of snapshots from directory-backed volumes, as it wastes space
 		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is prohibited on directory-backed CSI volumes. Refer to Weka CSI plugin documentation")
 	}
 
@@ -281,7 +281,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		return nil, status.Errorf(codes.NotFound, "Failed to validate source volume ID %s", sourceVolId)
 	}
 	if sourceVol.hasInnerPath() && !server.getConfig().allowSnapshotsOfDirectoryVolumes {
-		// block cloning of snapshots from legacy volumes, as it wastes space
+		// block cloning of snapshots from directory-backed volumes, as it wastes space
 		return nil, status.Errorf(codes.FailedPrecondition, "Cloning is prohibited for directory-backed volumes, refer to WEKA CSI Plugin documentation for additional information")
 	}
 
