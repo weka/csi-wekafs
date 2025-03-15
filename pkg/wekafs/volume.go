@@ -258,10 +258,10 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 		return snapshots, nil
 	}
 
-	if fsObj.IsRemoving {
-		// assume snapshots are not relevant in such case
-		return snapshots, nil
-	}
+	//if fsObj.IsRemoving {
+	//	// assume snapshots are not relevant in such case
+	//	return snapshots, nil
+	//}
 
 	err = v.apiClient.FindSnapshotsByFilesystem(ctx, fsObj, snapshots)
 	if err != nil {
@@ -1521,7 +1521,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Debug().Str("filesystem", v.FilesystemName).Msg("Deleting filesystem")
-	fsObj, err := v.getFilesystemObj(ctx, true)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to fetch filesystem for deletion")
 		return status.Errorf(codes.Internal, "Failed to fetch filesystem for deletion: %s, %e", v.FilesystemName, err)
