@@ -1115,7 +1115,7 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 			logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
 			return nil, err
 		}
-		if !empty && !v.server.isInDevMode() {
+		if !empty {
 			logger.Error().Err(err).Msg("Cannot create a seed snapshot, filesystem is not empty")
 			return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
 		}
@@ -1125,25 +1125,6 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 		}
 	}
 
-	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-	// no actual data is copied, only directory structure is created as if it was a real snapshot.
-	// happens only if the real snapshot indeed exists
-	if v.server.isInDevMode() {
-		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
-
-		err, unmount := v.MountUnderlyingFS(ctx)
-		defer unmount()
-		if err != nil {
-			return snap, err
-		}
-		seedPath := filepath.Join(v.getMountPath(), SnapshotsSubDirectory, v.getSeedSnapshotAccessPoint())
-
-		if err := os.MkdirAll(seedPath, DefaultVolumePermissions); err != nil {
-			logger.Error().Err(err).Str("seed_path", seedPath).Msg("Failed to create seed snapshot debug directory")
-			return snap, err
-		}
-		logger.Debug().Str("full_path", v.GetFullPath(ctx)).Msg("Successully created seed snapshot debug directory")
-	}
 	return snap, nil
 }
 

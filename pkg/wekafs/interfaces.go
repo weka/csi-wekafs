@@ -17,7 +17,6 @@ type AnyServer interface {
 	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
-	isInDevMode() bool
 	getDefaultMountOptions() MountOptions
 	getNodeId() string
 	getBackgroundTasksWg() *sync.WaitGroup

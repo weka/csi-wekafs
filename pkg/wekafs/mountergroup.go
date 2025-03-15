@@ -25,14 +25,9 @@ func NewMounterGroup(driver *WekaFsDriver) *MounterGroup {
 
 	} else if driver.config.allowNfsFailback {
 		ret.nfs.Enable()
-		if driver.config.isInDevMode() {
-			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
-		} else {
-			if !isWekaRunning() {
-				ret.nfs.Enable()
-				ret.wekafs.Disable()
-				log.Warn().Msg("Weka Driver not found. Failing back to NFS transport")
-			}
+		if !isWekaRunning() {
+			ret.wekafs.Disable()
+			log.Warn().Msg("Weka Driver not found. Failing back to NFS transport")
 		}
 	}
 	log.Info().Msg("Enforcing WekaFS transport")
