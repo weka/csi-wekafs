@@ -141,10 +141,6 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	}
 }
 
-func (dc *DriverConfig) isInDevMode() bool {
-	return dc.debugPath != ""
-}
-
 func (dc *DriverConfig) GetVersion() string {
 	return dc.csiVersion
 }
