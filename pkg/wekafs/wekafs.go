@@ -376,10 +376,22 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		return
 	}
 
+	transport := func() string {
+		if d.config.useNfs {
+			return "nfs"
+		}
+		wekaRunning := isWekaRunning()
+		if d.config.allowNfsFailback && !wekaRunning {
+			return "nfs"
+		}
+		return "wekafs"
+	}()
+
 	labelsToSet := make(map[string]string)
+	labelsToSet[TopologyKeyNode] = d.nodeID
 	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, d.name)] = d.nodeID
 	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, d.name)] = "true"
-
+	labelsToSet[fmt.Sprintf(TopologyLabelTransportPattern, d.name)] = transport
 	updateNeeded := false
 
 	for label, value := range labelsToSet {
