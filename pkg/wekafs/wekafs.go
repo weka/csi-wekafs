@@ -98,6 +98,9 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 // fromSecrets returns a pointer to API by secret contents
 func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string, hostname string) (*apiclient.ApiClient, error) {
 	endpointsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["endpoints"], "\n"), "\n", ","))
+	if endpointsRaw == "" {
+		return nil, errors.New("no valid endpoints defined in secret, cannot create API client")
+	}
 	endpoints := func() []string {
 		var ret []string
 		for _, s := range strings.Split(endpointsRaw, ",") {
@@ -373,10 +376,22 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		return
 	}
 
+	transport := func() string {
+		if d.config.useNfs {
+			return "nfs"
+		}
+		wekaRunning := isWekaRunning()
+		if d.config.allowNfsFailback && !wekaRunning {
+			return "nfs"
+		}
+		return "wekafs"
+	}()
+
 	labelsToSet := make(map[string]string)
+	labelsToSet[TopologyKeyNode] = d.nodeID
 	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, d.name)] = d.nodeID
 	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, d.name)] = "true"
-
+	labelsToSet[fmt.Sprintf(TopologyLabelTransportPattern, d.name)] = transport
 	updateNeeded := false
 
 	for label, value := range labelsToSet {
@@ -485,7 +500,7 @@ func (driver *WekaFsDriver) NewMounter() AnyMounter {
 		log.Warn().Msg("Enforcing NFS transport due to configuration")
 		return newNfsMounter(driver)
 	}
-	if driver.config.allowNfsFailback && !isWekaInstalled() {
+	if driver.config.allowNfsFailback && !isWekaRunning() {
 		if driver.config.isInDevMode() {
 			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
 		} else {
