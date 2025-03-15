@@ -91,7 +91,7 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 
 	nfsReady := config.useNfs || config.allowNfsFailback
 	// weka is ready if we are in dev mode or weka is running AND NFS is not forced
-	wekafsReady := config.isInDevMode() || isWekaRunning() && !config.useNfs
+	wekafsReady := isWekaRunning() && !config.useNfs
 
 	if nfsReady {
 		mounters.nfs.Enable()
