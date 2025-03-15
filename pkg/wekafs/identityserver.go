@@ -82,7 +82,7 @@ func (ids *identityServer) getConfig() *DriverConfig {
 //goland:noinspection GoUnusedParameter
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	logger := log.Ctx(ctx)
-	isReady := ids.getConfig().isInDevMode() || isWekaRunning()
+	isReady := isWekaRunning()
 	if !isReady {
 		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
 			isReady = true
@@ -93,7 +93,7 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 		if ids.config.driverRef.csiMode == CsiModeNode || ids.config.driverRef.csiMode == CsiModeAll {
 			ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
 		}
-	} else if !ids.getConfig().isInDevMode() {
+	} else {
 		ids.getConfig().GetDriver().SetNodeLabels(ctx)
 	}
 	return &csi.ProbeResponse{
