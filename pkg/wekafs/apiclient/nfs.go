@@ -334,7 +334,6 @@ func (a *ApiClient) DeleteNfsPermission(ctx context.Context, r *NfsPermissionDel
 			}
 		}
 	}
-	time.Sleep(5 * time.Second) // wait for the permission to be removed
 	return nil
 }
 
