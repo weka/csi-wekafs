@@ -52,7 +52,6 @@ type WekaFsDriver struct {
 	cs             *ControllerServer
 	api            *ApiStore
 	mounters       *MounterGroup
-	debugPath      string
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig

@@ -26,7 +26,6 @@ type DriverConfig struct {
 	allowSnapshotsOfDirectoryVolumes bool
 	advertiseSnapshotSupport         bool
 	advertiseVolumeCloneSupport      bool
-	debugPath                        string
 	allowInsecureHttps               bool
 	alwaysAllowSnapshotVolumes       bool
 	mutuallyExclusiveOptions         []mutuallyExclusiveMountOptionSet
