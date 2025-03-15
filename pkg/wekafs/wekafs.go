@@ -227,7 +227,7 @@ func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
 }
 
 func NewWekaFsDriver(
-	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version, debugPath string,
+	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string,
 	csiMode CsiPluginMode, selinuxSupport bool, config *DriverConfig) (*WekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
@@ -257,7 +257,6 @@ func NewWekaFsDriver(
 		endpoint:          endpoint,
 		maxVolumesPerNode: maxVolumesPerNode,
 		api:               NewApiStore(config, nodeID),
-		debugPath:         debugPath,
 		csiMode:           csiMode, // either "controller", "node", "all"
 		selinuxSupport:    selinuxSupport,
 		config:            config,
