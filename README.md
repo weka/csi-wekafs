@@ -57,7 +57,7 @@ make build
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.2.0"` | CSI snapshotter sidecar image URL |
 | images.nodeinfo | string | `"quay.io/weka.io/csi-wekafs"` | CSI nodeinfo sidecar image URL, used for reading node metadata |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.7.4-SNAPSHOT.0.sha.989ba72"` | CSI driver tag |
+| images.csidriverTag | string | `"2.7.3"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
