@@ -25,6 +25,9 @@ helm repo add csi-wekafs https://weka.github.io/csi-wekafs
 helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
 ```
 
+> **NOTE:** Since version 3.0.0, WEKA CSI plugin removes support for legacy volumes (not having an API binding)
+> For further information, refer [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
+
 > **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
 > Refer to [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md) for additional information
 
@@ -50,7 +53,6 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 > However, for sake of more convenient migration, a `legacySecretName` parameter can be set that will
 > bind existing legacy volumes to a Weka cluster API and allow volume expansion.
 >
-> For further information, refer [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
 ## Usage
 - [Deploy an Example application](https://github.com/weka/csi-wekafs/blob/master/docs/usage.md)
@@ -79,6 +81,22 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | controller.replicas | int | `2` | Controller number of replicas |
 | controller.resources | object | `{"csiAttacher":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiProvisioner":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}},"csiResizer":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiSnapshotter":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for controller containers |
 | controller.terminationGracePeriodSeconds | int | `10` | termination grace period for controller pods |
+| controller.resources | object | `{"csiAttacher":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiProvisioner":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}},"csiResizer":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiSnapshotter":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"48Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for controller containers |
+| node.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
+| node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
+| node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
+| node.nodeSelector | object | `{}` | optional nodeSelector for node components only |
+| node.affinity | object | `{}` | optional affinity for node components only |
+| node.labels | object | `{}` | optional labels to add to node daemonset |
+| node.podLabels | object | `{}` | optional labels to add to node pods |
+| node.terminationGracePeriodSeconds | int | `10` | termination grace period for node pods |
+| node.resources | object | `{"csiRegistrar":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"8m","memory":"52Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"44Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for node containers |
+| logLevel | int | `5` | Log level of CSI plugin |
+| useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
+| priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |
+| selinuxSupport | string | `"off"` | Support SELinux labeling for Persistent Volumes, may be either `off`, `mixed`, `enforced` (default off)    In `enforced` mode, CSI node components will only start on nodes having a label `selinuxNodeLabel` below    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!    NOTE: SELinux support is enabled automatically on clusters recognized as RedHat OpenShift Container Platform |
+| selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
+| selinuxOcpRetainMachineConfig | bool | `false` | If true, the SELinux policy machine configuration will not be removed when uninstalling the plugin.    This is useful for OpenShift Container Platform clusters, to not cause machine config pool update on plugin reinstall |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
 | csiDriverVersion | string | `"2.8.2"` | CSI driver version |

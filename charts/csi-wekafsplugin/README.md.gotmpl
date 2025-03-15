@@ -21,6 +21,9 @@ helm repo add csi-wekafs https://weka.github.io/csi-wekafs
 helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
 ```
 
+> **NOTE:** Since version 3.0.0, WEKA CSI Plugin removes support for legacy volumes without API binding.
+> For further information, refer [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
+
 > **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
 > Refer to [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md) for additional information
 
