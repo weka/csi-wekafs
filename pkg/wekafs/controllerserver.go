@@ -64,10 +64,6 @@ func (cs *ControllerServer) getNodeId() string {
 	return cs.nodeID
 }
 
-func (cs *ControllerServer) isInDevMode() bool {
-	return cs.getConfig().isInDevMode()
-}
-
 func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }

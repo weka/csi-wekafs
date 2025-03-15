@@ -187,7 +187,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 				"To support organization other than Root please upgrade to version %s or higher",
 			credentials.Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
 	}
-	if (api.config.allowNfsFailback || api.config.useNfs) && !api.config.isInDevMode() {
+	if api.config.allowNfsFailback || api.config.useNfs {
 		newClient.NfsInterfaceGroupName = api.config.interfaceGroupName
 		newClient.NfsClientGroupName = api.config.clientGroupName
 		err := newClient.RegisterNfsClientGroup(ctx)
@@ -324,10 +324,6 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 }
 
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
-		return
-	}
-
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
@@ -389,9 +385,6 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	log.Info().Msg("Successfully updated labels on node")
 }
 func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
-		return
-	}
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
