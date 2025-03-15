@@ -158,7 +158,7 @@ func (v *Volume) isOnSnapshot() bool {
 	return false
 }
 
-// hasInnerPath returns true for volumes having innerPath (basically either legacy directory OR directory on snapshot)
+// hasInnerPath returns true for volumes having innerPath (basically either directory OR directory on snapshot)
 func (v *Volume) hasInnerPath() bool {
 	return v.getInnerPath() != ""
 }
@@ -418,8 +418,7 @@ func (v *Volume) getFilesystemTotalCapacity(ctx context.Context) (int64, error) 
 func (v *Volume) getMaxCapacity(ctx context.Context) (int64, error) {
 
 	if v.apiClient == nil {
-		// this is a legacy, API-unbound volume
-		return v.getFilesystemFreeSpace(ctx)
+		return 0, errors.New("no API client exists for volume")
 	}
 
 	// max size of the volume is the current size of the filesystem (or 0 if not exists) + free space on storage
@@ -1673,7 +1672,7 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, er
 	return s, nil
 }
 
-// CanBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
+// CanBeOperated returns true if the object can be CRUDed (only volumes with API client backing)
 func (v *Volume) CanBeOperated() error {
 	if v.apiClient == nil {
 		return errors.New("Could not obtain a valid API secret configuration for operation")
