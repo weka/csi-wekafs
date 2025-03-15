@@ -60,7 +60,6 @@ func deferUmount(fn UnmountFunc, retErr *error) {
 }
 
 type AnyMount interface {
-	isInDevMode() bool
 	isMounted(ctx context.Context) bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error
