@@ -434,7 +434,7 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 type CsiPluginMode string
 
 const (
-	VolumeTypeDirV1   VolumeType = "dir/v1"  // if specified in storage class, create directory quotas (as in legacy CSI volumes). FS name must be set in SC as well
+	VolumeTypeDirV1   VolumeType = "dir/v1"  // if specified in storage class, create directory-backed volumes. FS name must be set in SC as well
 	VolumeTypeUnified VolumeType = "weka/v2" // no need to specify this in storageClass
 	VolumeTypeUNKNOWN VolumeType = "AMBIGUOUS_VOLUME_TYPE"
 	VolumeTypeEmpty   VolumeType = ""

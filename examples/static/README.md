@@ -1,3 +1,3 @@
 # Deprecated
 
-Legacy volumes without API backing are deprecated and will not be supported from next major release of Weka CSI Plugin
+Legacy volumes without API backing are not supported in this release of WEKA CSI Plugin
