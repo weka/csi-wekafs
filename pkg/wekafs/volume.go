@@ -918,8 +918,7 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
 
-	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
-
+	mountOpts := v.getMountOptions(ctx).MergedWith(v.server.getDefaultMountOptions(), v.server.getConfig().mutuallyExclusiveOptions)
 	mount, err, unmountFunc := v.server.getMounter(ctx).mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := func() {}
 	if err == nil {
@@ -942,12 +941,20 @@ func (v *Volume) UnmountUnderlyingFS(ctx context.Context) error {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	if v.server.getMounter(ctx) == nil {
-		Die("Volume unmount could not be done since mounter not defined on it")
+	mountTransport := getDataTransportFromMountPath(v.mountPath)
+
+	mounter := v.server.getMounter(ctx)
+	if mountTransport == "" {
+		logger.Debug().Msg("Could not identify transport from mount path, assuming default")
+	} else {
+		mounter = v.server.getMounterByTransport(ctx, mountTransport)
+	}
+	if mounter == nil {
+		return errors.New(string("could not find mounter for transport " + mountTransport))
 	}
 
 	mountOpts := v.getMountOptions(ctx)
-	err := v.server.getMounter(ctx).unmountWithOptions(ctx, v.FilesystemName, mountOpts)
+	err := mounter.unmountWithOptions(ctx, v.FilesystemName, mountOpts)
 
 	if err == nil {
 		v.mountPath = ""
