@@ -558,28 +558,24 @@ func isWekaRunning() bool {
 
 func getSelinuxStatus(ctx context.Context) bool {
 	logger := log.Ctx(ctx)
-	// check if we have /etc/selinux/config
-	// if it exists, we can check if selinux is enforced or not
-	selinuxConf := "/etc/selinux/config"
-	file, err := os.Open(selinuxConf)
+	data, err := os.ReadFile("/sys/fs/selinux/enforce")
 	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		logger.Error().Err(err).Msg("Error reading SELinux status")
 		return false
 	}
-	defer func() { _ = file.Close() }()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "SELINUX=enforcing") {
-			// no need to repeat each time, just set the selinuxSupport to true
-			return true
-		}
+	mode := strings.TrimSpace(string(data))
+	switch mode {
+	case "1":
+		return true
+	case "0":
+		return true
+	default:
+		return false
 	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
-	}
-	return false
 }
 
 func getDataTransportFromMountPath(mountPoint string) DataTransport {
