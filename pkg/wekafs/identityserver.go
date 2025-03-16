@@ -36,11 +36,14 @@ type identityServer struct {
 }
 
 //goland:noinspection GoExportedFuncWithUnexportedType
-func NewIdentityServer(name, version string, config *DriverConfig) *identityServer {
+func NewIdentityServer(driver *WekaFsDriver) *identityServer {
+	if driver == nil {
+		panic("Driver is nil")
+	}
 	return &identityServer{
-		name:    name,
-		version: version,
-		config:  config,
+		name:    driver.name,
+		version: driver.version,
+		config:  driver.config,
 	}
 }
 
