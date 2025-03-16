@@ -18,6 +18,7 @@ package wekafs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
@@ -108,16 +109,20 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounters *MounterGroup, config *DriverConfig) *ControllerServer {
+func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
+	if driver == nil {
+		panic("driver is nil")
+	}
+
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod supoort
+		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod support
 	}
-	if config.advertiseSnapshotSupport {
+	if driver.config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
 	}
-	if config.advertiseVolumeCloneSupport {
+	if driver.config.advertiseVolumeCloneSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CLONE_VOLUME)
 	}
 
@@ -125,10 +130,10 @@ func NewControllerServer(nodeID string, api *ApiStore, mounters *MounterGroup, c
 
 	return &ControllerServer{
 		caps:       capabilities,
-		nodeID:     nodeID,
-		mounters:   mounters,
-		api:        api,
-		config:     config,
+		nodeID:     driver.nodeID,
+		mounters:   driver.mounters,
+		api:        driver.api,
+		config:     driver.config,
 		semaphores: make(map[string]*semaphore.Weighted),
 	}
 }
@@ -171,9 +176,9 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 	return nil
 }
 
-type releaseSempahore func()
+type releaseSemaphore func()
 
-func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSemaphore) {
 	logger := log.Ctx(ctx)
 	cs.initializeSemaphore(ctx, op)
 	sem := cs.semaphores[op]
@@ -204,10 +209,10 @@ func (cs *ControllerServer) initializeSemaphore(ctx context.Context, op string) 
 	if _, ok := cs.semaphores[op]; ok {
 		return
 	}
-	max := cs.getConfig().maxConcurrencyPerOp[op]
+	m := cs.getConfig().maxConcurrencyPerOp[op]
 	logger := log.Ctx(ctx)
-	logger.Info().Str("op", op).Int64("max_concurrency", max).Msg("Initializing semaphore")
-	sem := semaphore.NewWeighted(max)
+	logger.Info().Str("op", op).Int64("max_concurrency", m).Msg("Initializing semaphore")
+	sem := semaphore.NewWeighted(m)
 	cs.semaphores[op] = sem
 }
 
@@ -294,7 +299,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	} else if volExists && err == nil {
 		// current capacity explicitly differs from requested, this is another volume request
 		return CreateVolumeError(ctx, codes.AlreadyExists, "Volume with same name and different capacity already exists")
-	} else if volExists && err != nil {
+	} else if volExists {
 		// can happen if volume is half-made (object was created but capacity was not set on it on previous run)
 		if err := volume.UpdateCapacity(ctx, &volume.enforceCapacity, capacity); err == nil {
 			result = "SUCCESS"
@@ -405,7 +410,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 	// cleanup
 	if err != nil {
-		if err == ErrFilesystemHasUnderlyingSnapshots {
+		if errors.Is(err, ErrFilesystemHasUnderlyingSnapshots) {
 			return &csi.DeleteVolumeResponse{}, err
 		}
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())

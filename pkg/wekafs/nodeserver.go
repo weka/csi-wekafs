@@ -193,7 +193,10 @@ func getVolumeStats(volumePath string) (volumeStats *VolumeStats, err error) {
 	return &VolumeStats{capacityBytes, usedBytes, availableBytes, inodes, inodesUsed, inodesFree}, nil
 }
 
-func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounters *MounterGroup, config *DriverConfig) *NodeServer {
+func NewNodeServer(driver *WekaFsDriver) *NodeServer {
+	if driver == nil {
+		panic("Driver is nil")
+	}
 	//goland:noinspection GoBoolExpressions
 	return &NodeServer{
 		caps: getNodeServiceCapabilities(
@@ -203,16 +206,16 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 				csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
 			},
 		),
-		nodeID:            nodeId,
-		maxVolumesPerNode: maxVolumesPerNode,
-		mounters:          mounters,
-		api:               api,
-		config:            config,
+		nodeID:            driver.nodeID,
+		maxVolumesPerNode: driver.maxVolumesPerNode,
+		mounters:          driver.mounters,
+		api:               driver.api,
+		config:            driver.config,
 		semaphores:        make(map[string]*semaphore.Weighted),
 	}
 }
 
-func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSemaphore) {
 	logger := log.Ctx(ctx)
 	ns.initializeSemaphore(ctx, op)
 	sem := ns.semaphores[op]
