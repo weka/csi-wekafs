@@ -31,10 +31,16 @@ func (m *wekafsMounter) isEnabled() bool {
 }
 
 func (m *wekafsMounter) Enable() {
+	if !m.enabled {
+		log.Ctx(context.Background()).Info().Msg("Enabling WekaFS mounter")
+	}
 	m.enabled = true
 }
 
 func (m *wekafsMounter) Disable() {
+	if m.enabled {
+		log.Ctx(context.Background()).Info().Msg("Disabling WekaFS mounter")
+	}
 	m.enabled = false
 }
 
