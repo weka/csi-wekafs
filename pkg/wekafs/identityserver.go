@@ -110,17 +110,38 @@ func (ids *identityServer) getConfig() *DriverConfig {
 //goland:noinspection GoUnusedParameter
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	logger := log.Ctx(ctx)
+	config := ids.getConfig()
+	driver := config.GetDriver()
+	mounters := driver.mounters
+
+	nfsReady := config.useNfs || config.allowNfsFailback
+	// weka is ready if we are in dev mode or weka is running AND NFS is not forced
+
 	probeCtx, probeCancel := context.WithTimeout(ctx, ids.config.healthProbeWekaTimeout)
 	defer probeCancel()
-	isReady := ids.getConfig().isInDevMode() || isWekaRunning(probeCtx)
-	if !isReady {
+	wekafsReady := ids.getConfig().isInDevMode() || isWekaRunning(probeCtx)
+	if !wekafsReady {
 		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
-			isReady = true
+			wekafsReady = true
 		}
 	}
+		if nfsReady {
+		mounters.nfs.Enable()
+	} else {
+		mounters.nfs.Disable()
+	}
+
+	if wekafsReady {
+		mounters.wekafs.Enable()
+	} else {
+		mounters.wekafs.Disable()
+	}
+
+	serverReady := nfsReady || wekafsReady
+
 	// manage node topology labels only if set by configuration
 	if ids.config.manageNodeTopologyLabels {
-		if !isReady {
+		if !serverReady {
 			logger.Error().Msg("Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
 			if ids.config.driverRef.csiMode == CsiModeNode || ids.config.driverRef.csiMode == CsiModeAll {
 				ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
@@ -129,9 +150,10 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 			ids.getConfig().GetDriver().SetNodeLabels(ctx)
 		}
 	}
+
 	return &csi.ProbeResponse{
 		Ready: &wrapperspb.BoolValue{
-			Value: isReady,
+			Value: serverReady,
 		},
 	}, nil
 }
