@@ -85,23 +85,37 @@ func (ids *identityServer) getConfig() *DriverConfig {
 //goland:noinspection GoUnusedParameter
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	logger := log.Ctx(ctx)
-	isReady := ids.getConfig().isInDevMode() || isWekaRunning()
-	if !isReady {
-		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
-			isReady = true
-		}
+	config := ids.getConfig()
+	driver := config.GetDriver()
+	mounters := driver.mounters
+
+	nfsReady := config.useNfs || config.allowNfsFailback
+	// weka is ready if we are in dev mode or weka is running AND NFS is not forced
+	wekafsReady := config.isInDevMode() || isWekaRunning() && !config.useNfs
+
+	if nfsReady {
+		mounters.nfs.Enable()
+	} else {
+		mounters.nfs.Disable()
 	}
-	if !isReady {
+
+	if wekafsReady {
+		mounters.wekafs.Enable()
+	} else {
+		mounters.wekafs.Disable()
+	}
+
+	serverReady := nfsReady || wekafsReady
+	if serverReady {
+		driver.SetNodeLabels(ctx)
+	} else {
+		driver.CleanupNodeLabels(ctx)
 		logger.Error().Msg("Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
-		if ids.config.driverRef.csiMode == CsiModeNode || ids.config.driverRef.csiMode == CsiModeAll {
-			ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
-		}
-	} else if !ids.getConfig().isInDevMode() {
-		ids.getConfig().GetDriver().SetNodeLabels(ctx)
 	}
+
 	return &csi.ProbeResponse{
 		Ready: &wrapperspb.BoolValue{
-			Value: isReady,
+			Value: serverReady,
 		},
 	}, nil
 }
