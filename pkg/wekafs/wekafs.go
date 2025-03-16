@@ -74,6 +74,7 @@ type WekaFsDriver struct {
 	ns             *NodeServer
 	cs             *ControllerServer
 	api            *ApiStore
+	mounters       *MounterGroup
 	debugPath      string
 	csiMode        CsiPluginMode
 	selinuxSupport bool
@@ -357,13 +358,12 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		}
 	}
 
-	mounters := NewMounterGroup(ctx, driver)
-
+	driver.mounters = NewMounterGroup(ctx, driver)
 	// Create GRPC servers
 
 	// identity server runs always
 	log.Info().Msg("Loading IdentityServer")
-	driver.ids = NewIdentityServer(driver.name, driver.version, driver.config)
+	driver.ids = NewIdentityServer(driver)
 
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
@@ -373,7 +373,8 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 			log.Warn().Err(err).Msg("Failed to initialize Kubernetes manager, running without leader election")
 		}
 
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounters, driver.config, driver.manager)
+		// bring up controller part
+		driver.cs = NewControllerServer(driver)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -387,7 +388,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 		// bring up node part
 		log.Info().Msg("Loading NodeServer")
-		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounters, driver.config)
+		driver.ns = NewNodeServer(driver)
 	} else {
 		driver.ns = &NodeServer{}
 	}
@@ -767,6 +768,9 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 	if d.config.isInDevMode() {
 		return
 	}
+	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
+		return
+	}
 	nodeLabelPatternsToRemove := []string{TopologyLabelNodePattern, TopologyLabelTransportPattern, TopologyLabelWekaLocalPattern}
 	nodeLabelsToRemove := []string{TopologyLabelTransportGlobal, TopologyLabelNodeGlobal, TopologyKeyNode}
 
@@ -840,22 +844,4 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
 		return ""
 	}
-}
-
-func (driver *WekaFsDriver) NewMounter(ctx context.Context) AnyMounter {
-	log.Info().Msg("Configuring Mounter")
-	if driver.config.useNfs {
-		log.Warn().Msg("Enforcing NFS transport due to configuration")
-		return newNfsMounter(ctx, driver)
-	}
-	if driver.config.allowNfsFailback && !isWekaRunning(ctx) {
-		if driver.config.isInDevMode() {
-			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
-		} else {
-			log.Warn().Msg("Weka Driver not found. Failing back to NFS transport")
-			return newNfsMounter(ctx, driver)
-		}
-	}
-	log.Info().Msg("Enforcing WekaFS transport")
-	return newWekafsMounter(ctx, driver)
 }
