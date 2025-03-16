@@ -34,10 +34,16 @@ func (n *nfsMounter) isEnabled() bool {
 }
 
 func (n *nfsMounter) Enable() {
+	if !n.enabled {
+		log.Ctx(context.Background()).Info().Msg("Enabling NFS mounter")
+	}
 	n.enabled = true
 }
 
 func (n *nfsMounter) Disable() {
+	if n.enabled {
+		log.Ctx(context.Background()).Info().Msg("Disabling NFS mounter")
+	}
 	n.enabled = false
 }
 
