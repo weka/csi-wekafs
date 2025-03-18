@@ -167,6 +167,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            {{- if .Values.tracingDeploymentIdentifier }}
+            - name: OTEL_DEPLOYMENT_IDENTIFIER
+              value: {{ .Values.tracingDeploymentIdentifier }}
+            {{- end }}
+
           volumeMounts:
             - mountPath: /csi
               name: socket-dir

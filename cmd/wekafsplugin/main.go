@@ -162,7 +162,7 @@ func main() {
 	} else {
 		url = ""
 	}
-	tp, err = wekafs.TracerProvider(version, url)
+	tp, err = wekafs.TracerProvider(version, url, csiMode)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
 	} else {
