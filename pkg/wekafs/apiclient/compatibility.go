@@ -22,6 +22,7 @@ type WekaCompatibilityRequiredVersions struct {
 	EncryptionWithClusterKey       string
 	EncryptionWithCustomSettings   string
 	ResolvePathToInode             string
+	ResolvePathToInodeCsiRole      string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
@@ -40,6 +41,7 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	EncryptionWithClusterKey:       "v4.0",   // can create encrypted filesystems with common cluster-wide key
 	EncryptionWithCustomSettings:   "v4.4.1", // can create encrypted filesystems with custom settings (key per filesystem(s))
 	ResolvePathToInode:             "v4.3",   // can resolve a path to an inode instead of doing it via mount
+	ResolvePathToInodeCsiRole:      "v9.99",  // can resolve a path to an inode via API with CSI role
 }
 
 type WekaCompatibilityMap struct {
@@ -58,6 +60,7 @@ type WekaCompatibilityMap struct {
 	EncryptionWithClusterKey        bool
 	EncryptionWithCustomSettings    bool
 	ResolvePathToInode              bool
+	ResolvePathToInodeCsiRole       bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -79,6 +82,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.EncryptionWithClusterKey = false
 		cm.EncryptionWithCustomSettings = false
 		cm.ResolvePathToInode = false
+		cm.ResolvePathToInodeCsiRole = false
 
 		return
 	}
@@ -97,6 +101,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	ec, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithClusterKey)
 	ecc, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithCustomSettings)
 	rp, _ := version.NewVersion(MinimumSupportedWekaVersions.ResolvePathToInode)
+	rpc, _ := version.NewVersion(MinimumSupportedWekaVersions.ResolvePathToInodeCsiRole)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
@@ -113,6 +118,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.EncryptionWithClusterKey = v.GreaterThanOrEqual(ec)
 	cm.EncryptionWithCustomSettings = v.GreaterThanOrEqual(ecc)
 	cm.ResolvePathToInode = v.GreaterThanOrEqual(rp)
+	cm.ResolvePathToInodeCsiRole = v.GreaterThanOrEqual(rpc)
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
@@ -172,5 +178,14 @@ func (a *ApiClient) RequiresNewNodePath() bool {
 }
 
 func (a *ApiClient) SupportsResolvePathToInode() bool {
-	return a.CompatibilityMap.ResolvePathToInode
+	if !a.CompatibilityMap.ResolvePathToInode {
+		return false
+	}
+	if a.ApiUserRole == "" {
+		return false
+	}
+	if a.ApiUserRole == ApiUserRoleCSI {
+		return a.CompatibilityMap.ResolvePathToInodeCsiRole
+	}
+	return true
 }
