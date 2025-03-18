@@ -879,7 +879,7 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
 
-	mountOpts := v.getMountOptions(ctx).MergedWith(v.server.getDefaultMountOptions(), v.server.getConfig().mutuallyExclusiveOptions)
+	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
 
 	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := func() {}
