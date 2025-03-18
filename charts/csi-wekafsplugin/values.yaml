@@ -140,6 +140,8 @@ metrics:
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
+# @ignore
+tracingDeploymentIdentifier: ""
 # -- Set to true to use host networking. Will be always set to true when using NFS mount protocol
 hostNetwork: false
 pluginConfig:
