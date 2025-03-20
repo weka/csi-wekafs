@@ -16,6 +16,7 @@ env:
   # - '-ginkgo.v'
   # - '-ginkgo.vv'
   SANITY_VERBOSITY: ${{ vars.SANITY_VERBOSITY }}
+  TRACING_SETTING: ${{ vars.TRACING_SETTING }}
   COMPOSE_DEFAULTS: '--exit-code-from=sanity --always-recreate-deps --force-recreate'
 
 jobs:

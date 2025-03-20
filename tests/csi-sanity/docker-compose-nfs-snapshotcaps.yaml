@@ -3,7 +3,7 @@ version: '3.8'
 services:
   plugin_controller:
     image: sanity
-    command: wekafsplugin -nodeid 1 -v 6 --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/controller.sock -metricsport=9091  --csimode=controller -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -alwaysallowsnapshotvolumes -usenfs -interfacegroupname=NFS
+    command: wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/controller.sock -metricsport=9091  --csimode=controller -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -alwaysallowsnapshotvolumes -usenfs -interfacegroupname=NFS ${TRACING_SETTING}
     volumes:
       - test-volume:/tmp/weka-csi-test
     privileged: true
@@ -16,7 +16,7 @@ services:
       interval: 3s
   plugin_node:
     image: sanity
-    command: wekafsplugin -nodeid 1 -v 6 --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/node.sock -metricsport=9092 --csimode=node -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -alwaysallowsnapshotvolumes -usenfs -interfacegroupname=NFS
+    command: wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/node.sock -metricsport=9092 --csimode=node -enablemetrics -allowautofscreation -allowautofsexpansion -allowsnapshotsoflegacyvolumes -alwaysallowsnapshotvolumes -usenfs -interfacegroupname=NFS ${TRACING_SETTING}
     volumes:
       - test-volume:/tmp/weka-csi-test
     privileged: true

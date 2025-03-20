@@ -188,6 +188,7 @@ func (v *Volume) hasUnderlyingSnapshots(ctx context.Context) (bool, error) {
 	if !v.isFilesystem() {
 		return false, nil
 	}
+	logger.Debug().Str("volume_id", v.GetId()).Msg("Checking if filesystem has underlying snapshots that prevent deletion")
 
 	snapshots, err := v.getUnderlyingSnapshots(ctx)
 	if err != nil {
@@ -540,40 +541,33 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 
 	// update capacity of the volume by updating quota object on its root directory (or XATTR)
 	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
-	var fallback = true // whether we should try to use xAttr fallback or not if setting quota was attempted and failed. note that in certain cases a fallbackFunc will be used right away:
 	primaryFunc := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
 	fallbackFunc := func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
+	capacityEntity := "quota"
 	if v.server.isInDevMode() {
 		logger.Trace().Msg("Updating quota via API is not possible since running in DEV mode")
 		primaryFunc = fallbackFunc
-		fallback = false
+		capacityEntity = "xattr"
 	} else if v.apiClient == nil {
 		logger.Trace().Msg("Volume has no API client bound, updating capacity in legacy mode")
 		primaryFunc = fallbackFunc
-		fallback = false
+		capacityEntity = "xattr"
 	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		logger.Warn().Msg("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
 		primaryFunc = fallbackFunc
-		fallback = false
+		capacityEntity = "xattr"
 	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
-		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode")
+		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode. Upgrade to latest version of Weka software to enable quota enforcement")
 		primaryFunc = fallbackFunc
-		fallback = false
+		capacityEntity = "xattr"
 	} else if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
 		logger.Warn().Msg("Quota enforcement is not supported for snapshot-backed volumes on current version of Weka software. Upgrade to latest version of Weka software to enable quota enforcement")
 	}
 	err := primaryFunc()
 	if err == nil {
-		logger.Info().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
-	} else if fallback {
-		// it means that fallback is false, and used for updating xattr if quota set failed.
-		// this is not intended to run Xattr for a second time
-		logger.Warn().Err(err).Msg("Failed to set quota via API, failing back to xattr")
-		err := fallbackFunc()
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to set capacity even in failback mode")
-		}
-		return err
+		logger.Info().Int64("new_capacity", capacityLimit).Str("capacity_entity", capacityEntity).Msg("Successfully updated capacity for volume")
+	} else {
+		logger.Error().Err(err).Str("capacity_entity", capacityEntity).Msg("Failed to set volume capacity")
 	}
 	return err
 }
@@ -885,7 +879,7 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
 
-	mountOpts := v.getMountOptions(ctx).MergedWith(v.server.getDefaultMountOptions(), v.server.getConfig().mutuallyExclusiveOptions)
+	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
 
 	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := func() {}

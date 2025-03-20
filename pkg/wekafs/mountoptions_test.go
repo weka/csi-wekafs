@@ -23,11 +23,12 @@ func TestMountOptions_RemoveOption(t *testing.T) {
 }
 
 func TestMountOptions_Merge(t *testing.T) {
-	opts1 := NewMountOptions([]string{"ro"})
-	opts2 := NewMountOptions([]string{"rw"})
+	opts1 := NewMountOptions([]string{"ro", "writecache"})
+	opts2 := NewMountOptions([]string{"rw", "forcedirect"})
 
 	exclusives := []mutuallyExclusiveMountOptionSet{
 		{"ro", "rw"},
+		{"coherent", "forcedirect", "readcache", "writecache"},
 	}
 
 	opts1.Merge(opts2, exclusives)
@@ -43,6 +44,14 @@ func TestMountOptions_Merge(t *testing.T) {
 
 	if !opts1.hasOption("acl") {
 		t.Errorf("Expected option 'acl' to be added")
+	}
+
+	if !opts1.hasOption("forcedirect") {
+		t.Errorf("Expected option 'forcedirect' to be added")
+	}
+
+	if opts1.hasOption("writecache") {
+		t.Errorf("Expected option 'writecache' to be removed due to exclusivity")
 	}
 }
 
