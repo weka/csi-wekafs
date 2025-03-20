@@ -336,6 +336,9 @@
         "selinuxSupport": {
             "type": "string"
         },
+        "tracingDeploymentIdentifier": {
+            "type": "string"
+        },
         "tracingUrl": {
             "type": "string"
         },

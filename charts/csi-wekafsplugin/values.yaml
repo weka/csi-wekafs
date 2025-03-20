@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.7.1
+csiDriverVersion: &csiDriverVersion 2.7.2-SNAPSHOT.8.ca76711
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.15.0
@@ -140,6 +140,8 @@ metrics:
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
+# @ignore
+tracingDeploymentIdentifier: ""
 # -- Set to true to use host networking. Will be always set to true when using NFS mount protocol
 hostNetwork: false
 pluginConfig:
