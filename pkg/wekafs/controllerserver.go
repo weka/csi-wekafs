@@ -108,6 +108,7 @@ func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod support
+		csi.ControllerServiceCapability_RPC_MODIFY_VOLUME,
 	}
 	if driver.config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
