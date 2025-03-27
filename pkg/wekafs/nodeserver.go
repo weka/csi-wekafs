@@ -233,10 +233,13 @@ func (ns *NodeServer) initializeSemaphore(ctx context.Context, op string) {
 		return
 	}
 
-	max := ns.getConfig().maxConcurrencyPerOp[op]
+	m, ok := ns.getConfig().maxConcurrencyPerOp[op]
+	if !ok { // if not set, default to 1
+		m = 1
+	}
 	logger := log.Ctx(ctx)
-	logger.Info().Str("op", op).Int64("max_concurrency", max).Msg("Initializing semaphore")
-	sem := semaphore.NewWeighted(max)
+	logger.Info().Str("op", op).Int64("max_concurrency", m).Msg("Initializing semaphore")
+	sem := semaphore.NewWeighted(m)
 	ns.semaphores[op] = sem
 }
 
