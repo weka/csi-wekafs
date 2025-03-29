@@ -164,9 +164,6 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
-            - mountPath: /etc/nodeinfo
-              name: nodeinfo
-              readOnly: true
             {{- if or (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") (eq .Values.selinuxSupport "enforced") }}
             - mountPath: /etc/selinux/config
               name: selinux-config
@@ -263,5 +260,3 @@ spec:
             type: Directory
           name: selinux-fs
       {{- end }}
-        - name: nodeinfo
-          emptyDir: {}
