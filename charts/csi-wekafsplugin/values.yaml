@@ -142,6 +142,11 @@ metricsServer:
   #    When false, all quota values will be fetched instantaneously, during metrics collection.
   #    Not recommended when having thousands of PVCs
   enableBatchModeForQuotaUpdates: false
+  # -- Resources for metrics server pods
+  resources:
+    requests:
+      cpu: 2
+      memory: 4Gi
 
 
 # -- Log level of CSI plugin
@@ -183,11 +188,6 @@ metrics:
   attacherPort: 9095
   # -- Metrics server metrics port
   metricsServerPort: 9096
-  # -- Resources for metrics server pods
-  resources:
-    requests:
-      cpu: 2
-      memory: 4Gi
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
