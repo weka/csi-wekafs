@@ -423,21 +423,20 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 func (ns *NodeServer) fetchMountOptionsForRequest(ctx context.Context, req *csi.NodePublishVolumeRequest) string {
 	logger := log.Ctx(ctx)
-	params := req.GetVolumeContext()
+	volumeId := req.GetVolumeId()
+
 	// set volume mountOptions, try first from configmap:
-	pvName := params["csi.storage.k8s.io/pv/name"]
 	var mountOptions string
 	var err error
 	successInFetchingOptionsFromCM := false
-	if pvName != "" { // this is a new flow, pre-3.0 volumes do not have this so they are not in map atm
-		mountOptions, err = ns.getConfig().GetDriver().GetVolumeMountOptionsFromMap(ctx, pvName)
-		if err == nil {
-			successInFetchingOptionsFromCM = true
-		}
+	mountOptions, err = ns.getConfig().GetDriver().GetVolumeMountOptionsFromMap(ctx, volumeId)
+	if err == nil {
+		successInFetchingOptionsFromCM = true
 	}
 	// if could not fetch from config map, use volumeContext for backward compatibility
-	if !successInFetchingOptionsFromCM && params != nil {
+	if !successInFetchingOptionsFromCM {
 		logger.Trace().Msg("Mount options not in config map, trying volumeContext")
+		params := req.GetVolumeContext()
 		mountOptions = params["mountOptions"]
 	}
 	return mountOptions

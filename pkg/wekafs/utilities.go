@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base32"
 	"encoding/hex"
 	"errors"
@@ -673,4 +674,27 @@ func SimpleXOR(input []byte) []byte {
 	}
 
 	return output
+}
+
+func HashToValidConfigMapKey(input string) string {
+	// Generate SHA-256 hash
+	hash := sha256.Sum256([]byte(input))
+
+	// Encode to Base32 (alphanumeric & case-insensitive)
+	encoded := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:])
+
+	// Ensure it starts with a letter (if needed, prefix with "h")
+	if encoded[0] >= '0' && encoded[0] <= '9' {
+		encoded = "h" + encoded
+	}
+
+	// Convert to lowercase (Kubernetes prefers lowercase keys)
+	encoded = strings.ToLower(encoded)
+
+	// Limit to 253 characters (safe limit for ConfigMap keys)
+	if len(encoded) > 253 {
+		encoded = encoded[:253]
+	}
+
+	return encoded
 }
