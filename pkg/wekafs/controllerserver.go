@@ -666,7 +666,12 @@ func (cs *ControllerServer) ControllerModifyVolume(ctx context.Context, req *csi
 		switch param {
 		case "mountOptions":
 			logger.Debug().Str("volume_id", volume.GetId()).Str("mount_options", value).Msg("Modifying volume mount options")
-			// do nothing, this is a read-only parameter
+			err = cs.getConfig().GetDriver().SetVolumeMountOptionsInMap(ctx, volume.GetId(), value)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to set volume mount options in map")
+				return ModifyVolumeError(ctx, codes.Internal, "Failed to set volume mount options in map")
+			}
+
 		default:
 			return ModifyVolumeError(ctx, codes.InvalidArgument, fmt.Sprintf("Cannot modify parameter %s via ModifyVolume", param))
 		}
