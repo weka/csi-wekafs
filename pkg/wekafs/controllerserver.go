@@ -322,10 +322,12 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 	if !mountOptionsInMap {
 		params["mountOptions"] = volume.getMountOptions(ctx).AsVolumeContext()
+	} else {
+		delete(params, "mountOptions")
 	}
 	// remove unnecessary parameters from volumeContext
 	volumeContext := params
-	for _, key := range []string{"csi.storage.k8s.io/pvc/name", "csi.storage.k8s.io/pvc/namespace", "filesystemGroupName", "initialFilesystemSizeGB"} {
+	for _, key := range []string{"filesystemGroupName", "initialFilesystemSizeGB"} {
 		delete(volumeContext, key)
 	}
 
