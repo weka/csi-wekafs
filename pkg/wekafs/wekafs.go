@@ -453,7 +453,8 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 	log.Info().Msg("Successfully removed labels from node")
 }
 
-func (d *WekaFsDriver) getMountOptionsConfigMap(ctx context.Context) (*v1.ConfigMap, error) {
+func (d *WekaFsDriver) ensureMountOptionsConfigMap(ctx context.Context) (*v1.ConfigMap, error) {
+	logger := log.Ctx(ctx)
 	client := d.GetK8sApiClient()
 	if client == nil {
 		log.Error().Msg("Failed to get Kubernetes client")
@@ -463,23 +464,24 @@ func (d *WekaFsDriver) getMountOptionsConfigMap(ctx context.Context) (*v1.Config
 	configMap, err := client.CoreV1().ConfigMaps(getOwnKubernetesNameSpace()).Get(ctx, getMountOptionsConfigMapName(d.name), metav1.GetOptions{})
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			log.Info().Msg("Mount options config map not found, creating a new one")
+			logger.Info().Msg("Mount options config map not found, creating a new one")
 			configMap = &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: getMountOptionsConfigMapName(d.name),
 				},
+				BinaryData: make(map[string][]byte),
 			}
-			return nil, nil
+			configMap, err = client.CoreV1().ConfigMaps(getOwnKubernetesNameSpace()).Create(ctx, configMap, metav1.CreateOptions{})
+		} else {
+			logger.Error().Err(err).Msg("Failed to get config map")
+			return nil, err
 		}
-		log.Error().Err(err).Msg("Failed to get config map")
-		return nil, err
 	}
-
 	return configMap, nil
 }
 
 func (d *WekaFsDriver) GetVolumeMountOptionsFromMap(ctx context.Context, volumeId string) (string, error) {
-	configMap, err := d.getMountOptionsConfigMap(ctx)
+	configMap, err := d.ensureMountOptionsConfigMap(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -506,11 +508,14 @@ func (d *WekaFsDriver) SetVolumeMountOptionsInMap(ctx context.Context, volumeId 
 		return errors.New("failed to get Kubernetes client")
 	}
 
-	c, err := d.getMountOptionsConfigMap(ctx)
+	c, err := d.ensureMountOptionsConfigMap(ctx)
 	if err != nil {
 		return err
 	}
 	volumeKey := HashToValidConfigMapKey(volumeId)
+	if c.BinaryData == nil {
+		c.BinaryData = make(map[string][]byte)
+	}
 	c.BinaryData[volumeKey] = SimpleXOR([]byte(options))
 
 	// we assume that at this stage we already run in Kubernetes otherwise getOwnKubernetesNameSpace() will fail
@@ -528,7 +533,7 @@ func (d *WekaFsDriver) DeleteVolumeMountOptionsFromMap(ctx context.Context, volu
 		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
-	c, err := d.getMountOptionsConfigMap(ctx)
+	c, err := d.ensureMountOptionsConfigMap(ctx)
 	if err != nil {
 		return
 	}
