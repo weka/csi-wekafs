@@ -473,6 +473,9 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
 	}
 
+	// Delete volume mount options from map
+	cs.getConfig().GetDriver().DeleteVolumeMountOptionsFromMap(ctx, volume.GetId())
+
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
 		logger.Debug().Str("volume_id", volume.GetId()).Msg("Volume not found, but returning success for idempotence")
