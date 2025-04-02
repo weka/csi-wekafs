@@ -318,15 +318,13 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// omit the container_name though as it should only be set via API secret and not via mount options
 	params["provisionedByCsiVersion"] = cs.getConfig().GetVersion()
 
-	pvName := params["csi.storage.k8s.io/pv/name"]
 	mountOptionsInMap := false
-	if len(pvName) > 0 {
-		err := cs.getConfig().GetDriver().SetVolumeMountOptionsInMap(ctx, pvName, volume.getMountOptions(ctx).AsVolumeContext())
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to set volume mount options in map")
-		} else {
-			mountOptionsInMap = true
-		}
+
+	err = cs.getConfig().GetDriver().SetVolumeMountOptionsInMap(ctx, volume.GetId(), volume.getMountOptions(ctx).AsVolumeContext())
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to set volume mount options in map")
+	} else {
+		mountOptionsInMap = true
 	}
 	if !mountOptionsInMap {
 		params["mountOptions"] = volume.getMountOptions(ctx).AsVolumeContext()
