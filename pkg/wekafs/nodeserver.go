@@ -313,11 +313,9 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	mountOptions := ns.fetchMountOptionsForRequest(ctx, req)
-	if mountOptions != "" {
-		logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
-		volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
-		volume.pruneUnsupportedMountOptions(ctx)
-	}
+	logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
+	volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
+	volume.pruneUnsupportedMountOptions(ctx)
 
 	// Check volume capabitily arguments
 	if req.GetVolumeCapability() == nil {
@@ -351,9 +349,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	readOnly := req.GetReadonly()
 	// create a readonly mount
 	if readOnly {
-		roMountOptions := NewMountOptions([]string{"ro"})
-		roMountOptions.excludeOptions = []string{"rw"}
-		volume.mountOptions.Merge(roMountOptions, ns.getConfig().mutuallyExclusiveOptions)
+		volume.setMountOptions(ctx, NewMountOptionsFromString("ro"))
 		innerMountOpts = append(innerMountOpts, "ro")
 	}
 
@@ -431,6 +427,7 @@ func (ns *NodeServer) fetchMountOptionsForRequest(ctx context.Context, req *csi.
 	successInFetchingOptionsFromCM := false
 	mountOptions, err = ns.getConfig().GetDriver().GetVolumeMountOptionsFromMap(ctx, volumeId)
 	if err == nil {
+		logger.Trace().Str("mount_options", mountOptions).Msg("Mount options fetched from config map")
 		successInFetchingOptionsFromCM = true
 	}
 	// if could not fetch from config map, use volumeContext for backward compatibility
