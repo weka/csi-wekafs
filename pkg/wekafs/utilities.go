@@ -24,9 +24,10 @@ import (
 )
 
 const (
-	SnapshotTypeUnifiedSnap = "wekasnap/v2"
-	ProcModulesPath         = "/proc/modules"
-	ProcWekafsInterface     = "/proc/wekafs/interface"
+	SnapshotTypeUnifiedSnap           = "wekasnap/v2"
+	ProcModulesPath                   = "/proc/modules"
+	ProcWekafsInterface               = "/proc/wekafs/interface"
+	MountOptionsConfigMapNameTemplate = "%s-pv-mount-options"
 )
 
 var ProcMountsPath = "/proc/mounts"
@@ -590,4 +591,30 @@ func getDataTransportFromMountPath(mountPoint string) DataTransport {
 	}
 	// just default
 	return dataTransportWekafs
+}
+
+func getOwnKubernetesNameSpace() string {
+	data, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func getMountOptionsConfigMapName(driverName string) string {
+	driverSanitizedName := strings.ReplaceAll(driverName, ".", "-")
+	return fmt.Sprintf(MountOptionsConfigMapNameTemplate, driverSanitizedName)
+}
+
+// SimpleXOR encrypts/decrypts a string using XOR with a key. Not used for encryption per se, just to obfuscate the string
+func SimpleXOR(input []byte) []byte {
+	key := []byte("weka")
+	keyLen := len(key)
+	output := make([]byte, len(input))
+
+	for i := range input {
+		output[i] = input[i] ^ key[i%keyLen] // XOR each byte with key
+	}
+
+	return output
 }
