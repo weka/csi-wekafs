@@ -478,7 +478,7 @@ func (d *WekaFsDriver) getMountOptionsConfigMap(ctx context.Context) (*v1.Config
 	return configMap, nil
 }
 
-func (d *WekaFsDriver) GetVolumeMountOptionsFromMap(ctx context.Context, volumeName string) (string, error) {
+func (d *WekaFsDriver) GetVolumeMountOptionsFromMap(ctx context.Context, volumeId string) (string, error) {
 	configMap, err := d.getMountOptionsConfigMap(ctx)
 	if err != nil {
 		return "", err
@@ -487,8 +487,8 @@ func (d *WekaFsDriver) GetVolumeMountOptionsFromMap(ctx context.Context, volumeN
 	if configMap == nil {
 		return "", nil
 	}
-
-	opts, ok := configMap.BinaryData[volumeName]
+	volumeKey := HashToValidConfigMapKey(volumeId)
+	opts, ok := configMap.BinaryData[volumeKey]
 	if !ok {
 		return "", MountOptionsNotFoundInMap
 	}
@@ -499,7 +499,7 @@ func (d *WekaFsDriver) GetVolumeMountOptionsFromMap(ctx context.Context, volumeN
 	return ret, nil
 }
 
-func (d *WekaFsDriver) SetVolumeMountOptionsInMap(ctx context.Context, volumeName string, options string) error {
+func (d *WekaFsDriver) SetVolumeMountOptionsInMap(ctx context.Context, volumeId string, options string) error {
 	client := d.GetK8sApiClient()
 	if client == nil {
 		log.Error().Msg("Failed to get Kubernetes client")
@@ -510,7 +510,8 @@ func (d *WekaFsDriver) SetVolumeMountOptionsInMap(ctx context.Context, volumeNam
 	if err != nil {
 		return err
 	}
-	c.BinaryData[volumeName] = SimpleXOR([]byte(options))
+	volumeKey := HashToValidConfigMapKey(volumeId)
+	c.BinaryData[volumeKey] = SimpleXOR([]byte(options))
 
 	// we assume that at this stage we already run in Kubernetes otherwise getOwnKubernetesNameSpace() will fail
 	_, err = client.CoreV1().ConfigMaps(getOwnKubernetesNameSpace()).Update(ctx, c, metav1.UpdateOptions{})
@@ -521,7 +522,7 @@ func (d *WekaFsDriver) SetVolumeMountOptionsInMap(ctx context.Context, volumeNam
 	return nil
 }
 
-func (d *WekaFsDriver) DeleteVolumeMountOptionsFromMap(ctx context.Context, volumeName string) {
+func (d *WekaFsDriver) DeleteVolumeMountOptionsFromMap(ctx context.Context, volumeId string) {
 	client := d.GetK8sApiClient()
 	if client == nil {
 		log.Error().Msg("Failed to get Kubernetes client")
@@ -534,7 +535,8 @@ func (d *WekaFsDriver) DeleteVolumeMountOptionsFromMap(ctx context.Context, volu
 	if c == nil {
 		return
 	}
-	delete(c.BinaryData, volumeName)
+	volumeKey := HashToValidConfigMapKey(volumeId)
+	delete(c.BinaryData, volumeKey)
 	// we assume that at this stage we already run in Kubernetes otherwise getOwnKubernetesNameSpace() will fail
 	_, err = d.GetK8sApiClient().CoreV1().ConfigMaps(getOwnKubernetesNameSpace()).Update(ctx, c, metav1.UpdateOptions{})
 	if err != nil {
