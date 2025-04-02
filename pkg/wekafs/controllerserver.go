@@ -310,8 +310,26 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	// set params to have all relevant mount options (default + those received in params) to be passed as part of volumeContext
 	// omit the container_name though as it should only be set via API secret and not via mount options
-	params["mountOptions"] = volume.getMountOptions(ctx).AsVolumeContext()
 	params["provisionedByCsiVersion"] = cs.getConfig().GetVersion()
+
+	pvName := params["csi.storage.k8s.io/pv/name"]
+	mountOptionsInMap := false
+	if len(pvName) > 0 {
+		err := cs.getConfig().GetDriver().SetVolumeMountOptionsInMap(ctx, pvName, volume.getMountOptions(ctx).AsVolumeContext())
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to set volume mount options in map")
+		} else {
+			mountOptionsInMap = true
+		}
+	}
+	if !mountOptionsInMap {
+		params["mountOptions"] = volume.getMountOptions(ctx).AsVolumeContext()
+	}
+	// remove unnecessary parameters from volumeContext
+	volumeContext := params
+	for _, key := range []string{"csi.storage.k8s.io/pvc/name", "csi.storage.k8s.io/pvc/namespace", "filesystemGroupName", "initialFilesystemSizeGB"} {
+		delete(volumeContext, key)
+	}
 
 	if err != nil {
 		if !volExists {
@@ -329,7 +347,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			Volume: &csi.Volume{
 				VolumeId:           volume.GetId(),
 				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
-				VolumeContext:      params,
+				VolumeContext:      volumeContext,
 				ContentSource:      volume.getCsiContentSource(ctx),
 				AccessibleTopology: cs.generateAccessibleTopology(),
 			},
@@ -345,7 +363,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				Volume: &csi.Volume{
 					VolumeId:           volume.GetId(),
 					CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
-					VolumeContext:      params,
+					VolumeContext:      volumeContext,
 					ContentSource:      volume.getCsiContentSource(ctx),
 					AccessibleTopology: cs.generateAccessibleTopology(),
 				},
