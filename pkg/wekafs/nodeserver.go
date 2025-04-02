@@ -319,14 +319,11 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return NodePublishVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
 
-	// set volume mountOptions
-	params := req.GetVolumeContext()
-	if params != nil {
-		if mountOptions, ok := params["mountOptions"]; ok {
-			logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
-			volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
-			volume.pruneUnsupportedMountOptions(ctx)
-		}
+	mountOptions := ns.fetchMountOptionsForRequest(ctx, req)
+	if mountOptions != "" {
+		logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
+		volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
+		volume.pruneUnsupportedMountOptions(ctx)
 	}
 
 	// Check volume capabitily arguments
@@ -429,6 +426,29 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	result = "SUCCESS"
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
 	return &csi.NodePublishVolumeResponse{}, nil
+}
+
+func (ns *NodeServer) fetchMountOptionsForRequest(ctx context.Context, req *csi.NodePublishVolumeRequest) string {
+	logger := log.Ctx(ctx)
+	params := req.GetVolumeContext()
+	// set volume mountOptions, try first from configmap:
+	pvName := params["csi.storage.k8s.io/pv/name"]
+	var mountOptions string
+	var err error
+	successInFetchingOptionsFromCM := false
+	if pvName != "" { // this is a new flow, pre-3.0 volumes do not have this so they are not in map atm
+		mountOptions, err = ns.getConfig().GetDriver().GetVolumeMountOptionsFromMap(ctx, pvName)
+		if err == nil {
+			successInFetchingOptionsFromCM = true
+		}
+	}
+	// if could not fetch from config map, use volumeContext for backward compatibility
+	if !successInFetchingOptionsFromCM && params != nil {
+		logger.Trace().Msg("Mount options not in config map, trying volumeContext")
+		mountOptions = params["mountOptions"]
+	}
+	return mountOptions
+
 }
 
 func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeUnpublishVolumeResponse, error) {
