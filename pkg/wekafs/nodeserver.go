@@ -36,20 +36,6 @@ import (
 	"time"
 )
 
-const (
-	TopologyKeyNode              = "topology.wekafs.csi/node"
-	TopologyLabelNodeGlobal      = "topology.csi.weka.io/node"
-	TopologyLabelWekaGlobal      = "topology.csi.weka.io/global"
-	TopologyLabelTransportGlobal = "topology.csi.weka.io/transport"
-
-	TopologyLabelWekaLocalPattern = "topology.%s/accessible"
-	TopologyLabelNodePattern      = "topology.%s/node"
-	TopologyLabelTransportPattern = "topology.%s/transport"
-
-	WekaKernelModuleName             = "wekafsgw"
-	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
-)
-
 type NodeServer struct {
 	csi.UnimplementedNodeServer
 	caps              []*csi.NodeServiceCapability
