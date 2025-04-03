@@ -71,3 +71,25 @@ default /run/weka-fs-mounts/default-DTQLAJ6KO6IUCZE23RBIM26YYUQNWKAA-mystrangecl
 	assert.Equal(t, "", containerName)
 
 }
+
+func TestHashToValidConfigMapKey(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"example", "vynezyjzjomfh7ad67odhnkjnznxyup4"},
+		{"anotherExample", "vofn7cikcmoojakjzmh47cz6w4zti7dm"},
+		{"yetAnotherExample", "vvxauaoztcqrolsxl2f3jngt3n6khbf2"},
+		{"pv-45f5fca8-2b1f-42f6-811c-17a8c27584c5", "vacka6yjtwgrebyscwb6lrrpdiknc3js"},
+		{"pv-45f5fca9-2b1f-42f6-811c-17a8c27584c5", "vxa7cmihpgur7jmwockf43nauawu6n5s"},
+		{"pv-45f5fca8-2b1a-42f6-811c-17a8c27584c5", "v6ho3xvfiyc4j3hgz4xy6jv7rxhaldbz"},
+		{"pv-45f5fca8-2b1f-42fa-811c-17a8c27584c5", "v32ojj3tv6ijzoepbs5uxcg3gn3xnnqx"},
+		{"pv-45f5fca8-2b1f-42f6-811d-17a8c27584c5", "v5ddxghhrbzz4l7d3ddfi5jndbeuw5ex"},
+		{"pv-45f5fca8-2b1f-42f6-811c-17a8c27584c6", "vqn3maadqgwtztmqsiudvo5vrs74jlca"},
+	}
+
+	for _, tc := range testCases {
+		result := HashToValidConfigMapKey(tc.input)
+		assert.Equal(t, tc.expected, result, "Expected %s but got %s", tc.expected, result)
+	}
+}
