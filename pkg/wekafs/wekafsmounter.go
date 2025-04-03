@@ -11,10 +11,6 @@ import (
 	"time"
 )
 
-const (
-	inactiveMountGcPeriod = time.Minute * 10
-)
-
 type wekafsMounter struct {
 	mountMap                wekafsMountsMap
 	lock                    sync.Mutex
