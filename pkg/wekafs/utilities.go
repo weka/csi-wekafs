@@ -672,7 +672,7 @@ func SimpleXOR(input []byte) []byte {
 func HashToValidConfigMapKey(input string) string {
 	// Generate SHA1 hash
 	hash := sha1.Sum([]byte(input))
-	encoded := "v" + string(hash[:])
+	encoded := strings.ToLower("v" + base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:]))
 	if len(encoded) > 32 {
 		encoded = encoded[:32]
 	}
