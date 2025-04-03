@@ -6,11 +6,6 @@ import (
 	"time"
 )
 
-const (
-	dataTransportNfs    DataTransport = "nfs"
-	dataTransportWekafs DataTransport = "wekafs"
-)
-
 type AnyServer interface {
 	getMounter(ctx context.Context) AnyMounter
 	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
@@ -35,11 +30,6 @@ type AnyMounter interface {
 	Disable()
 }
 
-type nfsMountsMap map[string]int // we only follow the mountPath and number of references
-type wekafsMountsMap map[string]int
-type DataTransport string
-type UnmountFunc func()
-
 type AnyMount interface {
 	isMounted() bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
@@ -51,3 +41,11 @@ type AnyMount interface {
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
 }
+
+type nfsMountsMap map[string]int // we only follow the mountPath and number of references
+type wekafsMountsMap map[string]int
+type DataTransport string
+type UnmountFunc func()
+type VolumeBackingType string
+type VolumeType string
+type CsiPluginMode string
