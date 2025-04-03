@@ -128,6 +128,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		}
 		driver.Ms.Stop(ctx)
 		s.Stop()
+		log.Info().Msg("Server stopped")
 		os.Exit(1)
 
 	}()
