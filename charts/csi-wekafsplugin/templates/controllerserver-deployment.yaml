@@ -277,6 +277,9 @@ spec:
           {{- end }}
             - "--workers={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
+          {{- if semverCompare ">=1.31.0" .Capabilities.KubeVersion.Version }}
+            - "--feature-gates=VolumeAttributesClass=true"
+          {{- end }}
           {{- if .Values.controller.configureResizerLeaderElection }}
           livenessProbe:
             httpGet:
