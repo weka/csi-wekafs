@@ -22,27 +22,6 @@ import (
 	"time"
 )
 
-const (
-	MaxHashLengthForObjectNames = 12
-	SnapshotsSubDirectory       = ".snapshots"
-)
-
-type VolumeBackingType string
-
-const (
-	VolumeBackingTypeDirectory  VolumeBackingType = "DIRECTORY"
-	VolumeBackingTypeFilesystem VolumeBackingType = "FILESYSTEM"
-	VolumeBackingTypeSnapshot   VolumeBackingType = "SNAPSHOT"
-	VolumeBackingTypeHybrid     VolumeBackingType = "HYBRID"
-)
-
-var KnownBackingTypes = []VolumeBackingType{VolumeBackingTypeDirectory, VolumeBackingTypeFilesystem, VolumeBackingTypeSnapshot}
-
-var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
-var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
-
-var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
-
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)
 type Volume struct {
 	id                    string
