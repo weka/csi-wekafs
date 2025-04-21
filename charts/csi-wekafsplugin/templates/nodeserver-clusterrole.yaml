@@ -34,3 +34,8 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get"]
+  {{- if semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.GitVersion }}
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattributesclasses"]
+    verbs: ["get", "list", "watch"]
+  {{- end }}
