@@ -21,10 +21,10 @@ require (
 	golang.org/x/sync v0.12.0
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.5
-	k8s.io/apimachinery v0.32.3
-	k8s.io/client-go v0.32.3
+	k8s.io/apimachinery v0.33.1
+	k8s.io/client-go v0.33.1
 	k8s.io/helm v2.17.0+incompatible
-	k8s.io/mount-utils v0.32.3
+	k8s.io/mount-utils v0.33.1
 )
 
 require (
