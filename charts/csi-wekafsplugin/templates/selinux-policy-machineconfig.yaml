@@ -6,6 +6,10 @@ metadata:
   name: 50-{{ $.Release.Name }}-selinux-policy-{{ . }}
   labels:
     machineconfiguration.openshift.io/role: {{ . }}
+  {{- if $.Values.selinuxOcpRetainMachineConfig }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
 spec:
   osImageURL: ''
   config:

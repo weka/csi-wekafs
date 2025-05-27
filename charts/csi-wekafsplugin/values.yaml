@@ -120,6 +120,9 @@ selinuxSupport: "off"
 #    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label
 #    `csi.weka.io/selinux_enabled="true"`
 selinuxNodeLabel: "csi.weka.io/selinux_enabled"
+# -- If true, the SELinux policy machine configuration will not be removed when uninstalling the plugin.
+#    This is useful for OpenShift Container Platform clusters, to not cause machine config pool update on plugin reinstall
+selinuxOcpRetainMachineConfig: false
 # -- kubelet path, in cases Kubernetes is installed not in default folder
 kubeletPath: "/var/lib/kubelet"
 metrics:
