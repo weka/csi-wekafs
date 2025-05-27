@@ -41,7 +41,7 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	EncryptionWithClusterKey:       "v4.0",   // can create encrypted filesystems with common cluster-wide key
 	EncryptionWithCustomSettings:   "v4.4.1", // can create encrypted filesystems with custom settings (key per filesystem(s))
 	ResolvePathToInode:             "v4.3",   // can resolve a path to an inode instead of doing it via mount
-	ResolvePathToInodeCsiRole:      "v9.99",  // can resolve a path to an inode via API with CSI role
+	ResolvePathToInodeCsiRole:      "v4.4.7", // can resolve a path to an inode via API with CSI role
 }
 
 type WekaCompatibilityMap struct {
