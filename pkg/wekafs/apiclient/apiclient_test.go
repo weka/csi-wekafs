@@ -3,8 +3,13 @@ package apiclient
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/stretchr/testify/assert"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestGenerateHash(t *testing.T) {
@@ -166,7 +171,8 @@ func TestMain(m *testing.M) {
 }
 
 func GetApiClientForTest(t *testing.T) *ApiClient {
-	creds.Endpoints = []string{endpoint}
+	endpoints := strings.Split(endpoint, ",")
+	creds.Endpoints = endpoints
 	if client == nil {
 		apiClient, err := NewApiClient(context.Background(), creds, true, endpoint)
 		if err != nil {
@@ -181,4 +187,108 @@ func GetApiClientForTest(t *testing.T) *ApiClient {
 		client = apiClient
 	}
 	return client
+}
+
+func TestApiClientRequest(t *testing.T) {
+	tests := []struct {
+		name           string
+		serverHandler  http.HandlerFunc
+		expectedError  error
+		expectedStatus int
+	}{
+		{
+			name: "Timeout error",
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(2 * time.Second) // Simulate a timeout
+			},
+			expectedError:  &ApiRetriesExceeded{},
+			expectedStatus: 0,
+		},
+		{
+			name: "Connection reset",
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				hj, ok := w.(http.Hijacker)
+				if !ok {
+					t.Fatal("Server does not support hijacking")
+				}
+				conn, _, err := hj.Hijack()
+				if err != nil {
+					t.Fatal(err)
+				}
+				conn.Close() // Simulate connection reset
+			},
+			expectedError:  &ApiRetriesExceeded{},
+			expectedStatus: 0,
+		},
+		{
+			name: "HTTP 500 Internal Server Error",
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"message": "Internal Server Error"}`))
+			},
+			expectedError:  &ApiRetriesExceeded{},
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "HTTP 404 Not Found",
+			serverHandler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+				w.Write([]byte(`{"message": "Not Found"}`))
+			},
+			expectedError:  &ApiNotFoundError{},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name: "HTTP 503 Service Unavailable",
+			serverHandler: func(writer http.ResponseWriter, r *http.Request) {
+				writer.WriteHeader(http.StatusServiceUnavailable)
+				writer.Write([]byte(`{"message": "Service Unavailable"}`))
+			},
+			expectedError:  &ApiRetriesExceeded{},
+			expectedStatus: http.StatusServiceUnavailable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a mock server
+			server := httptest.NewServer(tt.serverHandler)
+			socket := strings.Split(server.URL, ":")
+			if len(socket) != 3 {
+				t.Fatalf("Invalid server URL: %s", server.URL)
+			}
+			defer server.Close()
+
+			// Create an ApiClient with the mock server's URL
+			apiClient := GetApiClientForTest(t)
+
+			apiClient.client.Timeout = 1 * time.Second
+			endpointString := fmt.Sprintf("%s:%s", socket[1][2:], socket[2])
+			apiClient.Credentials.Endpoints = []string{endpointString}
+			apiClient.Credentials.HttpScheme = "http"
+			ctx := context.Background()
+			apiClient.resetDefaultEndpoints(ctx)
+			apiClient.rotateEndpoint(ctx)
+
+			r := ClusterInfoResponse{}
+			jb, err := marshalRequest(r)
+			assert.NoError(t, err)
+			responseData := &LoginResponse{}
+
+			// Perform the request
+			err = apiClient.request(context.Background(), "GET", ApiPathClusterInfo, jb, nil, responseData)
+
+			// Assert the error type
+			if tt.expectedError != nil {
+				assert.IsType(t, tt.expectedError, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// Assert the status code if applicable
+			if apiErr, ok := err.(ApiError); ok {
+				assert.Equal(t, tt.expectedStatus, apiErr.StatusCode)
+			}
+		})
+	}
 }
