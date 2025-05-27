@@ -115,8 +115,8 @@ func (a *ApiClient) getBaseUrl(ctx context.Context) string {
 	return fmt.Sprintf("%s://%s:%d/api/v2", scheme, endpoint.IpAddress, endpoint.MgmtPort)
 }
 
-// handleNetworkErrors checks if the error returned by endpoint is a network error (transient by definition)
-func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
+// handleTransientErrors checks if the error returned by endpoint is a network error (transient by definition)
+func (a *ApiClient) handleTransientErrors(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -135,6 +135,15 @@ func (a *ApiClient) handleNetworkErrors(ctx context.Context, err error) error {
 			if t == syscall.ECONNREFUSED {
 				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Connection refused:", a.getEndpoint(ctx)))}
 			}
+
+		case *transportError:
+			if t.Err != nil {
+				return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Transport error:", a.getEndpoint(ctx), t.Err))}
+			}
+		case *ApiNotAvailableError:
+			return &ApiNetworkError{Err: errors.New(fmt.Sprintln("Service unavailable:", a.getEndpoint(ctx), t.Err))}
+		default:
+			return nil
 		}
 	}
 	// In this case this is not a network error, will be treated separately
