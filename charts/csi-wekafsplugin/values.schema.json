@@ -333,6 +333,9 @@
         "selinuxNodeLabel": {
             "type": "string"
         },
+        "selinuxOcpRetainMachineConfig": {
+            "type": "boolean"
+        },
         "selinuxSupport": {
             "type": "string"
         },
