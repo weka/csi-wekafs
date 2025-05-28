@@ -23,6 +23,7 @@ type ApiEndPoint struct {
 	http404ErrCount      int64
 	http409ErrCount      int64
 	http500ErrCount      int64
+	http503ErrCount      int64
 	generalErrCount      int64
 	transportErrCount    int64
 	noRespCount          int64
@@ -151,7 +152,7 @@ func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 // rotateEndpoint returns a random endpoint of the configured ones
 func (a *ApiClient) rotateEndpoint(ctx context.Context) {
 	logger := log.Ctx(ctx)
-	if len(a.actualApiEndpoints) == 0 {
+	if len(a.actualApiEndpoints) == 0 || a.actualApiEndpoints == nil {
 		a.resetDefaultEndpoints(ctx)
 	}
 	if len(a.actualApiEndpoints) == 0 {

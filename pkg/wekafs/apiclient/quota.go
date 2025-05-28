@@ -301,15 +301,20 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 	err := a.Get(ctx, ret.GetApiUrl(a), nil, ret)
 	if err != nil {
 		switch t := err.(type) {
-		case ApiNotFoundError:
+		case *ApiNotFoundError:
 			return nil, ObjectNotFoundError
-		case ApiInternalError:
+		case *ApiInternalError:
 			if strings.Contains(t.ApiResponse.Message, "Directory has no quota") {
 				return nil, ObjectNotFoundError
 			}
 			return nil, err
+		case *ApiNonTransientError:
+			if strings.Contains(t.Error(), "Directory has no quota") {
+				return nil, ObjectNotFoundError
+			}
+
 		default:
-			logger.Error().Err(err).Msg("Invalid condition on getting quota")
+			logger.Error().Err(t).Msg("Invalid condition on getting quota")
 			return nil, err
 		}
 	}
