@@ -143,6 +143,33 @@ func (e ApiInternalError) getType() string {
 	return "ApiInternalError"
 }
 
+type ApiNotAvailableError ApiError
+
+func (e ApiNotAvailableError) Error() string {
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+		e.getType(),
+		e.Text,
+		e.StatusCode,
+		e.Err,
+		func() string {
+			if e.RawData != nil {
+				return string(*e.RawData)
+			}
+			return ""
+		}(),
+		func() json.RawMessage {
+			if e.ApiResponse != nil {
+				return e.ApiResponse.Data
+			}
+			return json.RawMessage{}
+		}(),
+	)
+}
+
+func (e ApiNotAvailableError) getType() string {
+	return "ApiNotAvailableError"
+}
+
 type ApiNotFoundError ApiError
 
 func (e ApiNotFoundError) Error() string {

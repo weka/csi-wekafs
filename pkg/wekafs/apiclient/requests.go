@@ -165,7 +165,17 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	case http.StatusInternalServerError: //500
 		endpoint.http500ErrCount++
-		return Response, ApiInternalError{
+		return Response, &ApiInternalError{
+			Err:         nil,
+			Text:        Response.Message,
+			StatusCode:  response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: Response,
+		}
+
+	case http.StatusServiceUnavailable: //503
+		endpoint.http503ErrCount++
+		return Response, &ApiNotAvailableError{
 			Err:         nil,
 			Text:        Response.Message,
 			StatusCode:  response.StatusCode,
@@ -175,7 +185,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	default:
 		endpoint.generalErrCount++
-		return Response, ApiError{
+		return Response, &ApiError{
 			Err:         err,
 			Text:        "General failure during API command",
 			StatusCode:  response.StatusCode,
@@ -192,10 +202,9 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 	defer span.End()
 	ctx = log.With().Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-
-	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), func() apiError {
+	f := func() apiError {
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
-		if a.handleNetworkErrors(ctx, reqErr) != nil { // transient network errors
+		if a.handleTransientErrors(ctx, reqErr) != nil { // transient network errors
 			a.rotateEndpoint(ctx)
 			logger.Error().Err(reqErr).Msg("")
 			return reqErr
@@ -233,7 +242,8 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 			logger.Warn().Err(reqErr).Int("http_code", s).Msg("Failed to perform a request, got an unhandled error")
 			return ApiNonTransientError{reqErr}
 		}
-	})
+	}
+	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), f)
 	if err != nil {
 		return err.(apiError)
 	}
