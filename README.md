@@ -1,7 +1,7 @@
 # CSI WekaFS Driver
 Helm chart for deploying the WEKA Container Storage Interface (CSI) plugin for WekaFS, the world's fastest filesystem.
 
-![Version: 2.7.3](https://img.shields.io/badge/Version-2.7.3-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.7.3](https://img.shields.io/badge/AppVersion-v2.7.3-informational?style=flat-square)
+![Version: 2.7.4-SNAPSHOT.0.sha.989ba72](https://img.shields.io/badge/Version-2.7.4--SNAPSHOT.0.sha.989ba72-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.7.4-SNAPSHOT.0.sha.989ba72](https://img.shields.io/badge/AppVersion-v2.7.4--SNAPSHOT.0.sha.989ba72-informational?style=flat-square)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
 
@@ -46,7 +46,7 @@ make build
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.7.3"` | CSI driver version |
+| csiDriverVersion | string | `"2.7.4-SNAPSHOT.0.sha.989ba72"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.15.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.8.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.1.0"` | CSI provisioner sidecar image URL |
@@ -55,7 +55,7 @@ make build
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.2.0"` | CSI snapshotter sidecar image URL |
 | images.nodeinfo | string | `"quay.io/weka.io/csi-wekafs"` | CSI nodeinfo sidecar image URL, used for reading node metadata |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.7.3"` | CSI driver tag |
+| images.csidriverTag | string | `"2.7.4-SNAPSHOT.0.sha.989ba72"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
