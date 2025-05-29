@@ -167,6 +167,8 @@ func (a *ApiClient) generateHash() uint32 {
 		a.Credentials.NfsTargetIPs,
 		a.Credentials.LocalContainerName,
 		a.Credentials.CaCertificate,
+		a.Credentials.KmsPreexistingCredentialsForVolumeEncryption.InsecureString(),
+		a.Credentials.KmsKeyManagementCredentials.InsecureString(),
 	)
 	_, _ = h.Write([]byte(s))
 	return h.Sum32()
