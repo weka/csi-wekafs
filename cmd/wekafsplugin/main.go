@@ -99,6 +99,7 @@ var (
 	skipGarbageCollection                = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
 	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
+	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
 	// Set by the build process
 	version = ""
 )
@@ -236,6 +237,7 @@ func handle(ctx context.Context) {
 		*waitForObjectDeletion,
 		*allowEncryptionWithoutKms,
 		*tracingUrl,
+		*manageNodeTopologyLabels,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

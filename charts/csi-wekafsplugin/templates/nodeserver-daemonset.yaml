@@ -110,6 +110,9 @@ spec:
           {{- if .Values.pluginConfig.mountProtocol.nfsProtocolVersion }}
             - "--nfsprotocolversion={{ .Values.pluginConfig.mountProtocol.nfsProtocolVersion | toString}}"
           {{- end }}
+          {{- if .Values.pluginConfig.manageNodeTopologyLabels }}
+            - "--managenodetopologylabels"
+          {{- end }}
           ports:
             - containerPort: 9899
               name: healthz

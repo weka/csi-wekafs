@@ -199,3 +199,6 @@ pluginConfig:
   skipGarbageCollection: false
   # -- Wait for WEKA filesystem / snapshot deletion before acknowledging the corresponding CSI volume deletion. Default false
   waitForObjectDeletion: false
+  # -- Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false.
+  manageNodeTopologyLabels: true
+
