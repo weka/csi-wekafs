@@ -539,32 +539,35 @@ func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int
 	return exists, matches, err
 }
 
-func isWekaRunning() bool {
+func isWekaDriverLoaded() bool {
+	// check if the WEKA kernel driver is loaded
 	file, err := os.Open(ProcModulesPath)
 	if err != nil {
 		log.Err(err).Msg("Failed to open procfs and check for existence of Weka kernel module")
 		return false
 	}
-	driverExists := false
 	defer func() { _ = file.Close() }()
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		s := strings.Split(scanner.Text(), " ")
 		name := s[0]
 		if name == WekaKernelModuleName {
-			driverExists = true
-			break
+			return true
 		}
 	}
-	// check if the driver actually runs and connected to Weka software
-	if driverExists {
+	return false
+}
+
+func isWekaRunning() bool {
+	if isWekaDriverLoaded() {
+		// check if the WEKA client software is running (on top of the kernel module)
 		driverInfo, err := os.Open(ProcWekafsInterface)
 		if err != nil {
 			log.Err(err).Msg("Failed to open driver interface and check for existence of Weka client software")
 			return false
 		}
 		defer func() { _ = driverInfo.Close() }()
-		scanner = bufio.NewScanner(driverInfo)
+		scanner := bufio.NewScanner(driverInfo)
 		for scanner.Scan() {
 			line := scanner.Text()
 			// TODO: improve it by checking for the explicit client container name rather than just ANY container
