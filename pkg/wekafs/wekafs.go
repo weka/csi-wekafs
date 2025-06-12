@@ -24,6 +24,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -55,13 +56,15 @@ type WekaFsDriver struct {
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig
+	k8sApiClient   *kubernetes.Clientset
 }
 
 type VolumeType string
 
 var (
-	vendorVersion           = "dev"
-	ClusterApiNotFoundError = errors.New("could not get API client by cluster guid")
+	vendorVersion             = "dev"
+	ClusterApiNotFoundError   = errors.New("could not get API client by cluster guid")
+	MountOptionsNotFoundInMap = errors.New("mount options not found in map")
 )
 
 // ApiStore hashmap of all APIs defined by credentials + endpoints
@@ -336,23 +339,38 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	s.Wait()
 }
 
+func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
+	if d.k8sApiClient == nil {
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			if errors.Is(err, rest.ErrNotInCluster) {
+				log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+				return nil
+			}
+			log.Error().Err(err).Msg("Failed to create in-cluster config")
+			return nil
+		}
+
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create Kubernetes client")
+			return nil
+		}
+		d.k8sApiClient = clientset
+	}
+	return d.k8sApiClient
+}
+
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create in-cluster config")
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create Kubernetes client")
-		return
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node object from Kubernetes")
 		return
@@ -389,7 +407,7 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		return
 	}
 
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = d.GetK8sApiClient().CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return
@@ -409,19 +427,13 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 	}
 	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
 
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create in-cluster config")
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create Kubernetes client")
-		return
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node")
 		return
@@ -432,18 +444,110 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 		log.Info().Str("label", label).Str("node", node.Name).Msg("Removing label from node")
 	}
 
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return
 	}
 
 	log.Info().Msg("Successfully removed labels from node")
+}
 
-	//output, err := exec.Command("/bin/kubectl", "label", "node", d.nodeID, labelsString).Output()
-	//if err != nil {
-	//	log.Error().Err(err).Str("output", string(output)).Msg("Failed to remove labels from node")
-	//}
+func (d *WekaFsDriver) ensureMountOptionsConfigMap(ctx context.Context) (*v1.ConfigMap, error) {
+	logger := log.Ctx(ctx)
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
+		return nil, errors.New("failed to get Kubernetes client")
+	}
+	// we assume that at this stage we already run in Kubernetes otherwise getOwnKubernetesNameSpace() will fail
+	configMap, err := client.CoreV1().ConfigMaps(getOwnKubernetesNameSpace()).Get(ctx, getMountOptionsConfigMapName(d.name), metav1.GetOptions{})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			logger.Info().Msg("Mount options config map not found, creating a new one")
+			configMap = &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: getMountOptionsConfigMapName(d.name),
+				},
+				BinaryData: make(map[string][]byte),
+			}
+			configMap, err = client.CoreV1().ConfigMaps(getOwnKubernetesNameSpace()).Create(ctx, configMap, metav1.CreateOptions{})
+		} else {
+			logger.Error().Err(err).Msg("Failed to get config map")
+			return nil, err
+		}
+	}
+	return configMap, nil
+}
+
+func (d *WekaFsDriver) GetVolumeMountOptionsFromMap(ctx context.Context, volumeId string) (string, error) {
+	configMap, err := d.ensureMountOptionsConfigMap(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if configMap == nil {
+		return "", nil
+	}
+	volumeKey := HashToValidConfigMapKey(volumeId)
+	opts, ok := configMap.BinaryData[volumeKey]
+	if !ok {
+		return "", MountOptionsNotFoundInMap
+	}
+	// now update the configmap with the new options
+
+	// need to encrypt the options just for obfuscation purposes so only the driver can read them
+	ret := string(SimpleXOR(opts))
+	return ret, nil
+}
+
+func (d *WekaFsDriver) SetVolumeMountOptionsInMap(ctx context.Context, volumeId string, options string) error {
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
+		return errors.New("failed to get Kubernetes client")
+	}
+
+	c, err := d.ensureMountOptionsConfigMap(ctx)
+	if err != nil {
+		return err
+	}
+	volumeKey := HashToValidConfigMapKey(volumeId)
+	if c.BinaryData == nil {
+		c.BinaryData = make(map[string][]byte)
+	}
+	c.BinaryData[volumeKey] = SimpleXOR([]byte(options))
+
+	// we assume that at this stage we already run in Kubernetes otherwise getOwnKubernetesNameSpace() will fail
+	_, err = client.CoreV1().ConfigMaps(getOwnKubernetesNameSpace()).Update(ctx, c, metav1.UpdateOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update config map")
+		return err
+	}
+	return nil
+}
+
+func (d *WekaFsDriver) DeleteVolumeMountOptionsFromMap(ctx context.Context, volumeId string) {
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
+		return
+	}
+	c, err := d.ensureMountOptionsConfigMap(ctx)
+	if err != nil {
+		return
+	}
+	if c == nil {
+		return
+	}
+	volumeKey := HashToValidConfigMapKey(volumeId)
+	delete(c.BinaryData, volumeKey)
+	// we assume that at this stage we already run in Kubernetes otherwise getOwnKubernetesNameSpace() will fail
+	_, err = d.GetK8sApiClient().CoreV1().ConfigMaps(getOwnKubernetesNameSpace()).Update(ctx, c, metav1.UpdateOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update config map")
+		return
+	}
 }
 
 type CsiPluginMode string

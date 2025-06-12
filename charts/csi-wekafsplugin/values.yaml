@@ -10,17 +10,15 @@ images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.15.0
   # -- CSI attacher sidecar image URL
-  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.8.0
+  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.8.1
   # -- CSI provisioner sidecar image URL
-  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v5.1.0
+  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v5.2.0
   # -- CSI registrar sidercar
   registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.13.0
   # -- CSI resizer sidecar image URL
-  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.13.1
+  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v1.13.2
   # -- CSI snapshotter sidecar image URL
   snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.2.0
-  # -- CSI nodeinfo sidecar image URL, used for reading node metadata
-  nodeinfo: quay.io/weka.io/csi-wekafs
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
@@ -59,6 +57,7 @@ controller:
     createVolume: 5
     deleteVolume: 5
     expandVolume: 5
+    modifyVolume: 5
     createSnapshot: 5
     deleteSnapshot: 5
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
