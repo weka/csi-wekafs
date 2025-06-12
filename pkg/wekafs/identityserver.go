@@ -114,7 +114,7 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 			if ids.config.driverRef.csiMode == CsiModeNode || ids.config.driverRef.csiMode == CsiModeAll {
 				ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
 			}
-		} else if !ids.getConfig().isInDevMode() {
+		} else {
 			ids.getConfig().GetDriver().SetNodeLabels(ctx)
 		}
 	}
