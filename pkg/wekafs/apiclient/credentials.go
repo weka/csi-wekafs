@@ -2,16 +2,35 @@ package apiclient
 
 import "fmt"
 
+type KmsVaultCredentials struct {
+	KeyIdentifier string
+	Namespace     string
+	RoleId        string
+	SecretId      string
+	Url           string
+}
+
+// InsecureString returns a string representation of the KmsVaultCredentials. Since very unsafe to print the values even by mistake, we do not call it String()
+func (k *KmsVaultCredentials) InsecureString() string {
+	if k == nil {
+		return ""
+	}
+	return fmt.Sprintf("KmsVaultCredentials(KeyIdentifier: %s, Namespace: %s, RoleId: %s, SecretId: %s, Url: %s)",
+		k.KeyIdentifier, k.Namespace, k.RoleId, k.SecretId, k.Url)
+}
+
 type Credentials struct {
-	Username            string
-	Password            string
-	Organization        string
-	HttpScheme          string
-	Endpoints           []string
-	LocalContainerName  string
-	AutoUpdateEndpoints bool
-	CaCertificate       string
-	NfsTargetIPs        []string
+	Username                                     string
+	Password                                     string
+	Organization                                 string
+	HttpScheme                                   string
+	Endpoints                                    []string
+	LocalContainerName                           string
+	AutoUpdateEndpoints                          bool
+	CaCertificate                                string
+	NfsTargetIPs                                 []string
+	KmsPreexistingCredentialsForVolumeEncryption KmsVaultCredentials // those are used as is to pass to filesystem creation
+	KmsKeyManagementCredentials                  KmsVaultCredentials // those are used by the CSI plugin to connect to vault and create new credentials //TODO: not implemented
 }
 
 func (c *Credentials) String() string {
