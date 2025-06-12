@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"golang.org/x/exp/constraints"
@@ -453,27 +452,6 @@ func validateSnapshotId(snapshotId string) error {
 	} else {
 		return errors.New(fmt.Sprintln("Snapshot ID does not match regex:", r, snapshotId))
 	}
-}
-
-func updateXattrs(volPath string, attrs map[string][]byte) error {
-	for key, val := range attrs {
-		if err := xattr.Set(volPath, key, val); err != nil {
-			return status.Errorf(codes.Internal, "failed to update volume attribute %s: %s, %s", key, val, err.Error())
-		}
-	}
-	return nil
-}
-
-func setVolumeProperties(volPath string, capacity int64, volName string) error {
-	// assumes that volPath is already mounted and accessible
-	xattrs := make(map[string][]byte)
-	if volName != "" {
-		xattrs[xattrVolumeName] = []byte(volName)
-	}
-	if capacity > 0 {
-		xattrs[xattrCapacity] = []byte(fmt.Sprint(capacity))
-	}
-	return updateXattrs(volPath, xattrs)
 }
 
 func pathIsDirectory(filename string) error {
