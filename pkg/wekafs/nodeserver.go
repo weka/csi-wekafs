@@ -528,10 +528,14 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		TopologyKeyNode:         ns.nodeID,
 		TopologyLabelWekaGlobal: "true", // for backward compatibility remains as is
 	}
-	// this will either overwrite or add the keys based on the driver name
-	segments[fmt.Sprintf(TopologyLabelNodePattern, driverName)] = ns.nodeID
-	segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = string(ns.getMounter().getTransport())
-	segments[fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)] = "true"
+	if ns.config.manageNodeTopologyLabels {
+		// this will either overwrite or add the keys based on the driver name
+		segments[fmt.Sprintf(TopologyLabelNodePattern, driverName)] = ns.nodeID
+		segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = string(ns.getMounter().getTransport())
+		segments[fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)] = "true"
+	} else {
+		logger.Warn().Msg("Node topology labels management is disabled, using global label only")
+	}
 
 	topology := &csi.Topology{
 		Segments: segments,
