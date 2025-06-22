@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.7.4-SNAPSHOT.0.sha.989ba72
+csiDriverVersion: &csiDriverVersion 2.7.4-SNAPSHOT.5.sha.42dc5f7
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.15.0
@@ -201,4 +201,3 @@ pluginConfig:
   waitForObjectDeletion: false
   # -- Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false.
   manageNodeTopologyLabels: true
-
