@@ -279,6 +279,9 @@
                 "fsGroupPolicy": {
                     "type": "string"
                 },
+                "manageNodeTopologyLabels": {
+                    "type": "boolean"
+                },
                 "mountProtocol": {
                     "type": "object",
                     "properties": {
