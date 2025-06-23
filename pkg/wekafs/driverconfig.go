@@ -44,6 +44,7 @@ type DriverConfig struct {
 	allowEncryptionWithoutKms        bool
 	driverRef                        *WekaFsDriver
 	tracingUrl                       string
+	manageNodeTopologyLabels         bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -69,6 +70,7 @@ func (dc *DriverConfig) Log() {
 		Bool("skip_garbage_collection", dc.skipGarbageCollection).
 		Bool("wait_for_object_deletion", dc.waitForObjectDeletion).
 		Str("tracing_url", dc.tracingUrl).
+		Bool("manage_node_topology_labels", dc.manageNodeTopologyLabels).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -85,6 +87,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	skipGarbageCollection, waitForObjectDeletion bool,
 	allowEncryptionWithoutKms bool,
 	tracingUrl string,
+	manageNodeTopologyLabels bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -134,6 +137,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		waitForObjectDeletion:            waitForObjectDeletion,
 		allowEncryptionWithoutKms:        allowEncryptionWithoutKms,
 		tracingUrl:                       tracingUrl,
+		manageNodeTopologyLabels:         manageNodeTopologyLabels,
 	}
 }
 
