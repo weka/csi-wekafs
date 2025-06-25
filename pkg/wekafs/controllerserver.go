@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -40,6 +41,8 @@ const (
 	ControlServerAdditionalMountOptions = MountOptionAcl + "," + MountOptionWriteCache
 )
 
+var CsiControllerMetricsLabels = []string{"status"}
+
 type ControllerServer struct {
 	csi.UnimplementedControllerServer
 	caps       []*csi.ControllerServiceCapability
@@ -48,6 +51,7 @@ type ControllerServer struct {
 	api        *ApiStore
 	config     *DriverConfig
 	semaphores map[string]*semaphore.Weighted
+	metrics    *ControllerServerMetrics
 	sync.Mutex
 }
 
@@ -131,6 +135,7 @@ func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
 		api:        driver.api,
 		config:     driver.config,
 		semaphores: make(map[string]*semaphore.Weighted),
+		metrics:    NewControllerServerMetrics(CsiControllerMetricsLabels),
 	}
 }
 
@@ -183,15 +188,37 @@ func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (er
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
+
+	// select metrics histogram based on the operation type
+	var histogram *prometheus.HistogramVec
+	switch op {
+	case "CreateVolume":
+		histogram = cs.metrics.Concurrency.CreateVolumeWaitDuration
+	case "DeleteVolume":
+		histogram = cs.metrics.Concurrency.DeleteVolumeWaitDuration
+	case "ExpandVolume":
+		histogram = cs.metrics.Concurrency.ExpandVolumeWaitDuration
+	case "CreateSnapshot":
+		histogram = cs.metrics.Concurrency.CreateSnapshotWaitDuration
+	case "DeleteSnapshot":
+		histogram = cs.metrics.Concurrency.DeleteSnapshotWaitDuration
+	}
+
 	if err == nil {
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
 		return nil, func() {
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
+			if histogram != nil {
+				histogram.WithLabelValues("success").Observe(elapsed.Seconds())
+			}
 		}
 	}
 	logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Failed to acquire semaphore")
+	if histogram != nil {
+		histogram.WithLabelValues("failure").Observe(elapsed.Seconds())
+	}
 	return err, func() {}
 }
 
@@ -220,6 +247,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	params := req.GetParameters()
 	result := "FAILURE"
@@ -231,6 +259,10 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		cs.metrics.Operations.CreateVolumeTotalCapacity.WithLabelValues(result).Add(float64(req.GetCapacityRange().GetRequiredBytes()))
+		cs.metrics.Operations.CreateVolumeCounter.WithLabelValues(result).Inc()
+		cs.metrics.Operations.CreateVolumeDuration.WithLabelValues(result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -358,16 +390,26 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	volumeID := req.GetVolumeId()
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	capacity := int64(0)
+
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+
+		if capacity > 0 {
+			cs.metrics.Operations.DeleteVolumeTotalCapacity.WithLabelValues(result).Add(float64(capacity))
+		}
+		cs.metrics.Operations.DeleteVolumeCounter.WithLabelValues(result).Inc()
+		cs.metrics.Operations.DeleteVolumeDuration.WithLabelValues(result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -398,6 +440,12 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		logger.Warn().Err(err).Msg("invalid delete volume request")
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
+	}
+
+	// obtain capacity for metrics
+	capacity, err = volume.GetCapacity(ctx)
+	if err != nil || capacity <= 0 {
+		logger.Warn().Err(err).Msg("Failed to fetch volume capacity, assuming it does not exist")
 	}
 
 	err = volume.Trash(ctx)
@@ -431,6 +479,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).
 		Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).
 		Str("volume_id", volumeID).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -445,6 +494,11 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		if capacity > 0 {
+			cs.metrics.Operations.ExpandVolumeTotalCapacity.WithLabelValues(result).Add(float64(capacity))
+		}
+		cs.metrics.Operations.ExpandVolumeCounter.WithLabelValues(result).Inc()
+		cs.metrics.Operations.ExpandVolumeDuration.WithLabelValues(result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -520,6 +574,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	srcVolumeId := req.GetSourceVolumeId()
 	secrets := req.GetSecrets()
@@ -532,6 +587,9 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		cs.metrics.Operations.CreateSnapshotCounter.WithLabelValues(result).Inc()
+		cs.metrics.Operations.CreateSnapshotDuration.WithLabelValues(result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -595,6 +653,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -604,6 +663,8 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		cs.metrics.Operations.DeleteSnapshotCounter.WithLabelValues(result).Inc()
+		cs.metrics.Operations.DeleteSnapshotDuration.WithLabelValues(result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
