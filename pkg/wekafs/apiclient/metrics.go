@@ -21,7 +21,7 @@ func NewApiMetrics(client *ApiClient) *ApiMetrics {
 				Name:      "endpoints_count",
 				Help:      "Total number of API endpoints",
 			},
-			[]string{"cluster_guid", "endpoint_status"},
+			[]string{"csi_driver_name", "cluster_guid", "endpoint_status"},
 		),
 		requestCounters: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -30,7 +30,7 @@ func NewApiMetrics(client *ApiClient) *ApiMetrics {
 				Name:      "request_count",
 				Help:      "Total number of API requests broken down by endpoint, method, url, status",
 			},
-			[]string{"cluster_guid", "endpoint", "method", "url", "status"},
+			[]string{"csi_driver_name", "cluster_guid", "endpoint", "method", "url", "status"},
 		),
 		requestDurations: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -39,7 +39,7 @@ func NewApiMetrics(client *ApiClient) *ApiMetrics {
 				Name:      "request_duration_seconds",
 				Help:      "Duration of API requests in seconds broken down by endpoint, method, url, status",
 			},
-			[]string{"cluster_guid", "endpoint", "method", "url", "status"},
+			[]string{"csi_driver_name", "cluster_guid", "endpoint", "method", "url", "status"},
 		),
 	}
 	ret.Init()
