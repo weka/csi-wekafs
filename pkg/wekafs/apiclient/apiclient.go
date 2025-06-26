@@ -53,6 +53,7 @@ type ApiClient struct {
 	containerName              string
 	NfsInterfaceGroupName      string
 	NfsClientGroupName         string
+	metrics                    *ApiMetrics
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
@@ -87,6 +88,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		actualApiEndpoints: make(map[string]*ApiEndPoint),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
+
 	a.resetDefaultEndpoints(ctx)
 	if len(a.Credentials.Endpoints) < 1 {
 		return nil, &ApiNoEndpointsError{
