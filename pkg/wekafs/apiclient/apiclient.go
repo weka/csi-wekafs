@@ -54,9 +54,10 @@ type ApiClient struct {
 	NfsInterfaceGroupName      string
 	NfsClientGroupName         string
 	metrics                    *ApiMetrics
+	driverName                 string
 }
 
-func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
+func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string, driverName string) (*ApiClient, error) {
 	logger := log.Ctx(ctx)
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
@@ -87,6 +88,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		hostname:           hostname,
 		actualApiEndpoints: make(map[string]*ApiEndPoint),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
+		driverName:         driverName,
 	}
 
 	a.resetDefaultEndpoints(ctx)
