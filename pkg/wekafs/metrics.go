@@ -2,7 +2,14 @@ package wekafs
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/rs/zerolog/log"
+	"slices"
+)
+
+var (
+	CsiCommonLabels                             = []string{"csi_driver_name"}
+	CsiControllerConcurrencyMetricsLabels       = []string{"status"}
+	CsiControllerVolumeOperationMetricsLabels   = []string{"status", "backing_type"}
+	CsiControllerSnapshotOperationMetricsLabels = []string{"status"}
 )
 
 const MetricsPrefix = "weka_csi"
@@ -43,7 +50,7 @@ func (c *ControllerOperationMetrics) Init() {
 	})
 }
 
-func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics {
+func NewControllerOperationMetrics(volumeLabels, snapshotLabels []string) *ControllerOperationMetrics {
 	return &ControllerOperationMetrics{
 		CreateVolumeCounter: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -52,7 +59,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "create_volume_total",
 				Help:      "Total number of ControllerCreateVolume calls",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		CreateVolumeDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -61,7 +68,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "create_volume_duration_seconds",
 				Help:      "Duration of ControllerCreateVolume calls in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		CreateVolumeTotalCapacity: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -70,7 +77,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "create_volume_total_capacity_bytes",
 				Help:      "Total capacity of volumes created by ControllerCreateVolume in bytes",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		DeleteVolumeCounter: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -79,7 +86,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "delete_volume_total",
 				Help:      "Total number of ControllerDeleteVolume calls",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		DeleteVolumeDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -88,7 +95,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "delete_volume_duration_seconds",
 				Help:      "Duration of ControllerDeleteVolume calls in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		DeleteVolumeTotalCapacity: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -97,7 +104,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "delete_volume_total_capacity_bytes",
 				Help:      "Total capacity of volumes deleted by ControllerDeleteVolume in bytes",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		ExpandVolumeCounter: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -106,7 +113,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "expand_volume_total",
 				Help:      "Total number of ControllerExpandVolume calls",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		ExpandVolumeDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -115,7 +122,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "expand_volume_duration_seconds",
 				Help:      "Duration of ControllerExpandVolume calls in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		ExpandVolumeTotalCapacity: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -124,7 +131,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "expand_volume_total_capacity_bytes",
 				Help:      "Total capacity of volumes expanded by ControllerExpandVolume in bytes",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, volumeLabels),
 		),
 		CreateSnapshotCounter: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -133,7 +140,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "create_snapshot_total",
 				Help:      "Total number of ControllerCreateSnapshot calls",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, snapshotLabels),
 		),
 		CreateSnapshotDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -142,7 +149,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "create_snapshot_duration_seconds",
 				Help:      "Duration of ControllerCreateSnapshot calls in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, snapshotLabels),
 		),
 		DeleteSnapshotCounter: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -151,7 +158,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "delete_snapshot_total",
 				Help:      "Total number of ControllerDeleteSnapshot calls",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, snapshotLabels),
 		),
 		DeleteSnapshotDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -160,7 +167,7 @@ func NewControllerOperationMetrics(labels []string) *ControllerOperationMetrics 
 				Name:      "delete_snapshot_duration_seconds",
 				Help:      "Duration of ControllerDeleteSnapshot calls in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, snapshotLabels),
 		),
 	}
 }
@@ -187,7 +194,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_create_volume",
 				Help:      "Current number of concurrent ControllerCreateVolume operations",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		DeleteVolume: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -196,7 +203,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_delete_volume",
 				Help:      "Current number of concurrent ControllerDeleteVolume operations",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		ExpandVolume: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -205,7 +212,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_expand_volume",
 				Help:      "Current number of concurrent ControllerExpandVolume operations",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		CreateSnapshot: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -214,7 +221,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_create_snapshot",
 				Help:      "Current number of concurrent ControllerCreateSnapshot operations",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		DeleteSnapshot: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -223,7 +230,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_delete_snapshot",
 				Help:      "Current number of concurrent ControllerDeleteSnapshot operations",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		CreateVolumeWaitDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -232,7 +239,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_create_volume_wait_duration_seconds",
 				Help:      "Duration of waiting for ControllerCreateVolume semaphore in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		DeleteVolumeWaitDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -241,7 +248,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_delete_volume_wait_duration_seconds",
 				Help:      "Duration of waiting for ControllerDeleteVolume semaphore in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		ExpandVolumeWaitDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -250,7 +257,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_expand_volume_wait_duration_seconds",
 				Help:      "Duration of waiting for ControllerExpandVolume semaphore in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		CreateSnapshotWaitDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -259,7 +266,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_create_snapshot_wait_duration_seconds",
 				Help:      "Duration of waiting for ControllerCreateSnapshot semaphore in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 		DeleteSnapshotWaitDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -268,7 +275,7 @@ func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetr
 				Name:      "concurrency_delete_snapshot_wait_duration_seconds",
 				Help:      "Duration of waiting for ControllerDeleteSnapshot semaphore in seconds",
 			},
-			labels,
+			slices.Concat(CsiCommonLabels, labels),
 		),
 	}
 }
@@ -290,17 +297,14 @@ func (c *ControllerConcurrencyMetrics) Init() {
 }
 
 type ControllerServerMetrics struct {
-	Concurrency  *ControllerConcurrencyMetrics
-	Operations   *ControllerOperationMetrics
-	CommonLabels []string
+	Concurrency *ControllerConcurrencyMetrics
+	Operations  *ControllerOperationMetrics
 }
 
-func NewControllerServerMetrics(labels []string) *ControllerServerMetrics {
-	log.Info().Strs("labels", labels).Msg("Initializing controller server metrics")
+func NewControllerServerMetrics() *ControllerServerMetrics {
 	ret := &ControllerServerMetrics{
-		Operations:   NewControllerOperationMetrics(labels),
-		Concurrency:  NewControllerConcurrencyMetrics(labels),
-		CommonLabels: labels,
+		Operations:  NewControllerOperationMetrics(CsiControllerVolumeOperationMetricsLabels, CsiControllerSnapshotOperationMetricsLabels),
+		Concurrency: NewControllerConcurrencyMetrics(CsiControllerConcurrencyMetricsLabels),
 	}
 	ret.Init()
 	return ret
