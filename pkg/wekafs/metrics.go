@@ -319,8 +319,8 @@ func (m *ControllerServerMetrics) Init() {
 }
 
 type NodeServerConcurrencyMetrics struct {
-	PublishVolume               *prometheus.CounterVec
-	UnpublishVolume             *prometheus.CounterVec
+	PublishVolume               *prometheus.GaugeVec
+	UnpublishVolume             *prometheus.GaugeVec
 	PublishVolumeWaitDuration   *prometheus.HistogramVec
 	UnpublishVolumeWaitDuration *prometheus.HistogramVec
 }
@@ -337,16 +337,16 @@ func (m *NodeServerConcurrencyMetrics) Init(labels []string) {
 func NewNodeConcurrencyMetrics(labels []string) *NodeServerConcurrencyMetrics {
 	// Currently, no metrics are defined for NodeServer concurrency
 	return &NodeServerConcurrencyMetrics{
-		PublishVolume: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
+		PublishVolume: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
 				Namespace: MetricsPrefix,
 				Subsystem: "node",
 				Name:      "concurrency_node_publish_volume",
 			},
 			slices.Concat(CsiCommonLabels, labels),
 		),
-		UnpublishVolume: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
+		UnpublishVolume: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
 				Namespace: MetricsPrefix,
 				Subsystem: "node",
 				Name:      "concurrency_node_unpublish_volume",
