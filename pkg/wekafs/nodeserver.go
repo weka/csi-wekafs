@@ -25,7 +25,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
@@ -59,7 +58,7 @@ type NodeServer struct {
 	mounters          *MounterGroup
 	api               *ApiStore
 	config            *DriverConfig
-	semaphores        map[string]*semaphore.Weighted
+	semaphores        map[string]*SemaphoreWrapper
 	metrics           *NodeServerMetrics
 	sync.Mutex
 }
@@ -206,7 +205,7 @@ func NewNodeServer(driver *WekaFsDriver) *NodeServer {
 		mounters:          driver.mounters,
 		api:               driver.api,
 		config:            driver.config,
-		semaphores:        make(map[string]*semaphore.Weighted),
+		semaphores:        make(map[string]*SemaphoreWrapper),
 		metrics:           NewNodeServerMetrics(),
 	}
 }
@@ -223,13 +222,24 @@ func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, r
 
 	// select metrics histogram based on the operation type
 	var histogram *prometheus.HistogramVec
+	var gauge *prometheus.GaugeVec
 	switch op {
 	case "PublishVolume":
 		histogram = ns.metrics.Concurrency.PublishVolumeWaitDuration
+		gauge = ns.metrics.Concurrency.PublishVolume
 	case "UnpublishVolume":
 		histogram = ns.metrics.Concurrency.UnpublishVolumeWaitDuration
+		gauge = ns.metrics.Concurrency.UnpublishVolume
 	}
 	driverName := ns.getConfig().GetDriver().name
+
+	// update concurrent operations
+	currentOps := func() {
+		if gauge != nil {
+			gauge.WithLabelValues(driverName, "acquired").Set(float64(sem.CurrentCount()))
+		}
+	}
+	currentOps()
 
 	if err == nil {
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
@@ -237,6 +247,7 @@ func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, r
 			histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
 		}
 		return nil, func() {
+			defer currentOps()
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
@@ -263,7 +274,8 @@ func (ns *NodeServer) initializeSemaphore(ctx context.Context, op string) {
 	}
 	logger := log.Ctx(ctx)
 	logger.Info().Str("op", op).Int64("max_concurrency", m).Msg("Initializing semaphore")
-	sem := semaphore.NewWeighted(m)
+	sem := NewSemaphoreWrapper(m)
+
 	ns.semaphores[op] = sem
 }
 
@@ -587,4 +599,19 @@ func getNodeServiceCapabilities(nl []csi.NodeServiceCapability_RPC_Type) []*csi.
 	}
 
 	return nsc
+}
+
+func (ns *NodeServer) GetAcquiredSemaphoreCount(op string) (int64, error) {
+	ns.Lock()
+	defer ns.Unlock()
+
+	sem, ok := ns.semaphores[op]
+	if !ok {
+		return 0, fmt.Errorf("semaphore for operation %s not found", op)
+	}
+
+	sem.mu.Lock()
+	defer sem.mu.Unlock()
+
+	return sem.CurrentCount(), nil
 }
