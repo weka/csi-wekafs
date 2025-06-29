@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -59,6 +60,7 @@ type NodeServer struct {
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
+	metrics           *NodeServerMetrics
 	sync.Mutex
 }
 
@@ -94,7 +96,7 @@ func (ns *NodeServer) NodeExpandVolume(ctx context.Context, request *csi.NodeExp
 func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	volumeID := req.GetVolumeId()
 	volumePath := req.GetVolumePath()
-
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 	// Validate request fields
 	if volumeID == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID must be provided")
@@ -117,8 +119,15 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 		return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID %s: %v", volumeID, err)
 	}
 
+	st := "FAILURE"
+	defer func() {
+		ns.metrics.Operations.GetVolumeStats.WithLabelValues(ns.getConfig().GetDriver().name, st).Inc()
+		ns.metrics.Operations.GetVolumeStatsDuration.WithLabelValues(ns.getConfig().GetDriver().name, st).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+	}()
+
 	stats, err := getVolumeStats(volumePath)
 	if err != nil || stats == nil {
+		st = "SUCCESS"
 		return &csi.NodeGetVolumeStatsResponse{
 			Usage: nil,
 			VolumeCondition: &csi.VolumeCondition{
@@ -198,6 +207,7 @@ func NewNodeServer(driver *WekaFsDriver) *NodeServer {
 		api:               driver.api,
 		config:            driver.config,
 		semaphores:        make(map[string]*semaphore.Weighted),
+		metrics:           NewNodeServerMetrics(),
 	}
 }
 
@@ -210,8 +220,22 @@ func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, r
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
+
+	// select metrics histogram based on the operation type
+	var histogram *prometheus.HistogramVec
+	switch op {
+	case "PublishVolume":
+		histogram = ns.metrics.Concurrency.PublishVolumeWaitDuration
+	case "UnpublishVolume":
+		histogram = ns.metrics.Concurrency.UnpublishVolumeWaitDuration
+	}
+	driverName := ns.getConfig().GetDriver().name
+
 	if err == nil {
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
+		if histogram != nil {
+			histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
+		}
 		return nil, func() {
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
@@ -255,6 +279,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -265,6 +290,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+
+		ns.metrics.Operations.UnpublishVolumeDuration.WithLabelValues(ns.getConfig().GetDriver().name, result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+		ns.metrics.Operations.UnpublishVolume.WithLabelValues(ns.getConfig().GetDriver().name, result).Inc()
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 

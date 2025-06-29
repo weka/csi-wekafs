@@ -203,14 +203,14 @@ func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (er
 	}
 	driverName := cs.getConfig().GetDriver().name
 	if err == nil {
+		if histogram != nil {
+			histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
+		}
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
 		return nil, func() {
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
-			if histogram != nil {
-				histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
-			}
 		}
 	}
 	logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Failed to acquire semaphore")
