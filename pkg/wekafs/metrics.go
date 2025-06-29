@@ -10,6 +10,8 @@ var (
 	CsiControllerConcurrencyMetricsLabels       = []string{"status"}
 	CsiControllerVolumeOperationMetricsLabels   = []string{"status", "backing_type"}
 	CsiControllerSnapshotOperationMetricsLabels = []string{"status"}
+	CsiNodeConcurrencyMetricsLabels             = []string{"status"}
+	CsiNodeVolumeOperationMetricsLabels         = []string{"status"}
 )
 
 const MetricsPrefix = "weka_csi"
@@ -314,6 +316,155 @@ func (m *ControllerServerMetrics) Init() {
 	// Initialize the metrics by registering them with Prometheus
 	m.Operations.Init()
 	m.Concurrency.Init()
+}
+
+type NodeServerConcurrencyMetrics struct {
+	PublishVolume               *prometheus.CounterVec
+	UnpublishVolume             *prometheus.CounterVec
+	PublishVolumeWaitDuration   *prometheus.HistogramVec
+	UnpublishVolumeWaitDuration *prometheus.HistogramVec
+}
+
+func (m *NodeServerConcurrencyMetrics) Init(labels []string) {
+	// Initialize the metrics by registering them with Prometheus
+	// Currently, no metrics are defined for NodeServer
+	initMetrics([]prometheus.Collector{
+		m.PublishVolume,
+		m.UnpublishVolume},
+	)
+}
+
+func NewNodeConcurrencyMetrics(labels []string) *NodeServerConcurrencyMetrics {
+	// Currently, no metrics are defined for NodeServer concurrency
+	return &NodeServerConcurrencyMetrics{
+		PublishVolume: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "concurrency_node_publish_volume",
+			},
+			slices.Concat(CsiCommonLabels, labels),
+		),
+		UnpublishVolume: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "concurrency_node_unpublish_volume",
+			},
+			slices.Concat(CsiCommonLabels, labels),
+		),
+		PublishVolumeWaitDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "concurrency_node_publish_volume_wait_duration_seconds",
+			},
+			slices.Concat(CsiCommonLabels, labels),
+		),
+		UnpublishVolumeWaitDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "concurrency_node_unpublish_volume_wait_duration_seconds",
+			},
+			slices.Concat(CsiCommonLabels, labels),
+		),
+	}
+}
+
+type NodeServerOperationMetrics struct {
+	PublishVolume           *prometheus.CounterVec
+	PublishVolumeDuration   *prometheus.HistogramVec
+	UnpublishVolume         *prometheus.CounterVec
+	UnpublishVolumeDuration *prometheus.HistogramVec
+	GetVolumeStats          *prometheus.CounterVec
+	GetVolumeStatsDuration  *prometheus.HistogramVec
+}
+
+func (m *NodeServerOperationMetrics) Init(labels []string) {
+	// Initialize the metrics by registering them with Prometheus
+	// Currently, no metrics are defined for NodeServer
+	initMetrics([]prometheus.Collector{
+		m.PublishVolume,
+		m.UnpublishVolume,
+		m.PublishVolumeDuration,
+		m.UnpublishVolumeDuration,
+	})
+}
+
+func NewNodeOperationMetrics(volumeLabels []string) *NodeServerOperationMetrics {
+	// Currently, no metrics are defined for NodeServer operations
+	return &NodeServerOperationMetrics{
+		PublishVolume: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "publish_volume_total",
+			},
+			slices.Concat(CsiCommonLabels, volumeLabels),
+		),
+		PublishVolumeDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "publish_volume_duration_seconds",
+			},
+			slices.Concat(CsiCommonLabels, volumeLabels),
+		),
+		UnpublishVolume: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "unpublish_volume_total",
+			},
+			slices.Concat(CsiCommonLabels, volumeLabels),
+		),
+		UnpublishVolumeDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "unpublish_volume_duration_seconds",
+			},
+			slices.Concat(CsiCommonLabels, volumeLabels),
+		),
+		GetVolumeStats: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "get_volume_stats_total",
+			},
+			slices.Concat(CsiCommonLabels, volumeLabels),
+		),
+		GetVolumeStatsDuration: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: MetricsPrefix,
+				Subsystem: "node",
+				Name:      "get_volume_stats_duration_seconds",
+			},
+			slices.Concat(CsiCommonLabels, volumeLabels),
+		),
+	}
+}
+
+type NodeServerMetrics struct {
+	Concurrency *NodeServerConcurrencyMetrics
+	Operations  *NodeServerOperationMetrics
+}
+
+func (m *NodeServerMetrics) Init() {
+	// Initialize the metrics by registering them with Prometheus
+	// Currently, no metrics are defined for NodeServer
+	m.Concurrency.Init(CsiNodeConcurrencyMetricsLabels)
+	m.Operations.Init(CsiNodeVolumeOperationMetricsLabels)
+}
+
+func NewNodeServerMetrics() *NodeServerMetrics {
+	ret := &NodeServerMetrics{
+		Operations:  NewNodeOperationMetrics(CsiNodeVolumeOperationMetricsLabels),
+		Concurrency: NewNodeConcurrencyMetrics(CsiNodeConcurrencyMetricsLabels),
+	}
+	ret.Init()
+	return ret
 }
 
 func initMetrics(c []prometheus.Collector) {
