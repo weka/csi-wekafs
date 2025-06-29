@@ -13,23 +13,9 @@ import (
 )
 
 type ApiEndPoint struct {
-	IpAddress            string
-	MgmtPort             int
-	lastActive           time.Time
-	failCount            int64
-	timeoutCount         int64
-	http400ErrCount      int64
-	http401ErrCount      int64
-	http404ErrCount      int64
-	http409ErrCount      int64
-	http500ErrCount      int64
-	http503ErrCount      int64
-	generalErrCount      int64
-	transportErrCount    int64
-	noRespCount          int64
-	parseErrCount        int64
-	requestCount         int64
-	requestDurationTotal time.Duration
+	IpAddress  string
+	MgmtPort   int
+	lastActive time.Time
 }
 
 func (e *ApiEndPoint) String() string {
@@ -64,12 +50,9 @@ func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
 			portNum = 14000
 		}
 		endPoint := &ApiEndPoint{
-			IpAddress:            ip,
-			MgmtPort:             portNum,
-			lastActive:           time.Now(),
-			failCount:            0,
-			requestCount:         0,
-			requestDurationTotal: 0,
+			IpAddress:  ip,
+			MgmtPort:   portNum,
+			lastActive: time.Now(),
 		}
 		actualEndPoints[e] = endPoint
 	}
@@ -128,7 +111,7 @@ func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 					newEndpoints[endpointKey] = existingEndpoint
 				} else {
 					logger.Info().Str("endpoint", endpointKey).Msg("Adding new API endpoint")
-					endpoint := &ApiEndPoint{IpAddress: IpAddress, MgmtPort: n.MgmtPort, lastActive: updateTime, failCount: 0, requestCount: 0, requestDurationTotal: 0}
+					endpoint := &ApiEndPoint{IpAddress: IpAddress, MgmtPort: n.MgmtPort, lastActive: updateTime}
 					newEndpoints[endpointKey] = endpoint
 				}
 			}
