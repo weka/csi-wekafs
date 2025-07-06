@@ -110,7 +110,7 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		secrets:               NewSecretsStore(),
 		volumeMetrics:         NewVolumeMetrics(),
 		prometheusMetrics:     NewPrometheusMetrics(),
-		persistentVolumesChan: make(chan *v1.PersistentVolume, MetricsServerVolumeLimit),
+		persistentVolumesChan: make(chan *v1.PersistentVolume, driver.config.metricsFetchConcurrentRequests),
 		wg:                    sync.WaitGroup{},
 
 		quotaMaps: NewQuotaMapsPerFilesystem(),
@@ -577,6 +577,8 @@ func (ms *MetricsServer) fetchSecret(ctx context.Context, secretName, secretName
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch secret %s/%s: %w", secretNamespace, secretName, err)
 	}
+	ms.secrets.Lock()
+	defer ms.secrets.Unlock()
 	ms.secrets.secrets[hash] = secret // Cache the secret
 	return secret, nil
 }
@@ -602,6 +604,7 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 		ms.prometheusMetrics.server.FetchSinglePvMetricsOperationsFailureCount.Inc()
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
+
 	vm.metrics = qosMetric
 	ms.volumeMetricsChan <- vm // Send the metric to the MetricsServer's incoming requests channel
 	ms.prometheusMetrics.server.FetchSinglePvMetricsOperationsSuccessCount.Inc()
