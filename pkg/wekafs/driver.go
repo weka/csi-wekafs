@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"os/signal"
 	"syscall"
@@ -75,7 +76,6 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	driver.mounters = NewMounterGroup(driver)
 	// Create GRPC servers
 
-	// identity server runs always
 	log.Info().Msg("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver)
 
@@ -127,10 +127,21 @@ func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
 		if err != nil {
 			if errors.Is(err, rest.ErrNotInCluster) {
 				log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+				// Fallback to using kubeconfig from the local environment
+				kubeconfig := os.Getenv("KUBECONFIG")
+				if kubeconfig == "" {
+					log.Error().Msg("KUBECONFIG environment variable is not set")
+					return nil
+				}
+				config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
+					return nil
+				}
+			} else {
+				log.Error().Err(err).Msg("Failed to create in-cluster config")
 				return nil
 			}
-			log.Error().Err(err).Msg("Failed to create in-cluster config")
-			return nil
 		}
 
 		clientset, err := kubernetes.NewForConfig(config)
