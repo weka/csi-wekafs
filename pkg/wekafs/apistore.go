@@ -166,7 +166,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 		}
 	}
 	api.Lock()
-	api.Unlock()
+	defer api.Unlock()
 	api.apis[hash] = newClient
 
 	return newClient, nil

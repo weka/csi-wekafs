@@ -47,6 +47,13 @@ func NewIdentityServer(driver *WekaFsDriver) *identityServer {
 	}
 }
 
+func (ids *identityServer) GetConfig() *DriverConfig {
+	if ids.config == nil {
+		panic("DriverConfig is nil")
+	}
+	return ids.config
+}
+
 //goland:noinspection GoUnusedParameter
 func (ids *identityServer) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
 	op := "GetPluginInfo"

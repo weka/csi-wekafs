@@ -99,6 +99,29 @@ node:
   podLabels: {}
   # -- termination grace period for node pods
   terminationGracePeriodSeconds: 10
+# -- Metrics server parameters, used for exposing WEKA metrics in Prometheus format
+metricsServer:
+  # -- Allow CSI plugin to report WEKA metrics in Prometheus format.
+  #    NOTE: this implies that the CSI plugin will get access to all Kubernetes PVs, and fetch their credentials, then query WEKA cluster for those metrics
+  enabled: true
+  # -- Number of replicas for metrics server
+  replicas: 1
+  # -- optional nodeSelector for metrics server only
+  nodeSelector: {}
+  # -- optional affinity for metrics server only
+  affinity: {}
+  # -- optional labels to add to metrics server deployment
+  labels: {}
+  # -- optional labels to add to metrics server pods
+  podLabels: {}
+  # -- tolerations for metrics server only
+  tolerations: *globalPluginTolerations
+  # -- concurrent requests for WEKA metrics
+  maxConcurrentRequests: 5
+  # -- metrics fetch interval in seconds, default is 60 seconds
+  metricsFetchIntervalSeconds: 60
+  # -- termination grace period for metrics server pods
+  terminationGracePeriodSeconds: 10
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
@@ -136,6 +159,8 @@ metrics:
   nodePort: 9094
   # -- Attacher metrics port
   attacherPort: 9095
+  # -- Metrics server metrics port
+  metricsServerPort: 9096
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""

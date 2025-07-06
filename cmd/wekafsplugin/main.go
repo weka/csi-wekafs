@@ -62,7 +62,7 @@ var (
 	showVersion                          = flag.Bool("version", false, "Show version.")
 	dynamicSubPath                       = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csimodetext                          = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
+	csimodetext                          = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"metricsserver\", \"all\" (default)")
 	selinuxSupport                       = flag.Bool("selinux-support", false, "Enable support for SELinux")
 	newVolumePrefix                      = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
 	newSnapshotPrefix                    = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
@@ -97,6 +97,8 @@ var (
 	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
+	wekametricsfetchintervalseconds      = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
+	wekametricsfetchconcurrentrequests   = flag.Int64("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
 	// Set by the build process
 	version = ""
 )
@@ -135,7 +137,7 @@ func main() {
 		fmt.Println(baseName, version)
 		return
 	}
-	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode {
+	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode && csiMode != wekafs.CsiModeMetricsServer {
 		log.Panic().Str("requestedCsiMode", string(csiMode)).Msg("Invalid mode specified for CSI driver")
 	}
 	log.Info().Str("csi_mode", string(csiMode)).Bool("selinux_mode", *selinuxSupport).Msg("Started CSI driver")
@@ -234,6 +236,8 @@ func handle(ctx context.Context) {
 		*allowEncryptionWithoutKms,
 		*tracingUrl,
 		*manageNodeTopologyLabels,
+		time.Duration(*wekametricsfetchintervalseconds)*time.Second,
+		*wekametricsfetchconcurrentrequests,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, csiMode, *selinuxSupport, config)
 	if err != nil {
