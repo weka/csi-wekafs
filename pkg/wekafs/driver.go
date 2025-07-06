@@ -26,6 +26,7 @@ type WekaFsDriver struct {
 	ids            *identityServer
 	ns             *NodeServer
 	cs             *ControllerServer
+	ms             *MetricsServer
 	api            *ApiStore
 	mounters       *MounterGroup
 	csiMode        CsiPluginMode
@@ -73,11 +74,18 @@ func NewWekaFsDriver(
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
 
-	driver.mounters = NewMounterGroup(driver)
-	// Create GRPC servers
+	if driver.csiMode != CsiModeMetricsServer {
+		driver.mounters = NewMounterGroup(driver)
 
-	log.Info().Msg("Loading IdentityServer")
-	driver.ids = NewIdentityServer(driver)
+		log.Info().Msg("Loading IdentityServer")
+		driver.ids = NewIdentityServer(driver)
+
+	} else {
+		log.Info().Msg("Running in Metrics Server mode, skipping IdentityServer and MounterGroup initialization")
+		driver.ids = nil
+		driver.mounters = nil
+	}
+	// Create GRPC servers
 
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
@@ -96,6 +104,13 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		driver.ns = NewNodeServer(driver)
 	} else {
 		driver.ns = &NodeServer{}
+	}
+
+	if driver.csiMode == CsiModeMetricsServer || driver.csiMode == CsiModeAll {
+		log.Info().Msg("Loading MetricsServer")
+		driver.ms = NewMetricsServer(driver)
+	} else {
+		driver.ms = nil
 	}
 
 	s := NewNonBlockingGRPCServer(driver.csiMode)

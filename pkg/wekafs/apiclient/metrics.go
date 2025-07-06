@@ -11,7 +11,12 @@ type ApiMetrics struct {
 	requestDurations *prometheus.HistogramVec
 }
 
+var GlobalApiMetrics *ApiMetrics
+
 func NewApiMetrics(client *ApiClient) *ApiMetrics {
+	if GlobalApiMetrics != nil {
+		return GlobalApiMetrics
+	}
 	ret := &ApiMetrics{
 		client: client,
 		Endpoints: prometheus.NewGaugeVec(
@@ -43,6 +48,7 @@ func NewApiMetrics(client *ApiClient) *ApiMetrics {
 		),
 	}
 	ret.Init()
+	GlobalApiMetrics = ret
 	return ret
 }
 

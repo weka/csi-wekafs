@@ -46,7 +46,9 @@ type nonBlockingGRPCServer struct {
 }
 
 func (s *nonBlockingGRPCServer) Start(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
-
+	if s == nil {
+		return
+	}
 	s.wg.Add(1)
 
 	go s.serve(endpoint, ids, cs, ns)
@@ -59,6 +61,9 @@ func (s *nonBlockingGRPCServer) Wait() {
 }
 
 func (s *nonBlockingGRPCServer) Stop() {
+	if s == nil || s.server == nil {
+		return
+	}
 	s.server.GracefulStop()
 }
 
@@ -91,10 +96,11 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 	server := grpc.NewServer(opts...)
 	s.server = server
 
-	if ids != nil {
+	if s.csiMmode != CsiModeMetricsServer {
 		log.Info().Msg("Registering GRPC IdentityServer")
 		csi.RegisterIdentityServer(server, ids)
 	}
+
 	if s.csiMmode == CsiModeController || s.csiMmode == CsiModeAll {
 		if cs != nil {
 			log.Info().Msg("Registering GRPC ControllerServer")
@@ -108,7 +114,9 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 		}
 	}
 
-	log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
+	if s.csiMmode != CsiModeMetricsServer {
+		log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
+	}
 
 	if err := server.Serve(listener); err != nil {
 		Die(err.Error())

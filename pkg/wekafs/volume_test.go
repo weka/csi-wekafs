@@ -17,7 +17,8 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 		true, true, mutuallyExclusive,
 		1, 1, 1, 1, 1, 1, 1, 10,
 		true, true, true, "", "", "4.1", "v1", false, false, true,
-		"", false)
+		"", false,
+		60, 5)
 	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", CsiModeAll, false, driverConfig)
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)
