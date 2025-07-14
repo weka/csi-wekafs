@@ -1,0 +1,25 @@
+image:
+  repository: images.scalar.dev.weka.io:5002/csi-metricsserver
+  pullPolicy: IfNotPresent
+  tag: ""
+
+csiDriverName: "csi.weka.io"
+
+replicaCount: 2
+
+nameOverride: ""
+fullnameOverride: ""
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

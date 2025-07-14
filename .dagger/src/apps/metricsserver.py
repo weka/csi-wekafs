@@ -15,7 +15,7 @@ async def metricsserver_ubi(src: Directory, sock: Socket, gh_token: Optional[Sec
         dag.container()
         .from_(
             "registry.access.redhat.com/ubi9/ubi@sha256:9ac75c1a392429b4a087971cdf9190ec42a854a169b6835bc9e25eecaf851258")
-        .with_file("/metricsserver", metricsserver.file("/out-binary"))
+        .with_file("/csi-metricsserver", metricsserver.file("/out-binary"))
     )
 
 
@@ -65,6 +65,7 @@ async def publish_metricsserver_helm_chart(
     helm package charts/csi-metricsserver --version {version} --app-version {version} --destination charts/
         """])
         .with_exec(["sh", "-ec", f"""
+        helm push charts/metricsserver-*.tgz oci://{repository}
         if [ -f /registry-secret ]; then
             AUTH=$(cat /registry-secret)
             USERNAME=$(echo $AUTH | cut -d: -f1)
