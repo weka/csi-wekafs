@@ -32,7 +32,7 @@ const (
 type Quota struct {
 	FilesystemUid  uuid.UUID `json:"-"`
 	InodeId        uint64    `json:"inode_id,omitempty"`
-	TotalBytes     uint64    `json:"total_bytes,omitempty"`
+	UsedBytes      uint64    `json:"used_bytes,omitempty"`
 	HardLimitBytes uint64    `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64    `json:"soft_limit_bytes,omitempty"`
 	Status         string    `json:"status,omitempty"`

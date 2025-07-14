@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 	"io"
 	"io/fs"
+	v1 "k8s.io/api/core/v1"
 	"math"
 	"os"
 	"path/filepath"
@@ -56,7 +57,10 @@ type Volume struct {
 	fileSystemObject *apiclient.FileSystem
 	snapshotObject   *apiclient.Snapshot
 
-	inodeId uint64
+	inodeId uint64 // cached for better performance, used in metricsserver flow
+
+	persistentVol *v1.PersistentVolume // persistentVolName is the persistent volume object, used in metricsserver flow
+	lastStats     *apiclient.PerfStats // lastStats is the last performance stats for the volume, used in metricsserver flow
 }
 
 func (v *Volume) hasCustomEncryptionSettings() bool {

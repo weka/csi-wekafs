@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
+	"hash/fnv"
 	"os"
 	"path"
 	"path/filepath"
@@ -587,12 +588,19 @@ func getDataTransportFromMountPath(mountPoint string) DataTransport {
 	return dataTransportWekafs
 }
 
+// Die used to intentionally panic and exit, while updating termination log
+func Die(exitMsg string) {
+	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+	panic(exitMsg)
+}
+
 func GetCsiPluginMode(mode *string) CsiPluginMode {
 	ret := CsiPluginMode(*mode)
 	switch ret {
 	case CsiModeNode,
 		CsiModeController,
-		CsiModeAll:
+		CsiModeAll,
+		CsiModeMetricsServer:
 		return ret
 	default:
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
@@ -600,13 +608,26 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 	}
 }
 
+// hashString is a simple hash function that takes a string and returns a hash value in the range [0, n)
+func hashString(s string, n int) int {
+	if n == 0 {
+		return 0
+	}
+
+	// Create a new FNV-1a hash
+	h := fnv.New32a()
+
+	// Write the string to the hash
+	_, _ = h.Write([]byte(s))
+
+	// Get the hash sum as a uint32
+	hashValue := h.Sum32()
+
+	// Return the hash value in the range of [0, n)
+	return int(hashValue % uint32(n))
+}
+
 func (api *ApiStore) getLockForHash(hash uint32) *sync.Mutex {
 	lockIface, _ := api.locks.LoadOrStore(hash, &sync.Mutex{})
 	return lockIface.(*sync.Mutex)
-}
-
-// Die used to intentionally panic and exit, while updating termination log
-func Die(exitMsg string) {
-	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
-	panic(exitMsg)
 }

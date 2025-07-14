@@ -17,7 +17,8 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 		true, true, mutuallyExclusive,
 		1, 1, 1, 1, 1, 1, 1, 10,
 		true, true, true, "", "", "4.1", "v1", false, false, true,
-		"", false)
+		"", false,
+		60, 5)
 	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", CsiModeAll, false, driverConfig)
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)
@@ -30,7 +31,7 @@ var creds apiclient.Credentials
 var endpoint string
 var fsName string
 
-var client *apiclient.ApiClient
+var globalClient *apiclient.ApiClient
 
 func TestMain(m *testing.M) {
 	flag.StringVar(&endpoint, "api-endpoint", "localhost:14000", "API endpoint for tests")
@@ -45,7 +46,7 @@ func TestMain(m *testing.M) {
 
 func GetApiClientForTest(t *testing.T) *apiclient.ApiClient {
 	creds.Endpoints = []string{endpoint}
-	if client == nil {
+	if globalClient == nil {
 		apiClient, err := apiclient.NewApiClient(context.Background(), creds, true, endpoint, "csi.weka.io")
 		if err != nil {
 			t.Fatalf("Failed to create API client: %v", err)
@@ -56,9 +57,9 @@ func GetApiClientForTest(t *testing.T) *apiclient.ApiClient {
 		if err := apiClient.Login(context.Background()); err != nil {
 			t.Fatalf("Failed to login: %v", err)
 		}
-		client = apiClient
+		globalClient = apiClient
 	}
-	return client
+	return globalClient
 }
 
 func TestVolume_getFilesystemFreeSpaceByApi(t *testing.T) {

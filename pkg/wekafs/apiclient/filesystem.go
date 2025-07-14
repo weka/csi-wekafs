@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -48,6 +49,21 @@ type FileSystem struct {
 
 	// used for internal purposes
 	ForceFresh *bool `json:"-" url:"force_fresh,omitempty"`
+}
+
+func (fs *FileSystem) GetFsIdAsInt() int {
+	// takes the Id in string format "FSId<0>" and extracts the number from it
+	if fs.Id == "" {
+		return -1
+	}
+	idStr := strings.TrimPrefix(fs.Id, "FSId<")
+	idStr = strings.TrimSuffix(idStr, ">")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Error().Err(err).Str("id", fs.Id).Msg("Failed to convert filesystem Id to int")
+		return -1
+	}
+	return id
 }
 
 type FileSystemMountToken struct {
