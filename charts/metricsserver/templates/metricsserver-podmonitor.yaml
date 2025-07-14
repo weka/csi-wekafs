@@ -1,5 +1,4 @@
-# only if metricsServer.enabled is true and the metricsServerPort is set and Prometheus stack is installed
-{{- if .Values.metricsServer.enabled }}
+# only if metricsServerPort is set and Prometheus stack is installed
 {{- if .Values.metrics.metricsServerPort }}
 {{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
 ---
@@ -20,7 +19,7 @@ spec:
         matchNames:
         - {{ .Release.Namespace }}
     podMetricsEndpoints:
-        - port: metrics
+        - port: ms-metrics
           metricRelabelings:
             - action: labeldrop
               regex: ^job$
@@ -33,6 +32,5 @@ spec:
             - action: labeldrop
               regex: ^container$
 
-{{- end }}
 {{- end }}
 {{- end }}

@@ -8,6 +8,7 @@ image:
   tag: ""
 imagePullSecret: ""
 
+hostNetwork: false
 metricsServer:
   # -- Number of replicas for metrics server
   replicas: 1
@@ -47,8 +48,8 @@ pluginConfig:
 
 resources:
   limits:
-    cpu: 4
+    cpu: 2
     memory: 2Gi
   requests:
-    cpu: 2
-    memory: 1Gi
+    cpu: 0.1
+    memory: 100Mi
