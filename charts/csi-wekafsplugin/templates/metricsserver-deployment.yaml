@@ -82,7 +82,7 @@ spec:
           ports:
             {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
-              name: metrics
+              name: ms-metrics
               protocol: TCP
             {{- end }}
           livenessProbe:

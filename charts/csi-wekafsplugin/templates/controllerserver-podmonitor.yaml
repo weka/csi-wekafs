@@ -20,7 +20,7 @@ spec:
     matchNames:
       - {{ .Release.Namespace }}
   podMetricsEndpoints:
-    - port: metrics
+    - port: controller-metrics
 
 {{- end }}
 {{- end }}
