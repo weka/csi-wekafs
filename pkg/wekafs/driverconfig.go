@@ -46,6 +46,7 @@ type DriverConfig struct {
 	manageNodeTopologyLabels           bool
 	wekaMetricsFetchInterval           time.Duration
 	wekaMetricsFetchConcurrentRequests int64
+	enableMetricsServerLeaderElection  bool
 }
 
 func (dc *DriverConfig) Log() {
