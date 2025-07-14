@@ -21,6 +21,17 @@ spec:
         - {{ .Release.Namespace }}
     podMetricsEndpoints:
         - port: metrics
+          metricRelabelings:
+            - action: labeldrop
+              regex: ^job$
+            - action: labeldrop
+              regex: ^instance$
+            - action: labeldrop
+              regex: ^namespace$
+            - action: labeldrop
+              regex: ^endpoint$
+            - action: labeldrop
+              regex: ^container$
 
 {{- end }}
 {{- end }}
