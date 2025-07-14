@@ -130,7 +130,13 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	lock.Lock()
 	defer lock.Unlock()
 
-	newClient, err := apiclient.NewApiClient(ctx, credentials, api.config.allowInsecureHttps, hostname, api.config.GetDriver().name)
+	newClient, err := apiclient.NewApiClient(ctx, credentials, apiclient.ApiClientOptions{
+		AllowInsecureHttps: api.config.allowInsecureHttps,
+		Hostname:           hostname,
+		DriverName:         api.config.GetDriver().name,
+		ApiTimeout:         api.config.wekaApiTimeout,
+	})
+
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
 	}

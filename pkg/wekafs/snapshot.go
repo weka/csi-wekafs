@@ -112,7 +112,7 @@ func (s *Snapshot) Create(ctx context.Context) error {
 		}
 		return status.Errorf(codes.AlreadyExists, "Another snapshot exists with same name")
 	}
-	fsObj, err := s.getFileSystemObject(ctx)
+	fsObj, err := s.getFileSystemObject(ctx, false)
 	if err != nil {
 		return status.Errorf(codes.NotFound, "Failed to fetch origin filesystem from the API")
 	}
@@ -252,7 +252,7 @@ func (s *Snapshot) waitForSnapshotDeletion(ctx context.Context, logger zerolog.L
 	return nil, false
 }
 
-func (s *Snapshot) getFileSystemObject(ctx context.Context) (*apiclient.FileSystem, error) {
+func (s *Snapshot) getFileSystemObject(ctx context.Context, cached bool) (*apiclient.FileSystem, error) {
 	op := "getFileSystemObject"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()

@@ -36,6 +36,15 @@ type Quota struct {
 	HardLimitBytes uint64    `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64    `json:"soft_limit_bytes,omitempty"`
 	Status         string    `json:"status,omitempty"`
+	LastUpdateTime time.Time `json:"-"`
+}
+
+func (q *Quota) SupportsPagination() bool {
+	return false
+}
+
+func (q *Quota) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("implement me")
 }
 
 func (q *Quota) String() string {
@@ -86,6 +95,20 @@ func (q *Quota) GetCapacityLimit() uint64 {
 		return q.HardLimitBytes
 	}
 	return q.SoftLimitBytes
+}
+
+type Quotas []*Quota
+
+func (q Quotas) SupportsPagination() bool {
+	return true
+}
+func (q Quotas) CombinePartialResponse(next ApiObjectResponse) error {
+	// this is a list, so we just append the data
+	if partialList, ok := next.(*Quotas); ok {
+		q = append(q, *partialList...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response")
 }
 
 type QuotaCreateRequest struct {
@@ -267,11 +290,11 @@ func (a *ApiClient) WaitForQuotaActive(ctx context.Context, q *Quota) error {
 	return nil
 }
 
-func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultSet *[]Quota) error {
+func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultSet *Quotas) error {
 	if query.FilesystemUid == uuid.Nil {
 		return RequestMissingParams
 	}
-	ret := &[]Quota{}
+	ret := &Quotas{}
 	err := a.Get(ctx, query.GetBasePath(a), nil, ret)
 	if err != nil {
 		return err
@@ -320,11 +343,12 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 	}
 	ret.FilesystemUid = fs.Uid
 	ret.InodeId = inodeId
+	ret.LastUpdateTime = time.Now()
 	return ret, nil
 }
 
 func (a *ApiClient) GetQuotaByFilter(ctx context.Context, query *Quota) (*Quota, error) {
-	rs := &[]Quota{}
+	rs := &Quotas{}
 	err := a.FindQuotaByFilter(ctx, query, rs)
 	if err != nil {
 		return nil, err
@@ -336,7 +360,7 @@ func (a *ApiClient) GetQuotaByFilter(ctx context.Context, query *Quota) (*Quota,
 		return nil, MultipleObjectsFoundError
 	}
 	result := &(*rs)[0]
-	return result, nil
+	return *result, nil
 }
 
 func (a *ApiClient) IsQuotaActive(ctx context.Context, query *Quota) (done bool, err error) {

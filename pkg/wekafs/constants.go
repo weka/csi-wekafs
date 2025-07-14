@@ -66,7 +66,7 @@ const (
 	ProcModulesPath             = "/proc/modules"
 	ProcWekafsInterface         = "/proc/wekafs/interface"
 	SnapshotsSubDirectory       = ".snapshots"
-	MaxHashLengthForObjectNames = 12            // Max length of hash for object names due to limitations of WEKA filesystem /snapshot names
+	MaxHashLengthForObjectNames = 12 // Max length of hash for object names due to limitations of WEKA filesystem /snapshot names
 
 	// Volume Backing types
 	VolumeBackingTypeDirectory  VolumeBackingType = "DIRECTORY"
@@ -92,6 +92,9 @@ const (
 	CsiModeMetricsServer CsiPluginMode = "metricsserver"
 
 	DefaultVolumePermissions fs.FileMode = 0750
+
+	// Metrics Server
+	MetricsServerVolumeLimit = 100000
 )
 
 var (

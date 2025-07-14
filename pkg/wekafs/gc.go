@@ -60,6 +60,8 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 		return err
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
+	gc.Lock()
+	defer gc.Unlock()
 	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
 		if !os.IsExist(err) {
 			logger.Error().Str("garbage_collection_path", volumeTrashLoc).Err(err).Msg("Failed to create garbage collector directory")
@@ -118,9 +120,14 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 		logger.Trace().Str("output", string(output)).Msg("Locar output")
 	} else {
 		logger.Debug().Msg("Using default deletion method")
-		if err := os.RemoveAll(volumeTrashLoc); err != nil {
-			logger.Error().Err(err).Str("path", volumeTrashLoc).Msg("Failed to perform garbage collection")
-		}
+		go func() {
+			// this is a workaround to avoid deadlocks in case of multiple volumes being deleted at the same time
+			gc.Lock()
+			gc.Unlock()
+			if err := os.RemoveAll(volumeTrashLoc); err != nil {
+				logger.Error().Err(err).Str("path", volumeTrashLoc).Msg("Failed to perform garbage collection")
+			}
+		}()
 	}
 	logger.Debug().Msg("Garbage collection completed")
 	gc.Lock()

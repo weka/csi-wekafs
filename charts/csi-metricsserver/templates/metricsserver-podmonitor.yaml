@@ -1,0 +1,40 @@
+# only if metricsServerPort is set and Prometheus stack is installed and service is not enabled
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+{{- if .Values.metricsServer.port }}
+{{- if not .Values.metricsServer.service.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Release.Name }}-metrics-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-metrics-server
+    component: {{ .Release.Name }}-metrics-server
+spec:
+  selector:
+    matchLabels:
+    app: {{ .Release.Name }}-metrics-server
+    component: {{ .Release.Name }}-metrics-server
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  podMetricsEndpoints:
+    - port: ms-metrics
+      interval: "{{ .Values.metricsServer.metricsFetchIntervalSeconds | default "1m" }}"
+      honorTimestamps: true
+      metricRelabelings:
+        - action: labeldrop
+          regex: ^job$
+        - action: labeldrop
+          regex: ^instance$
+        - action: labeldrop
+          regex: ^namespace$
+        - action: labeldrop
+          regex: ^endpoint$
+        - action: labeldrop
+          regex: ^container$
+
+{{- end }}
+{{- end }}
+{{- end }}

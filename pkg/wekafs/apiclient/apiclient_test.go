@@ -174,7 +174,12 @@ func GetApiClientForTest(t *testing.T) *ApiClient {
 	endpoints := strings.Split(endpoint, ",")
 	creds.Endpoints = endpoints
 	if client == nil {
-		apiClient, err := NewApiClient(context.Background(), creds, true, endpoint, "csi.weka.io")
+		apiClient, err := NewApiClient(context.Background(), creds, ApiClientOptions{
+			AllowInsecureHttps: true,
+			Hostname:           endpoint,
+			DriverName:         "csi.weka.io",
+			ApiTimeout:         ApiHttpTimeOutSeconds,
+		})
 		if err != nil {
 			t.Fatalf("Failed to create API client: %v", err)
 		}

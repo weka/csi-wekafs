@@ -49,7 +49,7 @@ spec:
       hostNetwork: true
       {{- end }}
       containers:
-        - name: wekafs
+        - name: metrics-server
           image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
           imagePullPolicy: Always
           args:
@@ -76,10 +76,25 @@ spec:
           {{- if .Values.metricsServer.metricsFetchIntervalSeconds | default 60 }}
             - "--wekametricsfetchintervalseconds={{ .Values.metricsServer.metricsFetchIntervalSeconds }}"
           {{- end }}
+          {{- if .Values.metricsServer.enableLeaderElection | default false }}
+            - "--enablemetricsserverleaderelection"
+          {{- end }}
+          {{- if .Values.metricsServer.quotaUpdateConcurrentRequests }}
+            - "--wekametricsquotaupdateconcurrentrequests={{ .Values.metricsServer.quotaUpdateConcurrentRequests }}"
+          {{- end }}
+          {{- if .Values.metricsServer.quotaCacheValiditySeconds }}
+            - "--wekametricsquotacachevalidityseconds={{ .Values.metricsServer.quotaCacheValiditySeconds }}"
+          {{- end }}
+          {{- if .Values.metricsServer.apiClientTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.metricsServer.apiClientTimeoutSeconds }}"
+          {{- end }}
+          {{- if .Values.metricsServer.enableBatchModeForQuotaUpdates | default false }}
+            - "--fetchquotasinbatchmode"
+          {{- end }}
           ports:
             {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
-              name: metrics
+              name: ms-metrics
               protocol: TCP
             {{- end }}
           livenessProbe:
@@ -111,5 +126,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      resources:
+        {{- toYaml .Values.metricsServer.resources | nindent 8}}
       terminationGracePeriodSeconds: {{ .Values.metricsServer.terminationGracePeriodSeconds | default 30 }}
 {{- end }}

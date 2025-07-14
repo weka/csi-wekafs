@@ -26,7 +26,7 @@ type WekaFsDriver struct {
 	ids            *identityServer
 	ns             *NodeServer
 	cs             *ControllerServer
-	ms             *MetricsServer
+	Ms             *MetricsServer
 	api            *ApiStore
 	mounters       *MounterGroup
 	csiMode        CsiPluginMode
@@ -108,9 +108,9 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	if driver.csiMode == CsiModeMetricsServer || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading MetricsServer")
-		driver.ms = NewMetricsServer(driver)
+		driver.Ms = NewMetricsServer(driver)
 	} else {
-		driver.ms = nil
+		driver.Ms = nil
 	}
 
 	s := NewNonBlockingGRPCServer(driver.csiMode)
@@ -126,14 +126,20 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		} else {
 			log.Info().Msg("Received SIGTERM/SIGINT, stopping server")
 		}
+		driver.Ms.Stop(ctx)
 		s.Stop()
-		log.Info().Msg("Server stopped")
 		os.Exit(1)
 
 	}()
 
-	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
-	s.Wait()
+	if s.csiMode != CsiModeMetricsServer {
+		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
+		s.Wait()
+	}
+	if s.csiMode == CsiModeMetricsServer {
+		driver.Ms.Start(ctx)
+		driver.Ms.Wait()
+	}
 }
 
 func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
@@ -141,7 +147,7 @@ func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
 		config, err := rest.InClusterConfig()
 		if err != nil {
 			if errors.Is(err, rest.ErrNotInCluster) {
-				log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+				log.Trace().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
 				// Fallback to using kubeconfig from the local environment
 				kubeconfig := os.Getenv("KUBECONFIG")
 				if kubeconfig == "" {

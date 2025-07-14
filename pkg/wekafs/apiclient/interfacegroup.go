@@ -29,6 +29,29 @@ type InterfaceGroup struct {
 	Status          string             `json:"status"`
 }
 
+type InterfaceGroups []*InterfaceGroup
+
+func (i *InterfaceGroups) SupportsPagination() bool {
+	return true
+}
+
+func (i *InterfaceGroups) CombinePartialResponse(next ApiObjectResponse) error {
+	if partialList, ok := next.(*InterfaceGroups); ok {
+		*i = append(*i, *partialList...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response")
+}
+
+func (i *InterfaceGroup) SupportsPagination() bool {
+	return false
+}
+
+func (i *InterfaceGroup) CombinePartialResponse(next ApiObjectResponse) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (i *InterfaceGroup) String() string {
 	return fmt.Sprintln("InterfaceGroup ", i.Name, "Uid:", i.Uid.String(), "type:", i.Type, "status:", i.Status)
 }
@@ -108,7 +131,7 @@ func (i *InterfaceGroup) GetRandomIpAddress(ctx context.Context) (string, error)
 	return ip, nil
 }
 
-func (a *ApiClient) GetInterfaceGroups(ctx context.Context, interfaceGroups *[]InterfaceGroup) error {
+func (a *ApiClient) GetInterfaceGroups(ctx context.Context, interfaceGroups *InterfaceGroups) error {
 	ig := &InterfaceGroup{}
 
 	err := a.Get(ctx, ig.GetBasePath(a), nil, interfaceGroups)
@@ -118,8 +141,8 @@ func (a *ApiClient) GetInterfaceGroups(ctx context.Context, interfaceGroups *[]I
 	return nil
 }
 
-func (a *ApiClient) GetInterfaceGroupsByType(ctx context.Context, groupType InterfaceGroupType, interfaceGroups *[]InterfaceGroup) error {
-	res := &[]InterfaceGroup{}
+func (a *ApiClient) GetInterfaceGroupsByType(ctx context.Context, groupType InterfaceGroupType, interfaceGroups *InterfaceGroups) error {
+	res := &InterfaceGroups{}
 	err := a.GetInterfaceGroups(ctx, res)
 	if err != nil {
 		return nil
@@ -144,7 +167,7 @@ func (a *ApiClient) GetInterfaceGroupByUid(ctx context.Context, uid uuid.UUID, i
 }
 
 func (a *ApiClient) fetchNfsInterfaceGroup(ctx context.Context, name string) error {
-	igs := &[]InterfaceGroup{}
+	igs := &InterfaceGroups{}
 	err := a.GetInterfaceGroupsByType(ctx, InterfaceGroupTypeNFS, igs)
 	if err != nil {
 		return errors.Join(errors.New("failed to fetch nfs interface groups"), err)
@@ -164,7 +187,7 @@ func (a *ApiClient) fetchNfsInterfaceGroup(ctx context.Context, name string) err
 				}
 				return errors.New("no IP addresses found for nfs interface group \"" + name + "\"")
 			}
-			a.NfsInterfaceGroups[igname] = &ig
+			a.NfsInterfaceGroups[igname] = ig
 			return nil
 		}
 	}
