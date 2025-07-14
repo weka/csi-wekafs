@@ -70,6 +70,13 @@ jobs:
         run: |
           out="$(echo "${{ steps.auto_version.outputs.version }}" | sed 's/^v//1')"
           echo "helm_version=$out" >> $GITHUB_OUTPUT
+
+      - name: Get metricsserver Helm chart version
+        id: helm_metricsserver_version
+        run: |
+          out="0.1.0-$(git rev-parse --short HEAD)"
+          echo "helm_metricsserver_version=$out" >> $GITHUB_OUTPUT
+
       - name: Update Helm chart version
         uses: mikefarah/yq@master
         with:
@@ -134,7 +141,7 @@ jobs:
       - name: Run chart-testing (install)
         id: helm-test
         run: |
-          ct install --print-config --chart-dirs charts --all --debug && \
+          ct install --print-config --chart-dirs charts/csi-wekafsplugin --all --debug && \
           echo "passed=true" >> $GITHUB_OUTPUT
         if: steps.list-changed.outputs.changed == 'true'
 
@@ -150,6 +157,20 @@ jobs:
           echo "filename=$FILENAME" >> $GITHUB_OUTPUT
           echo "url=$URL" >> $GITHUB_OUTPUT
 
+      # UPLOAD metricsserver chart to S3
+      - name: Create Helm package for metricsserver
+        id: helm-package-metricsserver
+        run: |
+          helm package charts/metricsserver
+          FILENAME="csi-metricsserver-${{ steps.helm_metricsserver_version.outputs.helm_metricsserver_version }}.tgz"
+          mv metricsserver-0.1.0.tgz "$FILENAME"
+          # TODO: remove this when we have a proper versioning for metricsserver
+          AWS_REGION=${{ secrets.AWS_ACCESS_SECRET_KEY }}
+          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
+          URL="https://$S3_BUCKET_NAME.s3.$AWS_REGION.amazonaws.com"
+          echo "metricsserverfilename=$FILENAME" >> $GITHUB_OUTPUT
+          echo "metricsserverurl=$URL" >> $GITHUB_OUTPUT
+
       - name: Install AWS CLI
         id: install-aws-cli
         uses: unfor19/install-aws-cli-action@v1
@@ -163,8 +184,10 @@ jobs:
           export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY}}"
           export AWS_REGION="${{ secrets.AWS_REGION }}"
           aws s3 cp ${{ steps.helm-package.outputs.filename }} "s3://${{ vars.AWS_BUCKET }}/"
+          aws s3 cp ${{ steps.helm-package-metricsserver.outputs.metricsserverfilename }} "s3://${{ vars.AWS_BUCKET }}/"
           echo "link=https://${{ vars.AWS_BUCKET }}.s3.${AWS_REGION}.amazonaws.com/${{ steps.helm-package.outputs.filename }}" >> $GITHUB_OUTPUT
-        if: steps.helm-test.outputs.passed == 'true'
+          echo "metricsserverlink=https://${{ vars.AWS_BUCKET }}.s3.${AWS_REGION}.amazonaws.com/${{ steps.helm-package-metricsserver.outputs.metricsserverfilename }}" >> $GITHUB_OUTPUT
+        #if: steps.helm-test.outputs.passed == 'true'
 
       - uses: rtCamp/action-slack-notify@v2
         env:
@@ -172,5 +195,5 @@ jobs:
           SLACK_USERNAME: csiBot
           SLACK_ICON_EMOJI: ":robot_face:"
           SLACK_TITLE: "New build was pushed"
-          SLACK_MESSAGE: "```helm upgrade csi-wekafs -n csi-wekafs --create-namespace -i  ${{ steps.helm-s3-upload.outputs.link }} --set logLevel=6```"
+          SLACK_MESSAGE: "```helm upgrade csi-wekafs -n csi-wekafs --create-namespace -i  ${{ steps.helm-s3-upload.outputs.link }} --set logLevel=6\n\nhelm upgrade csi-metricsserver -n csi-wekafs --create-namespace -i ${{ steps.helm-s3-upload.outputs.metricsserverlink }} --set logLevel=6```"
           SLACK_FOOTER: "Package path: ${{ steps.helm-s3-upload.outputs.link }}"
