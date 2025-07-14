@@ -62,6 +62,10 @@ func (v *Volume) fetchPvUsageStats(ctx context.Context) (*UsageStats, error) {
 }
 
 func (v *Volume) fetchPvPerformanceStats(ctx context.Context) (*apiclient.PerfStats, error) {
+	// TODO: the metrics mechanism used via API is very slow and not suitable for production use.
+	// Currently, blocking it
+	return nil, nil
+
 	if v.apiClient == nil {
 		return nil, errors.New("no API client available to fetch performance stats")
 	}
