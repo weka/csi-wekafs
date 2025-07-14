@@ -44,6 +44,8 @@ type VolumeMetrics struct {
 }
 
 func (vms *VolumeMetrics) HasVolumeMetric(pvUID types.UID) bool {
+	vms.Lock()
+	defer vms.Unlock()
 	_, exists := vms.Metrics[pvUID]
 	return exists
 }
@@ -51,7 +53,7 @@ func (vms *VolumeMetrics) HasVolumeMetric(pvUID types.UID) bool {
 func (vms *VolumeMetrics) GetVolumeMetric(pvUID types.UID) *VolumeMetric {
 	vms.Lock()
 	defer vms.Unlock()
-	if vms.HasVolumeMetric(pvUID) {
+	if _, exists := vms.Metrics[pvUID]; exists {
 		return vms.Metrics[pvUID]
 	}
 	return nil
@@ -69,9 +71,7 @@ func (vms *VolumeMetrics) AddVolumeMetric(pvUID types.UID, metric *VolumeMetric)
 func (vms *VolumeMetrics) RemoveVolumeMetric(pvUID types.UID) {
 	vms.Lock()
 	defer vms.Unlock()
-	if vms.HasVolumeMetric(pvUID) {
-		delete(vms.Metrics, pvUID)
-	}
+	delete(vms.Metrics, pvUID)
 }
 
 func NewVolumeMetrics() *VolumeMetrics {
