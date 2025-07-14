@@ -1,0 +1,26 @@
+{{- if (lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "volumeattributeclasses.csi.storage.k8s.io") }}
+---
+apiVersion: storage.k8s.io/v1beta1
+kind: VolumeAttributesClass
+metadata:
+  name: {{ .Release.Name }}-performance
+driverName: {{ .Values.csiDriverName }}
+parameters:
+  mountOptions: "writecache"
+---
+apiVersion: storage.k8s.io/v1beta1
+kind: VolumeAttributesClass
+metadata:
+  name: {{ .Release.Name}}-direct
+driverName: {{ .Values.csiDriverName }}
+parameters:
+  mountOptions: "forcedirect"
+---
+apiVersion: storage.k8s.io/v1beta1
+kind: VolumeAttributesClass
+metadata:
+  name: {{ .Release.Name}}-readcache
+driverName: {{ .Values.csiDriverName }}
+parameters:
+  mountOptions: "readcache"
+{{- end }}
