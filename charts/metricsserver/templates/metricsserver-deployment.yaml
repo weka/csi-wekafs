@@ -1,4 +1,3 @@
-{{- if .Values.metricsServer.enabled }}
 kind: Deployment
 apiVersion: apps/v1
 metadata:
@@ -27,24 +26,20 @@ spec:
         {{- if .Values.metricsServer.podLabels }}
         {{- toYaml .Values.metricsServer.podLabels | nindent 8 }}
         {{- end }}
-    {{- if not .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+    {{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/path: '/metrics'
         prometheus.io/port: '{{.Values.metrics.metricsServerPort | default 9096}}'
     {{- end }}
     spec:
-      {{- if or .Values.metricsServer.affinity .Values.affinity }}
-      {{- $metricsServerAffinity := dict  -}}
-      {{- $_ := include "helm-toolkit.utils.merge" (tuple $metricsServerAffinity .Values.metricsServer.affinity .Values.affinity) }}
+      {{- if .Values.metricsServer.affinity }}
       affinity:
-        {{- toYaml $metricsServerAffinity | nindent 8}}
+        {{- toYaml .Values.metricsServer.affinity | nindent 8 }}
       {{- end }}
-      {{- if or .Values.nodeSelector .Values.metricsServer.nodeSelector}}
-      {{- $nodeSelector := dict -}}
-      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeSelector .Values.metricsServer.nodeSelector .Values.nodeSelector) }}
+      {{- if .Values.metricsServer.nodeSelector }}
       nodeSelector:
-        {{- toYaml $nodeSelector | nindent 8 }}
+        {{- toYaml .Values.metricsServer.nodeSelector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-metrics-server
       {{- if .Values.hostNetwork }}
@@ -52,8 +47,10 @@ spec:
       {{- end }}
       containers:
         - name: wekafs
-          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
+          image: quay.io/weka.io/csi-wekafs:v2.8.0-sergeyseparatemetricsserver.65.sha.cedf3cf
           imagePullPolicy: Always
+{{/*          command:*/}}
+{{/*            - /metricsserver*/}}
           args:
             - "--drivername=$(CSI_DRIVER_NAME)"
             - "--nodeid=$(KUBE_NODE_NAME)"
@@ -62,10 +59,8 @@ spec:
           {{- if .Values.tracingUrl }}
             - "--tracingurl={{ .Values.tracingUrl }}"
           {{- end }}
-          {{- if .Values.metricsServer.enabled }}
             - "--enablemetrics"
             - "--metricsport={{ .Values.metrics.metricsServerPort | default 9096 }}"
-          {{- end }}
           {{- if .Values.pluginConfig.allowInsecureHttps }}
             - "--allowinsecurehttps"
           {{- end }}
@@ -81,7 +76,7 @@ spec:
           ports:
             {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
-              name: metrics
+              name: ms-metrics
               protocol: TCP
             {{- end }}
           livenessProbe:
@@ -114,4 +109,3 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       terminationGracePeriodSeconds: {{ .Values.metricsServer.terminationGracePeriodSeconds | default 30 }}
-{{- end }}
