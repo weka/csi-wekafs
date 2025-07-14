@@ -564,11 +564,12 @@ func (ms *MetricsServer) fetchSecret(ctx context.Context, secretName, secretName
 	secretKey := fmt.Sprintf("%s/%s", secretNamespace, secretName)
 	hash := hashString(secretKey, math.MaxInt)
 	ms.secrets.Lock()
-	defer ms.secrets.Unlock()
 	if secret, exists := ms.secrets.secrets[hash]; exists {
+		ms.secrets.Unlock()
 		logger.Trace().Str("namespace", secretNamespace).Str("name", secretName).Msg("Using a secret from cache")
 		return secret, nil // Return cached secret if available
 	}
+	ms.secrets.Unlock()
 	logger.Debug().Str("namespace", secretNamespace).Str("name", secretName).Msg("Fetching Secret")
 	if ms.GetK8sApi() == nil {
 		return nil, errors.New("no k8s API client available")
