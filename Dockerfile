@@ -26,8 +26,7 @@ RUN true
 
 
 RUN echo Building package
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/*
-
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin" /src/cmd/*
 FROM registry.access.redhat.com/ubi9/ubi:${UBI_HASH} AS ubibuilder
 RUN dnf install -y util-linux libselinux-utils pciutils binutils jq procps less container-selinux
 RUN dnf clean all && rm -rf /var/cache/dnf
@@ -45,6 +44,7 @@ LABEL summary="This image is used by WEKA CSI Plugin and incorporates both Contr
 LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data platform for AI"
 LABEL url="https://www.weka.io"
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
+COPY --from=go-builder /bin/metricsserver /metricsserver
 COPY --from=go-builder /src/locar /locar
 ARG binary=/bin/wekafsplugin
 EXPOSE 2049 111/tcp 111/udp
