@@ -317,12 +317,30 @@ func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList *[]v1.Persi
 	}
 }
 
+func (ms *MetricsServer) removePrometheusMetricsForLabels(ctx context.Context, metric *VolumeMetric) {
+	logger := log.Ctx(ctx)
+	logger.Trace().Str("pv_name", metric.persistentVolume.Name).Msg("Removing prometheus metrics labels for volume")
+	labelValues := ms.createPrometheusLabelsForMetric(metric)
+	ms.prometheusMetrics.Capacity.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.Used.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.Free.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.Reads.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.Writes.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.ReadBytes.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.WriteBytes.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.ReadDurationUs.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.WriteDurationUs.DeleteLabelValues(labelValues...)
+}
+
 func (ms *MetricsServer) pruneVolumeMetric(ctx context.Context, pvUUID types.UID) {
 	ctx, span := otel.Tracer(TracerName).Start(ctx, "pruneVolumeMetric")
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
+
+	metric := ms.volumeMetrics.GetVolumeMetric(pvUUID)
 	ms.volumeMetrics.RemoveVolumeMetric(pvUUID)
+	ms.removePrometheusMetricsForLabels(ctx, metric)
 	logger.Info().Str("pv_uid", string(pvUUID)).Msg("Removed persistent volume from metric collection")
 }
 
@@ -551,8 +569,6 @@ func (ms *MetricsServer) reportMetricsStreamer(ctx context.Context) {
 			if metric == nil || metric.metrics == nil {
 				continue
 			}
-			pvName := metric.persistentVolume.Name
-			guid := metric.apiClient.ClusterGuid.String()
 			u := metric.metrics.Usage
 			p := metric.metrics.Performance
 
@@ -574,23 +590,9 @@ func (ms *MetricsServer) reportMetricsStreamer(ctx context.Context) {
 				metric.volume.lastStats = p
 			}
 			// enrich labels with persistent volume claim information
-			labelValues := []string{ms.driver.name,
-				pvName,
-				guid,
-				metric.persistentVolume.Spec.StorageClassName,
-				metric.volume.FilesystemName,
-				string(metric.volume.GetBackingType()),
-			}
-			if metric.persistentVolume.Spec.ClaimRef != nil {
-				labelValues = append(labelValues,
-					metric.persistentVolume.Spec.ClaimRef.Name,
-					metric.persistentVolume.Spec.ClaimRef.Namespace,
-					string(metric.persistentVolume.Spec.ClaimRef.UID))
-			} else {
-				labelValues = append(labelValues, "", "", "")
-			}
+			labelValues := ms.createPrometheusLabelsForMetric(metric)
 
-			logger.Trace().Str("pv_name", pvName).Msg("Reporting prometheusMetrics for PersistentVolume")
+			logger.Trace().Str("pv_name", metric.persistentVolume.Name).Msg("Reporting prometheusMetrics for PersistentVolume")
 			ms.prometheusMetrics.Capacity.WithLabelValues(labelValues...).Set(float64(u.Capacity))
 			ms.prometheusMetrics.Used.WithLabelValues(labelValues...).Set(float64(u.Used))
 			ms.prometheusMetrics.Free.WithLabelValues(labelValues...).Set(float64(u.Free))
@@ -608,6 +610,28 @@ func (ms *MetricsServer) reportMetricsStreamer(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (ms *MetricsServer) createPrometheusLabelsForMetric(metric *VolumeMetric) []string {
+	pvName := metric.persistentVolume.Name
+	guid := metric.apiClient.ClusterGuid.String()
+
+	labelValues := []string{ms.driver.name,
+		pvName,
+		guid,
+		metric.persistentVolume.Spec.StorageClassName,
+		metric.volume.FilesystemName,
+		string(metric.volume.GetBackingType()),
+	}
+	if metric.persistentVolume.Spec.ClaimRef != nil {
+		labelValues = append(labelValues,
+			metric.persistentVolume.Spec.ClaimRef.Name,
+			metric.persistentVolume.Spec.ClaimRef.Namespace,
+			string(metric.persistentVolume.Spec.ClaimRef.UID))
+	} else {
+		labelValues = append(labelValues, "", "", "")
+	}
+	return labelValues
 }
 
 // InvalidateSecret removes a secret from the cache and its associated PerClientVolumes. To be called when getting error on API client which is likely due to secret rotation.
@@ -640,6 +664,7 @@ func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
 			logger.Info().Msg("Periodic fetch prometheusMetrics context cancelled, stopping...")
 			return
 		case <-time.After(ticker):
+			logger.Info().Int("pv_count", len(ms.volumeMetrics.Metrics)).Msg("Fetching prometheusMetrics for PersistentVolumes")
 			err := ms.FetchMetrics(ctx)
 			if err != nil {
 				logger.Error().Err(err).Msg("Error fetching prometheusMetrics")
