@@ -17,6 +17,7 @@ type ApiStore struct {
 	apis     map[uint32]*apiclient.ApiClient
 	config   *DriverConfig
 	Hostname string
+	locks    sync.Map // map[uint32]*sync.Mutex
 }
 
 // getByHash returns pointer to existing API if found by hash, or nil
@@ -123,8 +124,12 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 // If this is a new API, it will be created and put in hashmap
 func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.Credentials, hostname string) (*apiclient.ApiClient, error) {
 	logger := log.Ctx(ctx)
-	logger.Trace().Str("api_client", credentials.String()).Msg("Creating new Weka API client")
-	// doing this to fetch a client hash
+	logger.Trace().Msg("Received request to get an API client from credentials")
+	credsHash := credentials.Hash()
+	lock := api.getLockForHash(credsHash)
+	lock.Lock()
+	defer lock.Unlock()
+
 	newClient, err := apiclient.NewApiClient(ctx, credentials, api.config.allowInsecureHttps, hostname, api.config.GetDriver().name)
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
@@ -136,10 +141,11 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 		return existingApi, nil
 	}
 	api.Lock()
-	defer api.Unlock()
 	if api.getByHash(hash) != nil {
+		api.Unlock()
 		return api.getByHash(hash), nil
 	}
+	api.Unlock()
 	if err := newClient.Init(ctx); err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize API client")
 		return nil, err
@@ -159,6 +165,8 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 			return nil, err
 		}
 	}
+	api.Lock()
+	api.Unlock()
 	api.apis[hash] = newClient
 
 	return newClient, nil

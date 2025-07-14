@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -597,6 +598,11 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
 		return ""
 	}
+}
+
+func (api *ApiStore) getLockForHash(hash uint32) *sync.Mutex {
+	lockIface, _ := api.locks.LoadOrStore(hash, &sync.Mutex{})
+	return lockIface.(*sync.Mutex)
 }
 
 // Die used to intentionally panic and exit, while updating termination log
