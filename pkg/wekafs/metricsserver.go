@@ -11,8 +11,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"math"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"slices"
 	"sync"
 	"time"
@@ -37,8 +40,6 @@ type VolumeMetrics struct {
 }
 
 func (vms *VolumeMetrics) HasVolumeMetric(pvUID types.UID) bool {
-	vms.Lock()
-	defer vms.Unlock()
 	_, exists := vms.Metrics[pvUID]
 	return exists
 }
@@ -199,67 +200,71 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 	logger := log.Ctx(ctx)
 
 	out := ms.persistentVolumesChan
-	if ms.GetK8sApi() == nil {
-		logger.Error().Msg("no k8s API client available, cannot stream PersistentVolumes, no statistics will be available")
-	}
 
-	logger.Info().Msg("Fetching existing persistent volumes")
-	// Fetch initial list
-	pvList, err := ms.GetK8sApi().CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	config, err := rest.InClusterConfig()
 	if err != nil {
-		logger.Error().Msg("Failed to fetch PersistentVolumes, no statistics will be available")
-	}
-	logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched initial list of PersistentVolumes")
-	for _, pv := range pvList.Items {
-		logger.Trace().Str("pv_name", pv.Name).Msg("Sending PersistentVolume to channel for processing")
-		select {
-		case <-ctx.Done():
-			return
-		case out <- &pv:
+		if errors.Is(err, rest.ErrNotInCluster) {
+			log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+			// Fallback to using kubeconfig from the local environment
+			kubeconfig := os.Getenv("KUBECONFIG")
+			if kubeconfig == "" {
+				log.Error().Msg("KUBECONFIG environment variable is not set")
+				Die("KUBECONFIG environment variable is not set, cannot run MetricsServer without it and not in cluster")
+			}
+			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
+				Die("Failed to create config from kubeconfig file, cannot run MetricsServer without it")
+			}
+		} else {
+			log.Error().Err(err).Msg("Failed to create in-cluster config")
+			Die("Failed to create in-cluster config, cannot run MetricsServer without it")
 		}
 	}
 
-	logger.Info().Msg("Initial persistent volumes fetched, starting watch")
-	go func() {
-		logger.Info().Msg("Starting watch for PersistentVolumes")
-		defer logger.Info().Msg("PersistentVolumes watch goroutine stopped")
-		for {
-			watcher, err := ms.GetK8sApi().CoreV1().PersistentVolumes().Watch(ctx, metav1.ListOptions{})
-			if err != nil {
-				logger.Error().Err(err).Msg("Failed to start PersistentVolumes watch, retrying in 5s")
-				select {
-				case <-ctx.Done():
-					logger.Info().Msg("Context cancelled, stopping PersistentVolumes watch")
-					return
-				case <-time.After(5 * time.Second):
-					continue
-				}
-			}
-			for {
-				select {
-				case <-ctx.Done():
-					logger.Info().Msg("Context cancelled, stopping PersistentVolumes watch")
-					watcher.Stop()
-					return
-				case event, ok := <-watcher.ResultChan():
-					if !ok {
-						logger.Warn().Msg("PersistentVolumes watch channel closed, restarting watch")
-						watcher.Stop()
-						// Optionally, update resourceVersion here if needed
-						time.Sleep(1 * time.Second)
-						break
-					}
-					pv, ok := event.Object.(*v1.PersistentVolume)
-					if !ok {
-						logger.Error().Msg("Received non-PersistentVolume object from watch channel, skipping")
-						continue
-					}
-					logger.Trace().Str("pv_name", pv.Name).Str("event_type", string(event.Type)).Msg("Received PersistentVolume event")
-					out <- pv
-				}
+	cachedClient, err := client.New(config, client.Options{})
+	dur := ms.getConfig().wekaMetricsFetchInterval
+
+	for {
+		logger.Info().Msg("Fetching existing persistent volumes")
+		pvList := &v1.PersistentVolumeList{}
+		err = cachedClient.List(ctx, pvList)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes")
+		for _, pv := range pvList.Items {
+			logger.Trace().Str("pv_name", pv.Name).Msg("Sending PersistentVolume to channel for processing")
+			select {
+			case <-ctx.Done():
+				return
+			case out <- &pv:
 			}
 		}
-	}()
+		ms.pruneOldVolumes(ctx, &(pvList.Items))
+
+		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_diration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
+
+		// refresh list of volumes every wekaMetricsFetchInterval
+		time.Sleep(dur)
+	}
+}
+
+func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList *[]v1.PersistentVolume) {
+	currentUIDs := make(map[types.UID]struct{}, len(*pvList))
+	for _, pv := range *pvList {
+		currentUIDs[pv.UID] = struct{}{}
+	}
+	// Remove metrics for UIDs not present in the current PV list
+	for uid := range ms.volumeMetrics.Metrics {
+		if _, exists := currentUIDs[uid]; !exists {
+			ctx, span := otel.Tracer(TracerName).Start(ctx, "pruneOldVolumes")
+			ms.pruneVolumeMetric(ctx, uid)
+			span.End()
+		}
+	}
 }
 
 func (ms *MetricsServer) pruneVolumeMetric(ctx context.Context, pvUUID types.UID) {
@@ -328,7 +333,6 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 
 	// Check if the PersistentVolume is already being processed
 	if ms.volumeMetrics.HasVolumeMetric(pv.UID) {
-		logger.Debug().Str("pv_name", pv.Name).Msg("PersistentVolume already being processed, updating")
 		ms.volumeMetrics.GetVolumeMetric(pv.UID).persistentVolume = pv // Update the PersistentVolume reference in the existing VolumeMetric
 		return
 	}
@@ -406,7 +410,6 @@ func (ms *MetricsServer) fetchSecret(ctx context.Context, secretName, secretName
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("secret_name", secretName).Str("secret_namespace", secretNamespace).Logger()
-	logger.Debug().Msg("Fetching Secret")
 
 	// Fetch the secret from Kubernetes
 	if secretName == "" || secretNamespace == "" {
@@ -414,9 +417,14 @@ func (ms *MetricsServer) fetchSecret(ctx context.Context, secretName, secretName
 	}
 	secretKey := fmt.Sprintf("%s/%s", secretNamespace, secretName)
 	hash := hashString(secretKey, math.MaxInt)
+	ms.secrets.Lock()
 	if secret, exists := ms.secrets.secrets[hash]; exists {
+		ms.secrets.Unlock()
+		logger.Trace().Str("namespace", secretNamespace).Str("name", secretName).Msg("Using a secret from cache")
 		return secret, nil // Return cached secret if available
 	}
+	ms.secrets.Unlock()
+	logger.Debug().Str("namespace", secretNamespace).Str("name", secretName).Msg("Fetching Secret")
 	if ms.GetK8sApi() == nil {
 		return nil, errors.New("no k8s API client available")
 	}
@@ -518,7 +526,6 @@ func (ms *MetricsServer) reportMetricsStreamer(ctx context.Context) {
 					}
 				}
 				metric.volume.lastStats = p
-				logger.Trace().Int64("writes", metric.volume.lastStats.Reads).Msg("Updated last stats for volume")
 			}
 			// enrich labels with persistent volume claim information
 			labelValues := []string{ms.driver.name,
