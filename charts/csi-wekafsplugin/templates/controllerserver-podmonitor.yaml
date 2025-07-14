@@ -1,0 +1,27 @@
+# only if metrics.enabled is true and the node metrics port is set and Prometheus stack is installed
+{{- if .Values.metrics.enabled }}
+{{- if .Values.metrics.controllerPort }}
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Release.Name }}-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-controller
+    component: {{ .Release.Name }}-controller
+spec:
+  selector:
+    matchLabels:
+    app: {{ .Release.Name }}-controller
+    component: {{ .Release.Name }}-controller
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  podMetricsEndpoints:
+    - port: metrics
+
+{{- end }}
+{{- end }}
+{{- end }}
