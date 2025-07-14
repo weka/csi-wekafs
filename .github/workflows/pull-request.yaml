@@ -70,6 +70,13 @@ jobs:
         run: |
           out="$(echo "${{ steps.auto_version.outputs.version }}" | sed 's/^v//1')"
           echo "helm_version=$out" >> $GITHUB_OUTPUT
+
+      - name: Get metricsserver Helm chart version
+        id: helm_metricsserver_version
+        run: |
+          out="0.1.0-$(git rev-parse --short HEAD)"
+          echo "helm_metricsserver_version=$out" >> $GITHUB_OUTPUT
+
       - name: Update Helm chart version
         uses: mikefarah/yq@master
         with:
@@ -119,13 +126,13 @@ jobs:
       - name: Run chart-testing (list-changed)
         id: list-changed
         run: |
-          changed=$(ct list-changed --chart-dirs charts --target-branch ${{ github.event.repository.default_branch }})
+          changed=$(ct list-changed --chart-dirs charts/csi-wekafsplugin --target-branch ${{ github.event.repository.default_branch }})
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Run chart-testing (lint)
-        run: ct lint --chart-dirs charts --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
+        run: ct lint --chart-dirs charts/csi-wekafsplugin --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
 
       - name: Create kind cluster
         uses: helm/kind-action@v1.12.0
@@ -134,7 +141,7 @@ jobs:
       - name: Run chart-testing (install)
         id: helm-test
         run: |
-          ct install --print-config --chart-dirs charts --all --debug && \
+          ct install --print-config --chart-dirs charts/csi-wekafsplugin --all --debug && \
           echo "passed=true" >> $GITHUB_OUTPUT
         if: steps.list-changed.outputs.changed == 'true'
 
@@ -144,6 +151,18 @@ jobs:
         run: |
           helm package charts/csi-wekafsplugin
           FILENAME="csi-wekafsplugin-${{ steps.helm_version.outputs.helm_version }}.tgz"
+          AWS_REGION=${{ secrets.AWS_ACCESS_SECRET_KEY }}
+          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
+          URL="https://$S3_BUCKET_NAME.s3.$AWS_REGION.amazonaws.com"
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      # UPLOAD metricsserver chart to S3
+      - name: Create Helm package
+        id: helm-package-metricsserver
+        run: |
+          helm package charts/metricsserver
+          FILENAME="csi-metricsserver-${{ steps.helm_metricsserver_version.outputs.helm_metricsserver_version }}.tgz"
           AWS_REGION=${{ secrets.AWS_ACCESS_SECRET_KEY }}
           S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
           URL="https://$S3_BUCKET_NAME.s3.$AWS_REGION.amazonaws.com"
