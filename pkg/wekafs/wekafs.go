@@ -55,6 +55,7 @@ type WekaFsDriver struct {
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig
+	k8sApiClient   *kubernetes.Clientset
 }
 
 type VolumeType string
@@ -336,23 +337,38 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	s.Wait()
 }
 
+func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
+	if d.k8sApiClient == nil {
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			if errors.Is(err, rest.ErrNotInCluster) {
+				log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+				return nil
+			}
+			log.Error().Err(err).Msg("Failed to create in-cluster config")
+			return nil
+		}
+
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create Kubernetes client")
+			return nil
+		}
+		d.k8sApiClient = clientset
+	}
+	return d.k8sApiClient
+}
+
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create in-cluster config")
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create Kubernetes client")
-		return
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node object from Kubernetes")
 		return
@@ -389,7 +405,7 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		return
 	}
 
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = d.GetK8sApiClient().CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return
@@ -409,19 +425,13 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 	}
 	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
 
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create in-cluster config")
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create Kubernetes client")
-		return
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node")
 		return
@@ -432,18 +442,13 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 		log.Info().Str("label", label).Str("node", node.Name).Msg("Removing label from node")
 	}
 
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return
 	}
 
 	log.Info().Msg("Successfully removed labels from node")
-
-	//output, err := exec.Command("/bin/kubectl", "label", "node", d.nodeID, labelsString).Output()
-	//if err != nil {
-	//	log.Error().Err(err).Str("output", string(output)).Msg("Failed to remove labels from node")
-	//}
 }
 
 type CsiPluginMode string
