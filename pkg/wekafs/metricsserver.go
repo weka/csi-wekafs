@@ -9,12 +9,16 @@ import (
 	"go.opentelemetry.io/otel"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"math"
 	"os"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"slices"
 	"sync"
@@ -222,13 +226,60 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 		}
 	}
 
-	cachedClient, err := client.New(config, client.Options{})
-	dur := ms.getConfig().wekaMetricsFetchInterval
+	scheme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme:           scheme,
+		LeaderElection:   ms.getConfig().enableMetricsServerLeaderElection,
+		LeaderElectionID: "csimetricsad0b5146.weka.io",
+		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
+		// when the Manager ends. This requires the binary to immediately end when the
+		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
+		// speeds up voluntary leader transitions as the new leader don't have to wait
+		// LeaseDuration time first.
+		//
+		// In the default scaffold provided, the program ends immediately after
+		// the manager stops, so would be fine to enable this option. However,
+		// if you are doing or is intended to do any operation such as perform cleanups
+		// after the manager stops then its usage might be unsafe.
+		// LeaderElectionReleaseOnCancel: true,
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("unable to start manager")
+		Die("unable to start manager, cannot run MetricsServer without it")
+	}
 
+	//httpClient, err := rest.HTTPClientFor(mgr.GetConfig())
+	//if err != nil {
+	//	logger.Error().Err(err).Msg("Unable to create http client")
+	//	Die("unable to start HTTP client, cannot run MetricsServer without it")
+	//}
+
+	//gvk := schema.GroupVersionKind{
+	//	Group:   "",
+	//	Version: "v1",
+	//	Kind:    "PersistentVolume",
+	//}
+	//restClient, err := apiutil.RESTClientForGVK(gvk, false, mgr.GetConfig(), serializer.NewCodecFactory(mgr.GetScheme()), httpClient)
+	//if err != nil {
+	//	logger.Error().Err(err).Msg("unable to create rest client")
+	//	Die("unable to start REST client, cannot run MetricsServer without it")
+	//}
+
+	//cachedClient, err := client.New(config, client.Options{})
+	dur := ms.getConfig().wekaMetricsFetchInterval
+	go func() {
+		if err := mgr.Start(ctx); err != nil {
+			logger.Error().Err(err).Msg("unable to start manager")
+			Die("unable to start manager, cannot run MetricsServer without it")
+		}
+	}()
+	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
 		pvList := &v1.PersistentVolumeList{}
-		err = cachedClient.List(ctx, pvList)
+		err = mgr.GetClient().List(ctx, pvList, &client.ListOptions{})
+		//err = restClient.Get()
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
 			time.Sleep(10 * time.Second)
@@ -236,7 +287,6 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 		}
 		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes")
 		for _, pv := range pvList.Items {
-			logger.Trace().Str("pv_name", pv.Name).Msg("Sending PersistentVolume to channel for processing")
 			select {
 			case <-ctx.Done():
 				return
@@ -305,12 +355,6 @@ func (ms *MetricsServer) processStreamedPersistentVolumes(ctx context.Context) {
 					<-sem // release semaphore
 					wg.Done()
 				}()
-				logger.Trace().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received PersistentVolume for processing")
-				if pv.DeletionTimestamp != nil {
-					logger.Trace().Str("pv_name", pv.Name).Msg("PersistentVolume is being deleted, pruning metrics")
-					ms.pruneVolumeMetric(ctx, pv.UID)
-					return
-				}
 				ms.processSinglePersistentVolume(ctx, pv)
 			}(pv)
 		}
@@ -327,7 +371,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	// Validate the PersistentVolume validity
 	err := ms.ensurePersistentVolumeValid(pv)
 	if err != nil {
-		logger.Trace().Str("pv_name", pv.Name).Err(err).Msg("Skipping PersistentVolume, not valid for processing")
+		logger.Trace().Str("pv_name", pv.Name).Err(err).Msg("Skipping processing a PersistentVolume, not valid")
 		return
 	}
 
@@ -336,6 +380,8 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		ms.volumeMetrics.GetVolumeMetric(pv.UID).persistentVolume = pv // Update the PersistentVolume reference in the existing VolumeMetric
 		return
 	}
+
+	logger.Info().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received a new PersistentVolume for processing")
 
 	secret, err := ms.fetchSecret(ctx, pv.Spec.CSI.NodePublishSecretRef.Name, pv.Spec.CSI.NodePublishSecretRef.Namespace)
 	if err != nil {
@@ -353,13 +399,13 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 			secretData["endpoints"] = endpoints
 		}
 	}
-	client, err := ms.getApiStore().fromSecrets(ctx, secretData, ms.nodeID)
+	apiClient, err := ms.getApiStore().fromSecrets(ctx, secretData, ms.nodeID)
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to create API client from secret, skipping PersistentVolume")
 		return
 	}
 
-	volume, err := NewVolumeFromId(ctx, pv.Spec.CSI.VolumeHandle, client, ms)
+	volume, err := NewVolumeFromId(ctx, pv.Spec.CSI.VolumeHandle, apiClient, ms)
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to create Volume from ID")
 		return
@@ -371,7 +417,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		volume:           volume,
 		metrics:          nil,
 		secret:           secret,
-		apiClient:        client,
+		apiClient:        apiClient,
 	}
 	logger.Trace().Str("pv_name", pv.Name).Msg("Adding PersistentVolume for metrics processing")
 	ms.volumeMetrics.AddVolumeMetric(pv.UID, metric)
