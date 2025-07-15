@@ -1272,7 +1272,6 @@ func (ms *MetricsServer) StartDebugSingleQuotas(ctx context.Context) {
 			os.Exit(1)
 		}
 	}()
-
 }
 
 func (ms *MetricsServer) StartDebugQuotaMaps(ctx context.Context) {

@@ -47,15 +47,14 @@ spec:
       {{- end }}
       containers:
         - name: wekafs
-          image: quay.io/weka.io/csi-wekafs:v2.8.0-sergeyseparatemetricsserver.65.sha.cedf3cf
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}
           imagePullPolicy: Always
-{{/*          command:*/}}
-{{/*            - /metricsserver*/}}
+          command:
+            - /metricsserver
           args:
             - "--drivername=$(CSI_DRIVER_NAME)"
             - "--nodeid=$(KUBE_NODE_NAME)"
             - "--v={{ .Values.logLevel | default 5 }}"
-            - "--csimode=$(X_CSI_MODE)"
           {{- if .Values.tracingUrl }}
             - "--tracingurl={{ .Values.tracingUrl }}"
           {{- end }}
@@ -90,8 +89,6 @@ spec:
           env:
             - name: CSI_DRIVER_NAME
               value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
-            - name: X_CSI_MODE
-              value: metricsserver
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
