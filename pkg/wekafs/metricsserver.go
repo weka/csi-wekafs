@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/go-logr/zerologr"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -214,13 +215,6 @@ func (ms *MetricsServer) initManager(ctx context.Context) {
 		logger.Error().Err(err).Msg("unable to start manager")
 		Die("unable to start manager, cannot run MetricsServer without it")
 	}
-
-	go func() {
-		if err := ms.manager.Start(ctx); err != nil {
-			logger.Error().Err(err).Msg("unable to start manager")
-			Die("unable to start manager, cannot run MetricsServer without it")
-		}
-	}()
 
 }
 
@@ -685,6 +679,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 
 	ms.initManager(ctx) // Initialize the controller-runtime manager
 
+	// Add a Runnable that only runs when this pod is elected leader
 	// TODO: make sure that we do not continue further till leader election lease is acquired
 
 	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
@@ -707,25 +702,74 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 		}
 	}()
 
-	// Start processing streamed PersistentVolumes
+	// Add a Runnable that only runs when this pod is elected leader
+	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		logger.Info().Msg("Leader elected, starting streamPersistentVolumes")
+
+		go ms.streamPersistentVolumes(ctx)
+
+		// Wait until leadership is lost or shutdown
+		<-ctx.Done()
+		log.Info().Msg("Leadership lost or shutdown, stopping streamPersistentVolumes")
+		return nil
+	}))
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
+		Die("Failed to add streamPersistentVolumes to manager, cannot run MetricsServer without it")
+	}
+
+	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		logger.Info().Msg("Leader elected, starting reportMetricsStreamer")
+
+		go ms.reportMetricsStreamer(ctx)
+
+		// Wait until leadership is lost or shutdown
+		<-ctx.Done()
+		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
+		return nil
+	}))
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
+		Die("Failed to add reportMetricsStreamer to manager, cannot run MetricsServer without it")
+	}
+
+	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		logger.Info().Msg("Leader elected, starting processStreamedPersistentVolumes")
+
+		go ms.processStreamedPersistentVolumes(ctx)
+
+		// Wait until leadership is lost or shutdown
+		<-ctx.Done()
+		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
+		return nil
+	}))
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
+		Die("Failed to add processStreamedPersistentVolumes to manager, cannot run MetricsServer without it")
+	}
+
+	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		logger.Info().Msg("Leader elected, starting PeriodicFetchMetrics")
+
+		go ms.PeriodicFetchMetrics(ctx)
+
+		// Wait until leadership is lost or shutdown
+		<-ctx.Done()
+		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
+		return nil
+	}))
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
+		Die("Failed to add PeriodicFetchMetrics to manager, cannot run MetricsServer without it")
+	}
+
 	go func() {
-		ms.streamPersistentVolumes(ctx)
+		if err := ms.manager.Start(ctx); err != nil {
+			logger.Error().Err(err).Msg("Cannot continue running MetricsServer")
+			os.Exit(1)
+		}
 	}()
 
-	// Start processing streamed PersistentVolumes
-	go func() {
-		ms.processStreamedPersistentVolumes(ctx)
-	}()
-
-	// Start reporting prometheusMetrics
-	go func() {
-		ms.reportMetricsStreamer(ctx) // Start reporting prometheusMetrics
-	}()
-
-	// Start periodic metrics fetching
-	go func() {
-		ms.PeriodicFetchMetrics(ctx)
-	}()
 }
 
 func (ms *MetricsServer) Wait() {

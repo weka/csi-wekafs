@@ -643,6 +643,16 @@ func getOwnNamespace() (string, error) {
 			}
 		}
 	}
+	// read namespace from file
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to read namespace from %s: %w", file, err)
+	}
+	namespace := strings.TrimSpace(string(data))
+	if namespace != "" {
+		return namespace, nil
+	}
+
 	return "", errors.New("namespace not found or not set in environment variable LEADER_ELECTION_NAMESPACE")
 	// Get the namespace from the environment variable
 }

@@ -11,7 +11,7 @@ imagePullSecret: ""
 hostNetwork: false
 metricsServer:
   # -- Number of replicas for metrics server
-  replicas: 1
+  replicas: 2
   # -- optional nodeSelector for metrics server only
   nodeSelector: {}
   # -- optional affinity for metrics server only

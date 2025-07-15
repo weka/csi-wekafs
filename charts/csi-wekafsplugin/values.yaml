@@ -105,7 +105,7 @@ metricsServer:
   #    NOTE: this implies that the CSI plugin will get access to all Kubernetes PVs, and fetch their credentials, then query WEKA cluster for those metrics
   enabled: true
   # -- Number of replicas for metrics server
-  replicas: 1
+  replicas: 2
   # -- optional nodeSelector for metrics server only
   nodeSelector: {}
   # -- optional affinity for metrics server only
