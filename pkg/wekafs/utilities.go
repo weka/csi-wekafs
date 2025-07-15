@@ -631,3 +631,18 @@ func (api *ApiStore) getLockForHash(hash uint32) *sync.Mutex {
 	lockIface, _ := api.locks.LoadOrStore(hash, &sync.Mutex{})
 	return lockIface.(*sync.Mutex)
 }
+
+func getOwnNamespace() (string, error) {
+	file := "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	// Check if the file exists
+	if _, err := os.Stat(file); err != nil {
+		if os.IsNotExist(err) {
+			// If the file does not exist, return a default namespace
+			if os.Getenv("LEADER_ELECTION_NAMESPACE") != "" {
+				return os.Getenv("LEADER_ELECTION_NAMESPACE"), nil
+			}
+		}
+	}
+	return "", errors.New("namespace not found or not set in environment variable LEADER_ELECTION_NAMESPACE")
+	// Get the namespace from the environment variable
+}

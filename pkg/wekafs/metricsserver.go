@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
+
+	"github.com/go-logr/zerologr"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
 	v1 "k8s.io/api/core/v1"
@@ -20,6 +22,7 @@ import (
 	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	clog "sigs.k8s.io/controller-runtime/pkg/log"
 	"slices"
 	"sync"
 	"time"
@@ -183,11 +186,30 @@ func (ms *MetricsServer) initManager(ctx context.Context) {
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+
+	pprofBindAddress := os.Getenv("PPROF_BIND_ADDRESS")
+	if pprofBindAddress != "" {
+		logger.Info().Str("pprof_bind_address", pprofBindAddress).Msg("Using PPROF_BIND_ADDRESS environment variable for pprof binding address")
+	}
+
+	namespace, err := getOwnNamespace()
+	if err != nil {
+		logger.Error().Msg("Namespace not detected and not set, not using Leader Election mechanism")
+	}
+	zerologr.NameFieldName = "logger"
+	zerologr.NameSeparator = "/"
+	zerologr.SetMaxV(1)
+	var logrLog = zerologr.New(logger)
+
 	ms.manager, err = ctrl.NewManager(config, ctrl.Options{
-		Scheme:           scheme,
-		LeaderElection:   ms.getConfig().enableMetricsServerLeaderElection,
-		LeaderElectionID: "csimetricsad0b5146.weka.io",
+		Scheme:                  scheme,
+		LeaderElection:          ms.getConfig().enableMetricsServerLeaderElection,
+		LeaderElectionID:        "csimetricsad0b5146.weka.io",
+		LeaderElectionNamespace: namespace,
+		PprofBindAddress:        pprofBindAddress,
 	})
+	clog.SetLogger(logrLog)
+
 	if err != nil {
 		logger.Error().Err(err).Msg("unable to start manager")
 		Die("unable to start manager, cannot run MetricsServer without it")
