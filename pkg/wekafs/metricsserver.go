@@ -702,7 +702,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 				ms.wg.Done()
 				return
 			default:
-				// Keep the goroutine alive to listen for incoming requests
+				time.Sleep(100 * time.Millisecond) // Prevent busy loop
 			}
 		}
 	}()
