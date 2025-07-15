@@ -37,7 +37,7 @@ func init() {
 }
 
 var (
-	csiMode                            = wekafs.CsiPluginMode("metricserver")
+	csiMode                            = wekafs.CsiModeMetricsServer
 	driverName                         = flag.String("drivername", "csi.weka.io", "name of the driver")
 	nodeID                             = flag.String("nodeid", "", "node id")
 	showVersion                        = flag.Bool("version", false, "Show version.")
@@ -184,7 +184,7 @@ func handle(ctx context.Context) {
 		time.Duration(*wekametricsfetchintervalseconds)*time.Second,
 		*wekametricsfetchconcurrentrequests,
 	)
-	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, "", 0, version, csiMode, false, config)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, "/dev/null", 0, version, csiMode, false, config)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

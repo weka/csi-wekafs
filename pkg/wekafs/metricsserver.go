@@ -133,8 +133,6 @@ type VolumeMetric struct {
 
 // NewMetricsServer initializes a new MetricsServer instance
 func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
-	ctx := context.Background()
-
 	if driver == nil {
 		panic("Driver is nil")
 	}
@@ -150,7 +148,6 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		persistentVolumesChan: make(chan *v1.PersistentVolume, driver.config.wekaMetricsFetchConcurrentRequests),
 		wg:                    sync.WaitGroup{},
 	}
-	ret.Start(ctx)
 	return ret
 
 }
@@ -249,24 +246,6 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 		Die("unable to start manager, cannot run MetricsServer without it")
 	}
 
-	//httpClient, err := rest.HTTPClientFor(mgr.GetConfig())
-	//if err != nil {
-	//	logger.Error().Err(err).Msg("Unable to create http client")
-	//	Die("unable to start HTTP client, cannot run MetricsServer without it")
-	//}
-
-	//gvk := schema.GroupVersionKind{
-	//	Group:   "",
-	//	Version: "v1",
-	//	Kind:    "PersistentVolume",
-	//}
-	//restClient, err := apiutil.RESTClientForGVK(gvk, false, mgr.GetConfig(), serializer.NewCodecFactory(mgr.GetScheme()), httpClient)
-	//if err != nil {
-	//	logger.Error().Err(err).Msg("unable to create rest client")
-	//	Die("unable to start REST client, cannot run MetricsServer without it")
-	//}
-
-	//cachedClient, err := client.New(config, client.Options{})
 	dur := ms.getConfig().wekaMetricsFetchInterval
 	go func() {
 		if err := mgr.Start(ctx); err != nil {
@@ -274,6 +253,7 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 			Die("unable to start manager, cannot run MetricsServer without it")
 		}
 	}()
+	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
 	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
@@ -689,8 +669,8 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	ms.Unlock()
 
 	// Initialize the incoming requests channel and report all incoming prometheusMetrics
+	ms.wg.Add(1)
 	go func() {
-		ms.wg.Add(1)
 
 		ms.volumeMetricsChan = make(chan *VolumeMetric, ms.config.wekaMetricsFetchConcurrentRequests)
 		for {
@@ -724,22 +704,24 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	go func() {
 		ms.PeriodicFetchMetrics(ctx)
 	}()
+}
+
+func (ms *MetricsServer) Wait() {
 	ms.wg.Wait()
 }
 
 func (ms *MetricsServer) Stop(ctx context.Context) {
-	component := "StopMetricsServer"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
+	if ms == nil {
+		return // Nothing to stop
+	}
 	ms.Lock()
 	defer ms.Unlock()
 	if !ms.running {
 		return // Already stopped
 	}
-	ms.running = false
 	close(ms.volumeMetricsChan)     // Close the channel to stop reporting prometheusMetrics
 	close(ms.persistentVolumesChan) // Close the channel to stop streaming PersistentVolumes
-	logger.Info().Msg("Metrics server stopped")
+	ms.wg.Done()
+	ms.running = false
+	log.Info().Msg("Metrics server stopped")
 }
