@@ -76,6 +76,9 @@ spec:
           {{- if .Values.metricsServer.metricsFetchIntervalSeconds | default 60 }}
             - "--wekametricsfetchintervalseconds={{ .Values.metricsServer.metricsFetchIntervalSeconds }}"
           {{- end }}
+          {{- if .Values.metricsServer.enableLeaderElection | default false }}
+            - "--enablemetricsserverleaderelection"
+          {{- end }}
           ports:
             {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}

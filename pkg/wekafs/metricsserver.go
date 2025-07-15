@@ -90,6 +90,7 @@ type MetricsServer struct {
 	prometheusMetrics *PrometheusMetrics
 	running           bool
 
+	manager               ctrl.Manager
 	persistentVolumesChan chan *v1.PersistentVolume // channel for streaming PersistentVolume objects for further processing
 	volumeMetricsChan     chan *VolumeMetric        // channel for incoming requests
 	sync.Mutex
@@ -157,6 +158,50 @@ func (ms *MetricsServer) GetK8sApi() *kubernetes.Clientset {
 	return ms.driver.GetK8sApiClient()
 }
 
+func (ms *MetricsServer) initManager(ctx context.Context) {
+	logger := log.Ctx(ctx)
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		if errors.Is(err, rest.ErrNotInCluster) {
+			log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+			// Fallback to using kubeconfig from the local environment
+			kubeconfig := os.Getenv("KUBECONFIG")
+			if kubeconfig == "" {
+				log.Error().Msg("KUBECONFIG environment variable is not set")
+				Die("KUBECONFIG environment variable is not set, cannot run MetricsServer without it and not in cluster")
+			}
+			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
+				Die("Failed to create config from kubeconfig file, cannot run MetricsServer without it")
+			}
+		} else {
+			log.Error().Err(err).Msg("Failed to create in-cluster config")
+			Die("Failed to create in-cluster config, cannot run MetricsServer without it")
+		}
+	}
+
+	scheme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	ms.manager, err = ctrl.NewManager(config, ctrl.Options{
+		Scheme:           scheme,
+		LeaderElection:   ms.getConfig().enableMetricsServerLeaderElection,
+		LeaderElectionID: "csimetricsad0b5146.weka.io",
+	})
+	if err != nil {
+		logger.Error().Err(err).Msg("unable to start manager")
+		Die("unable to start manager, cannot run MetricsServer without it")
+	}
+
+	go func() {
+		if err := ms.manager.Start(ctx); err != nil {
+			logger.Error().Err(err).Msg("unable to start manager")
+			Die("unable to start manager, cannot run MetricsServer without it")
+		}
+	}()
+
+}
+
 func (ms *MetricsServer) getFullListOfPersistentVolumes(ctx context.Context, out chan<- *v1.PersistentVolume) error {
 	if ms.GetK8sApi() == nil {
 		close(out)
@@ -202,63 +247,10 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 
 	out := ms.persistentVolumesChan
 
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		if errors.Is(err, rest.ErrNotInCluster) {
-			log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
-			// Fallback to using kubeconfig from the local environment
-			kubeconfig := os.Getenv("KUBECONFIG")
-			if kubeconfig == "" {
-				log.Error().Msg("KUBECONFIG environment variable is not set")
-				Die("KUBECONFIG environment variable is not set, cannot run MetricsServer without it and not in cluster")
-			}
-			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
-				Die("Failed to create config from kubeconfig file, cannot run MetricsServer without it")
-			}
-		} else {
-			log.Error().Err(err).Msg("Failed to create in-cluster config")
-			Die("Failed to create in-cluster config, cannot run MetricsServer without it")
-		}
-	}
-
-	scheme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	mgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme:           scheme,
-		LeaderElection:   ms.getConfig().enableMetricsServerLeaderElection,
-		LeaderElectionID: "csimetricsad0b5146.weka.io",
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
-	})
-	if err != nil {
-		logger.Error().Err(err).Msg("unable to start manager")
-		Die("unable to start manager, cannot run MetricsServer without it")
-	}
-
-	dur := ms.getConfig().wekaMetricsFetchInterval
-	go func() {
-		if err := mgr.Start(ctx); err != nil {
-			logger.Error().Err(err).Msg("unable to start manager")
-			Die("unable to start manager, cannot run MetricsServer without it")
-		}
-	}()
-	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
-	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
 		pvList := &v1.PersistentVolumeList{}
-		err = mgr.GetClient().List(ctx, pvList, &client.ListOptions{})
+		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{})
 		//err = restClient.Get()
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
@@ -274,6 +266,7 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 			}
 		}
 		ms.pruneOldVolumes(ctx, &(pvList.Items))
+		dur := ms.getConfig().wekaMetricsFetchInterval
 
 		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_diration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
 
@@ -667,6 +660,13 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	}
 	ms.running = true
 	ms.Unlock()
+
+	ms.initManager(ctx) // Initialize the controller-runtime manager
+
+	// TODO: make sure that we do not continue further till leader election lease is acquired
+
+	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
+	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
 
 	// Initialize the incoming requests channel and report all incoming prometheusMetrics
 	ms.wg.Add(1)

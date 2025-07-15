@@ -76,6 +76,7 @@ func (dc *DriverConfig) Log() {
 		Str("nfs_protocol_version", dc.nfsProtocolVersion).
 		Str("weka_metrics_fetch_interval", dc.wekaMetricsFetchInterval.String()).
 		Int64("weka_metrics_fetch_concurrent_requests", dc.wekaMetricsFetchConcurrentRequests).
+		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -95,6 +96,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	manageNodeTopologyLabels bool,
 	wekaMetricsFetchInterval time.Duration,
 	wekaMetricsFetchConcurrentRequests int64,
+	enableMetricsServerLeaderElection bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -146,6 +148,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		manageNodeTopologyLabels:           manageNodeTopologyLabels,
 		wekaMetricsFetchInterval:           wekaMetricsFetchInterval,
 		wekaMetricsFetchConcurrentRequests: wekaMetricsFetchConcurrentRequests,
+		enableMetricsServerLeaderElection:  enableMetricsServerLeaderElection,
 	}
 }
 

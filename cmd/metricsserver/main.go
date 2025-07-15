@@ -50,6 +50,7 @@ var (
 	grpcRequestTimeoutSeconds          = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
 	wekametricsfetchintervalseconds    = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
 	wekametricsfetchconcurrentrequests = flag.Int64("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
+	enableMetricsServerLeaderElection  = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
 	// Set by the build process
 	version = ""
 )
@@ -183,6 +184,7 @@ func handle(ctx context.Context) {
 		false,
 		time.Duration(*wekametricsfetchintervalseconds)*time.Second,
 		*wekametricsfetchconcurrentrequests,
+		*enableMetricsServerLeaderElection,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, "/dev/null", 0, version, csiMode, false, config)
 	if err != nil {
