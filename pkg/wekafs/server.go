@@ -34,15 +34,15 @@ import (
 //goland:noinspection GoExportedFuncWithUnexportedType
 func NewNonBlockingGRPCServer(mode CsiPluginMode) *nonBlockingGRPCServer {
 	return &nonBlockingGRPCServer{
-		csiMmode: mode,
+		csiMode: mode,
 	}
 }
 
 // NonBlocking server
 type nonBlockingGRPCServer struct {
-	wg       sync.WaitGroup
-	server   *grpc.Server
-	csiMmode CsiPluginMode
+	wg      sync.WaitGroup
+	server  *grpc.Server
+	csiMode CsiPluginMode
 }
 
 func (s *nonBlockingGRPCServer) Start(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
@@ -73,48 +73,50 @@ func (s *nonBlockingGRPCServer) ForceStop() {
 
 func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
 
-	proto, addr, err := parseEndpoint(endpoint)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
+	var listener net.Listener
+	if s.csiMode != CsiModeMetricsServer {
+		proto, addr, err := parseEndpoint(endpoint)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
 
-	if proto == "unix" {
-		addr = "/" + addr
-		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
-			Die(fmt.Sprintf("Failed to remove %s, error: %s", addr, err.Error()))
+		if proto == "unix" {
+			addr = "/" + addr
+			if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
+				Die(fmt.Sprintf("Failed to remove %s, error: %s", addr, err.Error()))
+			}
+		}
+
+		listener, err = net.Listen(proto, addr)
+		if err != nil {
+			Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
 		}
 	}
-
-	listener, err := net.Listen(proto, addr)
-	if err != nil {
-		Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
-	}
-
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(logGRPC),
 	}
 	server := grpc.NewServer(opts...)
 	s.server = server
 
-	if s.csiMmode != CsiModeMetricsServer {
+	if s.csiMode != CsiModeMetricsServer {
 		log.Info().Msg("Registering GRPC IdentityServer")
 		csi.RegisterIdentityServer(server, ids)
 	}
 
-	if s.csiMmode == CsiModeController || s.csiMmode == CsiModeAll {
+	if s.csiMode == CsiModeController || s.csiMode == CsiModeAll {
 		if cs != nil {
 			log.Info().Msg("Registering GRPC ControllerServer")
 			csi.RegisterControllerServer(server, cs)
 		}
 	}
-	if s.csiMmode == CsiModeNode || s.csiMmode == CsiModeAll {
+	if s.csiMode == CsiModeNode || s.csiMode == CsiModeAll {
 		if ns != nil {
 			log.Info().Msg("Registering GRPC NodeServer")
 			csi.RegisterNodeServer(server, ns)
 		}
 	}
 
-	if s.csiMmode != CsiModeMetricsServer {
+	if s.csiMode != CsiModeMetricsServer {
 		log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
 	}
 

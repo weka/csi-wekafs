@@ -126,14 +126,20 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		} else {
 			log.Info().Msg("Received SIGTERM/SIGINT, stopping server")
 		}
+		driver.ms.Stop(ctx)
 		s.Stop()
-		log.Info().Msg("Server stopped")
 		os.Exit(1)
 
 	}()
 
-	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
-	s.Wait()
+	if s.csiMode != CsiModeMetricsServer {
+		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
+		s.Wait()
+	}
+	if s.csiMode == CsiModeMetricsServer {
+		driver.ms.Start(ctx)
+		driver.ms.Wait()
+	}
 }
 
 func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
@@ -141,7 +147,7 @@ func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
 		config, err := rest.InClusterConfig()
 		if err != nil {
 			if errors.Is(err, rest.ErrNotInCluster) {
-				log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+				log.Trace().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
 				// Fallback to using kubeconfig from the local environment
 				kubeconfig := os.Getenv("KUBECONFIG")
 				if kubeconfig == "" {
