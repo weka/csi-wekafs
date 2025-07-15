@@ -297,11 +297,16 @@ func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList *[]v1.Persi
 		currentUIDs[pv.UID] = struct{}{}
 	}
 	// Remove metrics for UIDs not present in the current PV list
-	for uid := range ms.volumeMetrics.Metrics {
+	ms.volumeMetrics.Lock()
+	// obtain the current UIDs atomically and release the lock
+	var keys []types.UID
+	for k := range ms.volumeMetrics.Metrics {
+		keys = append(keys, k)
+	}
+	ms.volumeMetrics.Unlock()
+	for _, uid := range keys {
 		if _, exists := currentUIDs[uid]; !exists {
-			ctx, span := otel.Tracer(TracerName).Start(ctx, "pruneOldVolumes")
 			ms.pruneVolumeMetric(ctx, uid)
-			span.End()
 		}
 	}
 }
