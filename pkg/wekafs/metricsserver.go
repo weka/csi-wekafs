@@ -420,6 +420,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		}
 	}
 	apiClient, err := ms.getApiStore().fromSecrets(ctx, secretData, ms.nodeID)
+	apiClient.RotateEndpointOnEachRequest = true // Rotate endpoint on each request to ensure we spread the load across all endpoints
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to create API client from secret, skipping PersistentVolume")
 		return

@@ -31,30 +31,31 @@ type ApiUserRole string
 // Timeout sets max request timeout duration
 type ApiClient struct {
 	sync.Mutex
-	client                     *http.Client
-	Credentials                Credentials
-	ClusterGuid                uuid.UUID
-	ClusterName                string
-	MountEndpoints             []string
-	actualApiEndpoints         map[string]*ApiEndPoint
-	currentEndpoint            string
-	apiToken                   string
-	apiTokenExpiryDate         time.Time
-	refreshToken               string
-	apiTokenExpiryInterval     int64
-	refreshTokenExpiryInterval int64
-	refreshTokenExpiryDate     time.Time
-	CompatibilityMap           *WekaCompatibilityMap
-	clientHash                 uint32
-	hostname                   string
-	NfsInterfaceGroups         map[string]*InterfaceGroup
-	ApiUserRole                ApiUserRole
-	ApiOrgId                   int
-	containerName              string
-	NfsInterfaceGroupName      string
-	NfsClientGroupName         string
-	metrics                    *ApiMetrics
-	driverName                 string
+	client                      *http.Client
+	Credentials                 Credentials
+	ClusterGuid                 uuid.UUID
+	ClusterName                 string
+	MountEndpoints              []string
+	actualApiEndpoints          map[string]*ApiEndPoint
+	currentEndpoint             string
+	apiToken                    string
+	apiTokenExpiryDate          time.Time
+	refreshToken                string
+	apiTokenExpiryInterval      int64
+	refreshTokenExpiryInterval  int64
+	refreshTokenExpiryDate      time.Time
+	CompatibilityMap            *WekaCompatibilityMap
+	clientHash                  uint32
+	hostname                    string
+	NfsInterfaceGroups          map[string]*InterfaceGroup
+	ApiUserRole                 ApiUserRole
+	ApiOrgId                    int
+	containerName               string
+	NfsInterfaceGroupName       string
+	NfsClientGroupName          string
+	metrics                     *ApiMetrics
+	driverName                  string
+	RotateEndpointOnEachRequest bool // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string, driverName string) (*ApiClient, error) {

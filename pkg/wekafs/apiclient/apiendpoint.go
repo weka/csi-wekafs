@@ -145,7 +145,9 @@ func (a *ApiClient) rotateEndpoint(ctx context.Context) {
 	}
 	keys := reflect.ValueOf(a.actualApiEndpoints).MapKeys()
 	key := keys[rand.Intn(len(keys))].String()
-	logger.Debug().Str("new_endpoint", key).Str("previous_endpoint", a.currentEndpoint).Msg("Switched to new API endpoint")
+	if !a.RotateEndpointOnEachRequest {
+		logger.Debug().Str("new_endpoint", key).Str("previous_endpoint", a.currentEndpoint).Msg("Switched to new API endpoint")
+	}
 	a.currentEndpoint = key
 }
 
