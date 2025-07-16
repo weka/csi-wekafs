@@ -297,18 +297,22 @@ func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList *[]v1.Persi
 		currentUIDs[pv.UID] = struct{}{}
 	}
 	// Remove metrics for UIDs not present in the current PV list
+	for _, uid := range ms.fetchMetricKeys(ctx) {
+		if _, exists := currentUIDs[uid]; !exists {
+			ms.pruneVolumeMetric(ctx, uid)
+		}
+	}
+}
+
+func (ms *MetricsServer) fetchMetricKeys(ctx context.Context) []types.UID {
 	ms.volumeMetrics.Lock()
+	defer ms.volumeMetrics.Unlock()
 	// obtain the current UIDs atomically and release the lock
 	var keys []types.UID
 	for k := range ms.volumeMetrics.Metrics {
 		keys = append(keys, k)
 	}
-	ms.volumeMetrics.Unlock()
-	for _, uid := range keys {
-		if _, exists := currentUIDs[uid]; !exists {
-			ms.pruneVolumeMetric(ctx, uid)
-		}
-	}
+	return keys
 }
 
 func (ms *MetricsServer) removePrometheusMetricsForLabels(ctx context.Context, metric *VolumeMetric) {
@@ -521,10 +525,14 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 	component := "FetchMetrics"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
+	logger := log.Ctx(ctx).With().Str("component", component).Str("span_id", span.SpanContext().SpanID().String()).Str("trace_id", span.SpanContext().TraceID().String()).Logger()
 	wg := &sync.WaitGroup{}
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
-
-	for _, vm := range ms.volumeMetrics.Metrics {
+	keys := ms.fetchMetricKeys(ctx)
+	logger.Info().Int("pv_count", len(keys)).Msg("Starting to fetch prometheusMetrics for PersistentVolumes")
+	defer logger.Info().Int("pv_count", len(keys)).Msg("Fetched PrometheusMetrics")
+	for _, key := range ms.fetchMetricKeys(ctx) {
+		vm := ms.volumeMetrics.GetVolumeMetric(key)
 		wg.Add(1)
 		sem <- struct{}{} // Acquire a slot in the semaphore
 
@@ -534,7 +542,7 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 
 			err := ms.fetchSingleMetric(ctx, vm)
 			if err != nil {
-				fmt.Printf("failed to fetch prometheusMetrics for persistent volume %s: %v\n", vm.persistentVolume.Name, err)
+				logger.Error().Err(err).Str("pv_name", vm.persistentVolume.Name).Msg("Failed to fetch prometheusMetrics for persistent volume")
 			}
 		}(vm)
 	}
