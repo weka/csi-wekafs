@@ -33,6 +33,14 @@ type StatsResponse struct {
 	} `json:"all,omitempty"`
 }
 
+func (s *StatsResponse) SupportsPagination() bool {
+	return false
+}
+
+func (s *StatsResponse) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("implement me")
+}
+
 func (s *StatsResponse) GetType() string {
 	return "stats"
 }

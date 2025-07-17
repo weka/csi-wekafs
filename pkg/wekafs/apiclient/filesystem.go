@@ -51,6 +51,14 @@ type FileSystem struct {
 	ForceFresh *bool `json:"-" url:"force_fresh,omitempty"`
 }
 
+func (fs *FileSystem) SupportsPagination() bool {
+	return false
+}
+
+func (fs *FileSystem) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("implement me")
+}
+
 func (fs *FileSystem) GetFsIdAsInt() int {
 	// takes the Id in string format "FSId<0>" and extracts the number from it
 	if fs.Id == "" {
@@ -66,9 +74,31 @@ func (fs *FileSystem) GetFsIdAsInt() int {
 	return id
 }
 
+type FileSystems []FileSystem
+
+func (f FileSystems) SupportsPagination() bool {
+	return true
+}
+
+func (f FileSystems) CombinePartialResponse(next ApiObjectResponse) error {
+	if nextFs, ok := next.(*FileSystems); ok {
+		f = append(f, *nextFs...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response type: %T", next)
+}
+
 type FileSystemMountToken struct {
 	Token          string `json:"mount_token,omitempty"`
 	FilesystemName string `json:"filesystem_name,omitempty"`
+}
+
+func (f FileSystemMountToken) SupportsPagination() bool {
+	return false
+}
+
+func (f FileSystemMountToken) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("implement me")
 }
 
 var AsyncOperationTimedOut = errors.New("Asynchronous operation timed out")
@@ -109,7 +139,7 @@ func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSyst
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	ret := &[]FileSystem{}
+	ret := &FileSystems{}
 	q, _ := qs.Values(query)
 	err := a.Get(ctx, query.GetBasePath(a), q, ret)
 	if err != nil {
@@ -243,7 +273,7 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsName string) error {
 	logger := log.Ctx(ctx)
 	logger.Trace().Str("filesystem", fsName).Msg("Ensuring no NFS permissions for filesystem")
-	permissions := &[]NfsPermission{}
+	permissions := &NfsPermissions{}
 	err := a.FindNfsPermissionsByFilesystem(ctx, fsName, permissions)
 	if err != nil {
 		logger.Error().Err(err).Str("filesystem", fsName).Msg("Failed to list NFS permissions")

@@ -63,7 +63,7 @@ func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
 func (a *ApiClient) fetchMountEndpoints(ctx context.Context) error {
 	log.Ctx(ctx).Trace().Msg("Fetching mount endpoints")
 	a.MountEndpoints = []string{}
-	nodes := &[]WekaNode{}
+	nodes := &WekaNodes{}
 	err := a.GetNodesByRole(ctx, NodeRoleBackend, nodes)
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func (a *ApiClient) fetchMountEndpoints(ctx context.Context) error {
 // UpdateApiEndpoints fetches current management IP addresses of the cluster
 func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 	logger := log.Ctx(ctx)
-	nodes := &[]WekaNode{}
+	nodes := &WekaNodes{}
 	err := a.GetNodesByRole(ctx, NodeRoleManagement, nodes)
 	if err != nil {
 		return err
