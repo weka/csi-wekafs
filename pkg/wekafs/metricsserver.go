@@ -42,48 +42,6 @@ func NewSecretsStore() *SecretsStore {
 	}
 }
 
-type VolumeMetrics struct {
-	sync.Mutex
-	Metrics map[types.UID]*VolumeMetric
-}
-
-func (vms *VolumeMetrics) HasVolumeMetric(pvUID types.UID) bool {
-	vms.Lock()
-	defer vms.Unlock()
-	_, exists := vms.Metrics[pvUID]
-	return exists
-}
-
-func (vms *VolumeMetrics) GetVolumeMetric(pvUID types.UID) *VolumeMetric {
-	vms.Lock()
-	defer vms.Unlock()
-	if _, exists := vms.Metrics[pvUID]; exists {
-		return vms.Metrics[pvUID]
-	}
-	return nil
-}
-
-func (vms *VolumeMetrics) AddVolumeMetric(pvUID types.UID, metric *VolumeMetric) {
-	vms.Lock()
-	defer vms.Unlock()
-	if vms.Metrics == nil {
-		vms.Metrics = make(map[types.UID]*VolumeMetric)
-	}
-	vms.Metrics[pvUID] = metric
-}
-
-func (vms *VolumeMetrics) RemoveVolumeMetric(pvUID types.UID) {
-	vms.Lock()
-	defer vms.Unlock()
-	delete(vms.Metrics, pvUID)
-}
-
-func NewVolumeMetrics() *VolumeMetrics {
-	return &VolumeMetrics{
-		Metrics: make(map[types.UID]*VolumeMetric),
-	}
-}
-
 type MetricsServer struct {
 	nodeID            string
 	api               *ApiStore
@@ -99,6 +57,10 @@ type MetricsServer struct {
 	manager               ctrl.Manager
 	persistentVolumesChan chan *v1.PersistentVolume // channel for streaming PersistentVolume objects for further processing
 	volumeMetricsChan     chan *VolumeMetric        // channel for incoming requests
+
+	quotaMaps              *QuotaMapsPerFilesystem
+	observedFilesystemUids *ObservedFilesystemUids // to track observed filesystem UIDs and their reference counts and API clients (for quota maps periodic updates)
+
 	sync.Mutex
 	wg sync.WaitGroup // WaitGroup to manage goroutines
 }
@@ -129,15 +91,6 @@ func (ms *MetricsServer) getNodeId() string {
 	return ms.driver.nodeID
 }
 
-// VolumeMetric represents the prometheusMetrics for a single Persistent Volume in Kubernetes
-type VolumeMetric struct {
-	persistentVolume *v1.PersistentVolume // object that represents the Kubernetes Persistent Volume
-	volume           *Volume              // object that represents the Weka CSI Volume
-	metrics          *PvStats             // Weka metrics for the volume including capacity, used, free, reads, writes, readBytes, writeBytes, writeThroughput
-	secret           *v1.Secret           // Kubernetes Secret associated with the volume
-	apiClient        *apiclient.ApiClient // reference to the Weka API client
-}
-
 // NewMetricsServer initializes a new MetricsServer instance
 func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 	if driver == nil {
@@ -154,6 +107,9 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		prometheusMetrics:     NewPrometheusMetrics(),
 		persistentVolumesChan: make(chan *v1.PersistentVolume, driver.config.wekaMetricsFetchConcurrentRequests),
 		wg:                    sync.WaitGroup{},
+
+		quotaMaps:              NewQuotaMapsPerFilesystem(),
+		observedFilesystemUids: NewObservedFilesystemUids(),
 	}
 	return ret
 
@@ -234,7 +190,7 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
 		pvList := &v1.PersistentVolumeList{}
-		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{})
+		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{Limit: 5})
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
 			ms.prometheusMetrics.FetchPvBatchOperationFailureCount.Inc()
@@ -331,6 +287,14 @@ func (ms *MetricsServer) pruneVolumeMetric(ctx context.Context, pvUUID types.UID
 	defer ms.prometheusMetrics.PersistentVolumesRemovedFromMetricsCollection.Inc()
 
 	metric := ms.volumeMetrics.GetVolumeMetric(pvUUID)
+
+	// decrease refcounter to a filesystem
+	fsObj, err := metric.volume.getFilesystemObj(ctx, true)
+	if err != nil {
+		logger.Error().Err(err).Str("pv_uid", string(pvUUID)).Msg("Failed to get filesystem object for volume metric, skipping removal")
+	}
+
+	ms.observedFilesystemUids.decRef(fsObj) // actually decrease refcounter
 	ms.volumeMetrics.RemoveVolumeMetric(pvUUID)
 	ms.removePrometheusMetricsForLabels(ctx, metric)
 	logger.Info().Str("pv_uid", string(pvUUID)).Msg("Removed persistent volume from metric collection")
@@ -420,11 +384,11 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		}
 	}
 	apiClient, err := ms.getApiStore().fromSecrets(ctx, secretData, ms.nodeID)
-	apiClient.RotateEndpointOnEachRequest = true // Rotate endpoint on each request to ensure we spread the load across all endpoints
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to create API client from secret, skipping PersistentVolume")
 		return
 	}
+	apiClient.RotateEndpointOnEachRequest = true // Rotate endpoint on each request to ensure we spread the load across all endpoints
 
 	volume, err := NewVolumeFromId(ctx, pv.Spec.CSI.VolumeHandle, apiClient, ms)
 	if err != nil {
@@ -433,6 +397,14 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	}
 	volume.persistentVol = pv // Set the PersistentVolume reference in the Volume object
 	// Create a new VolumeMetric instance
+
+	fsObj, err := volume.getFilesystemObj(ctx, true)
+	if err != nil {
+		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
+		return
+	}
+	ms.observedFilesystemUids.incRef(fsObj, apiClient) // Add the filesystem to the observed list
+
 	metric := &VolumeMetric{
 		persistentVolume: pv,
 		volume:           volume,
@@ -518,11 +490,13 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	}()
 
 	// Fetch prometheusMetrics for a single persistent volume
-	logger.Trace().Str("persistent_volume", vm.persistentVolume.Name).Msg("Fetching Metric")
-
-	qosMetric, err := vm.volume.FetchPvStats(ctx)
+	logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric")
+	qosMetric, err := ms.FetchPvStats(ctx, vm.volume)
 	if err != nil {
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
+	}
+	if qosMetric == nil {
+		return fmt.Errorf("no metric data available for persistent volume %s", vm.persistentVolume.Name)
 	}
 
 	vm.metrics = qosMetric
@@ -563,6 +537,12 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 		sem <- struct{}{} // Acquire a slot in the semaphore
 
 		go func(vm *VolumeMetric) {
+			if vm == nil || vm.persistentVolume == nil {
+				logger.Error().Str("pv_uid", string(key)).Msg("VolumeMetric or PersistentVolume is nil, skipping")
+				wg.Done()
+				<-sem // Release the slot in the semaphore
+				return
+			}
 			defer wg.Done()
 			defer func() { <-sem }() // Release the slot in the semaphore
 
@@ -575,6 +555,59 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 
 	wg.Wait()
 	return nil
+}
+
+// func (v *Volume) fetchPvUsageStats(ctx context.Context) (*UsageStats, error) {
+//	q, err := v.getQuota(ctx)
+//	if err != nil {
+//		return nil, err
+//	}
+//	if q != nil {
+//		return &UsageStats{
+//			Capacity: int64(q.HardLimitBytes),
+//			Used:     int64(q.UsedBytes),
+//			Free:     int64(q.HardLimitBytes - q.UsedBytes),
+//		}, nil
+//	}
+//	return nil, errors.New("no usage stats available")
+//}
+
+func (ms *MetricsServer) fetchPvUsageStats(ctx context.Context, v *Volume) (*UsageStats, error) {
+	inodeId, err := v.getInodeId(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inode ID for volume %s: %w", v.persistentVol.Name, err)
+	}
+	fsObj, err := v.getFilesystemObj(ctx, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get filesystem object for volume %s: %w", v.persistentVol.Name, err)
+	}
+	if fsObj == nil {
+		return nil, fmt.Errorf("failed to get filesystem object for volume %s", v.persistentVol.Name)
+	}
+	quotaMap, err := ms.GetQuotaMapForFilesystem(ctx, fsObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quota map for filesystem %s: %w", fsObj.Name, err)
+	}
+	if quotaMap == nil {
+		return nil, fmt.Errorf("quota map is nil for filesystem %s", fsObj.Name)
+	}
+	// Find the quota entry for the inode ID
+	quotaEntry := quotaMap.GetQuotaForInodeId(inodeId)
+	if quotaEntry == nil {
+		return &UsageStats{}, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
+	}
+	return &UsageStats{
+		Capacity: int64(quotaEntry.HardLimitBytes),
+		Used:     int64(quotaEntry.UsedBytes),
+		Free:     int64(quotaEntry.HardLimitBytes - quotaEntry.UsedBytes),
+	}, nil
+}
+
+func (ms *MetricsServer) FetchPvStats(ctx context.Context, v *Volume) (*PvStats, error) {
+	ret := &PvStats{}
+	usageStats, err := ms.fetchPvUsageStats(ctx, v)
+	ret.Usage = usageStats
+	return ret, err
 }
 
 // reportMetricsStreamer listens on the volumeMetricsChan channel and reports prometheusMetrics to Prometheus.
@@ -705,9 +738,9 @@ func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
 			err := ms.FetchMetrics(ctx)
 			if err != nil {
 				logger.Error().Err(err).Msg("Error fetching prometheusMetrics")
-				ms.prometheusMetrics.PeriodicFetchMetricsFailureCount.Inc()
-			} else {
 				ms.prometheusMetrics.PeriodicFetchMetricsSuccessCount.Inc()
+			} else {
+				ms.prometheusMetrics.PeriodicFetchMetricsFailureCount.Inc()
 			}
 			ms.periodicFetchRunning = false
 		}
