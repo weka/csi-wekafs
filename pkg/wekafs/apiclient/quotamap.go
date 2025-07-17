@@ -41,8 +41,11 @@ type QuotaMap struct {
 }
 
 func (q *QuotaMap) GetQuotaForInodeId(inodeId uint64) *Quota {
-	quota := q.Quotas[inodeId]
-	return quota
+	if quota, ok := q.Quotas[inodeId]; !ok {
+		return nil // no quota for this inode
+	} else {
+		return quota
+	}
 }
 
 //	 {

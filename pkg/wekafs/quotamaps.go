@@ -24,7 +24,6 @@ func NewQuotaMapsPerFilesystem() *QuotaMapsPerFilesystem {
 		locks:     sync.Map{},
 	}
 }
-
 func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apiclient.FileSystem) (*apiclient.QuotaMap, error) {
 	component := "GetQuotaMapForFilesystem"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
@@ -44,6 +43,7 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 	ms.quotaMaps.Unlock()
 
 	var maplock *sync.Mutex
+
 	l, ok := ms.quotaMaps.locks.Load(fs.Uid)
 	if !ok || l == nil {
 		l = &sync.Mutex{}
@@ -59,34 +59,71 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 			maplock.Unlock()
 			return quotaMap, nil
 		}
+		maplock.Unlock()
 	}
-	// If quotaMap does not exist or is stale, fetch it from the API
-	logger.Debug().Msg("Fetching QuotaMap for filesystem from API")
 
-	apiClient := ms.observedFilesystemUids.GetApiClient(fs.Uid)
-	if apiClient == nil {
-		return nil, fmt.Errorf("no API client found for filesystem UID %s", fs.Uid)
-	}
+	// if another thread already started fetching the quotaMap, wait for it to finish
 	maplock.Lock()
 	defer maplock.Unlock()
 
+	// Re-check if the quotaMap was updated while we were waiting for the lock
+	ms.quotaMaps.Lock()
+	quotaMap, exists = ms.quotaMaps.QuotaMaps[fs.Uid]
+	ms.quotaMaps.Unlock()
 	if exists { // maybe it was updated while we were waiting for the lock
 		// lock the quotaMap to ensure thread safety
-		maplock.Lock()
 		if quotaMap.LastUpdate.Add(ms.getConfig().wekaMetricsFetchInterval).After(time.Now()) {
 			logger.Trace().Str("filesystem", fs.Name).Msg("Returning cached QuotaMap for filesystem")
-			maplock.Unlock()
 			return quotaMap, nil
 		}
 	}
 
+	// If quotaMap does not exist or is stale, fetch it from the API
+	err := ms.updateQuotaMapPerFilesystem(ctx, fs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update QuotaMap for filesystem %s: %w", fs.Name, err)
+	}
+	ms.quotaMaps.Lock()
+	quotaMap, exists = ms.quotaMaps.QuotaMaps[fs.Uid]
+	ms.quotaMaps.Unlock()
+	if !exists {
+		return ms.GetQuotaMapForFilesystem(ctx, fs)
+	}
+	return quotaMap, nil
+}
+
+func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *apiclient.FileSystem) error {
+	component := "updateQuotaMapPerFilesystem"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	var maplock *sync.Mutex
+
+	l, ok := ms.quotaMaps.locks.Load(fs.Uid)
+	if !ok || l == nil {
+		l = &sync.Mutex{}
+		ms.quotaMaps.locks.Store(fs.Uid, l)
+	}
+	maplock = l.(*sync.Mutex)
+
+	logger.Debug().Msg("Fetching QuotaMap for filesystem from API")
+
+	apiClient := ms.observedFilesystemUids.GetApiClient(fs.Uid)
+	if apiClient == nil {
+		return fmt.Errorf("no API client found for filesystem UID %s", fs.Uid)
+	}
+
+	// eventually this thread is the one that will fetch the updated quotaMap
 	quotaMap, err := apiClient.GetQuotaMap(ctx, fs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch QuotaMap for filesystem %s: %w", fs.Name, err)
+		return fmt.Errorf("failed to fetch QuotaMap for filesystem %s: %w", fs.Name, err)
 	}
 
 	ms.quotaMaps.Lock() // ensure thread safety when updating the quotaMaps
+	maplock.Lock()
+	defer maplock.Unlock()
 	defer ms.quotaMaps.Unlock()
 	ms.quotaMaps.QuotaMaps[fs.Uid] = quotaMap
-	return quotaMap, nil
+	return nil
 }
