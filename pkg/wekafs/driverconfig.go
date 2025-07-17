@@ -17,36 +17,37 @@ func (i *MutuallyExclusiveMountOptsStrings) Set(value string) error {
 }
 
 type DriverConfig struct {
-	DynamicVolPath                     string
-	VolumePrefix                       string
-	SnapshotPrefix                     string
-	SeedSnapshotPrefix                 string
-	allowAutoFsCreation                bool
-	allowAutoFsExpansion               bool
-	allowSnapshotsOfDirectoryVolumes   bool
-	advertiseSnapshotSupport           bool
-	advertiseVolumeCloneSupport        bool
-	allowInsecureHttps                 bool
-	alwaysAllowSnapshotVolumes         bool
-	mutuallyExclusiveOptions           []mutuallyExclusiveMountOptionSet
-	maxConcurrencyPerOp                map[string]int64
-	grpcRequestTimeout                 time.Duration
-	allowProtocolContainers            bool
-	allowNfsFailback                   bool
-	useNfs                             bool
-	interfaceGroupName                 string
-	clientGroupName                    string
-	nfsProtocolVersion                 string
-	csiVersion                         string
-	skipGarbageCollection              bool
-	waitForObjectDeletion              bool
-	allowEncryptionWithoutKms          bool
-	driverRef                          *WekaFsDriver
-	tracingUrl                         string
-	manageNodeTopologyLabels           bool
-	wekaMetricsFetchInterval           time.Duration
-	wekaMetricsFetchConcurrentRequests int64
-	enableMetricsServerLeaderElection  bool
+	DynamicVolPath                           string
+	VolumePrefix                             string
+	SnapshotPrefix                           string
+	SeedSnapshotPrefix                       string
+	allowAutoFsCreation                      bool
+	allowAutoFsExpansion                     bool
+	allowSnapshotsOfDirectoryVolumes         bool
+	advertiseSnapshotSupport                 bool
+	advertiseVolumeCloneSupport              bool
+	allowInsecureHttps                       bool
+	alwaysAllowSnapshotVolumes               bool
+	mutuallyExclusiveOptions                 []mutuallyExclusiveMountOptionSet
+	maxConcurrencyPerOp                      map[string]int64
+	grpcRequestTimeout                       time.Duration
+	allowProtocolContainers                  bool
+	allowNfsFailback                         bool
+	useNfs                                   bool
+	interfaceGroupName                       string
+	clientGroupName                          string
+	nfsProtocolVersion                       string
+	csiVersion                               string
+	skipGarbageCollection                    bool
+	waitForObjectDeletion                    bool
+	allowEncryptionWithoutKms                bool
+	driverRef                                *WekaFsDriver
+	tracingUrl                               string
+	manageNodeTopologyLabels                 bool
+	wekaMetricsFetchInterval                 time.Duration
+	wekaMetricsFetchConcurrentRequests       int64
+	enableMetricsServerLeaderElection        bool
+	wekaMetricsQuotaUpdateConcurrentRequests int
 }
 
 func (dc *DriverConfig) Log() {
@@ -77,6 +78,7 @@ func (dc *DriverConfig) Log() {
 		Str("weka_metrics_fetch_interval", dc.wekaMetricsFetchInterval.String()).
 		Int64("weka_metrics_fetch_concurrent_requests", dc.wekaMetricsFetchConcurrentRequests).
 		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
+		Int("weka_metrics_quota_update_concurrent_requests", dc.wekaMetricsQuotaUpdateConcurrentRequests).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -97,6 +99,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	wekaMetricsFetchInterval time.Duration,
 	wekaMetricsFetchConcurrentRequests int64,
 	enableMetricsServerLeaderElection bool,
+	wekaMetricsQuotaUpdateConcurrentRequests int,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -120,35 +123,36 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
 
 	return &DriverConfig{
-		DynamicVolPath:                     dynamicVolPath,
-		VolumePrefix:                       VolumePrefix,
-		SnapshotPrefix:                     SnapshotPrefix,
-		SeedSnapshotPrefix:                 SeedSnapshotPrefix,
-		allowAutoFsCreation:                allowAutoFsCreation,
-		allowAutoFsExpansion:               allowAutoFsExpansion,
-		allowSnapshotsOfDirectoryVolumes:   allowSnapshotsOfDirectoryVolumes,
-		advertiseSnapshotSupport:           !suppressnapshotSupport,
-		advertiseVolumeCloneSupport:        !suppressVolumeCloneSupport,
-		allowInsecureHttps:                 allowInsecureHttps,
-		alwaysAllowSnapshotVolumes:         alwaysAllowSnapshotVolumes,
-		mutuallyExclusiveOptions:           MutuallyExclusiveMountOptions,
-		maxConcurrencyPerOp:                concurrency,
-		grpcRequestTimeout:                 grpcRequestTimeout,
-		allowProtocolContainers:            allowProtocolContainers,
-		allowNfsFailback:                   allowNfsFailback,
-		useNfs:                             useNfs,
-		interfaceGroupName:                 interfaceGroupName,
-		clientGroupName:                    clientGroupName,
-		nfsProtocolVersion:                 nfsProtocolVersion,
-		csiVersion:                         version,
-		skipGarbageCollection:              skipGarbageCollection,
-		waitForObjectDeletion:              waitForObjectDeletion,
-		allowEncryptionWithoutKms:          allowEncryptionWithoutKms,
-		tracingUrl:                         tracingUrl,
-		manageNodeTopologyLabels:           manageNodeTopologyLabels,
-		wekaMetricsFetchInterval:           wekaMetricsFetchInterval,
-		wekaMetricsFetchConcurrentRequests: wekaMetricsFetchConcurrentRequests,
-		enableMetricsServerLeaderElection:  enableMetricsServerLeaderElection,
+		DynamicVolPath:                           dynamicVolPath,
+		VolumePrefix:                             VolumePrefix,
+		SnapshotPrefix:                           SnapshotPrefix,
+		SeedSnapshotPrefix:                       SeedSnapshotPrefix,
+		allowAutoFsCreation:                      allowAutoFsCreation,
+		allowAutoFsExpansion:                     allowAutoFsExpansion,
+		allowSnapshotsOfDirectoryVolumes:         allowSnapshotsOfDirectoryVolumes,
+		advertiseSnapshotSupport:                 !suppressnapshotSupport,
+		advertiseVolumeCloneSupport:              !suppressVolumeCloneSupport,
+		allowInsecureHttps:                       allowInsecureHttps,
+		alwaysAllowSnapshotVolumes:               alwaysAllowSnapshotVolumes,
+		mutuallyExclusiveOptions:                 MutuallyExclusiveMountOptions,
+		maxConcurrencyPerOp:                      concurrency,
+		grpcRequestTimeout:                       grpcRequestTimeout,
+		allowProtocolContainers:                  allowProtocolContainers,
+		allowNfsFailback:                         allowNfsFailback,
+		useNfs:                                   useNfs,
+		interfaceGroupName:                       interfaceGroupName,
+		clientGroupName:                          clientGroupName,
+		nfsProtocolVersion:                       nfsProtocolVersion,
+		csiVersion:                               version,
+		skipGarbageCollection:                    skipGarbageCollection,
+		waitForObjectDeletion:                    waitForObjectDeletion,
+		allowEncryptionWithoutKms:                allowEncryptionWithoutKms,
+		tracingUrl:                               tracingUrl,
+		manageNodeTopologyLabels:                 manageNodeTopologyLabels,
+		wekaMetricsFetchInterval:                 wekaMetricsFetchInterval,
+		wekaMetricsFetchConcurrentRequests:       wekaMetricsFetchConcurrentRequests,
+		enableMetricsServerLeaderElection:        enableMetricsServerLeaderElection,
+		wekaMetricsQuotaUpdateConcurrentRequests: wekaMetricsQuotaUpdateConcurrentRequests,
 	}
 }
 

@@ -75,6 +75,9 @@ spec:
           {{- if .Values.metricsServer.enableLeaderElection | default false }}
             - "--enablemetricsserverleaderelection"
           {{- end }}
+          {{- if .Values.metricsServer.quotaUpdateConcurrentRequests }}
+            - "--wekametricsquotaupdateconcurrentrequests={{ .Values.metricsServer.quotaUpdateConcurrentRequests }}"
+          {{- end }}
           ports:
             {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}

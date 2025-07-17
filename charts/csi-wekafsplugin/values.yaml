@@ -124,6 +124,9 @@ metricsServer:
   terminationGracePeriodSeconds: 10
   # -- enable leader election for metrics server
   enableLeaderElection: true
+  # -- number of concurrent requests for metrics server to update quota lists for a whole filesystem
+  quotaUpdateConcurrentRequests: 5
+
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)

@@ -894,6 +894,21 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 		Die("Failed to add PeriodicFetchMetrics to manager, cannot run MetricsServer without it")
 	}
 
+	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		logger.Info().Msg("Leader elected, starting PeriodicUpdateQuotaMaps")
+
+		go ms.PeriodicUpdateQuotaMaps(ctx)
+
+		// Wait until leadership is lost or shutdown
+		<-ctx.Done()
+		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
+		return nil
+	}))
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
+		Die("Failed to add PeriodicUpdateQuotaMaps to manager, cannot run MetricsServer without it")
+	}
+
 	go func() {
 		if err := ms.manager.Start(ctx); err != nil {
 			logger.Error().Err(err).Msg("Cannot continue running MetricsServer")
