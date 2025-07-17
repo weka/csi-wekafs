@@ -62,10 +62,6 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 		maplock.Unlock()
 	}
 
-	// if another thread already started fetching the quotaMap, wait for it to finish
-	maplock.Lock()
-	defer maplock.Unlock()
-
 	// Re-check if the quotaMap was updated while we were waiting for the lock
 	ms.quotaMaps.Lock()
 	quotaMap, exists = ms.quotaMaps.QuotaMaps[fs.Uid]
@@ -107,7 +103,8 @@ func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *ap
 	}
 	maplock = l.(*sync.Mutex)
 
-	logger.Debug().Msg("Fetching QuotaMap for filesystem from API")
+	logger.Info().Str("filesystem", fs.Name).Msg("Updating QuotaMap for filesystem")
+	defer logger.Info().Str("filesystem", fs.Name).Msg("Finished Updating QuotaMap for filesystem")
 
 	apiClient := ms.observedFilesystemUids.GetApiClient(fs.Uid)
 	if apiClient == nil {

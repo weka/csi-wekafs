@@ -139,7 +139,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 		MetricsLabels,
 	)
-	prometheus.MustRegister(m.Capacity, m.Used, m.Free, m.Reads, m.ReadBytes, m.ReadDurationUs, m.Writes, m.WriteBytes, m.WriteDurationUs)
+	prometheus.MustRegister(m.Capacity, m.Used, m.Free, m.PvCapacity, m.Reads, m.ReadBytes, m.ReadDurationUs, m.Writes, m.WriteBytes, m.WriteDurationUs)
 
 	// metricsserver own metrics
 	m.FetchPvBatchOperations = prometheus.NewCounter(prometheus.CounterOpts{

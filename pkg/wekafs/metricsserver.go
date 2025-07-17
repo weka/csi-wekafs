@@ -493,6 +493,7 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 
 	// Fetch prometheusMetrics for a single persistent volume
 	logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric")
+	defer logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric completed")
 	qosMetric, err := ms.FetchPvStats(ctx, vm.volume)
 	if err != nil {
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
@@ -532,7 +533,7 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 	}()
 
 	logger.Info().Int("pv_count", len(keys)).Msg("Starting to fetch prometheusMetrics for PersistentVolumes")
-	defer logger.Info().Int("pv_count", len(keys)).Msg("Fetched PrometheusMetrics")
+	defer logger.Info().Int("pv_count", len(keys)).Msg("Finished to fetch prometheusMetrics for PersistentVolumes")
 	for _, key := range keys {
 		vm := ms.volumeMetrics.GetVolumeMetric(key)
 		wg.Add(1)
@@ -729,15 +730,17 @@ func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
 }
 
 func (ms *MetricsServer) PeriodicUpdateQuotaMaps(ctx context.Context) {
-	sem := make(chan struct{}, 10) // limit to 10 concurrent goroutines
 
+	component := "PeriodicUpdateQuotaMaps"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Msg("Starting to update quota maps")
+	defer logger.Info().Msg("Finished to update quota maps")
+
+	sem := make(chan struct{}, ms.getConfig().wekaMetricsQuotaUpdateConcurrentRequests) // limit concurrent goroutines
 	for fsUid, qm := range ms.observedFilesystemUids.uids {
-		component := "PeriodicUpdateQuotaMaps"
-		ctx, span := otel.Tracer(TracerName).Start(ctx, component)
-		defer span.End()
-		ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
-		logger := log.Ctx(ctx)
-
 		apiClient := qm.apiClient
 		fsObj := &apiclient.FileSystem{}
 		err := apiClient.GetFileSystemByUid(ctx, fsUid, fsObj, false)
@@ -775,6 +778,8 @@ func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
 			logger.Info().Msg("Periodic fetch prometheusMetrics context cancelled, stopping...")
 			return
 		case <-time.After(ticker):
+			startTime := time.Now()
+			logger.Info().Msg("Periodic fetch prometheusMetrics cycle triggered")
 			go func() {
 				ms.reportOnlyPvCapacities(ctx) // Report only capacities, assuming it will go faster and will not block the periodic fetch
 			}()
@@ -789,6 +794,8 @@ func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
 			} else {
 				ms.prometheusMetrics.PeriodicFetchMetricsFailureCount.Inc()
 			}
+			dur := time.Since(startTime)
+			logger.Info().Dur("duration", dur).Msg("Periodic fetch prometheusMetrics cycle completed")
 		}
 	}
 }
