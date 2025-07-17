@@ -270,6 +270,7 @@ func (ms *MetricsServer) removePrometheusMetricsForLabels(ctx context.Context, m
 	ms.prometheusMetrics.Capacity.DeleteLabelValues(labelValues...)
 	ms.prometheusMetrics.Used.DeleteLabelValues(labelValues...)
 	ms.prometheusMetrics.Free.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.PvCapacity.DeleteLabelValues(labelValues...)
 	ms.prometheusMetrics.Reads.DeleteLabelValues(labelValues...)
 	ms.prometheusMetrics.Writes.DeleteLabelValues(labelValues...)
 	ms.prometheusMetrics.ReadBytes.DeleteLabelValues(labelValues...)
@@ -707,6 +708,40 @@ func (ms *MetricsServer) InvalidateSecret(ctx context.Context, secretName, secre
 	}
 }
 
+func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
+	component := "reportOnlyPvCapacities"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+
+	keys := ms.fetchMetricKeys(ctx)
+	logger.Info().Int("pv_count", len(keys)).Msg("Starting to report only PersistentVolume capacities")
+	if len(keys) == 0 {
+		logger.Info().Msg("No PersistentVolumes found, nothing to report")
+		return
+	}
+
+	for _, key := range keys {
+		metric := ms.volumeMetrics.GetVolumeMetric(key)
+		if metric == nil || metric.persistentVolume == nil {
+			logger.Warn().Str("pv_uid", string(key)).Msg("VolumeMetric or PersistentVolume is nil, skipping")
+			continue
+		}
+
+		r := metric.persistentVolume.Spec.Capacity.Storage()
+		if r == nil {
+			logger.Warn().Str("pv_name", metric.persistentVolume.Name).Msg("PersistentVolume capacity is nil, skipping")
+			continue
+		}
+		capacity := r.Value()
+		labels := ms.createPrometheusLabelsForMetric(metric)
+		ms.prometheusMetrics.PvCapacity.WithLabelValues(labels...).Set(float64(capacity))
+
+	}
+	logger.Info().Int("pv_count", len(keys)).Msg("Finished to report only PersistentVolume capacities")
+}
+
 func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
 	// Periodically fetch prometheusMetrics for all persistent volumes
 	component := "reportMetricsStreamer"
@@ -725,6 +760,9 @@ func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
 			logger.Info().Msg("Periodic fetch prometheusMetrics context cancelled, stopping...")
 			return
 		case <-time.After(ticker):
+			go func() {
+				ms.reportOnlyPvCapacities(ctx) // Report only capacities, assuming it will go faster and will not block the periodic fetch
+			}()
 			ms.prometheusMetrics.PeriodicFetchMetricsInvokeCount.Inc()
 			ms.prometheusMetrics.ProcessPvQueueSize.Set(float64(len(ms.persistentVolumesChan)))
 			ms.prometheusMetrics.FetchSinglePvMetricsQueueSize.Set(float64(len(ms.volumeMetricsChan)))

@@ -5,9 +5,10 @@ import (
 )
 
 type PrometheusMetrics struct {
-	Capacity *prometheus.GaugeVec
-	Used     *prometheus.GaugeVec
-	Free     *prometheus.GaugeVec
+	Capacity   *prometheus.GaugeVec
+	Used       *prometheus.GaugeVec
+	Free       *prometheus.GaugeVec
+	PvCapacity *prometheus.GaugeVec
 
 	Reads           *prometheus.CounterVec
 	Writes          *prometheus.CounterVec
@@ -82,6 +83,14 @@ func (m *PrometheusMetrics) Init() {
 		prometheus.GaugeOpts{
 			Name: "weka_csi_volume_free_bytes",
 			Help: "Free capacity of the WEKA PersistentVolume in bytes",
+		},
+		MetricsLabels,
+	)
+
+	m.PvCapacity = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "weka_csi_reported_pv_capacity_bytes",
+			Help: "Reported capacity of the WEKA PersistentVolumes in bytes (from Kubernetes PV object)",
 		},
 		MetricsLabels,
 	)
