@@ -1,8 +1,8 @@
 package wekafs
 
-import (
-	"github.com/prometheus/client_golang/prometheus"
-)
+import "github.com/prometheus/client_golang/prometheus"
+
+var HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000}
 
 type PrometheusMetrics struct {
 	Capacity   *prometheus.GaugeVec
@@ -168,8 +168,9 @@ func (m *PrometheusMetrics) Init() {
 	})
 
 	m.FetchPvBatchOperationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "weka_csi_metricsserver_fetch_pv_batch_operations_duration_seconds_histogram",
-		Help: "Histogram of durations for fetching PersistentVolume objects from Kubernetes API",
+		Name:    "weka_csi_metricsserver_fetch_pv_batch_operations_duration_seconds_histogram",
+		Help:    "Histogram of durations for fetching PersistentVolume objects from Kubernetes API",
+		Buckets: HistogramDurationBuckets,
 	})
 
 	m.FetchPvBatchSize = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -198,8 +199,9 @@ func (m *PrometheusMetrics) Init() {
 	})
 
 	m.ProcessPvOperationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "weka_csi_metricsserver_process_pv_operations_duration_seconds_histogram",
-		Help: "Histogram of durations for processing PersistentVolume objects",
+		Name:    "weka_csi_metricsserver_process_pv_operations_duration_seconds_histogram",
+		Help:    "Histogram of durations for processing PersistentVolume objects",
+		Buckets: HistogramDurationBuckets,
 	})
 
 	m.FetchMetricsBatchOperations = prometheus.NewCounter(prometheus.CounterOpts{
@@ -213,8 +215,9 @@ func (m *PrometheusMetrics) Init() {
 	})
 
 	m.FetchMetricsBatchOperationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_duration_seconds_histogram",
-		Help: "Histogram of durations for fetching metrics batches from Weka cluster",
+		Name:    "weka_csi_metricsserver_fetch_metrics_batch_operations_duration_seconds_histogram",
+		Help:    "Histogram of durations for fetching metrics batches from Weka cluster",
+		Buckets: HistogramDurationBuckets,
 	})
 
 	m.FetchMetricsBatchSize = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -233,8 +236,9 @@ func (m *PrometheusMetrics) Init() {
 	})
 
 	m.FetchSinglePvMetricsOperationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_operations_duration_seconds_histogram",
-		Help: "Histogram of durations for fetching single metrics from Weka cluster",
+		Name:    "weka_csi_metricsserver_fetch_single_pv_metrics_operations_duration_seconds_histogram",
+		Help:    "Histogram of durations for fetching single metrics from Weka cluster",
+		Buckets: HistogramDurationBuckets,
 	})
 
 	m.FetchSinglePvMetricsQueueSize = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -267,8 +271,9 @@ func (m *PrometheusMetrics) Init() {
 	})
 
 	m.PruneVolumesBatchOperationsHistogram = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "weka_csi_metricsserver_prune_volumes_batch_operations_duration_seconds_histogram",
-		Help: "Histogram of durations for prune volumes batch operations",
+		Name:    "weka_csi_metricsserver_prune_volumes_batch_operations_duration_seconds_histogram",
+		Help:    "Histogram of durations for prune volumes batch operations",
+		Buckets: HistogramDurationBuckets,
 	})
 
 	m.PruneVolumesBatchSize = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -314,8 +319,9 @@ func (m *PrometheusMetrics) Init() {
 
 	m.QuotaMapUpdateHistogramPerFs = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name: "weka_csi_metricsserver_quota_map_update_duration_per_fs_seconds_histogram",
-			Help: "Histogram of durations for quota map updates per filesystem",
+			Name:    "weka_csi_metricsserver_quota_map_update_duration_per_fs_seconds_histogram",
+			Help:    "Histogram of durations for quota map updates per filesystem",
+			Buckets: HistogramDurationBuckets,
 		},
 		QuotaLabels,
 	)
@@ -336,8 +342,9 @@ func (m *PrometheusMetrics) Init() {
 
 	m.QuotaUpdateBatchDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name: "weka_csi_metricsserver_quota_update_batch_duration_seconds_histogram",
-			Help: "Histogram of durations for quota update batches",
+			Name:    "weka_csi_metricsserver_quota_update_batch_duration_seconds_histogram",
+			Help:    "Histogram of durations for quota update batches",
+			Buckets: HistogramDurationBuckets,
 		},
 	)
 
