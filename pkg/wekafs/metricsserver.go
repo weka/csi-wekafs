@@ -197,7 +197,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
 		pvList := &v1.PersistentVolumeList{}
-		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{Limit: 5})
+		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{})
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
 			ms.prometheusMetrics.FetchPvBatchOperationFailureCount.Inc()
@@ -374,7 +374,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		return
 	}
 
-	logger.Info().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received a new PersistentVolume for processing")
+	logger.Debug().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received a new PersistentVolume for processing")
 
 	ms.prometheusMetrics.PersistentVolumesAddedForMetricsCollection.Inc()
 

@@ -105,12 +105,12 @@ func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *ap
 
 	startTime := time.Now()
 
-	logger.Info().Str("filesystem", fs.Name).Msg("Updating QuotaMap for filesystem")
+	logger.Debug().Str("filesystem", fs.Name).Msg("Updating QuotaMap for filesystem")
 	defer func() {
 		dur := time.Since(startTime)
-		logger.Info().Str("filesystem", fs.Name).Dur("duration", dur).Msg("Finished Updating QuotaMap for filesystem")
+		logger.Debug().Str("filesystem", fs.Name).Dur("duration", dur).Msg("Finished Updating QuotaMap for filesystem")
 		if dur > ms.getConfig().wekaMetricsFetchInterval {
-			logger.Error().Str("filesystem", fs.Name).Dur("duration", dur).Msg("Updating QuotaMap took longer than expected. Consider increasing wekaMetricsFetchInterval")
+			logger.Warn().Str("filesystem", fs.Name).Dur("duration", dur).Msg("Updating QuotaMap took longer than expected. Consider increasing wekaMetricsFetchInterval")
 		} else {
 			logger.Trace().Str("filesystem", fs.Name).Dur("duration", dur).Msg("Updating QuotaMap completed within expected time")
 		}
