@@ -766,9 +766,10 @@ func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 	logger.Info().Int("batch_count", len(uids)).Msg("Starting to update quota maps")
 
 	// update prometheusMetrics for batchUpdateQuotaMaps batches
-	ms.prometheusMetrics.QuotaUpdateBatchCount.Inc()
+	ms.prometheusMetrics.QuotaUpdateBatchCountInvokedCount.Inc()
 	defer func() {
 		dur := time.Since(startTime).Seconds()
+		ms.prometheusMetrics.QuotaUpdateBatchCountCompletedCount.Inc()
 		ms.prometheusMetrics.QuotaUpdateBatchDuration.Add(dur)
 		ms.prometheusMetrics.QuotaUpdateBatchDurationHistogram.Observe(dur)
 		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(len(uids)))

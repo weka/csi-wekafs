@@ -67,12 +67,13 @@ type PrometheusMetrics struct {
 	QuotaMapUpdateDurationPerFs  *prometheus.CounterVec   // total duration of quota map updates per filesystem in seconds
 	QuotaMapUpdateHistogramPerFs *prometheus.HistogramVec // histogram of durations for quota map updates per filesystem
 
-	QuotaUpdateBatchCount             prometheus.Counter   // total number of all quota updates
-	QuotaUpdateBatchDuration          prometheus.Counter   // total duration of all quota updates in seconds
-	QuotaUpdateBatchDurationHistogram prometheus.Histogram // histogram of durations for quota updates
-	QuotaUpdateBatchSize              prometheus.Gauge     // total number of quotas updated in the last batch, or number of distinct observed filesystems
-	QuotaUpdateFrequencySeconds       prometheus.Gauge     // frequency of quota updates in seconds, taken from the configuration
-	QuotaUpdateConcurrentRequests     prometheus.Gauge     // number of concurrent quota update requests for filesystems, taken from the configuration
+	QuotaUpdateBatchCountInvokedCount   prometheus.Counter   // total number of all quota updates
+	QuotaUpdateBatchCountCompletedCount prometheus.Counter   // total number of all quota updates
+	QuotaUpdateBatchDuration            prometheus.Counter   // total duration of all quota updates in seconds
+	QuotaUpdateBatchDurationHistogram   prometheus.Histogram // histogram of durations for quota updates
+	QuotaUpdateBatchSize                prometheus.Gauge     // total number of quotas updated in the last batch, or number of distinct observed filesystems
+	QuotaUpdateFrequencySeconds         prometheus.Gauge     // frequency of quota updates in seconds, taken from the configuration
+	QuotaUpdateConcurrentRequests       prometheus.Gauge     // number of concurrent quota update requests for filesystems, taken from the configuration
 }
 
 func (m *PrometheusMetrics) Init() {
@@ -345,10 +346,17 @@ func (m *PrometheusMetrics) Init() {
 		QuotaLabels,
 	)
 
-	m.QuotaUpdateBatchCount = prometheus.NewCounter(
+	m.QuotaUpdateBatchCountInvokedCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "weka_csi_metricsserver_quota_update_batch_count_total",
+			Name: "weka_csi_metricsserver_batch_quota_updates_invoked_total",
 			Help: "Total number of all quota update batches performed",
+		},
+	)
+
+	m.QuotaUpdateBatchCountCompletedCount = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "weka_csi_metricsserver_batch_quota_updates_completed_total",
+			Help: "Total number of all quota update batches completed",
 		},
 	)
 
@@ -420,7 +428,8 @@ func (m *PrometheusMetrics) Init() {
 		m.QuotaMapUpdateCountPerFs,
 		m.QuotaMapUpdateDurationPerFs,
 		m.QuotaMapUpdateHistogramPerFs,
-		m.QuotaUpdateBatchCount,
+		m.QuotaUpdateBatchCountInvokedCount,
+		m.QuotaUpdateBatchCountCompletedCount,
 		m.QuotaUpdateBatchDuration,
 		m.QuotaUpdateBatchDurationHistogram,
 		m.QuotaUpdateBatchSize,
