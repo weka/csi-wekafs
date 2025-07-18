@@ -730,9 +730,9 @@ func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
 	logger.Info().Int("pv_count", len(keys)).Msg("Finished to report only PersistentVolume capacities")
 }
 
-func (ms *MetricsServer) PeriodicUpdateQuotaMaps(ctx context.Context) {
+func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 
-	component := "PeriodicUpdateQuotaMaps"
+	component := "batchUpdateQuotaMaps"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -741,10 +741,10 @@ func (ms *MetricsServer) PeriodicUpdateQuotaMaps(ctx context.Context) {
 
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsQuotaUpdateConcurrentRequests) // limit concurrent goroutines
 	uids := ms.observedFilesystemUids.GetUids()
-	logger.Info().Int("observer_filesystem_count", len(uids)).Msg("Starting to update quota maps")
+	logger.Info().Int("observed_filesystem_count", len(uids)).Msg("Starting to update quota maps")
 	defer logger.Info().Msg("Finished to update quota maps")
 
-	// update prometheusMetrics for PeriodicUpdateQuotaMaps batches
+	// update prometheusMetrics for batchUpdateQuotaMaps batches
 	ms.prometheusMetrics.QuotaUpdateBatchCount.Inc()
 	defer func() {
 		dur := time.Since(startTime).Seconds()
@@ -771,6 +771,30 @@ func (ms *MetricsServer) PeriodicUpdateQuotaMaps(ctx context.Context) {
 				logger.Error().Err(err).Str("filesystem_name", fsObj.Name).Msg("Failed to update quota map for filesystem")
 			}
 		}(fsObj)
+	}
+}
+
+func (ms *MetricsServer) PeriodicUpdateQuotaMaps(ctx context.Context) {
+	component := "PeriodicUpdateQuotaMaps"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("starting reporting metrics every defined interval")
+	ticker := ms.config.wekaMetricsFetchInterval
+	if ticker <= 0 {
+		ticker = time.Minute // Default to 1 minute if not set
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("PeriodicUpdateQuotaMaps context cancelled, stopping...")
+			return
+		case <-time.After(ticker):
+			logger.Info().Msg("PeriodicUpdateQuotaMaps cycle triggered")
+			ms.batchUpdateQuotaMaps(ctx)
+
+		}
 	}
 }
 
@@ -916,7 +940,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	}
 
 	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting PeriodicUpdateQuotaMaps")
+		logger.Info().Msg("Leader elected, starting batchUpdateQuotaMaps")
 
 		go ms.PeriodicUpdateQuotaMaps(ctx)
 
@@ -927,7 +951,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	}))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add PeriodicUpdateQuotaMaps to manager, cannot run MetricsServer without it")
+		Die("Failed to add batchUpdateQuotaMaps to manager, cannot run MetricsServer without it")
 	}
 
 	go func() {
