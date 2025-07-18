@@ -43,6 +43,7 @@ func NewApiMetrics(client *ApiClient) *ApiMetrics {
 				Subsystem: "api",
 				Name:      "request_duration_seconds",
 				Help:      "Duration of API requests in seconds broken down by endpoint, method, url, status",
+				Buckets:   []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000},
 			},
 			[]string{"csi_driver_name", "cluster_guid", "endpoint", "method", "url", "status"},
 		),
