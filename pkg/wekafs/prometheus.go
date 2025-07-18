@@ -1,6 +1,9 @@
 package wekafs
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog/log"
+)
 
 var HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000}
 
@@ -19,11 +22,12 @@ type PrometheusMetrics struct {
 
 	// metricsserver metrics
 	// Fetching PersistentVolume Objects from Kubernetes API. Refers to the number of batch requests made to fetch PVs.
-	FetchPvBatchOperations            prometheus.Counter
-	FetchPvBatchOperationFailureCount prometheus.Counter // total number of failed operations to fetch PVs
-	FetchPvBatchOperationsDuration    prometheus.Counter
-	FetchPvBatchOperationsHistogram   prometheus.Histogram
-	FetchPvBatchSize                  prometheus.Gauge // total number of PVs fetched in the last batch
+	FetchPvBatchOperationsInvokeCount  prometheus.Counter
+	FetchPvBatchOperationsSuccessCount prometheus.Counter
+	FetchPvBatchOperationFailureCount  prometheus.Counter // total number of failed operations to fetch PVs
+	FetchPvBatchOperationsDuration     prometheus.Counter
+	FetchPvBatchOperationsHistogram    prometheus.Histogram
+	FetchPvBatchSize                   prometheus.Gauge // total number of PVs fetched in the last batch
 
 	// streaming Pv objects
 	StreamPvOperations prometheus.Counter // total number of operations performed on streaming PVs
@@ -32,7 +36,6 @@ type PrometheusMetrics struct {
 	ProcessPvOperations          prometheus.Counter
 	ProcessPvOperationsDuration  prometheus.Counter
 	ProcessPvOperationsHistogram prometheus.Histogram
-	ProcessPvQueueSize           prometheus.Gauge // total number of PVs in the queue for processing
 
 	FetchMetricsBatchOperationsInvoked prometheus.Counter
 	// fetching metric batches. refer to batches of periodic metrics fetch. Basically, this number should never be larger than fetch metrics interval
@@ -43,12 +46,12 @@ type PrometheusMetrics struct {
 	FetchMetricsBatchSize                prometheus.Gauge
 	FetchMetricsFrequencySeconds         prometheus.Gauge // frequency of fetch metrics in seconds, taken from the configuration
 
+	FetchSinglePvMetricsOperationsInvokeCount  prometheus.Counter
+	FetchSinglePvMetricsOperationsSuccessCount prometheus.Counter
 	// fetching single metrics. refer to single metrics fetch from Weka cluster
-	FetchSinglePvMetricsOperationsCount     prometheus.Counter
-	FetchSinglePvMetricsFailureCount        prometheus.Counter // total number of failed single metrics fetch operations
-	FetchSinglePvMetricsOperationsDuration  prometheus.Counter
-	FetchSinglePvMetricsOperationsHistogram prometheus.Histogram
-	FetchSinglePvMetricsQueueSize           prometheus.Gauge // total number of single metrics in the queue for processing
+	FetchSinglePvMetricsOperationsFailureCount prometheus.Counter
+	FetchSinglePvMetricsOperationsDuration     prometheus.Counter
+	FetchSinglePvMetricsOperationsHistogram    prometheus.Histogram
 
 	PersistentVolumesAddedForMetricsCollection    prometheus.Counter
 	PersistentVolumesRemovedFromMetricsCollection prometheus.Counter
@@ -161,13 +164,18 @@ func (m *PrometheusMetrics) Init() {
 	prometheus.MustRegister(m.Capacity, m.Used, m.Free, m.PvCapacity, m.Reads, m.ReadBytes, m.ReadDurationUs, m.Writes, m.WriteBytes, m.WriteDurationUs)
 
 	// metricsserver own metrics
-	m.FetchPvBatchOperations = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_fetch_pv_batch_operations_total",
+	m.FetchPvBatchOperationsInvokeCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_pv_batch_operations_invoke_count_total",
+		Help: "Total number of operations to fetch PersistentVolume objects from Kubernetes API",
+	})
+
+	m.FetchPvBatchOperationsSuccessCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_pv_batch_operations_success_count_total",
 		Help: "Total number of operations to fetch PersistentVolume objects from Kubernetes API",
 	})
 
 	m.FetchPvBatchOperationFailureCount = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_fetch_pv_batch_operations_failures_total",
+		Name: "weka_csi_metricsserver_fetch_pv_batch_operations_failure_count_total",
 		Help: "Total number of failed operations to fetch PersistentVolume objects from Kubernetes API",
 	})
 
@@ -188,17 +196,12 @@ func (m *PrometheusMetrics) Init() {
 	})
 
 	m.StreamPvOperations = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_stream_pv_operations_total",
+		Name: "weka_csi_metricsserver_stream_pv_operations_count_total",
 		Help: "Total number of operations performed on streaming PersistentVolume objects",
 	})
 
-	m.ProcessPvQueueSize = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "weka_csi_metricsserver_process_pv_queue_size",
-		Help: "Total number of PersistentVolumes in the queue for processing",
-	})
-
 	m.ProcessPvOperations = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_process_pv_operations_total",
+		Name: "weka_csi_metricsserver_process_pv_operations_count_total",
 		Help: "Total number of processed PersistentVolume objects",
 	})
 
@@ -214,17 +217,17 @@ func (m *PrometheusMetrics) Init() {
 	})
 
 	m.FetchMetricsBatchOperationsInvoked = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_invoked_total",
+		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_invoke_count_total",
 		Help: "Total number of fetch metrics batches from Weka cluster that were invoked",
 	})
 
 	m.FetchMetricsBatchOperationsSucceeded = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_succeeded)total",
+		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_success_count_total",
 		Help: "Total number of fetch metrics batches from Weka cluster that were completed successfully",
 	})
 
 	m.FetchMetricsBatchOperationsFailed = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_failed_total",
+		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_failure_count_total",
 		Help: "Total number of fetch metrics batches from Weka cluster that were completed successfully",
 	})
 
@@ -249,14 +252,19 @@ func (m *PrometheusMetrics) Init() {
 		Help: "Frequency, or interval of fetching metrics from Weka cluster in seconds, taken from the configuration. Too high value may lead to stale metrics or API overload",
 	})
 
-	m.FetchSinglePvMetricsOperationsCount = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_operations_total",
+	m.FetchSinglePvMetricsOperationsInvokeCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_invoke_count_total",
 		Help: "Total number of single metrics fetch operations from Weka cluster",
 	})
 
-	m.FetchSinglePvMetricsFailureCount = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_operations_failures_total",
-		Help: "Total number of failed single metrics fetch operations from Weka cluster",
+	m.FetchSinglePvMetricsOperationsSuccessCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_success_count_total",
+		Help: "Total number of single metrics fetch operations from Weka cluster",
+	})
+
+	m.FetchSinglePvMetricsOperationsFailureCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_failure_count_total",
+		Help: "Total number of single metrics fetch operations from Weka cluster",
 	})
 
 	m.FetchSinglePvMetricsOperationsDuration = prometheus.NewCounter(prometheus.CounterOpts{
@@ -268,11 +276,6 @@ func (m *PrometheusMetrics) Init() {
 		Name:    "weka_csi_metricsserver_fetch_single_pv_metrics_operations_duration_seconds_histogram",
 		Help:    "Histogram of durations for fetching single metrics from Weka cluster",
 		Buckets: HistogramDurationBuckets,
-	})
-
-	m.FetchSinglePvMetricsQueueSize = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_queue_size",
-		Help: "Total number of single metrics in the queue for processing",
 	})
 
 	m.PersistentVolumesAddedForMetricsCollection = prometheus.NewCounter(prometheus.CounterOpts{
@@ -373,14 +376,14 @@ func (m *PrometheusMetrics) Init() {
 
 	m.QuotaUpdateBatchCountInvokedCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "weka_csi_metricsserver_batch_quota_updates_invoked_total",
+			Name: "weka_csi_metricsserver_batch_quota_updates_invoke_count_total",
 			Help: "Total number of all quota update batches performed",
 		},
 	)
 
 	m.QuotaUpdateBatchCountCompletedCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "weka_csi_metricsserver_batch_quota_updates_completed_total",
+			Name: "weka_csi_metricsserver_batch_quota_updates_complete_count_total",
 			Help: "Total number of all quota update batches completed",
 		},
 	)
@@ -418,7 +421,7 @@ func (m *PrometheusMetrics) Init() {
 	})
 
 	prometheus.MustRegister(
-		m.FetchPvBatchOperations,
+		m.FetchPvBatchOperationsInvokeCount,
 		m.FetchPvBatchOperationFailureCount,
 		m.FetchPvBatchOperationsDuration,
 		m.FetchPvBatchOperationsHistogram,
@@ -427,7 +430,6 @@ func (m *PrometheusMetrics) Init() {
 		m.ProcessPvOperations,
 		m.ProcessPvOperationsDuration,
 		m.ProcessPvOperationsHistogram,
-		m.ProcessPvQueueSize,
 		m.FetchMetricsBatchOperationsInvoked,
 		m.FetchMetricsBatchOperationsSucceeded,
 		m.FetchMetricsBatchOperationsFailed,
@@ -435,11 +437,11 @@ func (m *PrometheusMetrics) Init() {
 		m.FetchMetricsBatchOperationsHistogram,
 		m.FetchMetricsBatchSize,
 		m.FetchMetricsFrequencySeconds,
-		m.FetchSinglePvMetricsOperationsCount,
-		m.FetchSinglePvMetricsFailureCount,
+		m.FetchSinglePvMetricsOperationsInvokeCount,
+		m.FetchSinglePvMetricsOperationsSuccessCount,
+		m.FetchSinglePvMetricsOperationsFailureCount,
 		m.FetchSinglePvMetricsOperationsDuration,
 		m.FetchSinglePvMetricsOperationsHistogram,
-		m.FetchSinglePvMetricsQueueSize,
 		m.PersistentVolumesAddedForMetricsCollection,
 		m.PersistentVolumesRemovedFromMetricsCollection,
 		m.PersistentVolumesMonitored,
@@ -463,6 +465,7 @@ func (m *PrometheusMetrics) Init() {
 		m.QuotaUpdateFrequencySeconds,
 		m.QuotaUpdateConcurrentRequests,
 	)
+	log.Debug().Msg("Prometheus metrics initialized")
 }
 
 func NewPrometheusMetrics() *PrometheusMetrics {

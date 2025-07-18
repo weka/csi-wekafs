@@ -209,7 +209,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		}
 
 		d := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
-		ms.prometheusMetrics.FetchPvBatchOperations.Inc()
+		ms.prometheusMetrics.FetchPvBatchOperationsInvokeCount.Inc()
 		ms.prometheusMetrics.FetchPvBatchOperationsDuration.Add(d)
 		ms.prometheusMetrics.FetchPvBatchSize.Set(float64(len(pvList.Items)))
 		ms.prometheusMetrics.FetchPvBatchOperationsHistogram.Observe(d)
@@ -221,6 +221,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case out <- &pv:
+				ms.prometheusMetrics.FetchPvBatchOperationsSuccessCount.Inc()
 			}
 			ms.prometheusMetrics.StreamPvOperations.Inc()
 		}
@@ -501,9 +502,10 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	ctx = log.Ctx(ctx).With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	ctx = context.WithValue(ctx, "start_time", time.Now())
+
+	ms.prometheusMetrics.FetchSinglePvMetricsOperationsInvokeCount.Inc()
 	defer func() {
 		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
-		ms.prometheusMetrics.FetchSinglePvMetricsOperationsCount.Inc()
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsDuration.Add(dur)
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsHistogram.Observe(dur)
 	}()
@@ -515,11 +517,12 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	fsName := vm.volume.FilesystemName
 	if err != nil || qosMetric == nil {
 		logger.Warn().Str("pv_name", vm.persistentVolume.Name).Str("filesystem_name", fsName).Msg("Failed to fetch metric, skipping. Consider increasing wekaMetricsFetchInterval")
-		ms.prometheusMetrics.FetchSinglePvMetricsFailureCount.Inc()
+		ms.prometheusMetrics.FetchSinglePvMetricsOperationsFailureCount.Inc()
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
 	vm.metrics = qosMetric
 	ms.volumeMetricsChan <- vm // Send the metric to the MetricsServer's incoming requests channel
+	ms.prometheusMetrics.FetchSinglePvMetricsOperationsSuccessCount.Inc()
 	return nil
 }
 
@@ -861,8 +864,6 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 				ms.reportOnlyPvCapacities(ctx) // Report only capacities, assuming it will go faster and will not block the periodic fetch
 			}()
 			ms.prometheusMetrics.PeriodicFetchMetricsInvokeCount.Inc()
-			ms.prometheusMetrics.ProcessPvQueueSize.Set(float64(len(ms.persistentVolumesChan)))
-			ms.prometheusMetrics.FetchSinglePvMetricsQueueSize.Set(float64(len(ms.volumeMetricsChan)))
 			logger.Info().Int("pv_count", len(ms.volumeMetrics.Metrics)).Msg("Fetching prometheusMetrics for PersistentVolumes")
 			err := ms.FetchMetrics(ctx)
 			if err != nil {
