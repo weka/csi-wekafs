@@ -532,10 +532,15 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
 	keys := ms.fetchMetricKeys(ctx)
 	ms.prometheusMetrics.FetchMetricsBatchSize.Set(float64(len(keys)))
-
+	ms.prometheusMetrics.FetchMetricsBatchOperationsInvoked.Inc()
+	succeeded := true
 	defer func() {
 		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
-		ms.prometheusMetrics.FetchMetricsBatchOperations.Inc()
+		if succeeded {
+			ms.prometheusMetrics.FetchMetricsBatchOperationsSucceeded.Inc()
+		} else {
+			ms.prometheusMetrics.FetchMetricsBatchOperationsFailed.Inc()
+		}
 		ms.prometheusMetrics.FetchMetricsBatchOperationsDuration.Add(dur)
 		ms.prometheusMetrics.FetchMetricsBatchOperationsHistogram.Observe(dur)
 		if dur > float64(ms.getConfig().wekaMetricsFetchInterval.Seconds()) {
@@ -564,6 +569,7 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 
 			err := ms.fetchSingleMetric(ctx, vm) // Actually fetch the prometheusMetrics for the persistent volume
 			if err != nil {
+				succeeded = false
 				logger.Error().Err(err).Str("pv_name", vm.persistentVolume.Name).Msg("Failed to fetch prometheusMetrics for persistent volume")
 			}
 		}(vm)

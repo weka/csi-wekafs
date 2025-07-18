@@ -34,8 +34,10 @@ type PrometheusMetrics struct {
 	ProcessPvOperationsHistogram prometheus.Histogram
 	ProcessPvQueueSize           prometheus.Gauge // total number of PVs in the queue for processing
 
+	FetchMetricsBatchOperationsInvoked prometheus.Counter
 	// fetching metric batches. refer to batches of periodic metrics fetch. Basically, this number should never be larger than fetch metrics interval
-	FetchMetricsBatchOperations          prometheus.Counter
+	FetchMetricsBatchOperationsSucceeded prometheus.Counter
+	FetchMetricsBatchOperationsFailed    prometheus.Counter
 	FetchMetricsBatchOperationsDuration  prometheus.Counter
 	FetchMetricsBatchOperationsHistogram prometheus.Histogram
 	FetchMetricsBatchSize                prometheus.Gauge
@@ -206,9 +208,19 @@ func (m *PrometheusMetrics) Init() {
 		Buckets: HistogramDurationBuckets,
 	})
 
-	m.FetchMetricsBatchOperations = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_total",
-		Help: "Total number of fetch metrics batches from Weka cluster",
+	m.FetchMetricsBatchOperationsInvoked = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_invoked_total",
+		Help: "Total number of fetch metrics batches from Weka cluster that were invoked",
+	})
+
+	m.FetchMetricsBatchOperationsSucceeded = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_succeeded)total",
+		Help: "Total number of fetch metrics batches from Weka cluster that were completed successfully",
+	})
+
+	m.FetchMetricsBatchOperationsFailed = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_metrics_batch_operations_failed_total",
+		Help: "Total number of fetch metrics batches from Weka cluster that were completed successfully",
 	})
 
 	m.FetchMetricsBatchOperationsDuration = prometheus.NewCounter(prometheus.CounterOpts{
@@ -383,7 +395,9 @@ func (m *PrometheusMetrics) Init() {
 		m.ProcessPvOperationsDuration,
 		m.ProcessPvOperationsHistogram,
 		m.ProcessPvQueueSize,
-		m.FetchMetricsBatchOperations,
+		m.FetchMetricsBatchOperationsInvoked,
+		m.FetchMetricsBatchOperationsSucceeded,
+		m.FetchMetricsBatchOperationsFailed,
 		m.FetchMetricsBatchOperationsDuration,
 		m.FetchMetricsBatchOperationsHistogram,
 		m.FetchMetricsBatchSize,
