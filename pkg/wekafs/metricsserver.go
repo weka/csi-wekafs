@@ -755,12 +755,13 @@ func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
 	startTime := time.Now()
 
-	sem := make(chan struct{}, ms.getConfig().wekaMetricsQuotaUpdateConcurrentRequests) // limit concurrent goroutines
+	concurrency := ms.getConfig().wekaMetricsQuotaUpdateConcurrentRequests
+	sem := make(chan struct{}, concurrency) // limit concurrent goroutines
 	uids := ms.observedFilesystemUids.GetUids()
-	logger.Info().Int("batch_count", len(uids)).Msg("Starting to update quota maps")
+	logger := log.Ctx(ctx).With().Int("batch_size", len(uids)).Int("concurrency", concurrency).Logger()
+	logger.Info().Msg("Starting to update quota maps")
 
 	// update prometheusMetrics for batchUpdateQuotaMaps batches
 	ms.prometheusMetrics.QuotaUpdateBatchCountInvokedCount.Inc()
@@ -771,10 +772,10 @@ func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 		ms.prometheusMetrics.QuotaUpdateBatchDurationHistogram.Observe(dur)
 		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(len(uids)))
 		if time.Since(startTime) > ms.getConfig().wekaMetricsFetchInterval {
-			logger.Error().Int("batch_count", len(uids)).Dur("batch_duration_ms", time.Since(startTime)).
+			logger.Error().Dur("batch_duration_ms", time.Since(startTime)).
 				Msg("Finished to update quota maps, took longer than configured interval, consider increasing wekaMetricsFetchInterval or wekaMetricsQuotaUpdateConcurrentRequests")
 		} else {
-			logger.Info().Int("batch_count", len(uids)).Dur("batch_duration_ms", time.Since(startTime)).Msg("Finished to update quota maps on time")
+			logger.Info().Dur("batch_duration_ms", time.Since(startTime)).Msg("Finished to update quota maps on time")
 		}
 	}()
 
