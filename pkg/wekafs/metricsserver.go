@@ -503,7 +503,7 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	ctx = context.WithValue(ctx, "start_time", time.Now())
 	defer func() {
 		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
-		ms.prometheusMetrics.FetchSinglePvMetricsOperations.Inc()
+		ms.prometheusMetrics.FetchSinglePvMetricsOperationsCount.Inc()
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsDuration.Add(dur)
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsHistogram.Observe(dur)
 	}()
@@ -514,6 +514,7 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	qosMetric, err := ms.FetchPvStats(ctx, vm.volume)
 	if err != nil || qosMetric == nil {
 		logger.Warn().Str("pv_name", vm.persistentVolume.Name).Msg("Failed to fetch metric, skipping")
+		ms.prometheusMetrics.FetchSinglePvMetricsFailureCount.Inc()
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
 	vm.metrics = qosMetric
@@ -571,7 +572,6 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 			err := ms.fetchSingleMetric(ctx, vm) // Actually fetch the prometheusMetrics for the persistent volume
 			if err != nil {
 				succeeded = false
-				logger.Error().Err(err).Str("pv_name", vm.persistentVolume.Name).Msg("Failed to fetch prometheusMetrics for persistent volume")
 			}
 		}(vm)
 	}

@@ -44,7 +44,8 @@ type PrometheusMetrics struct {
 	FetchMetricsFrequencySeconds         prometheus.Gauge // frequency of fetch metrics in seconds, taken from the configuration
 
 	// fetching single metrics. refer to single metrics fetch from Weka cluster
-	FetchSinglePvMetricsOperations          prometheus.Counter
+	FetchSinglePvMetricsOperationsCount     prometheus.Counter
+	FetchSinglePvMetricsFailureCount        prometheus.Counter // total number of failed single metrics fetch operations
 	FetchSinglePvMetricsOperationsDuration  prometheus.Counter
 	FetchSinglePvMetricsOperationsHistogram prometheus.Histogram
 	FetchSinglePvMetricsQueueSize           prometheus.Gauge // total number of single metrics in the queue for processing
@@ -245,9 +246,14 @@ func (m *PrometheusMetrics) Init() {
 		Help: "Frequency, or interval of fetching metrics from Weka cluster in seconds, taken from the configuration. Too high value may lead to stale metrics or API overload",
 	})
 
-	m.FetchSinglePvMetricsOperations = prometheus.NewCounter(prometheus.CounterOpts{
+	m.FetchSinglePvMetricsOperationsCount = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_operations_total",
 		Help: "Total number of single metrics fetch operations from Weka cluster",
+	})
+
+	m.FetchSinglePvMetricsFailureCount = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_operations_failures_total",
+		Help: "Total number of failed single metrics fetch operations from Weka cluster",
 	})
 
 	m.FetchSinglePvMetricsOperationsDuration = prometheus.NewCounter(prometheus.CounterOpts{
@@ -410,7 +416,8 @@ func (m *PrometheusMetrics) Init() {
 		m.FetchMetricsBatchOperationsHistogram,
 		m.FetchMetricsBatchSize,
 		m.FetchMetricsFrequencySeconds,
-		m.FetchSinglePvMetricsOperations,
+		m.FetchSinglePvMetricsOperationsCount,
+		m.FetchSinglePvMetricsFailureCount,
 		m.FetchSinglePvMetricsOperationsDuration,
 		m.FetchSinglePvMetricsOperationsHistogram,
 		m.FetchSinglePvMetricsQueueSize,
