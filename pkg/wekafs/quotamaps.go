@@ -13,7 +13,7 @@ import (
 )
 
 type QuotaMapsPerFilesystem struct {
-	sync.Mutex
+	sync.RWMutex
 	locks     sync.Map
 	QuotaMaps map[uuid.UUID]*apiclient.QuotaMap // map[filesystemUUID]*apiclient.QuotaMap
 }
@@ -38,34 +38,34 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 		return nil, errors.New("filesystem UID is empty")
 	}
 
-	ms.quotaMaps.Lock()
+	ms.quotaMaps.RLock()
 	quotaMap, exists := ms.quotaMaps.QuotaMaps[fs.Uid]
-	ms.quotaMaps.Unlock()
+	ms.quotaMaps.RUnlock()
 
-	var maplock *sync.Mutex
+	var maplock *sync.RWMutex
 
 	l, ok := ms.quotaMaps.locks.Load(fs.Uid)
 	if !ok || l == nil {
-		l = &sync.Mutex{}
+		l = &sync.RWMutex{}
 		ms.quotaMaps.locks.Store(fs.Uid, l)
 	}
-	maplock = l.(*sync.Mutex)
+	maplock = l.(*sync.RWMutex)
 
 	if exists {
 		// lock the quotaMap to ensure thread safety
-		maplock.Lock()
+		maplock.RLock()
 		if quotaMap.LastUpdate.Add(ms.getConfig().wekaMetricsFetchInterval).After(time.Now()) {
 			logger.Trace().Str("filesystem", fs.Name).Msg("Returning cached QuotaMap for filesystem")
-			maplock.Unlock()
+			maplock.RUnlock()
 			return quotaMap, nil
 		}
-		maplock.Unlock()
+		maplock.RUnlock()
 	}
 
 	// Re-check if the quotaMap was updated while we were waiting for the lock
-	ms.quotaMaps.Lock()
+	ms.quotaMaps.RLock()
 	quotaMap, exists = ms.quotaMaps.QuotaMaps[fs.Uid]
-	ms.quotaMaps.Unlock()
+	ms.quotaMaps.RUnlock()
 	if exists { // maybe it was updated while we were waiting for the lock
 		// lock the quotaMap to ensure thread safety
 		if quotaMap.LastUpdate.Add(ms.getConfig().wekaMetricsFetchInterval).After(time.Now()) {
@@ -94,14 +94,14 @@ func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *ap
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	var maplock *sync.Mutex
+	var maplock *sync.RWMutex
 
 	l, ok := ms.quotaMaps.locks.Load(fs.Uid)
 	if !ok || l == nil {
-		l = &sync.Mutex{}
+		l = &sync.RWMutex{}
 		ms.quotaMaps.locks.Store(fs.Uid, l)
 	}
-	maplock = l.(*sync.Mutex)
+	maplock = l.(*sync.RWMutex)
 
 	startTime := time.Now()
 

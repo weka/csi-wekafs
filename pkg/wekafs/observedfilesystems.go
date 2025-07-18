@@ -7,32 +7,38 @@ import (
 )
 
 type ObservedFilesystemUids struct {
-	sync.Mutex
+	sync.RWMutex
 	uids map[uuid.UUID]*ObservedFilesystemUid // map[filesystemUUID]int, where int is the number of references to this filesystem
 }
 
 func (ofu *ObservedFilesystemUids) GetUids() map[uuid.UUID]*ObservedFilesystemUid {
-	ofu.Lock()
-	defer ofu.Unlock()
-	if ofu.uids == nil {
-		return nil // no observed filesystems
-	}
+	ofu.RLock()
+	defer ofu.RUnlock()
 	return ofu.uids // return a copy of the map
+}
+
+func (ofu *ObservedFilesystemUids) GetByUid(uid uuid.UUID) *ObservedFilesystemUid {
+	ofu.RLock()
+	defer ofu.RUnlock()
+	if existing, exists := ofu.uids[uid]; exists {
+		ofu.RUnlock()
+		return existing // return the ObservedFilesystemUid for the given UID
+	}
+	return nil
 }
 
 func (ofu *ObservedFilesystemUids) incRef(fs *apiclient.FileSystem, apiClient *apiclient.ApiClient) {
 	if fs == nil || fs.Uid == uuid.Nil {
 		return // nothing to do
 	}
-	ofu.Lock()
-	defer ofu.Unlock()
-	if ofu.uids == nil {
-		ofu.uids = make(map[uuid.UUID]*ObservedFilesystemUid)
-	}
-	if existing, exists := ofu.uids[fs.Uid]; exists {
-		existing.refCounter++
-		ofu.uids[fs.Uid] = existing
+	ofu.RLock()
+	of := ofu.GetByUid(fs.Uid)
+	ofu.RUnlock()
+	if of != nil {
+		of.incRef()
 	} else {
+		ofu.Lock()
+		defer ofu.Unlock()
 		ofu.uids[fs.Uid] = &ObservedFilesystemUid{
 			apiClient:  apiClient,
 			refCounter: 1,
@@ -44,50 +50,48 @@ func (ofu *ObservedFilesystemUids) decRef(fs *apiclient.FileSystem) {
 	if fs == nil || fs.Uid == uuid.Nil {
 		return // nothing to do
 	}
-	ofu.Lock()
-	defer ofu.Unlock()
-	if ofu.uids == nil {
-		return // nothing to do
-	}
-	if existing, exists := ofu.uids[fs.Uid]; exists {
-		existing.refCounter--
-		if existing.refCounter <= 0 {
-			delete(ofu.uids, fs.Uid) // remove if no references left
-		} else {
-			ofu.uids[fs.Uid] = existing // update the reference count
-		}
+	ofu.RLock()
+	defer ofu.RUnlock()
+	of, exists := ofu.uids[fs.Uid]
+	if exists {
+		of.Lock()
+		defer of.Unlock()
+		of.refCounter--
 	}
 }
 
 func (ofu *ObservedFilesystemUids) GetApiClient(uid uuid.UUID) *apiclient.ApiClient {
-	ofu.Lock()
-	defer ofu.Unlock()
-	if ofu.uids == nil {
-		return nil // no observed filesystems
+	existing := ofu.GetByUid(uid)
+	if existing == nil {
+		return nil
 	}
-	if existing, exists := ofu.uids[uid]; exists {
-		return existing.apiClient // return the API client for the filesystem
-	}
-	return nil // filesystem not found
-}
-
-// SetApiClient sets the API client for a filesystem
-func (ofu *ObservedFilesystemUids) SetApiClient(uid uuid.UUID, apiClient *apiclient.ApiClient) {
-	ofu.Lock()
-	defer ofu.Unlock()
-	if ofu.uids == nil {
-		ofu.uids = make(map[uuid.UUID]*ObservedFilesystemUid)
-	}
-	if existing, exists := ofu.uids[uid]; exists {
-		existing.apiClient = apiClient // update the API client
-	}
+	return existing.apiClient // return the API client for the filesystem
 }
 
 func NewObservedFilesystemUids() *ObservedFilesystemUids {
-	return &ObservedFilesystemUids{}
+	return &ObservedFilesystemUids{
+		uids: make(map[uuid.UUID]*ObservedFilesystemUid),
+	}
 }
 
 type ObservedFilesystemUid struct {
+	sync.Mutex
 	apiClient  *apiclient.ApiClient // the API client for this filesystem
 	refCounter int
+}
+
+func (ofu *ObservedFilesystemUid) incRef() {
+	of := ofu
+	of.Lock()
+	defer of.Unlock()
+	of.refCounter++
+}
+
+func (ofu *ObservedFilesystemUid) decRef() {
+	of := ofu
+	of.Lock()
+	defer of.Unlock()
+	if of.refCounter > 0 {
+		of.refCounter--
+	}
 }
