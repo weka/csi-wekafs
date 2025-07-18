@@ -73,19 +73,8 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 			return quotaMap, nil
 		}
 	}
-
-	// If quotaMap does not exist or is stale, fetch it from the API
-	err := ms.updateQuotaMapPerFilesystem(ctx, fs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update QuotaMap for filesystem %s: %w", fs.Name, err)
-	}
-	ms.quotaMaps.Lock()
-	quotaMap, exists = ms.quotaMaps.QuotaMaps[fs.Uid]
-	ms.quotaMaps.Unlock()
-	if !exists {
-		return ms.GetQuotaMapForFilesystem(ctx, fs)
-	}
-	return quotaMap, nil
+	// If we reach here, we need to wait for the update to complete
+	return nil, errors.New("quota map not found for filesystem")
 }
 
 func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *apiclient.FileSystem) error {

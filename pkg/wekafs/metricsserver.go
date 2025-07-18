@@ -512,13 +512,10 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric")
 	defer logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric completed")
 	qosMetric, err := ms.FetchPvStats(ctx, vm.volume)
-	if err != nil {
+	if err != nil || qosMetric == nil {
+		logger.Warn().Str("pv_name", vm.persistentVolume.Name).Msg("Failed to fetch metric, skipping")
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
-	if qosMetric == nil {
-		return fmt.Errorf("no metric data available for persistent volume %s", vm.persistentVolume.Name)
-	}
-
 	vm.metrics = qosMetric
 	ms.volumeMetricsChan <- vm // Send the metric to the MetricsServer's incoming requests channel
 	return nil

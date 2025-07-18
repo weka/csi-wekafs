@@ -17,20 +17,20 @@ type VolumeMetric struct {
 }
 
 type VolumeMetrics struct {
-	sync.Mutex
+	sync.RWMutex
 	Metrics map[types.UID]*VolumeMetric
 }
 
 func (vms *VolumeMetrics) HasVolumeMetric(pvUID types.UID) bool {
-	vms.Lock()
-	defer vms.Unlock()
+	vms.RLock()
+	defer vms.RUnlock()
 	_, exists := vms.Metrics[pvUID]
 	return exists
 }
 
 func (vms *VolumeMetrics) GetVolumeMetric(pvUID types.UID) *VolumeMetric {
-	vms.Lock()
-	defer vms.Unlock()
+	vms.RLock()
+	defer vms.RUnlock()
 	if _, exists := vms.Metrics[pvUID]; exists {
 		return vms.Metrics[pvUID]
 	}
