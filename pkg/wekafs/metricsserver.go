@@ -175,9 +175,9 @@ func (ms *MetricsServer) initManager(ctx context.Context) {
 
 }
 
-// streamPersistentVolumes streams PersistentVolumes from Kubernetes, sending them to the provided channel.
-func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
-	component := "streamPersistentVolumes"
+// PersistentVolumeStreamer streams PersistentVolumes from Kubernetes, sending them to the provided channel.
+func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
+	component := "PersistentVolumeStreamer"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -303,8 +303,8 @@ func (ms *MetricsServer) pruneVolumeMetric(ctx context.Context, pvUUID types.UID
 	logger.Info().Str("pv_uid", string(pvUUID)).Msg("Removed persistent volume from metric collection")
 }
 
-func (ms *MetricsServer) processStreamedPersistentVolumes(ctx context.Context) {
-	component := "processStreamedPersistentVolumes"
+func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
+	component := "PersistentVolumeStreamProcessor"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -401,9 +401,13 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	volume.persistentVol = pv // Set the PersistentVolume reference in the Volume object
 	// Create a new VolumeMetric instance
 
-	fsObj, err := volume.getFilesystemObj(ctx, true)
+	fsObj, err := volume.getFilesystemObj(ctx, false)
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
+		return
+	}
+	if fsObj == nil {
+		logger.Error().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, skipping PersistentVolume")
 		return
 	}
 	ms.observedFilesystemUids.incRef(fsObj, apiClient) // Add the filesystem to the observed list
@@ -599,9 +603,9 @@ func (ms *MetricsServer) FetchPvStats(ctx context.Context, v *Volume) (*PvStats,
 	return ret, err
 }
 
-// reportMetricsStreamer listens on the volumeMetricsChan channel and reports prometheusMetrics to Prometheus.
-func (ms *MetricsServer) reportMetricsStreamer(ctx context.Context) {
-	component := "reportMetricsStreamer"
+// MetricsReportStreamer listens on the volumeMetricsChan channel and reports prometheusMetrics to Prometheus.
+func (ms *MetricsServer) MetricsReportStreamer(ctx context.Context) {
+	component := "MetricsReportStreamer"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -741,8 +745,7 @@ func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsQuotaUpdateConcurrentRequests) // limit concurrent goroutines
 	uids := ms.observedFilesystemUids.GetUids()
-	logger.Info().Int("observed_filesystem_count", len(uids)).Msg("Starting to update quota maps")
-	defer logger.Info().Msg("Finished to update quota maps")
+	logger.Info().Int("batch_count", len(uids)).Msg("Starting to update quota maps")
 
 	// update prometheusMetrics for batchUpdateQuotaMaps batches
 	ms.prometheusMetrics.QuotaUpdateBatchCount.Inc()
@@ -751,7 +754,12 @@ func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 		ms.prometheusMetrics.QuotaUpdateBatchDuration.Add(dur)
 		ms.prometheusMetrics.QuotaUpdateBatchDurationHistogram.Observe(dur)
 		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(len(uids)))
-		logger.Info().Dur("duration", time.Duration(dur*float64(time.Second))).Msg("Quota map update batch completed")
+		if time.Since(startTime) > ms.getConfig().wekaMetricsFetchInterval {
+			logger.Error().Int("batch_count", len(uids)).Dur("batch_duration_ms", time.Since(startTime)).
+				Msg("Finished to update quota maps, took longer than configured interval, consider increasing wekaMetricsFetchInterval or wekaMetricsQuotaUpdateConcurrentRequests")
+		} else {
+			logger.Info().Int("batch_count", len(uids)).Dur("batch_duration_ms", time.Since(startTime)).Msg("Finished to update quota maps on time")
+		}
 	}()
 
 	for fsUid, qm := range uids {
@@ -774,8 +782,8 @@ func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 	}
 }
 
-func (ms *MetricsServer) PeriodicUpdateQuotaMaps(ctx context.Context) {
-	component := "PeriodicUpdateQuotaMaps"
+func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
+	component := "PeriodicQuotaMapUpdater"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -788,19 +796,19 @@ func (ms *MetricsServer) PeriodicUpdateQuotaMaps(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info().Msg("PeriodicUpdateQuotaMaps context cancelled, stopping...")
+			logger.Info().Msg("PeriodicQuotaMapUpdater context cancelled, stopping...")
 			return
 		case <-time.After(ticker):
-			logger.Info().Msg("PeriodicUpdateQuotaMaps cycle triggered")
+			logger.Info().Msg("PeriodicQuotaMapUpdater cycle triggered")
 			ms.batchUpdateQuotaMaps(ctx)
 
 		}
 	}
 }
 
-func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
+func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 	// Periodically fetch prometheusMetrics for all persistent volumes
-	component := "PeriodicFetchMetrics"
+	component := "PeriodicMetricsFetcher"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -880,39 +888,24 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 
 	// Add a Runnable that only runs when this pod is elected leader
 	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting streamPersistentVolumes")
+		logger.Info().Msg("Leader elected, starting PersistentVolumeStreamer")
 
-		go ms.streamPersistentVolumes(ctx)
+		go ms.PersistentVolumeStreamer(ctx)
 
 		// Wait until leadership is lost or shutdown
 		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping streamPersistentVolumes")
+		log.Info().Msg("Leadership lost or shutdown, stopping PersistentVolumeStreamer")
 		return nil
 	}))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add streamPersistentVolumes to manager, cannot run MetricsServer without it")
+		Die("Failed to add PersistentVolumeStreamer to manager, cannot run MetricsServer without it")
 	}
 
 	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting reportMetricsStreamer")
+		logger.Info().Msg("Leader elected, starting MetricsReportStreamer")
 
-		go ms.reportMetricsStreamer(ctx)
-
-		// Wait until leadership is lost or shutdown
-		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add reportMetricsStreamer to manager, cannot run MetricsServer without it")
-	}
-
-	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting processStreamedPersistentVolumes")
-
-		go ms.processStreamedPersistentVolumes(ctx)
+		go ms.MetricsReportStreamer(ctx)
 
 		// Wait until leadership is lost or shutdown
 		<-ctx.Done()
@@ -921,13 +914,13 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	}))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add processStreamedPersistentVolumes to manager, cannot run MetricsServer without it")
+		Die("Failed to add MetricsReportStreamer to manager, cannot run MetricsServer without it")
 	}
 
 	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting PeriodicFetchMetrics")
+		logger.Info().Msg("Leader elected, starting PersistentVolumeStreamProcessor")
 
-		go ms.PeriodicFetchMetrics(ctx)
+		go ms.PersistentVolumeStreamProcessor(ctx)
 
 		// Wait until leadership is lost or shutdown
 		<-ctx.Done()
@@ -936,13 +929,28 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	}))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add PeriodicFetchMetrics to manager, cannot run MetricsServer without it")
+		Die("Failed to add PersistentVolumeStreamProcessor to manager, cannot run MetricsServer without it")
 	}
 
 	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting batchUpdateQuotaMaps")
+		logger.Info().Msg("Leader elected, starting PeriodicMetricsFetcher")
 
-		go ms.PeriodicUpdateQuotaMaps(ctx)
+		go ms.PeriodicMetricsFetcher(ctx)
+
+		// Wait until leadership is lost or shutdown
+		<-ctx.Done()
+		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
+		return nil
+	}))
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
+		Die("Failed to add PeriodicMetricsFetcher to manager, cannot run MetricsServer without it")
+	}
+
+	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		logger.Info().Msg("Leader elected, starting PeriodicQuotaMapUpdater")
+
+		go ms.PeriodicQuotaMapUpdater(ctx)
 
 		// Wait until leadership is lost or shutdown
 		<-ctx.Done()
