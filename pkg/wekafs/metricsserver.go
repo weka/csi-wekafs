@@ -32,6 +32,11 @@ import (
 var MetricsLabels = []string{"csi_driver_name", "pv_name", "cluster_guid", "storage_class_name", "filesystem_name", "volume_type", "pvc_name", "pvc_namespace", "pvc_uid"}
 var QuotaLabels = []string{"csi_driver_name", "cluster_guid", "filesystem_name"}
 
+const (
+	PVStreamChannelSize     = 100000 // Size of the channel for streaming PersistentVolume objects
+	VolumeMetricsBufferSize = 10000
+)
+
 type SecretsStore struct {
 	secrets map[int]*v1.Secret // map[secretName/secretNamespace]*v1.Secret
 	sync.Mutex
@@ -104,7 +109,7 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		secrets:               NewSecretsStore(),
 		volumeMetrics:         NewVolumeMetrics(),
 		prometheusMetrics:     NewPrometheusMetrics(),
-		persistentVolumesChan: make(chan *v1.PersistentVolume, driver.config.wekaMetricsFetchConcurrentRequests),
+		persistentVolumesChan: make(chan *v1.PersistentVolume, PVStreamChannelSize),
 		wg:                    sync.WaitGroup{},
 
 		quotaMaps:              NewQuotaMapsPerFilesystem(),
@@ -876,7 +881,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	ms.wg.Add(1)
 	go func() {
 
-		ms.volumeMetricsChan = make(chan *VolumeMetric, ms.config.wekaMetricsFetchConcurrentRequests)
+		ms.volumeMetricsChan = make(chan *VolumeMetric, VolumeMetricsBufferSize)
 		for {
 			select {
 			case <-ctx.Done():
