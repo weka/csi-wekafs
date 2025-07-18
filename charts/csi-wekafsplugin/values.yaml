@@ -117,7 +117,7 @@ metricsServer:
   # -- tolerations for metrics server only
   tolerations: *globalPluginTolerations
   # -- concurrent requests for WEKA metrics
-  maxConcurrentRequests: 5
+  maxConcurrentRequests: 50
   # -- metrics fetch interval in seconds, default is 60 seconds
   metricsFetchIntervalSeconds: 60
   # -- termination grace period for metrics server pods
@@ -125,7 +125,7 @@ metricsServer:
   # -- enable leader election for metrics server
   enableLeaderElection: true
   # -- number of concurrent requests for metrics server to update quota lists for a whole filesystem
-  quotaUpdateConcurrentRequests: 5
+  quotaUpdateConcurrentRequests: 25
 
 # -- Log level of CSI plugin
 logLevel: 5
