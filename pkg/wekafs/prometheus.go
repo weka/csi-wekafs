@@ -2,7 +2,7 @@ package wekafs
 
 import "github.com/prometheus/client_golang/prometheus"
 
-var HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000, 250000}
+var HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000}
 
 type PrometheusMetrics struct {
 	Capacity   *prometheus.GaugeVec
@@ -39,6 +39,7 @@ type PrometheusMetrics struct {
 	FetchMetricsBatchOperationsDuration  prometheus.Counter
 	FetchMetricsBatchOperationsHistogram prometheus.Histogram
 	FetchMetricsBatchSize                prometheus.Gauge
+	FetchMetricsFrequencySeconds         prometheus.Gauge // frequency of fetch metrics in seconds, taken from the configuration
 
 	// fetching single metrics. refer to single metrics fetch from Weka cluster
 	FetchSinglePvMetricsOperations          prometheus.Counter
@@ -68,7 +69,8 @@ type PrometheusMetrics struct {
 	QuotaUpdateBatchDuration          prometheus.Counter   // total duration of all quota updates in seconds
 	QuotaUpdateBatchDurationHistogram prometheus.Histogram // histogram of durations for quota updates
 	QuotaUpdateBatchSize              prometheus.Gauge     // total number of quotas updated in the last batch, or number of distinct observed filesystems
-
+	QuotaUpdateFrequencySeconds       prometheus.Gauge     // frequency of quota updates in seconds, taken from the configuration
+	QuotaUpdateConcurrentRequests     prometheus.Gauge     // number of concurrent quota update requests for filesystems, taken from the configuration
 }
 
 func (m *PrometheusMetrics) Init() {
@@ -225,6 +227,11 @@ func (m *PrometheusMetrics) Init() {
 		Help: "Size of the batch of metrics fetched from Weka cluster",
 	})
 
+	m.FetchMetricsFrequencySeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "weka_csi_metricsserver_fetch_metrics_frequency_seconds",
+		Help: "Frequency, or interval of fetching metrics from Weka cluster in seconds, taken from the configuration. Too high value may lead to stale metrics or API overload",
+	})
+
 	m.FetchSinglePvMetricsOperations = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "weka_csi_metricsserver_fetch_single_pv_metrics_operations_total",
 		Help: "Total number of single metrics fetch operations from Weka cluster",
@@ -355,6 +362,16 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
+	m.QuotaUpdateFrequencySeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "weka_csi_metricsserver_quota_update_frequency_seconds",
+		Help: "Frequency, or interval of per filesystem quota updates in seconds, taken from the configuration. Too high value may lead to stale quotas or API overload",
+	})
+
+	m.QuotaUpdateConcurrentRequests = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "weka_csi_metricsserver_quota_update_concurrent_requests",
+		Help: "Number of concurrent quota update requests for filesystems, taken from the configuration. This is used to limit the number of concurrent requests to the Weka API. Too high value may lead to API overload",
+	})
+
 	prometheus.MustRegister(
 		m.FetchPvBatchOperations,
 		m.FetchPvBatchOperationFailureCount,
@@ -370,6 +387,7 @@ func (m *PrometheusMetrics) Init() {
 		m.FetchMetricsBatchOperationsDuration,
 		m.FetchMetricsBatchOperationsHistogram,
 		m.FetchMetricsBatchSize,
+		m.FetchMetricsFrequencySeconds,
 		m.FetchSinglePvMetricsOperations,
 		m.FetchSinglePvMetricsOperationsDuration,
 		m.FetchSinglePvMetricsOperationsHistogram,
@@ -392,6 +410,8 @@ func (m *PrometheusMetrics) Init() {
 		m.QuotaUpdateBatchDuration,
 		m.QuotaUpdateBatchDurationHistogram,
 		m.QuotaUpdateBatchSize,
+		m.QuotaUpdateFrequencySeconds,
+		m.QuotaUpdateConcurrentRequests,
 	)
 }
 

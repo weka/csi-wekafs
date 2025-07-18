@@ -110,6 +110,9 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		quotaMaps:              NewQuotaMapsPerFilesystem(),
 		observedFilesystemUids: NewObservedFilesystemUids(),
 	}
+	ret.prometheusMetrics.FetchMetricsFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
+	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(float64(ret.getConfig().wekaMetricsQuotaUpdateConcurrentRequests))
+
 	return ret
 
 }
@@ -189,7 +192,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
 		pvList := &v1.PersistentVolumeList{}
-		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{})
+		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{Limit: 5})
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
 			ms.prometheusMetrics.FetchPvBatchOperationFailureCount.Inc()
