@@ -512,8 +512,9 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric")
 	defer logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric completed")
 	qosMetric, err := ms.FetchPvStats(ctx, vm.volume)
+	fsName := vm.volume.FilesystemName
 	if err != nil || qosMetric == nil {
-		logger.Warn().Str("pv_name", vm.persistentVolume.Name).Msg("Failed to fetch metric, skipping")
+		logger.Warn().Str("pv_name", vm.persistentVolume.Name).Str("filesystem_name", fsName).Msg("Failed to fetch metric, skipping. Consider increasing wekaMetricsFetchInterval")
 		ms.prometheusMetrics.FetchSinglePvMetricsFailureCount.Inc()
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
