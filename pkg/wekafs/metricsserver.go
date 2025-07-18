@@ -65,6 +65,8 @@ type MetricsServer struct {
 	quotaMaps              *QuotaMapsPerFilesystem
 	observedFilesystemUids *ObservedFilesystemUids // to track observed filesystem UIDs and their reference counts and API clients (for quota maps periodic updates)
 
+	firstStreamCompleted  bool // flag to indicate if the first stream of PersistentVolumes has been completed so we can start processing them
+	firstQuotaMapsFetched bool // flag to indicate if the first quota maps have been fetched so fetching metrics can start
 	sync.Mutex
 	wg sync.WaitGroup // WaitGroup to manage goroutines
 }
@@ -224,6 +226,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 
 		ms.pruneOldVolumes(ctx, pvList.Items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
 
+		ms.firstStreamCompleted = true
 		dur := ms.getConfig().wekaMetricsFetchInterval
 
 		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_diration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
@@ -802,7 +805,13 @@ func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("starting reporting metrics every defined interval")
+
+	logger.Info().Msg("Waiting for the first batch of PersistentVolumes to be streamed before starting PeriodicQuotaMapUpdater")
+	for !ms.firstStreamCompleted {
+		time.Sleep(100 * time.Millisecond) // Wait until the first batch of PersistentVolumes is streamed
+	}
+	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting PeriodicQuotaMapUpdater every defined interval")
+
 	ticker := ms.config.wekaMetricsFetchInterval
 	if ticker <= 0 {
 		ticker = time.Minute // Default to 1 minute if not set
@@ -815,7 +824,7 @@ func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 		case <-time.After(ticker):
 			logger.Info().Msg("PeriodicQuotaMapUpdater cycle triggered")
 			ms.batchUpdateQuotaMaps(ctx)
-
+			ms.firstQuotaMapsFetched = true // Mark that processing has started, so that PeriodicMetricsFetcher can proceed
 		}
 	}
 }
@@ -827,7 +836,14 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("starting reporting metrics every defined interval")
+
+	logger.Info().Msg("Waiting for the first batch of filesystem quota updates before starting PeriodicMetricsFetcher")
+	for !ms.firstQuotaMapsFetched {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting collection of WEKA metrics for PVs")
+
 	ticker := ms.config.wekaMetricsFetchInterval
 	if ticker <= 0 {
 		ticker = time.Minute // Default to 1 minute if not set
