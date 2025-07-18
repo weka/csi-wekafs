@@ -64,7 +64,10 @@ type PrometheusMetrics struct {
 	PeriodicFetchMetricsSuccessCount prometheus.Counter
 	PeriodicFetchMetricsFailureCount prometheus.Counter
 
-	QuotaMapUpdateCountPerFs     *prometheus.CounterVec   // total number of quota map updates
+	QuotaMapUpdateCountPerFsInvokeCount  *prometheus.CounterVec // total number of quota map updates
+	QuotaMapUpdateCountPerFsSuccessCount *prometheus.CounterVec // total number of successful quota map updates per filesystem
+	QuotaMapUpdateCountPerFsFailureCount *prometheus.CounterVec // total number of quota map updates
+
 	QuotaMapUpdateDurationPerFs  *prometheus.CounterVec   // total duration of quota map updates per filesystem in seconds
 	QuotaMapUpdateHistogramPerFs *prometheus.HistogramVec // histogram of durations for quota map updates per filesystem
 
@@ -327,10 +330,26 @@ func (m *PrometheusMetrics) Init() {
 		Help: "Total number of failed periodic fetch metrics invocations",
 	})
 
-	m.QuotaMapUpdateCountPerFs = prometheus.NewCounterVec(
+	m.QuotaMapUpdateCountPerFsInvokeCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "weka_csi_metricsserver_quota_map_update_count_per_fs_total",
+			Name: "weka_csi_metricsserver_quota_map_update_invoke_count_total",
 			Help: "Total number of quota map updates per filesystem",
+		},
+		QuotaLabels,
+	)
+
+	m.QuotaMapUpdateCountPerFsSuccessCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "weka_csi_metricsserver_quota_map_update_success_count_total",
+			Help: "Total number of successful quota map updates per filesystem",
+		},
+		QuotaLabels,
+	)
+
+	m.QuotaMapUpdateCountPerFsFailureCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "weka_csi_metricsserver_quota_map_update_failure_count_total",
+			Help: "Total number of failed quota map updates per filesystem",
 		},
 		QuotaLabels,
 	)
@@ -432,7 +451,8 @@ func (m *PrometheusMetrics) Init() {
 		m.PeriodicFetchMetricsSkipCount,
 		m.PeriodicFetchMetricsSuccessCount,
 		m.PeriodicFetchMetricsFailureCount,
-		m.QuotaMapUpdateCountPerFs,
+		m.QuotaMapUpdateCountPerFsInvokeCount,
+		m.QuotaMapUpdateCountPerFsFailureCount,
 		m.QuotaMapUpdateDurationPerFs,
 		m.QuotaMapUpdateHistogramPerFs,
 		m.QuotaUpdateBatchCountInvokedCount,

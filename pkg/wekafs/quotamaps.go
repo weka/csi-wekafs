@@ -112,7 +112,7 @@ func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *ap
 
 	// update per-fs prometheus metrics: "csi_driver_name", "cluster_guid", "filesystem_name"
 	labelValues := []string{ms.getConfig().GetDriver().name, apiClient.ClusterGuid.String(), fs.Name}
-	ms.prometheusMetrics.QuotaMapUpdateCountPerFs.WithLabelValues(labelValues...).Inc()
+	ms.prometheusMetrics.QuotaMapUpdateCountPerFsInvokeCount.WithLabelValues(labelValues...).Inc()
 	defer func() {
 		dur := time.Since(startTime).Seconds()
 		ms.prometheusMetrics.QuotaMapUpdateDurationPerFs.WithLabelValues(labelValues...).Add(dur)
@@ -122,8 +122,10 @@ func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *ap
 	// eventually this thread is the one that will fetch the updated quotaMap
 	quotaMap, err := apiClient.GetQuotaMap(ctx, fs)
 	if err != nil {
+		ms.prometheusMetrics.QuotaMapUpdateCountPerFsFailureCount.WithLabelValues(labelValues...).Inc()
 		return fmt.Errorf("failed to fetch QuotaMap for filesystem %s: %w", fs.Name, err)
 	}
+	ms.prometheusMetrics.QuotaMapUpdateCountPerFsSuccessCount.WithLabelValues(labelValues...).Inc()
 
 	ms.quotaMaps.Lock() // ensure thread safety when updating the quotaMaps
 	maplock.Lock()
