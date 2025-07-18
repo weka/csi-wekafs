@@ -21,7 +21,6 @@ func (ofu *ObservedFilesystemUids) GetByUid(uid uuid.UUID) *ObservedFilesystemUi
 	ofu.RLock()
 	defer ofu.RUnlock()
 	if existing, exists := ofu.uids[uid]; exists {
-		ofu.RUnlock()
 		return existing // return the ObservedFilesystemUid for the given UID
 	}
 	return nil
@@ -31,9 +30,7 @@ func (ofu *ObservedFilesystemUids) incRef(fs *apiclient.FileSystem, apiClient *a
 	if fs == nil || fs.Uid == uuid.Nil {
 		return // nothing to do
 	}
-	ofu.RLock()
 	of := ofu.GetByUid(fs.Uid)
-	ofu.RUnlock()
 	if of != nil {
 		of.incRef()
 	} else {
