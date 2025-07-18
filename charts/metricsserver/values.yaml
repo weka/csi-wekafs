@@ -23,7 +23,7 @@ metricsServer:
   # -- tolerations for metrics server only
   tolerations: {}
   # -- concurrent requests for WEKA metrics
-  maxConcurrentRequests: 50
+  maxConcurrentRequests: 25
   # -- metrics fetch interval in seconds, default is 300 seconds (every 5 minutes)
   metricsFetchIntervalSeconds: 300
   # -- termination grace period for metrics server pods

@@ -51,6 +51,12 @@ type FileSystem struct {
 	ForceFresh *bool `json:"-" url:"force_fresh,omitempty"`
 }
 
+type fsCacheEntry struct {
+	fs        *FileSystem
+	timestamp time.Time
+	cacheHits int
+}
+
 func (fs *FileSystem) SupportsPagination() bool {
 	return false
 }
@@ -173,6 +179,35 @@ func (a *ApiClient) GetFileSystemByFilter(ctx context.Context, query *FileSystem
 func (a *ApiClient) GetFileSystemByName(ctx context.Context, name string) (*FileSystem, error) {
 	query := &FileSystem{Name: name}
 	return a.GetFileSystemByFilter(ctx, query)
+}
+
+// CachedGetFileSystemByName returns a cached filesystem object by name.
+// If forceFresh is true, it fetches a new object and updates the cache.
+func (a *ApiClient) CachedGetFileSystemByName(ctx context.Context, name string, forceFresh bool) (*FileSystem, error) {
+	const cacheTTL = 30 * time.Second
+
+	a.fsCacheMu.Lock()
+	if a.fsCache == nil {
+		a.fsCache = make(map[string]*fsCacheEntry)
+	}
+	entry, found := a.fsCache[name]
+	a.fsCacheMu.Unlock()
+
+	if found && !forceFresh && time.Since(entry.timestamp) < cacheTTL {
+		entry.cacheHits++
+		return entry.fs, nil
+	}
+
+	fs, err := a.GetFileSystemByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+
+	a.fsCacheMu.Lock()
+	a.fsCache[name] = &fsCacheEntry{fs: fs, timestamp: time.Now()}
+	a.fsCacheMu.Unlock()
+
+	return fs, nil
 }
 
 func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateRequest, fs *FileSystem) error {

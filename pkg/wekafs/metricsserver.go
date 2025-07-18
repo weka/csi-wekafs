@@ -414,7 +414,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	volume.persistentVol = pv // Set the PersistentVolume reference in the Volume object
 	// Create a new VolumeMetric instance
 
-	fsObj, err := volume.getFilesystemObj(ctx, false)
+	fsObj, err := volume.getCachedFilesystemObj(ctx)
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
 		return
@@ -840,6 +840,11 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
+
+	if os.Getenv("DISABLE_PERIODIC_METRICS_FETCHER") == "true" {
+		logger.Info().Msg("PeriodicMetricsFetcher is disabled by environment variable, skipping periodic fetch")
+		return
+	}
 
 	logger.Info().Msg("Waiting for the first batch of filesystem quota updates before starting PeriodicMetricsFetcher")
 	for !ms.firstQuotaMapsFetched {

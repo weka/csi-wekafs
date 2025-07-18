@@ -454,6 +454,7 @@ func (m *PrometheusMetrics) Init() {
 		m.PeriodicFetchMetricsSuccessCount,
 		m.PeriodicFetchMetricsFailureCount,
 		m.QuotaMapUpdateCountPerFsInvokeCount,
+		m.QuotaMapUpdateCountPerFsSuccessCount,
 		m.QuotaMapUpdateCountPerFsFailureCount,
 		m.QuotaMapUpdateDurationPerFs,
 		m.QuotaMapUpdateHistogramPerFs,

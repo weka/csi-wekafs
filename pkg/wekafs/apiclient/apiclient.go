@@ -55,6 +55,9 @@ type ApiClient struct {
 	metrics                     *ApiMetrics
 	driverName                  string
 	RotateEndpointOnEachRequest bool // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
+
+	fsCache   map[string]*fsCacheEntry
+	fsCacheMu sync.Mutex
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string, driverName string) (*ApiClient, error) {

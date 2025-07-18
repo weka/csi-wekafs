@@ -890,6 +890,25 @@ func (v *Volume) getFilesystemObj(ctx context.Context, fromCache bool) (*apiclie
 	return fsObj, nil
 }
 
+func (v *Volume) getCachedFilesystemObj(ctx context.Context) (*apiclient.FileSystem, error) {
+	if v.fileSystemObject != nil && !v.fileSystemObject.IsRemoving {
+		return v.fileSystemObject, nil
+	}
+	if v.apiClient == nil {
+		return nil, errors.New("cannot get object of API-unbound volume")
+	}
+	fsObj, err := v.apiClient.CachedGetFileSystemByName(ctx, v.FilesystemName, false)
+	if err != nil {
+		if err == apiclient.ObjectNotFoundError {
+			return nil, nil
+		}
+		return nil, err
+	}
+	v.fileSystemObject = fsObj
+	return fsObj, nil
+
+}
+
 func (v *Volume) getSnapshotObj(ctx context.Context, fromCache bool) (*apiclient.Snapshot, error) {
 	if v.snapshotObject != nil && fromCache {
 		return v.snapshotObject, nil
