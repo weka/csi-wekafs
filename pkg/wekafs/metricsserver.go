@@ -118,7 +118,8 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		observedFilesystemUids: NewObservedFilesystemUids(),
 	}
 	ret.prometheusMetrics.FetchMetricsFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
-	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(float64(ret.getConfig().wekaMetricsQuotaUpdateConcurrentRequests))
+	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(float64(ret.getConfig().wekaMetricsFetchInterval.Seconds()))
+	ret.prometheusMetrics.QuotaUpdateConcurrentRequests.Set(float64(ret.getConfig().wekaMetricsQuotaUpdateConcurrentRequests))
 
 	return ret
 
@@ -229,7 +230,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		ms.firstStreamCompleted = true
 		dur := ms.getConfig().wekaMetricsFetchInterval
 
-		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_diration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
+		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_duration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
 
 		// refresh list of volumes every wekaMetricsFetchInterval
 		time.Sleep(dur)
