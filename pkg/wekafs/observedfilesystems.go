@@ -11,6 +11,15 @@ type ObservedFilesystemUids struct {
 	uids map[uuid.UUID]*ObservedFilesystemUid // map[filesystemUUID]int, where int is the number of references to this filesystem
 }
 
+func (ofu *ObservedFilesystemUids) GetUids() map[uuid.UUID]*ObservedFilesystemUid {
+	ofu.Lock()
+	defer ofu.Unlock()
+	if ofu.uids == nil {
+		return nil // no observed filesystems
+	}
+	return ofu.uids // return a copy of the map
+}
+
 func (ofu *ObservedFilesystemUids) incRef(fs *apiclient.FileSystem, apiClient *apiclient.ApiClient) {
 	if fs == nil || fs.Uid == uuid.Nil {
 		return // nothing to do

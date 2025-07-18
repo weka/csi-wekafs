@@ -30,6 +30,7 @@ import (
 )
 
 var MetricsLabels = []string{"csi_driver_name", "pv_name", "cluster_guid", "storage_class_name", "filesystem_name", "volume_type", "pvc_name", "pvc_namespace", "pvc_uid"}
+var QuotaLabels = []string{"csi_driver_name", "cluster_guid", "filesystem_name"}
 
 type SecretsStore struct {
 	secrets map[int]*v1.Secret // map[secretName/secretNamespace]*v1.Secret
@@ -188,7 +189,7 @@ func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
 		pvList := &v1.PersistentVolumeList{}
-		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{Limit: 5})
+		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{})
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
 			ms.prometheusMetrics.FetchPvBatchOperationFailureCount.Inc()
@@ -736,11 +737,24 @@ func (ms *MetricsServer) PeriodicUpdateQuotaMaps(ctx context.Context) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	logger.Info().Msg("Starting to update quota maps")
-	defer logger.Info().Msg("Finished to update quota maps")
+	startTime := time.Now()
 
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsQuotaUpdateConcurrentRequests) // limit concurrent goroutines
-	for fsUid, qm := range ms.observedFilesystemUids.uids {
+	uids := ms.observedFilesystemUids.GetUids()
+	logger.Info().Int("observer_filesystem_count", len(uids)).Msg("Starting to update quota maps")
+	defer logger.Info().Msg("Finished to update quota maps")
+
+	// update prometheusMetrics for PeriodicUpdateQuotaMaps batches
+	ms.prometheusMetrics.QuotaUpdateBatchCount.Inc()
+	defer func() {
+		dur := time.Since(startTime).Seconds()
+		ms.prometheusMetrics.QuotaUpdateBatchDuration.Add(dur)
+		ms.prometheusMetrics.QuotaUpdateBatchDurationHistogram.Observe(dur)
+		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(len(uids)))
+		logger.Info().Dur("duration", time.Duration(dur*float64(time.Second))).Msg("Quota map update batch completed")
+	}()
+
+	for fsUid, qm := range uids {
 		apiClient := qm.apiClient
 		fsObj := &apiclient.FileSystem{}
 		err := apiClient.GetFileSystemByUid(ctx, fsUid, fsObj, false)

@@ -59,6 +59,16 @@ type PrometheusMetrics struct {
 	PeriodicFetchMetricsSkipCount    prometheus.Counter
 	PeriodicFetchMetricsSuccessCount prometheus.Counter
 	PeriodicFetchMetricsFailureCount prometheus.Counter
+
+	QuotaMapUpdateCountPerFs     *prometheus.CounterVec   // total number of quota map updates
+	QuotaMapUpdateDurationPerFs  *prometheus.CounterVec   // total duration of quota map updates per filesystem in seconds
+	QuotaMapUpdateHistogramPerFs *prometheus.HistogramVec // histogram of durations for quota map updates per filesystem
+
+	QuotaUpdateBatchCount             prometheus.Counter   // total number of all quota updates
+	QuotaUpdateBatchDuration          prometheus.Counter   // total duration of all quota updates in seconds
+	QuotaUpdateBatchDurationHistogram prometheus.Histogram // histogram of durations for quota updates
+	QuotaUpdateBatchSize              prometheus.Gauge     // total number of quotas updated in the last batch, or number of distinct observed filesystems
+
 }
 
 func (m *PrometheusMetrics) Init() {
@@ -286,6 +296,58 @@ func (m *PrometheusMetrics) Init() {
 		Help: "Total number of failed periodic fetch metrics invocations",
 	})
 
+	m.QuotaMapUpdateCountPerFs = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "weka_csi_metricsserver_quota_map_update_count_per_fs_total",
+			Help: "Total number of quota map updates per filesystem",
+		},
+		QuotaLabels,
+	)
+
+	m.QuotaMapUpdateDurationPerFs = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "weka_csi_metricsserver_quota_map_update_duration_per_fs_seconds",
+			Help: "Total duration of quota map updates per filesystem in seconds",
+		},
+		QuotaLabels,
+	)
+
+	m.QuotaMapUpdateHistogramPerFs = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "weka_csi_metricsserver_quota_map_update_duration_per_fs_seconds_histogram",
+			Help: "Histogram of durations for quota map updates per filesystem",
+		},
+		QuotaLabels,
+	)
+
+	m.QuotaUpdateBatchCount = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "weka_csi_metricsserver_quota_update_batch_count_total",
+			Help: "Total number of all quota update batches performed",
+		},
+	)
+
+	m.QuotaUpdateBatchDuration = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "weka_csi_metricsserver_quota_update_batch_duration_seconds",
+			Help: "Total duration of all quota update batches in seconds",
+		},
+	)
+
+	m.QuotaUpdateBatchDurationHistogram = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "weka_csi_metricsserver_quota_update_batch_duration_seconds_histogram",
+			Help: "Histogram of durations for quota update batches",
+		},
+	)
+
+	m.QuotaUpdateBatchSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "weka_csi_metricsserver_quota_update_filesystem_count",
+			Help: "Total number of distinct observed filesystems in the last quota update batch",
+		},
+	)
+
 	prometheus.MustRegister(
 		m.FetchPvBatchOperations,
 		m.FetchPvBatchOperationFailureCount,
@@ -316,6 +378,13 @@ func (m *PrometheusMetrics) Init() {
 		m.PeriodicFetchMetricsSkipCount,
 		m.PeriodicFetchMetricsSuccessCount,
 		m.PeriodicFetchMetricsFailureCount,
+		m.QuotaMapUpdateCountPerFs,
+		m.QuotaMapUpdateDurationPerFs,
+		m.QuotaMapUpdateHistogramPerFs,
+		m.QuotaUpdateBatchCount,
+		m.QuotaUpdateBatchDuration,
+		m.QuotaUpdateBatchDurationHistogram,
+		m.QuotaUpdateBatchSize,
 	)
 }
 

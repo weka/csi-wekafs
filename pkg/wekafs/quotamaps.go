@@ -103,13 +103,31 @@ func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *ap
 	}
 	maplock = l.(*sync.Mutex)
 
+	startTime := time.Now()
+
 	logger.Info().Str("filesystem", fs.Name).Msg("Updating QuotaMap for filesystem")
-	defer logger.Info().Str("filesystem", fs.Name).Msg("Finished Updating QuotaMap for filesystem")
+	defer func() {
+		logger.Info().Str("filesystem", fs.Name).Dur("duration", time.Since(startTime)*time.Second).Msg("Finished Updating QuotaMap for filesystem")
+		if time.Since(startTime) > ms.getConfig().wekaMetricsFetchInterval {
+			logger.Error().Str("filesystem", fs.Name).Dur("duration", time.Since(startTime)*time.Second).Msg("Updating QuotaMap took longer than expected. Consider increasing wekaMetricsFetchInterval")
+		} else {
+			logger.Trace().Str("filesystem", fs.Name).Dur("duration", time.Since(startTime)*time.Second).Msg("Updating QuotaMap completed within expected time")
+		}
+	}()
 
 	apiClient := ms.observedFilesystemUids.GetApiClient(fs.Uid)
 	if apiClient == nil {
 		return fmt.Errorf("no API client found for filesystem UID %s", fs.Uid)
 	}
+
+	// update per-fs prometheus metrics: "csi_driver_name", "cluster_guid", "filesystem_name"
+	labelValues := []string{ms.getConfig().GetDriver().name, apiClient.ClusterGuid.String(), fs.Name}
+	ms.prometheusMetrics.QuotaMapUpdateCountPerFs.WithLabelValues(labelValues...).Inc()
+	defer func() {
+		dur := time.Since(startTime).Seconds()
+		ms.prometheusMetrics.QuotaMapUpdateDurationPerFs.WithLabelValues(labelValues...).Add(dur)
+		ms.prometheusMetrics.QuotaMapUpdateHistogramPerFs.WithLabelValues(labelValues...).Observe(dur)
+	}()
 
 	// eventually this thread is the one that will fetch the updated quotaMap
 	quotaMap, err := apiClient.GetQuotaMap(ctx, fs)

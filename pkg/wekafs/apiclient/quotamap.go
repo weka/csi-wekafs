@@ -118,7 +118,7 @@ func (a *ApiClient) GetQuotaMap(ctx context.Context, fs *FileSystem) (*QuotaMap,
 		logger.Error().Err(err).Msg("Failed to encode query parameters for quota list request")
 		return nil, RequestMissingParams
 	}
-
+	startTime := time.Now()
 	err = a.Get(ctx, r.getApiUrl(a), q, out)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to get quota list for filesystem")
@@ -136,5 +136,6 @@ func (a *ApiClient) GetQuotaMap(ctx context.Context, fs *FileSystem) (*QuotaMap,
 		}
 	}
 	ret.LastUpdate = time.Now()
+	logger.Debug().Str("filesystem", fs.Name).Dur("duration_ms", time.Since(startTime)).Int("object_count", len(*out)).Msg("Fetched QuotaMap for filesystem")
 	return ret, nil
 }
