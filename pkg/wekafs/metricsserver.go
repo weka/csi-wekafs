@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"strconv"
 
 	"github.com/go-logr/zerologr"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -29,7 +30,10 @@ import (
 	"time"
 )
 
-var MetricsLabels = []string{"csi_driver_name", "pv_name", "cluster_guid", "storage_class_name", "filesystem_name", "volume_type", "pvc_name", "pvc_namespace", "pvc_uid"}
+const (
+	PVStreamChannelSize     = 100000 // Size of the channel for streaming PersistentVolume objects
+	VolumeMetricsBufferSize = 10000
+)
 
 type SecretsStore struct {
 	secrets map[int]*v1.Secret // map[secretName/secretNamespace]*v1.Secret
@@ -39,48 +43,6 @@ type SecretsStore struct {
 func NewSecretsStore() *SecretsStore {
 	return &SecretsStore{
 		secrets: make(map[int]*v1.Secret),
-	}
-}
-
-type VolumeMetrics struct {
-	sync.Mutex
-	Metrics map[types.UID]*VolumeMetric
-}
-
-func (vms *VolumeMetrics) HasVolumeMetric(pvUID types.UID) bool {
-	vms.Lock()
-	defer vms.Unlock()
-	_, exists := vms.Metrics[pvUID]
-	return exists
-}
-
-func (vms *VolumeMetrics) GetVolumeMetric(pvUID types.UID) *VolumeMetric {
-	vms.Lock()
-	defer vms.Unlock()
-	if _, exists := vms.Metrics[pvUID]; exists {
-		return vms.Metrics[pvUID]
-	}
-	return nil
-}
-
-func (vms *VolumeMetrics) AddVolumeMetric(pvUID types.UID, metric *VolumeMetric) {
-	vms.Lock()
-	defer vms.Unlock()
-	if vms.Metrics == nil {
-		vms.Metrics = make(map[types.UID]*VolumeMetric)
-	}
-	vms.Metrics[pvUID] = metric
-}
-
-func (vms *VolumeMetrics) RemoveVolumeMetric(pvUID types.UID) {
-	vms.Lock()
-	defer vms.Unlock()
-	delete(vms.Metrics, pvUID)
-}
-
-func NewVolumeMetrics() *VolumeMetrics {
-	return &VolumeMetrics{
-		Metrics: make(map[types.UID]*VolumeMetric),
 	}
 }
 
@@ -97,6 +59,12 @@ type MetricsServer struct {
 	manager               ctrl.Manager
 	persistentVolumesChan chan *v1.PersistentVolume // channel for streaming PersistentVolume objects for further processing
 	volumeMetricsChan     chan *VolumeMetric        // channel for incoming requests
+
+	quotaMaps              *QuotaMapsPerFilesystem
+	observedFilesystemUids *ObservedFilesystemUids // to track observed filesystem UIDs and their reference counts and API clients (for quota maps periodic updates)
+
+	firstStreamCompleted  bool // flag to indicate if the first stream of PersistentVolumes has been completed so we can start processing them
+	firstQuotaMapsFetched bool // flag to indicate if the first quota maps have been fetched so fetching metrics can start
 	sync.Mutex
 	wg sync.WaitGroup // WaitGroup to manage goroutines
 }
@@ -127,15 +95,6 @@ func (ms *MetricsServer) getNodeId() string {
 	return ms.driver.nodeID
 }
 
-// VolumeMetric represents the prometheusMetrics for a single Persistent Volume in Kubernetes
-type VolumeMetric struct {
-	persistentVolume *v1.PersistentVolume // object that represents the Kubernetes Persistent Volume
-	volume           *Volume              // object that represents the Weka CSI Volume
-	metrics          *PvStats             // Weka metrics for the volume including capacity, used, free, reads, writes, readBytes, writeBytes, writeThroughput
-	secret           *v1.Secret           // Kubernetes Secret associated with the volume
-	apiClient        *apiclient.ApiClient // reference to the Weka API client
-}
-
 // NewMetricsServer initializes a new MetricsServer instance
 func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 	if driver == nil {
@@ -150,9 +109,16 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		secrets:               NewSecretsStore(),
 		volumeMetrics:         NewVolumeMetrics(),
 		prometheusMetrics:     NewPrometheusMetrics(),
-		persistentVolumesChan: make(chan *v1.PersistentVolume, driver.config.wekaMetricsFetchConcurrentRequests),
+		persistentVolumesChan: make(chan *v1.PersistentVolume, PVStreamChannelSize),
 		wg:                    sync.WaitGroup{},
+
+		quotaMaps: NewQuotaMapsPerFilesystem(),
 	}
+	ret.observedFilesystemUids = NewObservedFilesystemUids(ret)
+
+	ret.prometheusMetrics.FetchMetricsFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
+	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(float64(ret.getConfig().wekaMetricsFetchInterval.Seconds()))
+
 	return ret
 
 }
@@ -199,7 +165,6 @@ func (ms *MetricsServer) initManager(ctx context.Context) {
 	}
 	zerologr.NameFieldName = "logger"
 	zerologr.NameSeparator = "/"
-	zerologr.SetMaxV(1)
 	var logrLog = zerologr.New(logger)
 
 	ms.manager, err = ctrl.NewManager(config, ctrl.Options{
@@ -208,6 +173,7 @@ func (ms *MetricsServer) initManager(ctx context.Context) {
 		LeaderElectionID:        "csimetricsad0b5146.weka.io",
 		LeaderElectionNamespace: namespace,
 		PprofBindAddress:        pprofBindAddress,
+		HealthProbeBindAddress:  ":8081",
 	})
 	clog.SetLogger(logrLog)
 
@@ -218,109 +184,132 @@ func (ms *MetricsServer) initManager(ctx context.Context) {
 
 }
 
-func (ms *MetricsServer) getFullListOfPersistentVolumes(ctx context.Context, out chan<- *v1.PersistentVolume) error {
-	if ms.GetK8sApi() == nil {
-		close(out)
-		return errors.New("no k8s API client available")
-	}
-
-	// Get all PersistentVolumes
-	pvList, err := ms.GetK8sApi().CoreV1().PersistentVolumes().List(
-		ctx,
-		metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	go func() {
-		defer close(out)
-		for _, pv := range pvList.Items {
-			if pv.Spec.CSI != nil &&
-				pv.Spec.CSI.Driver == ms.driver.name &&
-				pv.Spec.Capacity != nil &&
-				pv.Spec.CSI.VolumeAttributes != nil &&
-				slices.Contains(KnownVolTypes[:], VolumeType(pv.Spec.CSI.VolumeAttributes["volumeType"])) &&
-				pv.Spec.CSI.NodePublishSecretRef != nil &&
-				(pv.Status.Phase == v1.VolumeBound || pv.Status.Phase == v1.VolumeReleased) {
-
-				select {
-				case <-ctx.Done():
-					return
-				case out <- &pv:
-				}
-			}
-		}
-	}()
-	return nil
-}
-
-// streamPersistentVolumes streams PersistentVolumes from Kubernetes, sending them to the provided channel.
-func (ms *MetricsServer) streamPersistentVolumes(ctx context.Context) {
-	component := "streamPersistentVolumes"
+// PersistentVolumeStreamer streams PersistentVolumes from Kubernetes, sending them to the provided channel.
+func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
+	component := "PersistentVolumeStreamer"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
+	ctx = context.WithValue(ctx, "start_time", time.Now())
 	out := ms.persistentVolumesChan
 
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
 		pvList := &v1.PersistentVolumeList{}
-		err := ms.manager.GetClient().List(ctx, pvList, &client.ListOptions{})
-		//err = restClient.Get()
+		opts := &client.ListOptions{}
+
+		// override the maximum count of PersistentVolumes to fetch from environment variable if set
+		maxCountStr := os.Getenv("MAXIMUM_PERSISTENT_VOLUME_COUNT")
+		if maxCountStr != "" {
+			maxCount, err := strconv.ParseInt(maxCountStr, 10, 64)
+			if err == nil { // handle error (e.g., log or set a default value)
+				opts.Limit = maxCount
+			}
+		}
+
+		err := ms.manager.GetClient().List(ctx, pvList, opts)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
+			ms.prometheusMetrics.FetchPvBatchOperationFailureCount.Inc()
 			time.Sleep(10 * time.Second)
 			continue
 		}
+
+		d := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
+		ms.prometheusMetrics.FetchPvBatchOperationsInvokeCount.Inc()
+		ms.prometheusMetrics.FetchPvBatchOperationsDurationSeconds.Add(d)
+		ms.prometheusMetrics.FetchPvBatchSize.Set(float64(len(pvList.Items)))
+		ms.prometheusMetrics.FetchPvBatchOperationsDurationHistogram.Observe(d)
+		ms.prometheusMetrics.MonitoredPersistentVolumesGauge.Set(float64(len(ms.volumeMetrics.Metrics)))
+
 		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes")
+
 		for _, pv := range pvList.Items {
 			select {
 			case <-ctx.Done():
 				return
 			case out <- &pv:
+				ms.prometheusMetrics.FetchPvBatchOperationsSuccessCount.Inc()
 			}
+			ms.prometheusMetrics.StreamPvOperationsCount.Inc()
 		}
-		ms.pruneOldVolumes(ctx, &(pvList.Items))
+
+		ms.pruneOldVolumes(ctx, pvList.Items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
+
+		if !ms.firstStreamCompleted {
+			logger.Info().Str("pv_count", fmt.Sprintf("%d", len(pvList.Items))).Msg("First stream of PersistentVolumes completed, starting fetching quota maps")
+			ms.firstStreamCompleted = true
+		} // Set the flag to indicate that the first stream of PersistentVolumes has been completed, so we can start processing them
+
 		dur := ms.getConfig().wekaMetricsFetchInterval
 
-		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_diration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
+		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_duration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
 
 		// refresh list of volumes every wekaMetricsFetchInterval
 		time.Sleep(dur)
 	}
 }
 
-func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList *[]v1.PersistentVolume) {
-	currentUIDs := make(map[types.UID]struct{}, len(*pvList))
-	for _, pv := range *pvList {
+func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList []v1.PersistentVolume) {
+	component := "pruneOldVolumes"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = context.WithValue(ctx, "start_time", time.Now())
+	logger := log.Ctx(ctx).With().Str("component", component).Str("span_id", span.SpanContext().SpanID().String()).Str("trace_id", span.SpanContext().TraceID().String()).Logger()
+	logger.Trace().Msg("Pruning old volumes from metrics collection")
+	var pruneCount float64 = 0
+	defer func() {
+		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
+		ms.prometheusMetrics.PruneVolumesBatchInvokeCount.Inc()
+		ms.prometheusMetrics.PruneVolumesBatchSize.Set(pruneCount)
+		ms.prometheusMetrics.PruneVolumesBatchDurationSeconds.Add(dur)
+		ms.prometheusMetrics.PruneVolumesBatchDurationHistogram.Observe(dur)
+		if pruneCount > 0 {
+			logger.Info().Int("pruned_volumes", int(pruneCount)).Msg("Pruned stale volumes")
+		} else {
+			logger.Info().Msg("No stale volumes to prune")
+		}
+
+	}()
+
+	currentUIDs := make(map[types.UID]struct{}, len(pvList))
+	for _, pv := range pvList {
 		currentUIDs[pv.UID] = struct{}{}
 	}
+	uids := ms.fetchMetricKeys(ctx)
 	// Remove metrics for UIDs not present in the current PV list
+	for _, uid := range uids {
+		if _, exists := currentUIDs[uid]; !exists {
+			pruneCount++
+			ms.pruneVolumeMetric(ctx, uid)
+		}
+	}
+}
+
+func (ms *MetricsServer) fetchMetricKeys(ctx context.Context) []types.UID {
 	ms.volumeMetrics.Lock()
+	defer ms.volumeMetrics.Unlock()
 	// obtain the current UIDs atomically and release the lock
 	var keys []types.UID
 	for k := range ms.volumeMetrics.Metrics {
 		keys = append(keys, k)
 	}
-	ms.volumeMetrics.Unlock()
-	for _, uid := range keys {
-		if _, exists := currentUIDs[uid]; !exists {
-			ms.pruneVolumeMetric(ctx, uid)
-		}
-	}
+	return keys
 }
 
 func (ms *MetricsServer) removePrometheusMetricsForLabels(ctx context.Context, metric *VolumeMetric) {
 	logger := log.Ctx(ctx)
 	logger.Trace().Str("pv_name", metric.persistentVolume.Name).Msg("Removing prometheus metrics labels for volume")
 	labelValues := ms.createPrometheusLabelsForMetric(metric)
-	ms.prometheusMetrics.Capacity.DeleteLabelValues(labelValues...)
-	ms.prometheusMetrics.Used.DeleteLabelValues(labelValues...)
-	ms.prometheusMetrics.Free.DeleteLabelValues(labelValues...)
-	ms.prometheusMetrics.Reads.DeleteLabelValues(labelValues...)
-	ms.prometheusMetrics.Writes.DeleteLabelValues(labelValues...)
-	ms.prometheusMetrics.ReadBytes.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.CapacityBytes.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.UsedBytes.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.FreeBytes.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.PvReportedCapacityBytes.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.ReadsTotal.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.WritesTotal.DeleteLabelValues(labelValues...)
+	ms.prometheusMetrics.ReadBytesTotal.DeleteLabelValues(labelValues...)
 	ms.prometheusMetrics.WriteBytes.DeleteLabelValues(labelValues...)
 	ms.prometheusMetrics.ReadDurationUs.DeleteLabelValues(labelValues...)
 	ms.prometheusMetrics.WriteDurationUs.DeleteLabelValues(labelValues...)
@@ -332,14 +321,24 @@ func (ms *MetricsServer) pruneVolumeMetric(ctx context.Context, pvUUID types.UID
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
+	defer ms.prometheusMetrics.PersistentVolumeRemovalsCount.Inc()
+
 	metric := ms.volumeMetrics.GetVolumeMetric(pvUUID)
+
+	// decrease refcounter to a filesystem
+	fsObj, err := metric.volume.getFilesystemObj(ctx, true)
+	if err != nil {
+		logger.Error().Err(err).Str("pv_uid", string(pvUUID)).Msg("Failed to get filesystem object for volume metric, skipping removal")
+	}
+
+	ms.observedFilesystemUids.decRef(fsObj) // actually decrease refcounter
 	ms.volumeMetrics.RemoveVolumeMetric(pvUUID)
 	ms.removePrometheusMetricsForLabels(ctx, metric)
 	logger.Info().Str("pv_uid", string(pvUUID)).Msg("Removed persistent volume from metric collection")
 }
 
-func (ms *MetricsServer) processStreamedPersistentVolumes(ctx context.Context) {
-	component := "processStreamedPersistentVolumes"
+func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
+	component := "PersistentVolumeStreamProcessor"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -380,6 +379,14 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
+	ctx = context.WithValue(ctx, "start_time", time.Now())
+	defer func() {
+		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
+		ms.prometheusMetrics.ProcessPvOperationsCount.Inc()
+		ms.prometheusMetrics.ProcessPvOperationsDurationSeconds.Add(dur)
+		ms.prometheusMetrics.ProcessPvOperationsDurationHistogram.Observe(dur)
+	}()
+
 	// Validate the PersistentVolume validity
 	err := ms.ensurePersistentVolumeValid(pv)
 	if err != nil {
@@ -393,7 +400,9 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		return
 	}
 
-	logger.Info().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received a new PersistentVolume for processing")
+	logger.Debug().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received a new PersistentVolume for processing")
+
+	ms.prometheusMetrics.PersistentVolumeAdditionsCount.Inc()
 
 	secret, err := ms.fetchSecret(ctx, pv.Spec.CSI.NodePublishSecretRef.Name, pv.Spec.CSI.NodePublishSecretRef.Namespace)
 	if err != nil {
@@ -416,6 +425,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to create API client from secret, skipping PersistentVolume")
 		return
 	}
+	apiClient.RotateEndpointOnEachRequest = true // Rotate endpoint on each request to ensure we spread the load across all endpoints
 
 	volume, err := NewVolumeFromId(ctx, pv.Spec.CSI.VolumeHandle, apiClient, ms)
 	if err != nil {
@@ -424,6 +434,18 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	}
 	volume.persistentVol = pv // Set the PersistentVolume reference in the Volume object
 	// Create a new VolumeMetric instance
+
+	fsObj, err := volume.getCachedFilesystemObj(ctx)
+	if err != nil {
+		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
+		return
+	}
+	if fsObj == nil {
+		logger.Error().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, skipping PersistentVolume")
+		return
+	}
+	ms.observedFilesystemUids.incRef(fsObj, apiClient) // Add the filesystem to the observed list
+
 	metric := &VolumeMetric{
 		persistentVolume: pv,
 		volume:           volume,
@@ -476,12 +498,11 @@ func (ms *MetricsServer) fetchSecret(ctx context.Context, secretName, secretName
 	secretKey := fmt.Sprintf("%s/%s", secretNamespace, secretName)
 	hash := hashString(secretKey, math.MaxInt)
 	ms.secrets.Lock()
+	defer ms.secrets.Unlock()
 	if secret, exists := ms.secrets.secrets[hash]; exists {
-		ms.secrets.Unlock()
 		logger.Trace().Str("namespace", secretNamespace).Str("name", secretName).Msg("Using a secret from cache")
 		return secret, nil // Return cached secret if available
 	}
-	ms.secrets.Unlock()
 	logger.Debug().Str("namespace", secretNamespace).Str("name", secretName).Msg("Fetching Secret")
 	if ms.GetK8sApi() == nil {
 		return nil, errors.New("no k8s API client available")
@@ -490,8 +511,6 @@ func (ms *MetricsServer) fetchSecret(ctx context.Context, secretName, secretName
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch secret %s/%s: %w", secretNamespace, secretName, err)
 	}
-	ms.secrets.Lock()
-	defer ms.secrets.Unlock()
 	ms.secrets.secrets[hash] = secret // Cache the secret
 	return secret, nil
 }
@@ -501,19 +520,35 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	component := "fetchSingleMetric"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	ctx = log.Ctx(ctx).With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
+	ctx = context.WithValue(ctx, "start_time", time.Now())
+
+	ms.prometheusMetrics.FetchSinglePvMetricsOperationsInvokeCount.Inc()
+	defer func() {
+		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
+		ms.prometheusMetrics.FetchSinglePvMetricsOperationsDurationSeconds.Add(dur)
+		ms.prometheusMetrics.FetchSinglePvMetricsOperationsDurationHistogram.Observe(dur)
+	}()
 
 	// Fetch prometheusMetrics for a single persistent volume
-	logger.Trace().Str("persistent_volume", vm.persistentVolume.Name).Msg("Fetching Metric")
-
-	qosMetric, err := vm.volume.FetchPvStats(ctx)
+	logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric")
+	defer logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric completed")
+	qosMetric, err := ms.FetchPvStats(ctx, vm.volume)
+	fsName := vm.volume.FilesystemName
 	if err != nil {
+		logger.Warn().Err(err).Str("pv_name", vm.persistentVolume.Name).Str("filesystem_name", fsName).Msg("Failed to fetch metric, skipping. Consider increasing wekaMetricsFetchInterval")
+		ms.prometheusMetrics.FetchSinglePvMetricsOperationsFailureCount.Inc()
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
-
+	if qosMetric == nil {
+		logger.Warn().Str("pv_name", vm.persistentVolume.Name).Str("filesystem_name", fsName).Msg("Fetched nil metric, skipping. Consider increasing wekaMetricsFetchInterval")
+		ms.prometheusMetrics.FetchSinglePvMetricsOperationsFailureCount.Inc()
+		return fmt.Errorf("fetched nil metric for persistent volume %s", vm.persistentVolume.Name)
+	}
 	vm.metrics = qosMetric
 	ms.volumeMetricsChan <- vm // Send the metric to the MetricsServer's incoming requests channel
+	ms.prometheusMetrics.FetchSinglePvMetricsOperationsSuccessCount.Inc()
 	return nil
 }
 
@@ -521,20 +556,52 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 	component := "FetchMetrics"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
+
+	logger := log.Ctx(ctx).With().Str("component", component).Str("span_id", span.SpanContext().SpanID().String()).Str("trace_id", span.SpanContext().TraceID().String()).Logger()
+
+	ctx = context.WithValue(ctx, "start_time", time.Now())
 	wg := &sync.WaitGroup{}
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
+	keys := ms.fetchMetricKeys(ctx)
+	ms.prometheusMetrics.FetchMetricsBatchSize.Set(float64(len(keys)))
+	ms.prometheusMetrics.FetchMetricsBatchOperationsInvokeCount.Inc()
+	succeeded := true
+	defer func() {
+		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
+		if succeeded {
+			ms.prometheusMetrics.FetchMetricsBatchOperationsSuccessCount.Inc()
+		} else {
+			ms.prometheusMetrics.FetchMetricsBatchOperationsFailureCount.Inc()
+		}
+		ms.prometheusMetrics.FetchMetricsBatchOperationsDurationSeconds.Add(dur)
+		ms.prometheusMetrics.FetchMetricsBatchOperationsDurationHistogram.Observe(dur)
+		if dur > float64(ms.getConfig().wekaMetricsFetchInterval.Seconds()) {
+			logger.Warn().Int("pv_count", len(keys)).Dur("fetch_duration", time.Duration(dur*float64(time.Second))).Msg("Fetching metrics took longer than the configured interval, consider increasing wekaMetricsFetchInterval or wekaMetricsFetchConcurrentRequests")
+		} else {
+			logger.Info().Int("pv_count", len(keys)).Dur("fetch_duration", time.Duration(dur*float64(time.Second))).Msg("Fetched metrics for PersistentVolumes")
+		}
+	}()
 
-	for _, vm := range ms.volumeMetrics.Metrics {
+	logger.Info().Int("pv_count", len(keys)).Msg("Starting to fetch prometheusMetrics for PersistentVolumes")
+	defer logger.Info().Int("pv_count", len(keys)).Msg("Finished to fetch prometheusMetrics for PersistentVolumes")
+	for _, key := range keys {
+		vm := ms.volumeMetrics.GetVolumeMetric(key)
 		wg.Add(1)
 		sem <- struct{}{} // Acquire a slot in the semaphore
 
 		go func(vm *VolumeMetric) {
+			if vm == nil || vm.persistentVolume == nil {
+				logger.Error().Str("pv_uid", string(key)).Msg("VolumeMetric or PersistentVolume is nil, skipping")
+				wg.Done()
+				<-sem // Release the slot in the semaphore
+				return
+			}
 			defer wg.Done()
 			defer func() { <-sem }() // Release the slot in the semaphore
 
-			err := ms.fetchSingleMetric(ctx, vm)
+			err := ms.fetchSingleMetric(ctx, vm) // Actually fetch the prometheusMetrics for the persistent volume
 			if err != nil {
-				fmt.Printf("failed to fetch prometheusMetrics for persistent volume %s: %v\n", vm.persistentVolume.Name, err)
+				succeeded = false
 			}
 		}(vm)
 	}
@@ -543,9 +610,49 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 	return nil
 }
 
-// reportMetricsStreamer listens on the volumeMetricsChan channel and reports prometheusMetrics to Prometheus.
-func (ms *MetricsServer) reportMetricsStreamer(ctx context.Context) {
-	component := "reportMetricsStreamer"
+func (ms *MetricsServer) fetchPvUsageStats(ctx context.Context, v *Volume) (*UsageStats, error) {
+	inodeId, err := v.getInodeId(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inode ID for volume %s: %w", v.persistentVol.Name, err)
+	}
+	fsObj, err := v.getFilesystemObj(ctx, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get filesystem object for volume %s: %w", v.persistentVol.Name, err)
+	}
+	if fsObj == nil {
+		return nil, fmt.Errorf("failed to get filesystem object for volume %s", v.persistentVol.Name)
+	}
+	quotaMap, err := ms.GetQuotaMapForFilesystem(ctx, fsObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quota map for filesystem %s: %w", fsObj.Name, err)
+	}
+	if quotaMap == nil {
+		return nil, fmt.Errorf("quota map is nil for filesystem %s", fsObj.Name)
+	}
+	// Find the quota entry for the inode ID
+	quotaEntry := quotaMap.GetQuotaForInodeId(inodeId)
+	if quotaEntry == nil {
+		return &UsageStats{}, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
+	}
+	return &UsageStats{
+
+		Capacity:  int64(quotaEntry.HardLimitBytes),
+		Used:      int64(quotaEntry.UsedBytes),
+		Free:      int64(quotaEntry.HardLimitBytes - quotaEntry.UsedBytes),
+		Timestamp: quotaEntry.LastUpdateTime,
+	}, nil
+}
+
+func (ms *MetricsServer) FetchPvStats(ctx context.Context, v *Volume) (*PvStats, error) {
+	ret := &PvStats{}
+	usageStats, err := ms.fetchPvUsageStats(ctx, v)
+	ret.Usage = usageStats
+	return ret, err
+}
+
+// MetricsReportStreamer listens on the volumeMetricsChan channel and reports prometheusMetrics to Prometheus.
+func (ms *MetricsServer) MetricsReportStreamer(ctx context.Context) {
+	component := "MetricsReportStreamer"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -579,6 +686,7 @@ func (ms *MetricsServer) reportMetricsStreamer(ctx context.Context) {
 						WriteBytes:     p.WriteBytes - lastStat.WriteBytes,
 						ReadLatencyUs:  p.ReadLatencyUs - lastStat.ReadLatencyUs,
 						WriteLatencyUs: p.WriteLatencyUs - lastStat.WriteLatencyUs,
+						Timestamp:      p.Timestamp,
 					}
 				}
 				metric.volume.lastStats = p
@@ -586,18 +694,20 @@ func (ms *MetricsServer) reportMetricsStreamer(ctx context.Context) {
 			// enrich labels with persistent volume claim information
 			labelValues := ms.createPrometheusLabelsForMetric(metric)
 
-			logger.Trace().Str("pv_name", metric.persistentVolume.Name).Msg("Reporting prometheusMetrics for PersistentVolume")
-			ms.prometheusMetrics.Capacity.WithLabelValues(labelValues...).Set(float64(u.Capacity))
-			ms.prometheusMetrics.Used.WithLabelValues(labelValues...).Set(float64(u.Used))
-			ms.prometheusMetrics.Free.WithLabelValues(labelValues...).Set(float64(u.Free))
+			if u != nil {
+				logger.Trace().Str("pv_name", metric.persistentVolume.Name).Msg("Reporting prometheusMetrics for PersistentVolume")
+				ms.prometheusMetrics.CapacityBytes.WithLabelValues(labelValues...).SetWithTimestamp(float64(u.Capacity), u.Timestamp)
+				ms.prometheusMetrics.UsedBytes.WithLabelValues(labelValues...).SetWithTimestamp(float64(u.Used), u.Timestamp)
+				ms.prometheusMetrics.FreeBytes.WithLabelValues(labelValues...).SetWithTimestamp(float64(u.Free), u.Timestamp)
+			}
 			if pDiff != nil {
 				// Report performance metrics if available
-				ms.prometheusMetrics.Reads.WithLabelValues(labelValues...).Add(float64(pDiff.Reads))
-				ms.prometheusMetrics.Writes.WithLabelValues(labelValues...).Add(float64(pDiff.Writes))
-				ms.prometheusMetrics.ReadBytes.WithLabelValues(labelValues...).Add(float64(pDiff.ReadBytes))
-				ms.prometheusMetrics.WriteBytes.WithLabelValues(labelValues...).Add(float64(pDiff.WriteBytes))
-				ms.prometheusMetrics.ReadDurationUs.WithLabelValues(labelValues...).Add(float64(pDiff.ReadLatencyUs))
-				ms.prometheusMetrics.WriteDurationUs.WithLabelValues(labelValues...).Add(float64(pDiff.WriteLatencyUs))
+				ms.prometheusMetrics.ReadsTotal.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.Reads), pDiff.Timestamp)
+				ms.prometheusMetrics.WritesTotal.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.Writes), pDiff.Timestamp)
+				ms.prometheusMetrics.ReadBytesTotal.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.ReadBytes), pDiff.Timestamp)
+				ms.prometheusMetrics.WriteBytes.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.WriteBytes), pDiff.Timestamp)
+				ms.prometheusMetrics.ReadDurationUs.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.ReadLatencyUs), pDiff.Timestamp)
+				ms.prometheusMetrics.WriteDurationUs.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.WriteLatencyUs), pDiff.Timestamp)
 			}
 		case <-ctx.Done():
 			logger.Info().Msg("Context cancelled, stopping reporting metrics")
@@ -640,14 +750,140 @@ func (ms *MetricsServer) InvalidateSecret(ctx context.Context, secretName, secre
 	}
 }
 
-func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
-	// Periodically fetch prometheusMetrics for all persistent volumes
-	component := "reportMetricsStreamer"
+func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
+	component := "reportOnlyPvCapacities"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("starting reporting metrics every defined interval")
+
+	keys := ms.fetchMetricKeys(ctx)
+	logger.Info().Int("pv_count", len(keys)).Msg("Starting to report only PersistentVolume capacities")
+	if len(keys) == 0 {
+		logger.Info().Msg("No PersistentVolumes found, nothing to report")
+		return
+	}
+
+	for _, key := range keys {
+		metric := ms.volumeMetrics.GetVolumeMetric(key)
+		if metric == nil || metric.persistentVolume == nil {
+			logger.Warn().Str("pv_uid", string(key)).Msg("VolumeMetric or PersistentVolume is nil, skipping")
+			continue
+		}
+
+		r := metric.persistentVolume.Spec.Capacity.Storage()
+		if r == nil {
+			logger.Warn().Str("pv_name", metric.persistentVolume.Name).Msg("PersistentVolume capacity is nil, skipping")
+			continue
+		}
+		capacity := r.Value()
+		labels := ms.createPrometheusLabelsForMetric(metric)
+		ms.prometheusMetrics.PvReportedCapacityBytes.WithLabelValues(labels...).Set(float64(capacity))
+
+	}
+	logger.Info().Int("pv_count", len(keys)).Msg("Finished to report only PersistentVolume capacities")
+}
+
+func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) {
+
+	component := "batchRefreshQuotaMaps"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	startTime := time.Now()
+
+	concurrency := ms.getConfig().wekaMetricsQuotaUpdateConcurrentRequests
+	sem := make(chan struct{}, concurrency) // limit concurrent goroutines
+	uids := ms.observedFilesystemUids.GetUids()
+	logger := log.Ctx(ctx).With().Int("batch_size", len(uids)).Int("concurrency", concurrency).Logger()
+	logger.Info().Msg("Starting to update quota maps")
+
+	// update prometheusMetrics for batchRefreshQuotaMaps batches
+	ms.prometheusMetrics.QuotaUpdateBatchInvokeCount.Inc()
+	defer func() {
+		dur := time.Since(startTime).Seconds()
+		ms.prometheusMetrics.QuotaUpdateBatchSuccessCount.Inc()
+		ms.prometheusMetrics.QuotaUpdateBatchDurationSeconds.Add(dur)
+		ms.prometheusMetrics.QuotaUpdateBatchDurationHistogram.Observe(dur)
+		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(len(uids)))
+		if time.Since(startTime) > ms.getConfig().wekaMetricsFetchInterval {
+			logger.Error().Dur("batch_duration_ms", time.Since(startTime)).
+				Msg("Finished to update quota maps, took longer than configured interval, consider increasing wekaMetricsFetchInterval or wekaMetricsQuotaUpdateConcurrentRequests")
+		} else {
+			logger.Info().Dur("batch_duration_ms", time.Since(startTime)).Msg("Finished to update quota maps on time")
+		}
+	}()
+
+	for fsUid, qm := range uids {
+		apiClient := qm.apiClient
+		fsObj := &apiclient.FileSystem{}
+		err := apiClient.GetFileSystemByUid(ctx, fsUid, fsObj, false)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to get filesystem object for quota map update")
+			continue
+		}
+
+		sem <- struct{}{} // acquire a slot
+		go func(fsObj *apiclient.FileSystem) {
+			defer func() { <-sem }() // release the slot
+			err = ms.refreshQuotaMapPerFilesystem(ctx, fsObj, force)
+			if err != nil {
+				logger.Error().Err(err).Str("filesystem_name", fsObj.Name).Msg("Failed to update quota map for filesystem")
+			}
+		}(fsObj)
+	}
+}
+
+func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
+	component := "PeriodicQuotaMapUpdater"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+
+	logger.Info().Msg("Waiting for the first batch of PersistentVolumes to be streamed before starting PeriodicQuotaMapUpdater")
+	for !ms.firstStreamCompleted {
+		time.Sleep(100 * time.Millisecond) // Wait until the first batch of PersistentVolumes is streamed
+	}
+	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting PeriodicQuotaMapUpdater every defined interval")
+
+	ticker := ms.config.wekaMetricsFetchInterval
+	if ticker <= 0 {
+		ticker = time.Minute // Default to 1 minute if not set
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("PeriodicQuotaMapUpdater context cancelled, stopping...")
+			return
+		case <-time.After(ticker):
+			logger.Info().Msg("PeriodicQuotaMapUpdater cycle triggered")
+			ms.batchRefreshQuotaMaps(ctx, false)
+			ms.firstQuotaMapsFetched = true // Mark that processing has started, so that PeriodicMetricsFetcher can proceed
+		}
+	}
+}
+
+func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
+	// Periodically fetch prometheusMetrics for all persistent volumes
+	component := "PeriodicMetricsFetcher"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+
+	if os.Getenv("DISABLE_PERIODIC_METRICS_FETCHER") == "true" {
+		logger.Info().Msg("PeriodicMetricsFetcher is disabled by environment variable, skipping periodic fetch")
+		return
+	}
+
+	logger.Info().Msg("Waiting for the first batch of filesystem quota updates before starting PeriodicMetricsFetcher")
+	for !ms.firstQuotaMapsFetched {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting collection of WEKA metrics for PVs")
+
 	ticker := ms.config.wekaMetricsFetchInterval
 	if ticker <= 0 {
 		ticker = time.Minute // Default to 1 minute if not set
@@ -658,11 +894,22 @@ func (ms *MetricsServer) PeriodicFetchMetrics(ctx context.Context) {
 			logger.Info().Msg("Periodic fetch prometheusMetrics context cancelled, stopping...")
 			return
 		case <-time.After(ticker):
+			startTime := time.Now()
+			logger.Info().Msg("Periodic fetch prometheusMetrics cycle triggered")
+			go func() {
+				ms.reportOnlyPvCapacities(ctx) // Report only capacities, assuming it will go faster and will not block the periodic fetch
+			}()
+			ms.prometheusMetrics.PeriodicFetchMetricsInvokeCount.Inc()
 			logger.Info().Int("pv_count", len(ms.volumeMetrics.Metrics)).Msg("Fetching prometheusMetrics for PersistentVolumes")
 			err := ms.FetchMetrics(ctx)
 			if err != nil {
 				logger.Error().Err(err).Msg("Error fetching prometheusMetrics")
+				ms.prometheusMetrics.PeriodicFetchMetricsSuccessCount.Inc()
+			} else {
+				ms.prometheusMetrics.PeriodicFetchMetricsFailureCount.Inc()
 			}
+			dur := time.Since(startTime)
+			logger.Info().Dur("duration", dur).Msg("Periodic fetch prometheusMetrics cycle completed")
 		}
 	}
 }
@@ -694,7 +941,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	ms.wg.Add(1)
 	go func() {
 
-		ms.volumeMetricsChan = make(chan *VolumeMetric, ms.config.wekaMetricsFetchConcurrentRequests)
+		ms.volumeMetricsChan = make(chan *VolumeMetric, VolumeMetricsBufferSize)
 		for {
 			select {
 			case <-ctx.Done():
@@ -709,63 +956,20 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 
 	// Add a Runnable that only runs when this pod is elected leader
 	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting streamPersistentVolumes")
+		logger.Info().Msg("Leader elected, starting MetricsServer processors")
 
-		go ms.streamPersistentVolumes(ctx)
-
-		// Wait until leadership is lost or shutdown
+		go ms.PersistentVolumeStreamer(ctx)
+		go ms.MetricsReportStreamer(ctx)
+		go ms.PersistentVolumeStreamProcessor(ctx)
+		go ms.PeriodicMetricsFetcher(ctx)
+		go ms.PeriodicQuotaMapUpdater(ctx)
 		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping streamPersistentVolumes")
+		log.Info().Msg("Leadership lost or shutdown, stopping...")
 		return nil
 	}))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add streamPersistentVolumes to manager, cannot run MetricsServer without it")
-	}
-
-	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting reportMetricsStreamer")
-
-		go ms.reportMetricsStreamer(ctx)
-
-		// Wait until leadership is lost or shutdown
-		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add reportMetricsStreamer to manager, cannot run MetricsServer without it")
-	}
-
-	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting processStreamedPersistentVolumes")
-
-		go ms.processStreamedPersistentVolumes(ctx)
-
-		// Wait until leadership is lost or shutdown
-		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add processStreamedPersistentVolumes to manager, cannot run MetricsServer without it")
-	}
-
-	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting PeriodicFetchMetrics")
-
-		go ms.PeriodicFetchMetrics(ctx)
-
-		// Wait until leadership is lost or shutdown
-		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add PeriodicFetchMetrics to manager, cannot run MetricsServer without it")
+		Die("Failed to add processors to manager, cannot run MetricsServer without it")
 	}
 
 	go func() {

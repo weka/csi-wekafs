@@ -229,3 +229,15 @@ func (e transportError) Error() string {
 func (e transportError) getType() string {
 	return "transportError"
 }
+
+type ApiResponseNextPage struct {
+	NextPageToken string
+}
+
+func (a ApiResponseNextPage) Error() string {
+	return ""
+}
+
+func (a ApiResponseNextPage) getType() string {
+	return a.NextPageToken
+}

@@ -20,6 +20,7 @@ spec:
         - {{ .Release.Namespace }}
     podMetricsEndpoints:
         - port: ms-metrics
+          honorTimestamps: true
           metricRelabelings:
             - action: labeldrop
               regex: ^job$

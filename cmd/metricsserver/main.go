@@ -37,20 +37,21 @@ func init() {
 }
 
 var (
-	csiMode                            = wekafs.CsiModeMetricsServer
-	driverName                         = flag.String("drivername", "csi.weka.io", "name of the driver")
-	nodeID                             = flag.String("nodeid", "", "node id")
-	showVersion                        = flag.Bool("version", false, "Show version.")
-	enableMetrics                      = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
-	metricsPort                        = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
-	verbosity                          = flag.Int("v", 1, "sets log verbosity level")
-	tracingUrl                         = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
-	allowInsecureHttps                 = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
-	usejsonlogging                     = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
-	grpcRequestTimeoutSeconds          = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
-	wekametricsfetchintervalseconds    = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
-	wekametricsfetchconcurrentrequests = flag.Int64("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
-	enableMetricsServerLeaderElection  = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
+	csiMode                                  = wekafs.CsiModeMetricsServer
+	driverName                               = flag.String("drivername", "csi.weka.io", "name of the driver")
+	nodeID                                   = flag.String("nodeid", "", "node id")
+	showVersion                              = flag.Bool("version", false, "Show version.")
+	enableMetrics                            = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
+	metricsPort                              = flag.String("metricsport", "9090", "HTTP port to expose metrics on")
+	verbosity                                = flag.Int("v", 1, "sets log verbosity level")
+	tracingUrl                               = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
+	allowInsecureHttps                       = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
+	usejsonlogging                           = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
+	grpcRequestTimeoutSeconds                = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
+	wekametricsfetchintervalseconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
+	wekametricsfetchconcurrentrequests       = flag.Int64("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
+	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
+	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
 	// Set by the build process
 	version = ""
 )
@@ -185,6 +186,7 @@ func handle(ctx context.Context) {
 		time.Duration(*wekametricsfetchintervalseconds)*time.Second,
 		*wekametricsfetchconcurrentrequests,
 		*enableMetricsServerLeaderElection,
+		*wekaMetricsQuotaUpdateConcurrentRequests,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, "/dev/null", 0, version, csiMode, false, config)
 	if err != nil {

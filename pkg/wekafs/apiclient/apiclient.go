@@ -31,30 +31,33 @@ type ApiUserRole string
 // Timeout sets max request timeout duration
 type ApiClient struct {
 	sync.Mutex
-	client                     *http.Client
-	Credentials                Credentials
-	ClusterGuid                uuid.UUID
-	ClusterName                string
-	MountEndpoints             []string
-	actualApiEndpoints         map[string]*ApiEndPoint
-	currentEndpoint            string
-	apiToken                   string
-	apiTokenExpiryDate         time.Time
-	refreshToken               string
-	apiTokenExpiryInterval     int64
-	refreshTokenExpiryInterval int64
-	refreshTokenExpiryDate     time.Time
-	CompatibilityMap           *WekaCompatibilityMap
-	clientHash                 uint32
-	hostname                   string
-	NfsInterfaceGroups         map[string]*InterfaceGroup
-	ApiUserRole                ApiUserRole
-	ApiOrgId                   int
-	containerName              string
-	NfsInterfaceGroupName      string
-	NfsClientGroupName         string
-	metrics                    *ApiMetrics
-	driverName                 string
+	client                      *http.Client
+	Credentials                 Credentials
+	ClusterGuid                 uuid.UUID
+	ClusterName                 string
+	MountEndpoints              []string
+	apiEndpoints                *ApiEndPoints
+	apiToken                    string
+	apiTokenExpiryDate          time.Time
+	refreshToken                string
+	apiTokenExpiryInterval      int64
+	refreshTokenExpiryInterval  int64
+	refreshTokenExpiryDate      time.Time
+	CompatibilityMap            *WekaCompatibilityMap
+	clientHash                  uint32
+	hostname                    string
+	NfsInterfaceGroups          map[string]*InterfaceGroup
+	ApiUserRole                 ApiUserRole
+	ApiOrgId                    int
+	containerName               string
+	NfsInterfaceGroupName       string
+	NfsClientGroupName          string
+	metrics                     *ApiMetrics
+	driverName                  string
+	RotateEndpointOnEachRequest bool // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
+
+	fsCache   map[string]*fsCacheEntry
+	fsCacheMu sync.Mutex
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string, driverName string) (*ApiClient, error) {
@@ -86,7 +89,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		Credentials:        credentials,
 		CompatibilityMap:   &WekaCompatibilityMap{},
 		hostname:           hostname,
-		actualApiEndpoints: make(map[string]*ApiEndPoint),
+		apiEndpoints:       NewApiEndPoints(),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 		driverName:         driverName,
 	}
@@ -188,6 +191,8 @@ func (a *ApiClient) retryBackoff(ctx context.Context, attempts int, sleep time.D
 	maxAttempts := attempts
 	if err := f(); err != nil {
 		switch s := err.(type) {
+		case ApiResponseNextPage:
+			return s // This is not an error, just a signal to continue with the next page
 		case ApiNonTransientError:
 			log.Ctx(ctx).Trace().Msg("Non-transient error returned from API, stopping further attempts")
 			// Return the original error for later checking

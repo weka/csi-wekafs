@@ -119,7 +119,7 @@ spec:
               protocol: TCP
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.nodePort }}
-              name: metrics
+              name: node-metrics
               protocol: TCP
           {{- end }}
           livenessProbe:

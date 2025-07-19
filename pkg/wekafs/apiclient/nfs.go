@@ -87,6 +87,14 @@ type NfsPermission struct {
 	EnableAuthTypes   []NfsAuthType           `json:"enable_auth_types,omitempty" url:"-"`
 }
 
+func (n *NfsPermission) SupportsPagination() bool {
+	return false
+}
+
+func (n *NfsPermission) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("implement me")
+}
+
 func (n *NfsPermission) GetType() string {
 	return "nfsPermission"
 }
@@ -134,12 +142,25 @@ func (n *NfsPermission) IsEligibleForCsi() bool {
 		n.SquashMode == NfsPermissionSquashModeNone
 }
 
-func (a *ApiClient) FindNfsPermissionsByFilter(ctx context.Context, query *NfsPermission, resultSet *[]NfsPermission) error {
+type NfsPermissions []NfsPermission
+
+func (n *NfsPermissions) SupportsPagination() bool {
+	return true
+}
+func (n *NfsPermissions) CombinePartialResponse(next ApiObjectResponse) error {
+	if partialList, ok := next.(*NfsPermissions); ok {
+		*n = append(*n, *partialList...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response")
+}
+
+func (a *ApiClient) FindNfsPermissionsByFilter(ctx context.Context, query *NfsPermission, resultSet *NfsPermissions) error {
 	op := "FindNfsPermissionsByFilter"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	ret := &[]NfsPermission{}
+	ret := &NfsPermissions{}
 	q, _ := qs.Values(query)
 	err := a.Get(ctx, query.GetBasePath(a), q, ret)
 	if err != nil {
@@ -153,12 +174,12 @@ func (a *ApiClient) FindNfsPermissionsByFilter(ctx context.Context, query *NfsPe
 	return nil
 }
 
-func (a *ApiClient) FindNfsPermissionsByFilesystem(ctx context.Context, fsName string, resultSet *[]NfsPermission) error {
+func (a *ApiClient) FindNfsPermissionsByFilesystem(ctx context.Context, fsName string, resultSet *NfsPermissions) error {
 	op := "FindNfsPermissionsByFilter"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	ret := &[]NfsPermission{}
+	ret := &NfsPermissions{}
 	query := &NfsPermission{Filesystem: fsName}
 	q, _ := qs.Values(query)
 	err := a.Get(ctx, query.GetBasePath(a), q, ret)
@@ -175,7 +196,7 @@ func (a *ApiClient) FindNfsPermissionsByFilesystem(ctx context.Context, fsName s
 
 // GetNfsPermissionByFilter expected to return exactly one result of FindNfsPermissionsByFilter (error)
 func (a *ApiClient) GetNfsPermissionByFilter(ctx context.Context, query *NfsPermission) (*NfsPermission, error) {
-	rs := &[]NfsPermission{}
+	rs := &NfsPermissions{}
 	err := a.FindNfsPermissionsByFilter(ctx, query, rs)
 	if err != nil {
 		return &NfsPermission{}, err
@@ -190,7 +211,7 @@ func (a *ApiClient) GetNfsPermissionByFilter(ctx context.Context, query *NfsPerm
 	return result, nil
 }
 
-func (a *ApiClient) GetNfsPermissionsByFilesystemName(ctx context.Context, fsName string, permissions *[]NfsPermission) error {
+func (a *ApiClient) GetNfsPermissionsByFilesystemName(ctx context.Context, fsName string, permissions *NfsPermissions) error {
 	query := &NfsPermission{Path: fsName}
 	return a.FindNfsPermissionsByFilter(ctx, query, permissions)
 }
@@ -344,6 +365,14 @@ type NfsClientGroup struct {
 	Name  string               `json:"name,omitempty" url:"name,omitempty"`
 }
 
+func (g *NfsClientGroup) SupportsPagination() bool {
+	return false
+}
+
+func (g *NfsClientGroup) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("implement me")
+}
+
 func (g *NfsClientGroup) GetType() string {
 	return "clientGroup"
 }
@@ -373,7 +402,7 @@ func (g *NfsClientGroup) String() string {
 	return fmt.Sprintln("NfsClientGroup name:", g.Name)
 }
 
-func (a *ApiClient) GetNfsClientGroups(ctx context.Context, clientGroups *[]NfsClientGroup) error {
+func (a *ApiClient) GetNfsClientGroups(ctx context.Context, clientGroups *NfsClientGroups) error {
 	cg := &NfsClientGroup{}
 
 	err := a.Get(ctx, cg.GetBasePath(a), nil, clientGroups)
@@ -383,14 +412,29 @@ func (a *ApiClient) GetNfsClientGroups(ctx context.Context, clientGroups *[]NfsC
 	return nil
 }
 
-func (a *ApiClient) FindNfsClientGroupsByFilter(ctx context.Context, query *NfsClientGroup, resultSet *[]NfsClientGroup) error {
+type NfsClientGroups []*NfsClientGroup
+
+func (n NfsClientGroups) SupportsPagination() bool {
+	return true
+}
+
+func (n NfsClientGroups) CombinePartialResponse(next ApiObjectResponse) error {
+	if partialList, ok := next.(*NfsClientGroups); ok {
+		// this is a list, so we just append the data
+		n = append(n, *partialList...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response")
+}
+
+func (a *ApiClient) FindNfsClientGroupsByFilter(ctx context.Context, query *NfsClientGroup, resultSet *NfsClientGroups) error {
 	op := "FindNfsClientGroupsByFilter"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	logger.Trace().Str("client_group_query", query.String()).Msg("Finding client groups by filter")
-	ret := &[]NfsClientGroup{}
+	ret := &NfsClientGroups{}
 	q, _ := qs.Values(query)
 	err := a.Get(ctx, query.GetBasePath(a), q, ret)
 	if err != nil {
@@ -411,7 +455,7 @@ func (a *ApiClient) GetNfsClientGroupByFilter(ctx context.Context, query *NfsCli
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	rs := &[]NfsClientGroup{}
+	rs := &NfsClientGroups{}
 	err := a.FindNfsClientGroupsByFilter(ctx, query, rs)
 	logger.Trace().Str("client_group", query.String()).Msg("Getting client group by filter")
 	if err != nil {
@@ -423,7 +467,7 @@ func (a *ApiClient) GetNfsClientGroupByFilter(ctx context.Context, query *NfsCli
 	if len(*rs) > 1 {
 		return &NfsClientGroup{}, MultipleObjectsFoundError
 	}
-	result := &(*rs)[0]
+	result := (*rs)[0]
 	return result, nil
 }
 
@@ -582,6 +626,14 @@ type NfsClientGroupRule struct {
 	Uid               uuid.UUID              `json:"uid,omitempty" url:"-"`
 	Rule              string                 `json:"rule,omitempty" url:"-"`
 	Id                string                 `json:"id,omitempty" url:"-"`
+}
+
+func (r *NfsClientGroupRule) SupportsPagination() bool {
+	return false
+}
+
+func (r *NfsClientGroupRule) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("implement me")
 }
 
 func (r *NfsClientGroupRule) GetType() string {

@@ -50,6 +50,6 @@ func TestStatsResponse_GetStats(t *testing.T) {
 	assert.NotNil(t, perfStats)
 
 	// Add assertions for expected values, e.g.:
-	// assert.Equal(t, int64(123), perfStats.Reads)
-	// assert.Equal(t, int64(456), perfStats.Writes)
+	// assert.Equal(t, int64(123), perfStats.ReadsTotal)
+	// assert.Equal(t, int64(456), perfStats.WritesTotal)
 }
