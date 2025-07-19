@@ -5,7 +5,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000}
+var HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000}
 
 type PrometheusMetrics struct {
 	Capacity   *prometheus.GaugeVec

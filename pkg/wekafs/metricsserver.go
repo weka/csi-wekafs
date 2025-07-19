@@ -248,6 +248,8 @@ func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList []v1.Persis
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = context.WithValue(ctx, "start_time", time.Now())
+	logger := log.Ctx(ctx).With().Str("component", component).Str("span_id", span.SpanContext().SpanID().String()).Str("trace_id", span.SpanContext().TraceID().String()).Logger()
+	logger.Trace().Msg("Pruning old volumes from metrics collection")
 	var pruneCount float64 = 0
 	defer func() {
 		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
@@ -255,16 +257,21 @@ func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList []v1.Persis
 		ms.prometheusMetrics.PruneVolumesBatchSize.Set(pruneCount)
 		ms.prometheusMetrics.PruneVolumesBatchOperationsDuration.Add(dur)
 		ms.prometheusMetrics.PruneVolumesBatchOperationsHistogram.Observe(dur)
+		if pruneCount > 0 {
+			logger.Info().Int("pruned_volumes", int(pruneCount)).Msg("Pruned stale volumes")
+		} else {
+			logger.Info().Msg("No stale volumes to prune")
+		}
+
 	}()
 
-	logger := log.Ctx(ctx).With().Str("component", component).Str("span_id", span.SpanContext().SpanID().String()).Str("trace_id", span.SpanContext().TraceID().String()).Logger()
-	logger.Trace().Msg("Pruning old volumes from metrics collection")
 	currentUIDs := make(map[types.UID]struct{}, len(pvList))
 	for _, pv := range pvList {
 		currentUIDs[pv.UID] = struct{}{}
 	}
+	uids := ms.fetchMetricKeys(ctx)
 	// Remove metrics for UIDs not present in the current PV list
-	for _, uid := range ms.fetchMetricKeys(ctx) {
+	for _, uid := range uids {
 		if _, exists := currentUIDs[uid]; !exists {
 			pruneCount++
 			ms.pruneVolumeMetric(ctx, uid)
