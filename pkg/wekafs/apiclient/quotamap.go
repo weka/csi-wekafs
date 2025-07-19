@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
+	"sync"
 	"time"
 )
 
@@ -35,12 +36,15 @@ func (q *QuotaListRequest) String() string {
 }
 
 type QuotaMap struct {
+	sync.RWMutex
 	Quotas        map[uint64]*Quota `json:"quotas"`
 	FileSystemUid uuid.UUID         `json:"filesystem_uid"`
 	LastUpdate    time.Time         `json:"-" url:"-"`
 }
 
 func (q *QuotaMap) GetQuotaForInodeId(inodeId uint64) *Quota {
+	q.RLock()
+	defer q.RUnlock()
 	if quota, ok := q.Quotas[inodeId]; !ok {
 		return nil // no quota for this inode
 	} else {
@@ -124,6 +128,7 @@ func (a *ApiClient) GetQuotaMap(ctx context.Context, fs *FileSystem) (*QuotaMap,
 		logger.Error().Err(err).Msg("Failed to get quota list for filesystem")
 		return nil, err
 	}
+	quotaTs := time.Now()
 	for _, q := range *out {
 		inodeId := q.InodeId
 		ret.Quotas[inodeId] = &Quota{
@@ -133,6 +138,7 @@ func (a *ApiClient) GetQuotaMap(ctx context.Context, fs *FileSystem) (*QuotaMap,
 			HardLimitBytes: q.HardLimitBytes,
 			SoftLimitBytes: q.SoftLimitBytes,
 			Status:         q.Status,
+			LastUpdateTime: quotaTs,
 		}
 	}
 	ret.LastUpdate = time.Now()

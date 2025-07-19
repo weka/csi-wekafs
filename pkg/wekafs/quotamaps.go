@@ -83,7 +83,6 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
 
 	if fs == nil {
 		return nil, errors.New("filesystem is nil")
@@ -92,35 +91,10 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 		return nil, errors.New("filesystem UID is empty")
 	}
 
-	ms.quotaMaps.RLock()
-	quotaMap, exists := ms.quotaMaps.QuotaMaps[fs.Uid]
-	ms.quotaMaps.RUnlock()
-
-	maplock := ms.quotaMaps.GetLock(fs.Uid)
-
-	if exists {
-		// lock the quotaMap to ensure thread safety
-		maplock.RLock()
-		if quotaMap.LastUpdate.Add(ms.getConfig().wekaMetricsFetchInterval).After(time.Now()) {
-			logger.Trace().Str("filesystem", fs.Name).Msg("Returning cached QuotaMap for filesystem")
-			maplock.RUnlock()
-			return quotaMap, nil
-		}
-		maplock.RUnlock()
+	quotaMap := ms.quotaMaps.GetQuotaMap(fs.Uid)
+	if quotaMap != nil {
+		return quotaMap, nil
 	}
-
-	// Re-check if the quotaMap was updated while we were waiting for the lock
-	ms.quotaMaps.RLock()
-	quotaMap, exists = ms.quotaMaps.QuotaMaps[fs.Uid]
-	ms.quotaMaps.RUnlock()
-	if exists { // maybe it was updated while we were waiting for the lock
-		// lock the quotaMap to ensure thread safety
-		if quotaMap.LastUpdate.Add(ms.getConfig().wekaMetricsFetchInterval).After(time.Now()) {
-			logger.Trace().Str("filesystem", fs.Name).Msg("Returning cached QuotaMap for filesystem")
-			return quotaMap, nil
-		}
-	}
-	// If we reach here, we need to wait for the update to complete
 	return nil, errors.New("quota map not found for filesystem")
 }
 
@@ -134,11 +108,12 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 	if fs == nil {
 		return errors.New("filesystem is nil")
 	}
+
+	logger.Debug().Str("filesystem", fs.Name).Msg("Updating QuotaMap for filesystem")
 	maplock := ms.quotaMaps.GetLock(fs.Uid)
 
 	startTime := time.Now()
 
-	logger.Debug().Str("filesystem", fs.Name).Msg("Updating QuotaMap for filesystem")
 	defer func() {
 		dur := time.Since(startTime)
 		logger.Debug().Str("filesystem", fs.Name).Dur("duration", dur).Msg("Finished Updating QuotaMap for filesystem")
@@ -163,23 +138,23 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 
 	// update per-fs prometheus metrics: "csi_driver_name", "cluster_guid", "filesystem_name"
 	labelValues := []string{ms.getConfig().GetDriver().name, apiClient.ClusterGuid.String(), fs.Name}
-	ms.prometheusMetrics.QuotaMapUpdateCountPerFsInvokeCount.WithLabelValues(labelValues...).Inc()
+	ms.prometheusMetrics.QuotaMapRefreshInvokeCount.WithLabelValues(labelValues...).Inc()
 	defer func() {
 		dur := time.Since(startTime).Seconds()
-		ms.prometheusMetrics.QuotaMapUpdateDurationPerFs.WithLabelValues(labelValues...).Add(dur)
-		ms.prometheusMetrics.QuotaMapUpdateHistogramPerFs.WithLabelValues(labelValues...).Observe(dur)
+		ms.prometheusMetrics.QuotaMapRefreshDurationSeconds.WithLabelValues(labelValues...).Add(dur)
+		ms.prometheusMetrics.QuotaMapRefreshDurationHistogram.WithLabelValues(labelValues...).Observe(dur)
 	}()
 
 	// eventually this thread is the one that will fetch the updated quotaMap
+	maplock.Lock() // lock the quotaMap to ensure thread safety and prevent other threads from reading it while we update
 	quotaMap, err := apiClient.GetQuotaMap(ctx, fs)
 	if err != nil {
-		ms.prometheusMetrics.QuotaMapUpdateCountPerFsFailureCount.WithLabelValues(labelValues...).Inc()
+		ms.prometheusMetrics.QuotaMapRefreshFailureCount.WithLabelValues(labelValues...).Inc()
 		return fmt.Errorf("failed to fetch QuotaMap for filesystem %s: %w", fs.Name, err)
 	}
-	ms.prometheusMetrics.QuotaMapUpdateCountPerFsSuccessCount.WithLabelValues(labelValues...).Inc()
+	ms.prometheusMetrics.QuotaMapRefreshSuccessCount.WithLabelValues(labelValues...).Inc()
 
 	ms.quotaMaps.Lock() // ensure thread safety when updating the quotaMaps
-	maplock.Lock()
 	defer maplock.Unlock()
 	defer ms.quotaMaps.Unlock()
 	ms.quotaMaps.QuotaMaps[fs.Uid] = quotaMap

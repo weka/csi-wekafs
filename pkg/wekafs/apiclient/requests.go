@@ -197,7 +197,7 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 	op := "ApiClientRequest"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
-	ctx = log.With().Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	f := func() apiError {
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
