@@ -9,6 +9,7 @@ import (
 type ObservedFilesystemUids struct {
 	sync.RWMutex
 	uids map[uuid.UUID]*ObservedFilesystemUid // map[filesystemUUID]int, where int is the number of references to this filesystem
+	ms   *MetricsServer
 }
 
 func (ofu *ObservedFilesystemUids) GetUids() map[uuid.UUID]*ObservedFilesystemUid {
@@ -47,13 +48,18 @@ func (ofu *ObservedFilesystemUids) decRef(fs *apiclient.FileSystem) {
 	if fs == nil || fs.Uid == uuid.Nil {
 		return // nothing to do
 	}
-	ofu.RLock()
-	defer ofu.RUnlock()
+	ofu.Lock()
+	defer ofu.Unlock()
 	of, exists := ofu.uids[fs.Uid]
 	if exists {
 		of.Lock()
 		defer of.Unlock()
 		of.refCounter--
+		if of.refCounter <= 0 {
+			// remove the filesystem from the map if no references are left
+			delete(ofu.uids, fs.Uid)
+			ofu.ms.quotaMaps.DeleteLock(fs.Uid) // to avoid memory leaks, delete the lock after the last reference is removed
+		}
 	}
 }
 
@@ -65,9 +71,10 @@ func (ofu *ObservedFilesystemUids) GetApiClient(uid uuid.UUID) *apiclient.ApiCli
 	return existing.apiClient // return the API client for the filesystem
 }
 
-func NewObservedFilesystemUids() *ObservedFilesystemUids {
+func NewObservedFilesystemUids(ms *MetricsServer) *ObservedFilesystemUids {
 	return &ObservedFilesystemUids{
 		uids: make(map[uuid.UUID]*ObservedFilesystemUid),
+		ms:   ms,
 	}
 }
 

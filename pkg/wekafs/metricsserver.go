@@ -114,9 +114,10 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		persistentVolumesChan: make(chan *v1.PersistentVolume, PVStreamChannelSize),
 		wg:                    sync.WaitGroup{},
 
-		quotaMaps:              NewQuotaMapsPerFilesystem(),
-		observedFilesystemUids: NewObservedFilesystemUids(),
+		quotaMaps: NewQuotaMapsPerFilesystem(),
 	}
+	ret.observedFilesystemUids = NewObservedFilesystemUids(ret)
+
 	ret.prometheusMetrics.FetchMetricsFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
 	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(float64(ret.getConfig().wekaMetricsFetchInterval.Seconds()))
 	ret.prometheusMetrics.QuotaUpdateConcurrentRequests.Set(float64(ret.getConfig().wekaMetricsQuotaUpdateConcurrentRequests))

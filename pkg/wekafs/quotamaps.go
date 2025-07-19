@@ -12,10 +12,54 @@ import (
 	"time"
 )
 
+type QMLocks struct {
+	sync.RWMutex
+	locks sync.Map
+}
+
+func NewQMLocks() *QMLocks {
+	return &QMLocks{
+		locks: sync.Map{},
+	}
+}
+
+func (qml *QMLocks) GetLock(uid uuid.UUID) *sync.RWMutex {
+	qml.RLock()
+
+	if lock, ok := qml.locks.Load(uid); ok {
+		qml.RUnlock()
+		return lock.(*sync.RWMutex)
+	}
+	qml.RUnlock()
+	newLock := &sync.RWMutex{}
+	qml.Lock()
+	defer qml.Unlock()
+	qml.locks.Store(uid, newLock)
+	return newLock
+}
+
+func (qml *QMLocks) Delete(uid uuid.UUID) {
+	qml.Lock()
+	defer qml.Unlock()
+	if lock, ok := qml.locks.Load(uid); ok {
+		lock.(*sync.RWMutex).Lock() // Lock before deleting to ensure thread safety
+		defer lock.(*sync.RWMutex).Unlock()
+		qml.Delete(uid)
+	}
+}
+
 type QuotaMapsPerFilesystem struct {
 	sync.RWMutex
-	locks     sync.Map
+	locks     *QMLocks
 	QuotaMaps map[uuid.UUID]*apiclient.QuotaMap // map[filesystemUUID]*apiclient.QuotaMap
+}
+
+func (qms *QuotaMapsPerFilesystem) GetLock(uid uuid.UUID) *sync.RWMutex {
+	return qms.locks.GetLock(uid)
+}
+
+func (qms *QuotaMapsPerFilesystem) DeleteLock(uid uuid.UUID) {
+	qms.locks.Delete(uid)
 }
 
 func (qms *QuotaMapsPerFilesystem) GetQuotaMap(uid uuid.UUID) *apiclient.QuotaMap {
@@ -31,7 +75,7 @@ func (qms *QuotaMapsPerFilesystem) GetQuotaMap(uid uuid.UUID) *apiclient.QuotaMa
 func NewQuotaMapsPerFilesystem() *QuotaMapsPerFilesystem {
 	return &QuotaMapsPerFilesystem{
 		QuotaMaps: make(map[uuid.UUID]*apiclient.QuotaMap),
-		locks:     sync.Map{},
+		locks:     NewQMLocks(),
 	}
 }
 func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apiclient.FileSystem) (*apiclient.QuotaMap, error) {
@@ -52,14 +96,7 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 	quotaMap, exists := ms.quotaMaps.QuotaMaps[fs.Uid]
 	ms.quotaMaps.RUnlock()
 
-	var maplock *sync.RWMutex
-
-	l, ok := ms.quotaMaps.locks.Load(fs.Uid)
-	if !ok || l == nil {
-		l = &sync.RWMutex{}
-		ms.quotaMaps.locks.Store(fs.Uid, l)
-	}
-	maplock = l.(*sync.RWMutex)
+	maplock := ms.quotaMaps.GetLock(fs.Uid)
 
 	if exists {
 		// lock the quotaMap to ensure thread safety
@@ -93,14 +130,11 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	var maplock *sync.RWMutex
 
-	l, ok := ms.quotaMaps.locks.Load(fs.Uid)
-	if !ok || l == nil {
-		l = &sync.RWMutex{}
-		ms.quotaMaps.locks.Store(fs.Uid, l)
+	if fs == nil {
+		return errors.New("filesystem is nil")
 	}
-	maplock = l.(*sync.RWMutex)
+	maplock := ms.quotaMaps.GetLock(fs.Uid)
 
 	startTime := time.Now()
 
