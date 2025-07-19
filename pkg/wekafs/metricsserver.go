@@ -930,78 +930,20 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 
 	// Add a Runnable that only runs when this pod is elected leader
 	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting PersistentVolumeStreamer")
+		logger.Info().Msg("Leader elected, starting MetricsServer processors")
 
 		go ms.PersistentVolumeStreamer(ctx)
-
-		// Wait until leadership is lost or shutdown
-		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping PersistentVolumeStreamer")
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add PersistentVolumeStreamer to manager, cannot run MetricsServer without it")
-	}
-
-	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting MetricsReportStreamer")
-
 		go ms.MetricsReportStreamer(ctx)
-
-		// Wait until leadership is lost or shutdown
-		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add MetricsReportStreamer to manager, cannot run MetricsServer without it")
-	}
-
-	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting PersistentVolumeStreamProcessor")
-
 		go ms.PersistentVolumeStreamProcessor(ctx)
-
-		// Wait until leadership is lost or shutdown
-		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add PersistentVolumeStreamProcessor to manager, cannot run MetricsServer without it")
-	}
-
-	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting PeriodicMetricsFetcher")
-
 		go ms.PeriodicMetricsFetcher(ctx)
-
-		// Wait until leadership is lost or shutdown
-		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add PeriodicMetricsFetcher to manager, cannot run MetricsServer without it")
-	}
-
-	err = ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting PeriodicQuotaMapUpdater")
-
 		go ms.PeriodicQuotaMapUpdater(ctx)
-
-		// Wait until leadership is lost or shutdown
 		<-ctx.Done()
-		log.Info().Msg("Leadership lost or shutdown, stopping MetricsServer")
+		log.Info().Msg("Leadership lost or shutdown, stopping...")
 		return nil
 	}))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add batchRefreshQuotaMaps to manager, cannot run MetricsServer without it")
+		Die("Failed to add processors to manager, cannot run MetricsServer without it")
 	}
 
 	go func() {
