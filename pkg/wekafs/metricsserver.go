@@ -228,7 +228,11 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 
 		ms.pruneOldVolumes(ctx, pvList.Items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
 
-		ms.firstStreamCompleted = true
+		if !ms.firstStreamCompleted {
+			logger.Info().Str("pv_count", fmt.Sprintf("%d", len(pvList.Items))).Msg("First stream of PersistentVolumes completed, starting fetching quota maps")
+			ms.firstStreamCompleted = true
+		} // Set the flag to indicate that the first stream of PersistentVolumes has been completed, so we can start processing them
+
 		dur := ms.getConfig().wekaMetricsFetchInterval
 
 		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_duration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
@@ -753,9 +757,9 @@ func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
 	logger.Info().Int("pv_count", len(keys)).Msg("Finished to report only PersistentVolume capacities")
 }
 
-func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
+func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) {
 
-	component := "batchUpdateQuotaMaps"
+	component := "batchRefreshQuotaMaps"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -767,7 +771,7 @@ func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 	logger := log.Ctx(ctx).With().Int("batch_size", len(uids)).Int("concurrency", concurrency).Logger()
 	logger.Info().Msg("Starting to update quota maps")
 
-	// update prometheusMetrics for batchUpdateQuotaMaps batches
+	// update prometheusMetrics for batchRefreshQuotaMaps batches
 	ms.prometheusMetrics.QuotaUpdateBatchCountInvokedCount.Inc()
 	defer func() {
 		dur := time.Since(startTime).Seconds()
@@ -795,7 +799,7 @@ func (ms *MetricsServer) batchUpdateQuotaMaps(ctx context.Context) {
 		sem <- struct{}{} // acquire a slot
 		go func(fsObj *apiclient.FileSystem) {
 			defer func() { <-sem }() // release the slot
-			err = ms.updateQuotaMapPerFilesystem(ctx, fsObj)
+			err = ms.refreshQuotaMapPerFilesystem(ctx, fsObj, force)
 			if err != nil {
 				logger.Error().Err(err).Str("filesystem_name", fsObj.Name).Msg("Failed to update quota map for filesystem")
 			}
@@ -827,7 +831,7 @@ func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 			return
 		case <-time.After(ticker):
 			logger.Info().Msg("PeriodicQuotaMapUpdater cycle triggered")
-			ms.batchUpdateQuotaMaps(ctx)
+			ms.batchRefreshQuotaMaps(ctx, false)
 			ms.firstQuotaMapsFetched = true // Mark that processing has started, so that PeriodicMetricsFetcher can proceed
 		}
 	}
@@ -996,7 +1000,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	}))
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add batchUpdateQuotaMaps to manager, cannot run MetricsServer without it")
+		Die("Failed to add batchRefreshQuotaMaps to manager, cannot run MetricsServer without it")
 	}
 
 	go func() {

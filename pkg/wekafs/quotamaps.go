@@ -18,6 +18,16 @@ type QuotaMapsPerFilesystem struct {
 	QuotaMaps map[uuid.UUID]*apiclient.QuotaMap // map[filesystemUUID]*apiclient.QuotaMap
 }
 
+func (qms *QuotaMapsPerFilesystem) GetQuotaMap(uid uuid.UUID) *apiclient.QuotaMap {
+	qms.RLock()
+	defer qms.RUnlock()
+	quotaMap, exists := qms.QuotaMaps[uid]
+	if !exists {
+		return nil
+	}
+	return quotaMap
+}
+
 func NewQuotaMapsPerFilesystem() *QuotaMapsPerFilesystem {
 	return &QuotaMapsPerFilesystem{
 		QuotaMaps: make(map[uuid.UUID]*apiclient.QuotaMap),
@@ -77,8 +87,8 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 	return nil, errors.New("quota map not found for filesystem")
 }
 
-func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *apiclient.FileSystem) error {
-	component := "updateQuotaMapPerFilesystem"
+func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *apiclient.FileSystem, force bool) error {
+	component := "refreshQuotaMapPerFilesystem"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -104,6 +114,13 @@ func (ms *MetricsServer) updateQuotaMapPerFilesystem(ctx context.Context, fs *ap
 			logger.Trace().Str("filesystem", fs.Name).Dur("duration", dur).Msg("Updating QuotaMap completed within expected time")
 		}
 	}()
+
+	// optimization: if quota map still valid, skip update unless force flag is set
+	existingQuotaMap := ms.quotaMaps.GetQuotaMap(fs.Uid)
+	if existingQuotaMap != nil && !force && existingQuotaMap.LastUpdate.Add(ms.getConfig().wekaMetricsFetchInterval).After(time.Now()) {
+		logger.Trace().Str("filesystem", fs.Name).Msg("QuotaMap is up-to-date, skipping update")
+		return nil // no need to update, the quotaMap is already up-to-date
+	}
 
 	apiClient := ms.observedFilesystemUids.GetApiClient(fs.Uid)
 	if apiClient == nil {
