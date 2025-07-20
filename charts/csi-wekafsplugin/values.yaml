@@ -126,6 +126,10 @@ metricsServer:
   enableLeaderElection: true
   # -- number of concurrent requests for metrics server to update quota lists for a whole filesystem
   quotaUpdateConcurrentRequests: 20
+  # -- the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,
+  #    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.
+  #    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded
+  quotaMapValiditySeconds: 300
 
 # -- Log level of CSI plugin
 logLevel: 5

@@ -45,6 +45,7 @@ type DriverConfig struct {
 	tracingUrl                               string
 	manageNodeTopologyLabels                 bool
 	wekaMetricsFetchInterval                 time.Duration
+	wekaQuotaMapValidityDuration             time.Duration // Duration for which the quota map is considered valid
 	wekaMetricsFetchConcurrentRequests       int64
 	enableMetricsServerLeaderElection        bool
 	wekaMetricsQuotaUpdateConcurrentRequests int
@@ -79,6 +80,7 @@ func (dc *DriverConfig) Log() {
 		Int64("weka_metrics_fetch_concurrent_requests", dc.wekaMetricsFetchConcurrentRequests).
 		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
 		Int("weka_metrics_quota_update_concurrent_requests", dc.wekaMetricsQuotaUpdateConcurrentRequests).
+		Int("weka_metrics_quota_map_validity_duration_seconds", int(dc.wekaQuotaMapValidityDuration.Seconds())).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -100,6 +102,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	wekaMetricsFetchConcurrentRequests int64,
 	enableMetricsServerLeaderElection bool,
 	wekaMetricsQuotaUpdateConcurrentRequests int,
+	wekaMetricsQuotaMapValidityDuration time.Duration,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -153,6 +156,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		wekaMetricsFetchConcurrentRequests:       wekaMetricsFetchConcurrentRequests,
 		enableMetricsServerLeaderElection:        enableMetricsServerLeaderElection,
 		wekaMetricsQuotaUpdateConcurrentRequests: wekaMetricsQuotaUpdateConcurrentRequests,
+		wekaQuotaMapValidityDuration:             wekaMetricsQuotaMapValidityDuration,
 	}
 }
 

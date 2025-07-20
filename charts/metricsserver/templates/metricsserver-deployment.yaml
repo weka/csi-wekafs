@@ -78,6 +78,9 @@ spec:
           {{- if .Values.metricsServer.quotaUpdateConcurrentRequests }}
             - "--wekametricsquotaupdateconcurrentrequests={{ .Values.metricsServer.quotaUpdateConcurrentRequests }}"
           {{- end }}
+          {{- if .Values.metricsServer.quotaMapValiditySeconds }}
+            - "--wekametricsquotamapvalidityseconds={{ .Values.metricsServer.quotaMapValiditySeconds }}"
+          {{- end }}
           ports:
             {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
