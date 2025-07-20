@@ -126,8 +126,8 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 
 	// optimization: if quota map still valid, skip update unless force flag is set
 	existingQuotaMap := ms.quotaMaps.GetQuotaMap(fs.Uid)
-	if existingQuotaMap != nil && !force && existingQuotaMap.LastUpdate.Add(ms.getConfig().wekaMetricsFetchInterval).After(time.Now()) {
-		logger.Trace().Str("filesystem", fs.Name).Msg("QuotaMap is up-to-date, skipping update")
+	if existingQuotaMap != nil && !force && existingQuotaMap.LastUpdate.Add(ms.getConfig().wekaQuotaMapValidityDuration).After(time.Now()) {
+		logger.Debug().Str("filesystem", fs.Name).Msg("QuotaMap is up-to-date, skipping update")
 		return nil // no need to update, the quotaMap is already up-to-date
 	}
 
