@@ -83,7 +83,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	}
 
 	responseBody, err := io.ReadAll(response.Body)
-	logger.Trace().Str("response", maskPayload(string(responseBody))).Msg("")
+	logger.Trace().Str("response", maskPayload(string(responseBody))).Str("duration", time.Since(ctx.Value("startTime").(time.Time)).String()).Msg("")
 	if err != nil {
 		status = "response_parse_error"
 		return nil, &ApiInternalError{
