@@ -63,8 +63,7 @@ type MetricsServer struct {
 	quotaMaps              *QuotaMapsPerFilesystem
 	observedFilesystemUids *ObservedFilesystemUids // to track observed filesystem UIDs and their reference counts and API clients (for quota maps periodic updates)
 
-	firstStreamCompleted  bool // flag to indicate if the first stream of PersistentVolumes has been completed so we can start processing them
-	firstQuotaMapsFetched bool // flag to indicate if the first quota maps have been fetched so fetching metrics can start
+	firstStreamCompleted bool // flag to indicate if the first stream of PersistentVolumes has been completed so we can start processing them
 	sync.Mutex
 	wg sync.WaitGroup // WaitGroup to manage goroutines
 }
@@ -541,11 +540,6 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsFailureCount.Inc()
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
-	if qosMetric == nil {
-		logger.Warn().Str("pv_name", vm.persistentVolume.Name).Str("filesystem_name", fsName).Msg("Fetched nil metric, skipping. Consider increasing wekaMetricsFetchInterval")
-		ms.prometheusMetrics.FetchSinglePvMetricsOperationsFailureCount.Inc()
-		return fmt.Errorf("fetched nil metric for persistent volume %s", vm.persistentVolume.Name)
-	}
 	vm.metrics = qosMetric
 	ms.volumeMetricsChan <- vm // Send the metric to the MetricsServer's incoming requests channel
 	ms.prometheusMetrics.FetchSinglePvMetricsOperationsSuccessCount.Inc()
@@ -632,7 +626,7 @@ func (ms *MetricsServer) fetchPvUsageStats(ctx context.Context, v *Volume) (*Usa
 	// Find the quota entry for the inode ID
 	quotaEntry := quotaMap.GetQuotaForInodeId(inodeId)
 	if quotaEntry == nil {
-		return &UsageStats{}, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
+		return nil, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
 	}
 	return &UsageStats{
 
@@ -708,6 +702,11 @@ func (ms *MetricsServer) MetricsReportStreamer(ctx context.Context) {
 				ms.prometheusMetrics.WriteBytes.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.WriteBytes), pDiff.Timestamp)
 				ms.prometheusMetrics.ReadDurationUs.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.ReadLatencyUs), pDiff.Timestamp)
 				ms.prometheusMetrics.WriteDurationUs.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.WriteLatencyUs), pDiff.Timestamp)
+			}
+			if u != nil || pDiff != nil {
+				ms.prometheusMetrics.ReportedMetricsSuccessCount.Inc()
+			} else {
+				ms.prometheusMetrics.ReportedMetricsFailureCount.Inc()
 			}
 		case <-ctx.Done():
 			logger.Info().Msg("Context cancelled, stopping reporting metrics")
@@ -859,7 +858,6 @@ func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 		case <-time.After(ticker):
 			logger.Info().Msg("PeriodicQuotaMapUpdater cycle triggered")
 			ms.batchRefreshQuotaMaps(ctx, false)
-			ms.firstQuotaMapsFetched = true // Mark that processing has started, so that PeriodicMetricsFetcher can proceed
 		}
 	}
 }
@@ -875,11 +873,6 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 	if os.Getenv("DISABLE_PERIODIC_METRICS_FETCHER") == "true" {
 		logger.Info().Msg("PeriodicMetricsFetcher is disabled by environment variable, skipping periodic fetch")
 		return
-	}
-
-	logger.Info().Msg("Waiting for the first batch of filesystem quota updates before starting PeriodicMetricsFetcher")
-	for !ms.firstQuotaMapsFetched {
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting collection of WEKA metrics for PVs")

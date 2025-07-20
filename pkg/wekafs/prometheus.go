@@ -93,6 +93,9 @@ type PrometheusMetrics struct {
 	QuotaUpdateBatchDurationHistogram *TimedHistogram  // histogram of durations for quota updates
 	QuotaUpdateBatchSize              *TimedGauge      // total number of quotas updated in the last batch, or number of distinct observed filesystems
 	QuotaUpdateFrequencySeconds       prometheus.Gauge // frequency of quota updates in seconds, taken from the configuration
+
+	ReportedMetricsSuccessCount *TimedCounter // number of metrics reported to Prometheus across all . Should be equal to FetchSinglePvMetricsOperationsInvokeCount
+	ReportedMetricsFailureCount *TimedCounter // number of metrics that were not valid for reporting, e.g. appeared empty
 }
 
 func labelsKey(values []string) string {
@@ -915,6 +918,24 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
+	m.ReportedMetricsSuccessCount = NewTimedCounter(
+		prometheus.CounterOpts{
+			Namespace: MetricsNamespace,
+			Subsystem: MetricsServerSubsystem,
+			Name:      "reported_metrics_success_count_total",
+			Help:      "Total number of metrics reported to Prometheus across all PersistentVolumes. Should be equal to FetchSinglePvMetricsOperationsInvokeCount",
+		},
+	)
+
+	m.ReportedMetricsFailureCount = NewTimedCounter(
+		prometheus.CounterOpts{
+			Namespace: MetricsNamespace,
+			Subsystem: MetricsServerSubsystem,
+			Name:      "reported_metrics_failure_count_total",
+			Help:      "Total number of metrics that were not valid for reporting, e.g. appeared empty",
+		},
+	)
+
 	prometheus.MustRegister(
 		m.CapacityBytes,
 		m.UsedBytes,
@@ -970,6 +991,8 @@ func (m *PrometheusMetrics) Init() {
 		m.QuotaUpdateBatchDurationHistogram,
 		m.QuotaUpdateBatchSize,
 		m.QuotaUpdateFrequencySeconds,
+		m.ReportedMetricsSuccessCount,
+		m.ReportedMetricsFailureCount,
 	)
 
 	log.Debug().Msg("Prometheus metrics initialized")
