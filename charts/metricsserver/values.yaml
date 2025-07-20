@@ -22,7 +22,7 @@ metricsServer:
   podLabels: {}
   # -- tolerations for metrics server only
   tolerations: {}
-  # -- concurrent requests for WEKA metrics
+  # -- concurrent requests for WEKA API (excluding quota maps updates)
   maxConcurrentRequests: 20
   # -- metrics fetch interval in seconds, default is 300 seconds (every 5 minutes)
   metricsFetchIntervalSeconds: 300
