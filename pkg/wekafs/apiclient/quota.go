@@ -343,6 +343,7 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 	}
 	ret.FilesystemUid = fs.Uid
 	ret.InodeId = inodeId
+	ret.LastUpdateTime = time.Now()
 	return ret, nil
 }
 
