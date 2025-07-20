@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	PVStreamChannelSize     = 100000 // Size of the channel for streaming PersistentVolume objects
-	VolumeMetricsBufferSize = 10000
+	PVStreamChannelSize                    = 100000 // Size of the channel for streaming PersistentVolume objects
+	VolumeMetricsBufferSize                = 10000
+	FetchInitialQuotaOnProcessSingleVolume = true
 )
 
 type SecretsStore struct {
@@ -240,8 +241,12 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		ms.pruneOldVolumes(ctx, pvList.Items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
 
 		if !ms.firstStreamCompleted {
-			logger.Info().Str("pv_count", fmt.Sprintf("%d", len(pvList.Items))).Msg("First stream of PersistentVolumes completed, starting fetching quota maps")
 			ms.firstStreamCompleted = true
+			if ms.getConfig().useQuotaMapsForMetrics {
+				go ms.PeriodicQuotaMapUpdater(ctx)
+			}
+			go ms.PersistentVolumeStreamProcessor(ctx)
+
 		} // Set the flag to indicate that the first stream of PersistentVolumes has been completed, so we can start processing them
 
 		dur := ms.getConfig().wekaMetricsFetchInterval
@@ -456,6 +461,12 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	}
 	logger.Trace().Str("pv_name", pv.Name).Msg("Adding PersistentVolume for metrics processing")
 	ms.volumeMetrics.AddVolumeMetric(pv.UID, metric)
+
+	// optimize, so we add initial straight when adding new PV
+	if FetchInitialQuotaOnProcessSingleVolume && !ms.getConfig().useQuotaMapsForMetrics {
+		_ = ms.fetchSingleMetric(ctx, metric)
+	}
+
 }
 
 func (ms *MetricsServer) ensurePersistentVolumeValid(pv *v1.PersistentVolume) error {
@@ -976,11 +987,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 
 		go ms.PersistentVolumeStreamer(ctx)
 		go ms.MetricsReportStreamer(ctx)
-		go ms.PersistentVolumeStreamProcessor(ctx)
 		go ms.PeriodicMetricsFetcher(ctx)
-		if ms.getConfig().useQuotaMapsForMetrics {
-			go ms.PeriodicQuotaMapUpdater(ctx)
-		}
 
 		<-ctx.Done()
 		log.Info().Msg("Leadership lost or shutdown, stopping...")
