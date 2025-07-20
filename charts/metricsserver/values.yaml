@@ -36,6 +36,8 @@ metricsServer:
   #    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.
   #    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded
   quotaMapValiditySeconds: 300
+  # -- Timeout for API client requests, in seconds. Default is 120 seconds. Increased to 180 seconds to allow for larger operations like quotamap fetching
+  apiClientTimeoutSeconds: 180
 
 # -- Log level of CSI plugin
 logLevel: 6

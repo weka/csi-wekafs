@@ -6,19 +6,52 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"testing"
+	"time"
 )
 
 func GetDriverForTest(t *testing.T) *WekaFsDriver {
 	ctx := context.Background()
 	nodeId := "localhost"
 	mutuallyExclusive := MutuallyExclusiveMountOptsStrings{"readcache,writecache,coherent,forcedirect", "sync,async", "ro,rw"}
-	driverConfig := NewDriverConfig("csi-volumes", "csi-vol-", "csi-snap-", "csi-seed-snap-",
-		true, true, true, true, true,
-		true, true, mutuallyExclusive,
-		1, 1, 1, 1, 1, 1, 1, 10,
-		true, true, true, "", "", "4.1", "v1", false, false, true,
-		"", false,
-		60, 5, false, 10, 60)
+	driverConfig := NewDriverConfig(
+		"csi-volumes",
+		"csi-vol-", "csi-snap-",
+		"csi-seed-snap-",
+		true,
+		true,
+		true,
+		true,
+		true,
+		true,
+		true,
+		mutuallyExclusive,
+		1,
+		1,
+		1,
+		1,
+		1,
+		1,
+		1,
+		10,
+		true,
+		true,
+		true,
+		"",
+		"",
+		"4.1",
+		"v1",
+		false,
+		false,
+		true,
+		"",
+		false,
+		60*time.Second,
+		5,
+		false,
+		10,
+		60*time.Second,
+		120*time.Second,
+	)
 	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", CsiModeAll, false, driverConfig)
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)
@@ -47,7 +80,12 @@ func TestMain(m *testing.M) {
 func GetApiClientForTest(t *testing.T) *apiclient.ApiClient {
 	creds.Endpoints = []string{endpoint}
 	if globalClient == nil {
-		apiClient, err := apiclient.NewApiClient(context.Background(), creds, true, endpoint, "csi.weka.io")
+		apiClient, err := apiclient.NewApiClient(context.Background(), creds, apiclient.ApiClientOptions{
+			AllowInsecureHttps: true,
+			Hostname:           endpoint,
+			DriverName:         "csi.weka.io",
+			ApiTimeout:         apiclient.ApiHttpTimeOutSeconds,
+		})
 		if err != nil {
 			t.Fatalf("Failed to create API client: %v", err)
 		}

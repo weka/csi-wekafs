@@ -60,10 +60,17 @@ type ApiClient struct {
 	fsCacheMu sync.Mutex
 }
 
-func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string, driverName string) (*ApiClient, error) {
+type ApiClientOptions struct {
+	AllowInsecureHttps bool
+	Hostname           string
+	DriverName         string
+	ApiTimeout         time.Duration
+}
+
+func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOptions) (*ApiClient, error) {
 	logger := log.Ctx(ctx)
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: opts.AllowInsecureHttps},
 	}
 	useCustomCACert := credentials.CaCertificate != ""
 	if useCustomCACert {
@@ -83,15 +90,15 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
-			Timeout:       ApiHttpTimeOutSeconds * time.Second,
+			Timeout:       opts.ApiTimeout,
 		},
 		ClusterGuid:        uuid.UUID{},
 		Credentials:        credentials,
 		CompatibilityMap:   &WekaCompatibilityMap{},
-		hostname:           hostname,
+		hostname:           opts.Hostname,
 		apiEndpoints:       NewApiEndPoints(),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
-		driverName:         driverName,
+		driverName:         opts.DriverName,
 	}
 
 	a.resetDefaultEndpoints(ctx)
@@ -101,7 +108,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		}
 	}
 
-	logger.Trace().Bool("insecure_skip_verify", allowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
+	logger.Trace().Bool("insecure_skip_verify", opts.AllowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
 	return a, nil
 }

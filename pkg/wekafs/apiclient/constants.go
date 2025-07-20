@@ -1,7 +1,7 @@
 package apiclient
 
 const (
-	ApiHttpTimeOutSeconds                     = 60
+	ApiHttpTimeOutSeconds                     = 120
 	ApiRetryIntervalSeconds                   = 1
 	ApiRetryMaxCount                          = 5
 	RetryBackoffExponentialFactor             = 1

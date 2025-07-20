@@ -49,6 +49,7 @@ type DriverConfig struct {
 	wekaMetricsFetchConcurrentRequests       int64
 	enableMetricsServerLeaderElection        bool
 	wekaMetricsQuotaUpdateConcurrentRequests int
+	wekaApiTimeout                           time.Duration // Timeout for Weka API requests
 }
 
 func (dc *DriverConfig) Log() {
@@ -81,6 +82,7 @@ func (dc *DriverConfig) Log() {
 		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
 		Int("weka_metrics_quota_update_concurrent_requests", dc.wekaMetricsQuotaUpdateConcurrentRequests).
 		Int("weka_metrics_quota_map_validity_duration_seconds", int(dc.wekaQuotaMapValidityDuration.Seconds())).
+		Dur("weka_api_timeout", dc.wekaApiTimeout).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -103,6 +105,8 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	enableMetricsServerLeaderElection bool,
 	wekaMetricsQuotaUpdateConcurrentRequests int,
 	wekaMetricsQuotaMapValidityDuration time.Duration,
+	wekaApiTimeout time.Duration,
+
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -157,6 +161,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		enableMetricsServerLeaderElection:        enableMetricsServerLeaderElection,
 		wekaMetricsQuotaUpdateConcurrentRequests: wekaMetricsQuotaUpdateConcurrentRequests,
 		wekaQuotaMapValidityDuration:             wekaMetricsQuotaMapValidityDuration,
+		wekaApiTimeout:                           wekaApiTimeout,
 	}
 }
 

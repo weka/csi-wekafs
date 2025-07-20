@@ -85,6 +85,9 @@ spec:
           {{- if .Values.metricsServer.quotaMapValiditySeconds }}
             - "--wekametricsquotamapvalidityseconds={{ .Values.metricsServer.quotaMapValiditySeconds }}"
           {{- end }}
+          {{- if .Values.metricsServer.apiClientTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.metricsServer.apiClientTimeoutSeconds }}"
+          {{- end }}
           ports:
             {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}

@@ -52,7 +52,8 @@ var (
 	wekametricsfetchconcurrentrequests       = flag.Int64("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
 	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
 	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
-	wekaMetricsQuotaMapValidity              = flag.Duration("wekametricsquotamapvalidityseconds", 60, "Duration for which the quota map is considered valid")
+	wekaMetricsQuotaMapValidity              = flag.Int("wekametricsquotamapvalidityseconds", 60, "Duration for which the quota map is considered valid")
+	wekaApiTimeout                           = flag.Int("wekaapitimeoutseconds", 120, "Timeout for Weka API requests in seconds")
 	// Set by the build process
 	version = ""
 )
@@ -188,7 +189,8 @@ func handle(ctx context.Context) {
 		*wekametricsfetchconcurrentrequests,
 		*enableMetricsServerLeaderElection,
 		*wekaMetricsQuotaUpdateConcurrentRequests,
-		*wekaMetricsQuotaMapValidity,
+		time.Duration(*wekaMetricsQuotaMapValidity)*time.Second,
+		time.Duration(*wekaApiTimeout)*time.Second,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, "/dev/null", 0, version, csiMode, false, config)
 	if err != nil {
