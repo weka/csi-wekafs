@@ -3,6 +3,7 @@ package wekafs
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog/log"
+	"go.uber.org/atomic"
 	"strings"
 	"sync"
 	"time"
@@ -106,19 +107,27 @@ func labelsKey(values []string) string {
 // TimedGauge is a gauge that records the value and the last timestamp it was set.
 type TimedGauge struct {
 	desc   *prometheus.Desc
-	val    float64
-	lastTs time.Time
+	val    *atomic.Float64
+	lastTs *atomic.Time
 	labels []string
 }
 
-func (tg *TimedGauge) Set(v float64) { tg.val = v; tg.lastTs = time.Now() }
+func (tg *TimedGauge) Set(v float64) { tg.val.Store(v); tg.lastTs.Store(time.Now()) }
+
+func NewTimedGauge(opts prometheus.GaugeOpts) *TimedGauge {
+	return &TimedGauge{
+		desc:   prometheus.NewDesc(prometheus.BuildFQName(opts.Namespace, opts.Subsystem, opts.Name), opts.Help+" (timestamped)", nil, nil),
+		val:    atomic.NewFloat64(0),
+		lastTs: atomic.NewTime(time.Time{}),
+	}
+}
 
 func (tg *TimedGauge) SetWithTimestamp(v float64, ts time.Time) *prometheus.Desc {
-	tg.val = v
+	tg.val.Store(v)
 	if ts.IsZero() {
-		tg.lastTs = time.Now()
+		tg.lastTs.Store(time.Now())
 	} else {
-		tg.lastTs = ts
+		tg.lastTs.Store(ts)
 	}
 	return tg.desc
 }
@@ -126,59 +135,54 @@ func (tg *TimedGauge) SetWithTimestamp(v float64, ts time.Time) *prometheus.Desc
 func (tg *TimedGauge) Describe(ch chan<- *prometheus.Desc) { ch <- tg.desc }
 
 func (tg *TimedGauge) Collect(ch chan<- prometheus.Metric) {
-	if tg.lastTs.IsZero() {
-		ch <- prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, tg.val, tg.labels...)
+	ts := tg.lastTs.Load()
+	v := tg.val.Load()
+	if ts.IsZero() {
+		ch <- prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, v, tg.labels...)
 		return
 	}
-	ch <- prometheus.NewMetricWithTimestamp(tg.lastTs,
-		prometheus.MustNewConstMetric(tg.desc, prometheus.CounterValue, tg.val, tg.labels...),
+	ch <- prometheus.NewMetricWithTimestamp(ts,
+		prometheus.MustNewConstMetric(tg.desc, prometheus.CounterValue, v, tg.labels...),
 	)
-}
-
-func NewTimedGauge(opts prometheus.GaugeOpts) *TimedGauge {
-	return &TimedGauge{
-		desc:   prometheus.NewDesc(prometheus.BuildFQName(opts.Namespace, opts.Subsystem, opts.Name), opts.Help+" (timestamped)", nil, nil),
-		val:    0,
-		lastTs: time.Time{},
-	}
 }
 
 // TimedCounter is a counter that records the value and the last timestamp it was set.
 type TimedCounter struct {
 	opts   *prometheus.CounterOpts
 	desc   *prometheus.Desc
-	val    float64
-	lastTs time.Time
+	val    *atomic.Float64
+	lastTs *atomic.Time
 	labels []string
 }
 
 func NewTimedCounter(opts prometheus.CounterOpts) *TimedCounter {
 	return &TimedCounter{
 		desc:   prometheus.NewDesc(prometheus.BuildFQName(opts.Namespace, opts.Subsystem, opts.Name), opts.Help+" (timestamped)", nil, nil),
-		val:    0,
-		lastTs: time.Time{},
+		val:    atomic.NewFloat64(0),
+		lastTs: atomic.NewTime(time.Time{}),
 	}
 
 }
-func (tc *TimedCounter) Inc()          { tc.val++; tc.lastTs = time.Now() }
-func (tc *TimedCounter) Add(v float64) { tc.val += v; tc.lastTs = time.Now() }
-func (tc *TimedCounter) AddWithTimestamp(v float64, ts time.Time) *prometheus.Desc {
-	tc.val += v
-	if ts.IsZero() {
-		tc.lastTs = time.Now()
-	} else {
-		tc.lastTs = ts
-	}
-	return tc.desc
+
+func (tc *TimedCounter) Inc() { tc.Add(1) }
+
+func (tc *TimedCounter) Add(v float64) { tc.val.Add(v); tc.lastTs.Store(time.Now()) }
+
+func (tc *TimedCounter) AddWithTimestamp(v float64, ts time.Time) {
+	tc.Add(v)
+	tc.lastTs.Store(ts)
 }
+
 func (tc *TimedCounter) Describe(ch chan<- *prometheus.Desc) { ch <- tc.desc }
 func (tc *TimedCounter) Collect(ch chan<- prometheus.Metric) {
-	if tc.lastTs.IsZero() {
-		ch <- prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, tc.val, tc.labels...)
+	ts := tc.lastTs.Load()
+	v := tc.val.Load()
+	if ts.IsZero() {
+		ch <- prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, v, tc.labels...)
 		return
 	}
-	ch <- prometheus.NewMetricWithTimestamp(tc.lastTs,
-		prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, tc.val, tc.labels...),
+	ch <- prometheus.NewMetricWithTimestamp(ts,
+		prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, v, tc.labels...),
 	)
 }
 
@@ -214,8 +218,8 @@ func (tg *TimedGaugeVec) WithLabelValues(lv ...string) *TimedGauge {
 	if values, ok := tg.lastValues[key]; !ok || values == nil {
 		tg.lastValues[key] = &TimedGauge{
 			desc:   tg.desc,
-			val:    0,
-			lastTs: time.Time{},
+			val:    atomic.NewFloat64(0),
+			lastTs: atomic.NewTime(time.Time{}),
 			labels: lv,
 		}
 	}
@@ -227,13 +231,16 @@ func (tg *TimedGaugeVec) Collect(ch chan<- prometheus.Metric) {
 	tg.RLock()
 	defer tg.RUnlock()
 	for _, val := range tg.lastValues {
-		if val.lastTs.IsZero() {
-			ch <- prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, val.val, val.labels...)
-			continue
-		}
-		ch <- prometheus.NewMetricWithTimestamp(val.lastTs,
-			prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, val.val, val.labels...),
-		)
+		val.Collect(ch)
+		//ts := val.lastTs.Load()
+		//v := val.val.Load()
+		//if ts.IsZero() {
+		//	ch <- prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, v, val.labels...)
+		//	continue
+		//}
+		//ch <- prometheus.NewMetricWithTimestamp(ts,
+		//	prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, v, val.labels...),
+		//)
 	}
 }
 
@@ -268,8 +275,8 @@ func (tc *TimedCounterVec) WithLabelValues(lv ...string) *TimedCounter {
 	if val, ok := tc.lastValues[key]; !ok || val == nil {
 		tc.lastValues[key] = &TimedCounter{
 			desc:   tc.desc,
-			val:    0,
-			lastTs: time.Time{},
+			val:    atomic.NewFloat64(0),
+			lastTs: atomic.NewTime(time.Time{}),
 			labels: lv,
 			opts:   tc.opts,
 		}
@@ -280,13 +287,7 @@ func (tc *TimedCounterVec) WithLabelValues(lv ...string) *TimedCounter {
 func (tc *TimedCounterVec) Describe(ch chan<- *prometheus.Desc) { ch <- tc.desc }
 func (tc *TimedCounterVec) Collect(ch chan<- prometheus.Metric) {
 	for _, val := range tc.lastValues {
-		if val.lastTs.IsZero() {
-			ch <- prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, val.val, val.labels...)
-			continue
-		}
-		ch <- prometheus.NewMetricWithTimestamp(val.lastTs,
-			prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, val.val, val.labels...),
-		)
+		val.Collect(ch)
 	}
 }
 
@@ -295,10 +296,10 @@ type TimedHistogram struct {
 	sync.Mutex
 	opts       *prometheus.HistogramOpts
 	desc       *prometheus.Desc
-	buckets    map[float64]uint64
-	sum        float64
-	count      uint64
-	lastTs     time.Time
+	buckets    map[float64]*atomic.Uint64
+	sum        *atomic.Float64
+	count      *atomic.Uint64
+	lastTs     *atomic.Time
 	bucketDefs []float64
 	labels     []string
 }
@@ -306,30 +307,48 @@ type TimedHistogram struct {
 func NewTimedHistogram(opts prometheus.HistogramOpts) *TimedHistogram {
 	return &TimedHistogram{
 		desc:       prometheus.NewDesc(prometheus.BuildFQName(opts.Namespace, opts.Subsystem, opts.Name), opts.Help+" (timestamped)", nil, nil),
-		buckets:    make(map[float64]uint64),
+		buckets:    make(map[float64]*atomic.Uint64),
 		bucketDefs: opts.Buckets,
+		sum:        atomic.NewFloat64(0),
+		count:      atomic.NewUint64(0),
+		lastTs:     atomic.NewTime(time.Time{}),
 	}
 }
 func (th *TimedHistogram) Observe(v float64) {
-	th.Lock()
+	th.count.Inc()
+	th.sum.Add(v)
+
+	th.Lock() // update map, need to lock since map is not thread-safe
 	defer th.Unlock()
-	th.count++
-	th.sum += v
 	for _, b := range th.bucketDefs {
+		if _, ok := th.buckets[b]; !ok {
+			th.buckets[b] = atomic.NewUint64(0) // initialize bucket if it does not exist
+		}
 		if v <= b {
-			th.buckets[b]++
+			th.buckets[b].Inc()
 		}
 	}
-	th.lastTs = time.Now()
+	th.lastTs.Store(time.Now())
 }
+
 func (th *TimedHistogram) Describe(ch chan<- *prometheus.Desc) { ch <- th.desc }
 func (th *TimedHistogram) Collect(ch chan<- prometheus.Metric) {
-	if th.lastTs.IsZero() {
-		ch <- prometheus.MustNewConstHistogram(th.desc, th.count, th.sum, th.buckets, th.labels...)
+	th.Lock()
+	ts := th.lastTs.Load()
+	c := th.count.Load()
+	s := th.sum.Load()
+	buckets := make(map[float64]uint64, len(th.buckets))
+	for b, count := range th.buckets {
+		buckets[b] = count.Load()
+	}
+	th.Unlock()
+
+	if ts.IsZero() {
+		ch <- prometheus.MustNewConstHistogram(th.desc, c, s, buckets, th.labels...)
 		return
 	}
-	h := prometheus.MustNewConstHistogram(th.desc, th.count, th.sum, th.buckets, th.labels...)
-	ch <- prometheus.NewMetricWithTimestamp(th.lastTs, h)
+	h := prometheus.MustNewConstHistogram(th.desc, c, s, buckets, th.labels...)
+	ch <- prometheus.NewMetricWithTimestamp(ts, h)
 }
 
 type TimedHistogramVec struct {
@@ -359,11 +378,14 @@ func (thv *TimedHistogramVec) WithLabelValues(lv ...string) *TimedHistogram {
 	key := labelsKey(lv)
 	if thv.lastValues[key] == nil {
 		thv.lastValues[key] = &TimedHistogram{
-			opts:       thv.opts,
-			buckets:    make(map[float64]uint64),
-			bucketDefs: thv.bucketDefs,
 			desc:       thv.desc,
+			opts:       thv.opts,
+			buckets:    make(map[float64]*atomic.Uint64),
+			bucketDefs: thv.bucketDefs,
 			labels:     lv,
+			sum:        atomic.NewFloat64(0),
+			count:      atomic.NewUint64(0),
+			lastTs:     atomic.NewTime(time.Time{}),
 		}
 	}
 	return thv.lastValues[key]
@@ -372,10 +394,7 @@ func (thv *TimedHistogramVec) WithLabelValues(lv ...string) *TimedHistogram {
 func (thv *TimedHistogramVec) Describe(ch chan<- *prometheus.Desc) { ch <- thv.desc }
 func (thv *TimedHistogramVec) Collect(ch chan<- prometheus.Metric) {
 	for _, th := range thv.lastValues {
-		sum, cnt := th.sum, th.count
-		buckets := th.buckets
-		m := prometheus.MustNewConstHistogram(thv.desc, cnt, sum, buckets, th.labels...)
-		ch <- prometheus.NewMetricWithTimestamp(th.lastTs, m)
+		th.Collect(ch)
 	}
 }
 
