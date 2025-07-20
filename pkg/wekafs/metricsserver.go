@@ -66,6 +66,8 @@ type MetricsServer struct {
 	firstStreamCompleted bool // flag to indicate if the first stream of PersistentVolumes has been completed so we can start processing them
 	sync.Mutex
 	wg sync.WaitGroup // WaitGroup to manage goroutines
+
+	capacityFetchRunning bool
 }
 
 func (ms *MetricsServer) getMounter(ctx context.Context) AnyMounter {
@@ -882,11 +884,6 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	if os.Getenv("DISABLE_PERIODIC_METRICS_FETCHER") == "true" {
-		logger.Info().Msg("PeriodicMetricsFetcher is disabled by environment variable, skipping periodic fetch")
-		return
-	}
-
 	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting collection of WEKA metrics for PVs")
 
 	ticker := ms.config.wekaMetricsFetchInterval
@@ -901,20 +898,34 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 		case <-time.After(ticker):
 			startTime := time.Now()
 			logger.Info().Msg("Periodic fetch prometheusMetrics cycle triggered")
+			ms.prometheusMetrics.PeriodicFetchMetricsInvokeCount.Inc()
+			// Start the fetch in a goroutine to avoid blocking the periodic fetch
 			go func() {
+				// report only capacities, this is a fast operation and will not block the periodic fetch
 				ms.reportOnlyPvCapacities(ctx) // Report only capacities, assuming it will go faster and will not block the periodic fetch
 			}()
-			ms.prometheusMetrics.PeriodicFetchMetricsInvokeCount.Inc()
-			logger.Info().Int("pv_count", len(ms.volumeMetrics.Metrics)).Msg("Fetching prometheusMetrics for PersistentVolumes")
-			err := ms.FetchMetrics(ctx)
-			if err != nil {
-				logger.Error().Err(err).Msg("Error fetching prometheusMetrics")
-				ms.prometheusMetrics.PeriodicFetchMetricsSuccessCount.Inc()
-			} else {
-				ms.prometheusMetrics.PeriodicFetchMetricsFailureCount.Inc()
-			}
-			dur := time.Since(startTime)
-			logger.Info().Dur("duration", dur).Msg("Periodic fetch prometheusMetrics cycle completed")
+			go func() {
+				// Start the fetch in a goroutine to avoid blocking the periodic fetch
+				// Check if the fetch is already running to avoid concurrent fetches
+				if ms.capacityFetchRunning {
+					logger.Warn().Msg("Capacity fetch is already running, skipping this cycle. This can happen if the fetch takes longer than the configured interval.")
+					ms.prometheusMetrics.PeriodicFetchMetricsSkipCount.Inc()
+					return
+				}
+				ms.capacityFetchRunning = true
+				defer func() { ms.capacityFetchRunning = false }()
+
+				logger.Info().Int("pv_count", len(ms.volumeMetrics.Metrics)).Msg("Fetching prometheusMetrics for PersistentVolumes")
+				err := ms.FetchMetrics(ctx)
+				if err != nil {
+					logger.Error().Err(err).Msg("Error fetching prometheusMetrics")
+					ms.prometheusMetrics.PeriodicFetchMetricsSuccessCount.Inc()
+				} else {
+					ms.prometheusMetrics.PeriodicFetchMetricsFailureCount.Inc()
+				}
+				dur := time.Since(startTime)
+				logger.Info().Dur("duration", dur).Msg("Periodic fetch prometheusMetrics cycle completed")
+			}()
 		}
 	}
 }
