@@ -616,17 +616,29 @@ func (ms *MetricsServer) fetchPvUsageStats(ctx context.Context, v *Volume) (*Usa
 	if fsObj == nil {
 		return nil, fmt.Errorf("failed to get filesystem object for volume %s", v.persistentVol.Name)
 	}
-	quotaMap, err := ms.GetQuotaMapForFilesystem(ctx, fsObj)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get quota map for filesystem %s: %w", fsObj.Name, err)
-	}
-	if quotaMap == nil {
-		return nil, fmt.Errorf("quota map is nil for filesystem %s", fsObj.Name)
-	}
-	// Find the quota entry for the inode ID
-	quotaEntry := quotaMap.GetQuotaForInodeId(inodeId)
-	if quotaEntry == nil {
-		return nil, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
+	var quotaEntry *apiclient.Quota
+	if ms.getConfig().useQuotaMapsForMetrics {
+		quotaMap, err := ms.GetQuotaMapForFilesystem(ctx, fsObj)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get quota map for filesystem %s: %w", fsObj.Name, err)
+		}
+		if quotaMap == nil {
+			return nil, fmt.Errorf("quota map is nil for filesystem %s", fsObj.Name)
+		}
+		// Find the quota entry for the inode ID
+		q := quotaMap.GetQuotaForInodeId(inodeId)
+		if q == nil {
+			return nil, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
+		}
+	} else {
+		// Fetch the quota entry directly from the API
+		quotaEntry, err = v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch quota for inode ID %d: %w", inodeId, err)
+		}
+		if quotaEntry == nil {
+			return nil, fmt.Errorf("no quota entry found for inode ID %d", inodeId)
+		}
 	}
 	return &UsageStats{
 
@@ -955,7 +967,10 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 		go ms.MetricsReportStreamer(ctx)
 		go ms.PersistentVolumeStreamProcessor(ctx)
 		go ms.PeriodicMetricsFetcher(ctx)
-		go ms.PeriodicQuotaMapUpdater(ctx)
+		if ms.getConfig().useQuotaMapsForMetrics {
+			go ms.PeriodicQuotaMapUpdater(ctx)
+		}
+
 		<-ctx.Done()
 		log.Info().Msg("Leadership lost or shutdown, stopping...")
 		return nil

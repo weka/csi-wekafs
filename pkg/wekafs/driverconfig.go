@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const UseQuotaMapsForMetrics = false
+
 type MutuallyExclusiveMountOptsStrings []string
 
 func (i *MutuallyExclusiveMountOptsStrings) String() string {
@@ -49,6 +51,7 @@ type DriverConfig struct {
 	wekaMetricsFetchConcurrentRequests       int64
 	enableMetricsServerLeaderElection        bool
 	wekaMetricsQuotaUpdateConcurrentRequests int
+	useQuotaMapsForMetrics                   bool
 	wekaApiTimeout                           time.Duration // Timeout for Weka API requests
 }
 
@@ -83,6 +86,7 @@ func (dc *DriverConfig) Log() {
 		Int("weka_metrics_quota_update_concurrent_requests", dc.wekaMetricsQuotaUpdateConcurrentRequests).
 		Int("weka_metrics_quota_map_validity_duration_seconds", int(dc.wekaQuotaMapValidityDuration.Seconds())).
 		Dur("weka_api_timeout", dc.wekaApiTimeout).
+		Bool("use_quota_maps_for_metrics", dc.useQuotaMapsForMetrics).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -129,6 +133,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	concurrency["NodePublishVolume"] = maxNodePublishVolumeReqs
 	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
 
+	useQuotaMaps := UseQuotaMapsForMetrics
 	return &DriverConfig{
 		DynamicVolPath:                           dynamicVolPath,
 		VolumePrefix:                             VolumePrefix,
@@ -159,6 +164,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		wekaMetricsFetchInterval:                 wekaMetricsFetchInterval,
 		wekaMetricsFetchConcurrentRequests:       wekaMetricsFetchConcurrentRequests,
 		enableMetricsServerLeaderElection:        enableMetricsServerLeaderElection,
+		useQuotaMapsForMetrics:                   useQuotaMaps,
 		wekaMetricsQuotaUpdateConcurrentRequests: wekaMetricsQuotaUpdateConcurrentRequests,
 		wekaQuotaMapValidityDuration:             wekaMetricsQuotaMapValidityDuration,
 		wekaApiTimeout:                           wekaApiTimeout,
