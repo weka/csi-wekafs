@@ -62,7 +62,6 @@ type MetricsServer struct {
 	quotaMaps              *QuotaMapsPerFilesystem
 	observedFilesystemUids *ObservedFilesystemUids // to track observed filesystem UIDs and their reference counts and API clients (for quota maps periodic updates)
 
-	firstStreamCompleted bool // flag to indicate if the first stream of PersistentVolumes has been completed so we can start processing them
 	sync.Mutex
 	wg sync.WaitGroup // WaitGroup to manage goroutines
 
@@ -530,7 +529,9 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	qosMetric, err := ms.FetchPvStats(ctx, vm.volume)
 	fsName := vm.volume.FilesystemName
 	if err != nil {
-		logger.Warn().Err(err).Str("pv_name", vm.persistentVolume.Name).Str("filesystem_name", fsName).Msg("Failed to fetch metric, skipping. Consider increasing wekaMetricsFetchInterval")
+		if !ms.getConfig().useQuotaMapsForMetrics {
+			logger.Warn().Err(err).Str("pv_name", vm.persistentVolume.Name).Str("filesystem_name", fsName).Msg("Failed to fetch metric, skipping. Consider increasing wekaMetricsFetchInterval")
+		}
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsFailureCount.Inc()
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
@@ -620,8 +621,8 @@ func (ms *MetricsServer) fetchPvUsageStats(ctx context.Context, v *Volume) (*Usa
 			return nil, fmt.Errorf("quota map is nil for filesystem %s", fsObj.Name)
 		}
 		// Find the quota entry for the inode ID
-		q := quotaMap.GetQuotaForInodeId(inodeId)
-		if q == nil {
+		quotaEntry = quotaMap.GetQuotaForInodeId(inodeId)
+		if quotaEntry == nil {
 			return nil, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
 		}
 	} else {
@@ -882,9 +883,7 @@ func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 	logger := log.Ctx(ctx)
 
 	logger.Info().Msg("Waiting for the first batch of PersistentVolumes to be streamed before starting PeriodicQuotaMapUpdater")
-	for !ms.firstStreamCompleted {
-		time.Sleep(100 * time.Millisecond) // Wait until the first batch of PersistentVolumes is streamed
-	}
+
 	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting PeriodicQuotaMapUpdater every defined interval")
 
 	ticker := ms.config.wekaMetricsFetchInterval
@@ -948,10 +947,6 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 			ms.prometheusMetrics.PeriodicFetchMetricsInvokeCount.Inc()
 			// Start the fetch in a goroutine to avoid blocking the periodic fetch
 			go func() {
-				// report only capacities, this is a fast operation and will not block the periodic fetch
-				ms.reportOnlyPvCapacities(ctx) // Report only capacities, assuming it will go faster and will not block the periodic fetch
-			}()
-			go func() {
 				// Start the fetch in a goroutine to avoid blocking the periodic fetch
 				// Check if the fetch is already running to avoid concurrent fetches
 				if ms.capacityFetchRunning {
@@ -959,6 +954,12 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 					ms.prometheusMetrics.PeriodicFetchMetricsSkipCount.Inc()
 					return
 				}
+
+				go func() {
+					// report only capacities, this is a fast operation and will not block the periodic fetch
+					ms.reportOnlyPvCapacities(ctx) // Report only capacities, assuming it will go faster and will not block the periodic fetch
+				}()
+
 				ms.capacityFetchRunning = true
 				defer func() { ms.capacityFetchRunning = false }()
 

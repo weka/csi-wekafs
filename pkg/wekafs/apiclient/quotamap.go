@@ -13,7 +13,7 @@ import (
 
 type QuotaListRequest struct {
 	FilesystemUid uuid.UUID `json:"-" url:"-"`
-	GetPath       bool      `json:"get_path"`
+	GetPath       bool      `url:"get_path"`
 }
 
 func (q *QuotaListRequest) getRequiredFields() []string {
