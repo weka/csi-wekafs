@@ -1,9 +1,12 @@
 package wekafs
 
 import (
+	"context"
 	"github.com/google/uuid"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.uber.org/atomic"
 	"sync"
+	"time"
 )
 
 type ObservedFilesystemUids struct {
@@ -40,6 +43,9 @@ func (ofu *ObservedFilesystemUids) incRef(fs *apiclient.FileSystem, apiClient *a
 		ofu.uids[fs.Uid] = &ObservedFilesystemUid{
 			apiClient:  apiClient,
 			refCounter: 1,
+			fsObj:      fs,
+			fsUid:      fs.Uid,
+			lastSeen:   atomic.NewTime(time.Now()),
 		}
 	}
 }
@@ -81,6 +87,9 @@ func NewObservedFilesystemUids(ms *MetricsServer) *ObservedFilesystemUids {
 type ObservedFilesystemUid struct {
 	sync.Mutex
 	apiClient  *apiclient.ApiClient // the API client for this filesystem
+	fsUid      uuid.UUID
+	fsObj      *apiclient.FileSystem
+	lastSeen   *atomic.Time
 	refCounter int
 }
 
@@ -89,6 +98,7 @@ func (ofu *ObservedFilesystemUid) incRef() {
 	of.Lock()
 	defer of.Unlock()
 	of.refCounter++
+	of.lastSeen.Store(time.Now())
 }
 
 func (ofu *ObservedFilesystemUid) decRef() {
@@ -98,4 +108,21 @@ func (ofu *ObservedFilesystemUid) decRef() {
 	if of.refCounter > 0 {
 		of.refCounter--
 	}
+}
+
+func (ofu *ObservedFilesystemUid) GetApiClient() *apiclient.ApiClient {
+	return ofu.apiClient // return the API client for this filesystem
+}
+
+func (ofu *ObservedFilesystemUid) GetFileSystem(ctx context.Context, fromCache bool) *apiclient.FileSystem {
+	ofu.Lock()
+	defer ofu.Unlock()
+	if ofu.fsObj == nil || !fromCache || ofu.lastSeen.Load().Add(1*time.Minute).Before(time.Now()) {
+		err := ofu.apiClient.GetFileSystemByUid(ctx, ofu.fsUid, ofu.fsObj, false)
+		if err != nil {
+			ofu.fsObj = nil // reset the filesystem object if there was an error
+			return nil      // return nil if the filesystem could not be fetched
+		}
+	}
+	return ofu.fsObj // return the filesystem object
 }
