@@ -26,7 +26,7 @@ type WekaFsDriver struct {
 	ids            *identityServer
 	ns             *NodeServer
 	cs             *ControllerServer
-	ms             *MetricsServer
+	Ms             *MetricsServer
 	api            *ApiStore
 	mounters       *MounterGroup
 	csiMode        CsiPluginMode
@@ -108,9 +108,9 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	if driver.csiMode == CsiModeMetricsServer || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading MetricsServer")
-		driver.ms = NewMetricsServer(driver)
+		driver.Ms = NewMetricsServer(driver)
 	} else {
-		driver.ms = nil
+		driver.Ms = nil
 	}
 
 	s := NewNonBlockingGRPCServer(driver.csiMode)
@@ -126,7 +126,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		} else {
 			log.Info().Msg("Received SIGTERM/SIGINT, stopping server")
 		}
-		driver.ms.Stop(ctx)
+		driver.Ms.Stop(ctx)
 		s.Stop()
 		os.Exit(1)
 
@@ -137,8 +137,8 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		s.Wait()
 	}
 	if s.csiMode == CsiModeMetricsServer {
-		driver.ms.Start(ctx)
-		driver.ms.Wait()
+		driver.Ms.Start(ctx)
+		driver.Ms.Wait()
 	}
 }
 
