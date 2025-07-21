@@ -822,25 +822,56 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 			logger.Info().Dur("batch_duration_ms", time.Since(startTime)).Msg("Finished to update quota maps on time")
 		}
 	}()
+	duration := atomic.NewFloat64(0)
+	countStarted := atomic.NewInt64(0)
+	countSuccessful := atomic.NewInt64(0)
+	countFailed := atomic.NewInt64(0)
 
-	for fsUid, qm := range uids {
-		apiClient := qm.apiClient
-		fsObj := &apiclient.FileSystem{}
-		err := apiClient.GetFileSystemByUid(ctx, fsUid, fsObj, false)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to get filesystem object for quota map update")
+	cycleStart := time.Now()
+	for fsUid, ofs := range uids {
+		if ofs == nil {
+			logger.Error().Str("fs_uid", fsUid.String()).Msg("Observed filesystem UID not found in the cache, skipping")
 			continue
 		}
-
+		fsObj := ofs.GetFileSystem(ctx, true)
+		if fsObj == nil {
+			logger.Error().Str("fs_uid", fsUid.String()).Msg("FileSystem object is nil, skipping")
+			continue
+		}
 		sem <- struct{}{} // acquire a slot
 		go func(fsObj *apiclient.FileSystem) {
 			defer func() { <-sem }() // release the slot
-			err = ms.refreshQuotaMapPerFilesystem(ctx, fsObj, force)
+			countStarted.Inc()
+			start := time.Now()
+			err := ms.refreshQuotaMapPerFilesystem(ctx, fsObj, force)
+			duration.Add(time.Since(start).Seconds())
+
 			if err != nil {
+				countFailed.Inc()
 				logger.Error().Err(err).Str("filesystem_name", fsObj.Name).Msg("Failed to update quota map for filesystem")
+			} else {
+				countSuccessful.Inc()
 			}
 		}(fsObj)
 	}
+	cycleDuration := time.Since(cycleStart)
+	countIncomplete := countStarted.Load() - countFailed.Load() - countSuccessful.Load()
+	countComplete := countSuccessful.Load() + countFailed.Load()
+	avgDurationEffective := duration.Load() / float64(countComplete)
+	avgDurationSuccessful := duration.Load() / float64(countSuccessful.Load())
+	parallelism := float64(countComplete) / cycleDuration.Seconds()
+
+	logger.Warn().Dur("cycle_duration", cycleDuration).
+		Float64("concurrency", parallelism).
+		Float64("avg_duration_effectie", avgDurationEffective).
+		Float64("avg_duration_successful", avgDurationSuccessful).
+		Int64("count_total", countStarted.Load()).
+		Int64("count_successful", countSuccessful.Load()).
+		Int64("count_failed", countFailed.Load()).
+		Int64("count_incomplete", countIncomplete).
+		Int64("count_completed", countComplete).
+		Msg("BATCH ENDED")
+
 }
 
 func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
