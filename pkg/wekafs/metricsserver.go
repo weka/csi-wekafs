@@ -903,6 +903,26 @@ func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 	}
 }
 
+func (ms *MetricsServer) RollingQuotaMapUpdaterForDebug(ctx context.Context) {
+	component := "RollingQuotaMapUpdaterForDebug"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+
+	logger.Info().Msg("Starting to update quota maps in debug mode")
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("RollingQuotaMapUpdaterForDebug context cancelled, stopping...")
+			return
+		default:
+			logger.Info().Msg("Starting to update quota maps for all PersistentVolumes in debug mode")
+			ms.batchRefreshQuotaMaps(ctx, true)
+		}
+	}
+}
+
 func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 	// Periodically fetch prometheusMetrics for all persistent volumes
 	component := "PeriodicMetricsFetcher"
@@ -1025,6 +1045,140 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 		}
 	}()
 
+}
+
+// StartDebug starts the MetricsServer in debug mode, only fetching metrics from WEKA
+func (ms *MetricsServer) StartDebugSingleQuotas(ctx context.Context) {
+	component := "StartDebugSingleQuotas"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+
+	logger := log.Ctx(ctx)
+	logger.Info().Msg("Starting MetricsServer in debug mode, only fetching single quotas from WEKA")
+	ms.Lock()
+	if ms.running {
+		return // Already running
+	}
+	ms.running = true
+	ms.Unlock()
+
+	ms.initManager(ctx) // Initialize the controller-runtime manager
+
+	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
+	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
+
+	// Initialize the incoming requests channel and report all incoming prometheusMetrics
+	ms.wg.Add(1)
+	go func() {
+
+		ms.volumeMetricsChan = make(chan *VolumeMetric, VolumeMetricsBufferSize)
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info().Msg("Metrics server context cancelled, stopping...")
+				ms.wg.Done()
+				return
+			default:
+				time.Sleep(100 * time.Millisecond) // Prevent busy loop
+			}
+		}
+	}()
+
+	// Add a Runnable that only runs when this pod is elected leader
+	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		logger.Info().Msg("Leader elected, starting MetricsServer processors")
+
+		go ms.PersistentVolumeStreamer(ctx)
+		go ms.PersistentVolumeStreamProcessor(ctx)
+
+		<-ctx.Done()
+		return nil
+	}))
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
+		Die("Failed to add processors to manager, cannot run MetricsServer without it")
+	}
+
+	go func() {
+		if err := ms.manager.Start(ctx); err != nil {
+			logger.Error().Err(err).Msg("Cannot continue running MetricsServer")
+			os.Exit(1)
+		}
+	}()
+
+}
+
+func (ms *MetricsServer) StartDebugQuotaMaps(ctx context.Context) {
+	component := "StartDebugQuotaMaps"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+	logger.Info().Msg("Starting MetricsServer in debug mode, fetching whole filesystem QUOTA MAPS from WEKA")
+	ms.Lock()
+	if ms.running {
+		return // Already running
+	}
+	ms.running = true
+	ms.Unlock()
+
+	ms.initManager(ctx) // Initialize the controller-runtime manager
+
+	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
+	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
+
+	// Initialize the incoming requests channel and report all incoming prometheusMetrics
+	ms.wg.Add(1)
+	go func() {
+
+		ms.volumeMetricsChan = make(chan *VolumeMetric, VolumeMetricsBufferSize)
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info().Msg("Metrics server context cancelled, stopping...")
+				ms.wg.Done()
+				return
+			default:
+				time.Sleep(100 * time.Millisecond) // Prevent busy loop
+			}
+		}
+	}()
+
+	// Add a Runnable that only runs when this pod is elected leader
+	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		logger.Info().Msg("Leader elected, starting MetricsServer processors")
+
+		go ms.PersistentVolumeStreamer(ctx)
+		go ms.PersistentVolumeStreamProcessor(ctx)
+
+		<-ctx.Done()
+		return nil
+	}))
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
+		Die("Failed to add processors to manager, cannot run MetricsServer without it")
+	}
+
+	go func() {
+		if err := ms.manager.Start(ctx); err != nil {
+			logger.Error().Err(err).Msg("Cannot continue running MetricsServer")
+			os.Exit(1)
+		}
+	}()
+
+	time.Sleep(10 * time.Second)
+	logger.Info().Msg("started manager, starting to fetch PersistentVolumes, no quota maps yet")
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("RollingMetricsFetcherForDebug context cancelled, stopping...")
+			return
+		default:
+			ms.batchRefreshQuotaMaps(ctx, true) // Force update quota maps in debug mode
+		}
+	}
 }
 
 func (ms *MetricsServer) Wait() {
