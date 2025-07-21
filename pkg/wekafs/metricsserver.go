@@ -816,12 +816,6 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 		ms.prometheusMetrics.QuotaUpdateBatchDurationSeconds.Add(dur)
 		ms.prometheusMetrics.QuotaUpdateBatchDurationHistogram.Observe(dur)
 		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(len(uids)))
-		if time.Since(startTime) > ms.getConfig().wekaMetricsFetchInterval {
-			logger.Error().Dur("batch_duration_ms", time.Since(startTime)).
-				Msg("Finished to update quota maps, took longer than configured interval, consider increasing wekaMetricsFetchInterval or wekaQuotaMapFetchConcurrency")
-		} else {
-			logger.Info().Dur("batch_duration_ms", time.Since(startTime)).Msg("Finished to update quota maps on time")
-		}
 	}()
 	duration := atomic.NewFloat64(0)
 	countStarted := atomic.NewInt64(0)
@@ -862,7 +856,7 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 	avgDurationSuccessful := duration.Load() / float64(countSuccessful.Load())
 	parallelism := float64(countComplete) / cycleDuration.Seconds()
 
-	logger.Warn().Dur("cycle_duration", cycleDuration).
+	logger.Info().Dur("cycle_duration", cycleDuration).
 		Float64("concurrency", parallelism).
 		Float64("avg_duration_effectie", avgDurationEffective).
 		Float64("avg_duration_successful", avgDurationSuccessful).
@@ -882,14 +876,13 @@ func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	logger.Info().Msg("Waiting for the first batch of PersistentVolumes to be streamed before starting PeriodicQuotaMapUpdater")
+	logger.Info().Msg("Starting PeriodicQuotaMapUpdater")
 
-	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting PeriodicQuotaMapUpdater every defined interval")
-
-	ticker := ms.config.wekaMetricsFetchInterval
-	if ticker <= 0 {
-		ticker = time.Minute // Default to 1 minute if not set
-	}
+	//ticker := ms.config.wekaMetricsFetchInterval
+	//if ticker <= 0 {
+	//	ticker = time.Minute // Default to 1 minute if not set
+	//}
+	ticker := time.Minute
 	for {
 		select {
 		case <-ctx.Done():
