@@ -38,6 +38,15 @@ metricsServer:
   quotaMapValiditySeconds: 300
   # -- Timeout for API client requests, in seconds. Default is 120 seconds. Increased to 180 seconds to allow for larger operations like quotamap fetching
   apiClientTimeoutSeconds: 180
+  # -- Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).
+  #    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.
+  #    This is enabled by default, but can be disabled if needed.
+  #    The drawback is that in such case, metrics will be reported less frequently, using cached values.
+  #    Report timestamp will be recorded for each metric, so you can see when the last update was.
+  #    This requires Prometheus server to honor timestamps.
+  #    When false, all quota values will be fetched instantaneously, during metrics collection.
+  #    Not recommended when having thousands of PVCs
+  enableBatchModeForQuotaUpdates: true
 
 # -- Log level of CSI plugin
 logLevel: 6

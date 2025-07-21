@@ -88,6 +88,9 @@ spec:
           {{- if .Values.metricsServer.apiClientTimeoutSeconds }}
             - "--wekaapitimeoutseconds={{ .Values.metricsServer.apiClientTimeoutSeconds }}"
           {{- end }}
+          {{- if .Values.metricsServer.enableBatchModeForQuotaUpdates | default false }}
+            - "--fetchquotasinbatchmode"
+          {{- end }}
           ports:
             {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
