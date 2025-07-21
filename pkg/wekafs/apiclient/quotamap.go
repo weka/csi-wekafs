@@ -13,6 +13,7 @@ import (
 
 type QuotaListRequest struct {
 	FilesystemUid uuid.UUID `json:"-" url:"-"`
+	GetPath       bool      `json:"get_path"`
 }
 
 func (q *QuotaListRequest) getRequiredFields() []string {
@@ -115,6 +116,7 @@ func (a *ApiClient) GetQuotaMap(ctx context.Context, fs *FileSystem) (*QuotaMap,
 
 	r := &QuotaListRequest{
 		FilesystemUid: fs.Uid,
+		GetPath:       false,
 	}
 	out := &QuotaListResponse{}
 	q, err := qs.Values(r)

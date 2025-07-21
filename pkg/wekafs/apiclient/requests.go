@@ -67,7 +67,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	}
 	logger := log.Ctx(ctx)
 
-	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
+	logger.Trace().Str("method", Method).Str("url", a.getEndpoint(ctx).String()+r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
 
 	//perform the request and update endpoint with stats
 	response, err := a.client.Do(r)
@@ -200,6 +200,8 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	f := func() apiError {
+
+		// perform the request here
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
 		if a.handleTransientErrors(ctx, reqErr) != nil { // transient network errors
 			a.rotateEndpoint(ctx)
