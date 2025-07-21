@@ -54,6 +54,7 @@ var (
 	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
 	wekaMetricsQuotaMapValidity              = flag.Int("wekametricsquotamapvalidityseconds", 60, "Duration for which the quota map is considered valid")
 	wekaApiTimeout                           = flag.Int("wekaapitimeoutseconds", 120, "Timeout for Weka API requests in seconds")
+	useBatchMode                             = flag.Bool("fetchquotasinbatchmode", false, "Use batch mode for metrics server, fetch all filesystem quotas in one go")
 	// Set by the build process
 	version = ""
 )
@@ -191,6 +192,7 @@ func handle(ctx context.Context) {
 		*wekaMetricsQuotaUpdateConcurrentRequests,
 		time.Duration(*wekaMetricsQuotaMapValidity)*time.Second,
 		time.Duration(*wekaApiTimeout)*time.Second,
+		*useBatchMode,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, "/dev/null", 0, version, csiMode, false, config)
 	if err != nil {

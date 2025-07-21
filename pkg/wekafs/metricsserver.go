@@ -111,7 +111,7 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		secrets:               NewSecretsStore(),
 		volumeMetrics:         NewVolumeMetrics(),
 		prometheusMetrics:     NewPrometheusMetrics(),
-		persistentVolumesChan: make(chan *v1.PersistentVolume, PVStreamChannelSize),
+		persistentVolumesChan: make(chan *v1.PersistentVolume, driver.config.wekaMetricsFetchConcurrentRequests),
 		wg:                    sync.WaitGroup{},
 
 		quotaMaps: NewQuotaMapsPerFilesystem(),
@@ -119,7 +119,7 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 	ret.observedFilesystemUids = NewObservedFilesystemUids(ret)
 
 	ret.prometheusMetrics.FetchMetricsFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
-	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(float64(ret.getConfig().wekaMetricsFetchInterval.Seconds()))
+	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
 
 	return ret
 
@@ -226,7 +226,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		ms.prometheusMetrics.FetchPvBatchOperationsDurationHistogram.Observe(d)
 		ms.prometheusMetrics.MonitoredPersistentVolumesGauge.Set(float64(len(ms.volumeMetrics.Metrics)))
 
-		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes")
+		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes, streaming them for processing")
 
 		for _, pv := range pvList.Items {
 			select {
@@ -273,9 +273,7 @@ func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList []v1.Persis
 		ms.prometheusMetrics.PruneVolumesBatchDurationSeconds.Add(dur)
 		ms.prometheusMetrics.PruneVolumesBatchDurationHistogram.Observe(dur)
 		if pruneCount > 0 {
-			logger.Info().Int("pruned_volumes", int(pruneCount)).Msg("Pruned stale volumes")
-		} else {
-			logger.Info().Msg("No stale volumes to prune")
+			logger.Debug().Int("pruned_volumes", int(pruneCount)).Msg("Pruned stale volumes")
 		}
 
 	}()
@@ -353,24 +351,18 @@ func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
 	logger.Info().Msg("Starting processing of PersistentVolumes")
 
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
-	var wg sync.WaitGroup
-
 	for {
 		select {
 		case <-ctx.Done():
-			wg.Wait()
 			return
 		case pv, ok := <-ms.persistentVolumesChan:
 			if !ok || pv == nil {
-				wg.Wait()
 				return
 			}
 			sem <- struct{}{} // acquire semaphore
-			wg.Add(1)
 			go func(pv *v1.PersistentVolume) {
 				defer func() {
 					<-sem // release semaphore
-					wg.Done()
 				}()
 				ms.processSinglePersistentVolume(ctx, pv)
 			}(pv)
@@ -462,8 +454,8 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	logger.Trace().Str("pv_name", pv.Name).Msg("Adding PersistentVolume for metrics processing")
 	ms.volumeMetrics.AddVolumeMetric(pv.UID, metric)
 
-	// optimize, so we add initial straight when adding new PV
-	if FetchInitialQuotaOnProcessSingleVolume && !ms.getConfig().useQuotaMapsForMetrics {
+	//optimize, so we add initial straight when adding new PV
+	if !ms.getConfig().useQuotaMapsForMetrics {
 		_ = ms.fetchSingleMetric(ctx, metric)
 	}
 
@@ -810,13 +802,17 @@ func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
 
 func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) {
 
+	if len(ms.observedFilesystemUids.GetUids()) == 0 {
+		time.Sleep(time.Second)
+		return
+	}
 	component := "batchRefreshQuotaMaps"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	startTime := time.Now()
 
-	concurrency := ms.getConfig().wekaMetricsQuotaUpdateConcurrentRequests
+	concurrency := ms.getConfig().wekaQuotaMapFetchConcurrency
 	sem := make(chan struct{}, concurrency) // limit concurrent goroutines
 	uids := ms.observedFilesystemUids.GetUids()
 	logger := log.Ctx(ctx).With().Int("batch_size", len(uids)).Int("concurrency", concurrency).Logger()
@@ -832,7 +828,7 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(len(uids)))
 		if time.Since(startTime) > ms.getConfig().wekaMetricsFetchInterval {
 			logger.Error().Dur("batch_duration_ms", time.Since(startTime)).
-				Msg("Finished to update quota maps, took longer than configured interval, consider increasing wekaMetricsFetchInterval or wekaMetricsQuotaUpdateConcurrentRequests")
+				Msg("Finished to update quota maps, took longer than configured interval, consider increasing wekaMetricsFetchInterval or wekaQuotaMapFetchConcurrency")
 		} else {
 			logger.Info().Dur("batch_duration_ms", time.Since(startTime)).Msg("Finished to update quota maps on time")
 		}
