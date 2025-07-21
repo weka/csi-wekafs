@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"strconv"
-
 	"github.com/go-logr/zerologr"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
+	"go.uber.org/atomic"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,15 +23,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	clog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 )
 
 const (
-	PVStreamChannelSize                    = 100000 // Size of the channel for streaming PersistentVolume objects
-	VolumeMetricsBufferSize                = 10000
-	FetchInitialQuotaOnProcessSingleVolume = true
+	VolumeMetricsBufferSize = 10000
 )
 
 type SecretsStore struct {
@@ -239,15 +237,6 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		}
 
 		ms.pruneOldVolumes(ctx, pvList.Items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
-
-		if !ms.firstStreamCompleted {
-			ms.firstStreamCompleted = true
-			if ms.getConfig().useQuotaMapsForMetrics {
-				go ms.PeriodicQuotaMapUpdater(ctx)
-			}
-			go ms.PersistentVolumeStreamProcessor(ctx)
-
-		} // Set the flag to indicate that the first stream of PersistentVolumes has been completed, so we can start processing them
 
 		dur := ms.getConfig().wekaMetricsFetchInterval
 
@@ -984,6 +973,10 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 		go ms.PersistentVolumeStreamer(ctx)
 		go ms.MetricsReportStreamer(ctx)
 		go ms.PeriodicMetricsFetcher(ctx)
+		if ms.getConfig().useQuotaMapsForMetrics {
+			go ms.PeriodicQuotaMapUpdater(ctx)
+		}
+		go ms.PersistentVolumeStreamProcessor(ctx)
 
 		<-ctx.Done()
 		log.Info().Msg("Leadership lost or shutdown, stopping...")
