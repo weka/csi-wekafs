@@ -194,10 +194,10 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 // request wraps do with retries and some more error handling
 func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v ApiObjectResponse) apiError {
-	op := "ApiClientRequest"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	//op := "ApiClientRequest"
+	//ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	//defer span.End()
+	//ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	f := func() apiError {
 
