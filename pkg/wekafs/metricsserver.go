@@ -336,7 +336,7 @@ func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	logger.Info().Msg("Starting processing of PersistentVolumes, will log every 100 requests")
+	logger.Info().Msg("Starting processing of PersistentVolumes")
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
 	sampledLogger := logger.Sample(&zerolog.BasicSampler{N: 100})
 	for {
@@ -797,6 +797,30 @@ func (ms *MetricsServer) InvalidateSecret(ctx context.Context, secretName, secre
 	}
 }
 
+func (ms *MetricsServer) PeriodicPersistentVolumeCapacityReporter(ctx context.Context) {
+	component := "PeriodicPersistentVolumeCapacityReporter"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+
+	logger.Info().Msg("Starting periodic reporting of PersistentVolume capacities once in a minute. This is the fallback mechanism to ensure that we report capacities even if the metrics are not fetched from Weka API for some reason.")
+	ticker := time.NewTicker(1 * time.Minute) // Report every minute
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info().Msg("Context cancelled, stopping periodic reporting of PersistentVolume capacities")
+			return
+		case <-ticker.C:
+			ms.reportOnlyPvCapacities(ctx)
+		default:
+			time.Sleep(100 * time.Millisecond) // Sleep to avoid busy waiting
+		}
+	}
+}
+
 func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
 	component := "reportOnlyPvCapacities"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
@@ -1000,11 +1024,6 @@ func (ms *MetricsServer) PeriodicSingleMetricsFetcher(ctx context.Context) {
 					return
 				}
 
-				go func() {
-					// report only capacities, this is a fast operation and will not block the periodic fetch
-					ms.reportOnlyPvCapacities(ctx) // Report only capacities, assuming it will go faster and will not block the periodic fetch
-				}()
-
 				ms.capacityFetchRunning = true
 				defer func() { ms.capacityFetchRunning = false }()
 
@@ -1075,6 +1094,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 			go ms.PeriodicSingleMetricsFetcher(ctx)
 		}
 		go ms.PersistentVolumeStreamProcessor(ctx)
+		go ms.PeriodicPersistentVolumeCapacityReporter(ctx)
 
 		<-ctx.Done()
 		log.Info().Msg("Leadership lost or shutdown, stopping...")
