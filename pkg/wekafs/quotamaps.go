@@ -98,7 +98,7 @@ func (ms *MetricsServer) GetQuotaMapForFilesystem(ctx context.Context, fs *apicl
 	return nil, errors.New("quota map not found for filesystem")
 }
 
-func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *apiclient.FileSystem, force bool) error {
+func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *apiclient.FileSystem, force bool) (*apiclient.QuotaMap, error) {
 	component := "refreshQuotaMapPerFilesystem"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
@@ -106,7 +106,7 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 	logger := log.Ctx(ctx)
 
 	if fs == nil {
-		return errors.New("filesystem is nil")
+		return nil, errors.New("filesystem is nil")
 	}
 
 	logger.Debug().Str("filesystem", fs.Name).Msg("Updating QuotaMap for filesystem")
@@ -128,12 +128,12 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 	existingQuotaMap := ms.quotaMaps.GetQuotaMap(fs.Uid)
 	if existingQuotaMap != nil && !force && existingQuotaMap.LastUpdate.Add(ms.getConfig().wekaQuotaMapValidityDuration).After(time.Now()) {
 		logger.Debug().Str("filesystem", fs.Name).Msg("QuotaMap is up-to-date, skipping update")
-		return nil // no need to update, the quotaMap is already up-to-date
+		return existingQuotaMap, nil // no need to update, the quotaMap is already up-to-date
 	}
 
 	apiClient := ms.observedFilesystemUids.GetApiClient(fs.Uid)
 	if apiClient == nil {
-		return fmt.Errorf("no API client found for filesystem UID %s", fs.Uid)
+		return nil, fmt.Errorf("no API client found for filesystem UID %s", fs.Uid)
 	}
 
 	// update per-fs prometheus metrics: "csi_driver_name", "cluster_guid", "filesystem_name"
@@ -150,7 +150,7 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 	quotaMap, err := apiClient.GetQuotaMap(ctx, fs)
 	if err != nil {
 		ms.prometheusMetrics.QuotaMapRefreshFailureCount.WithLabelValues(labelValues...).Inc()
-		return fmt.Errorf("failed to fetch QuotaMap for filesystem %s: %w", fs.Name, err)
+		return nil, fmt.Errorf("failed to fetch QuotaMap for filesystem %s: %w", fs.Name, err)
 	}
 	ms.prometheusMetrics.QuotaMapRefreshSuccessCount.WithLabelValues(labelValues...).Inc()
 
@@ -158,5 +158,5 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 	defer maplock.Unlock()
 	defer ms.quotaMaps.Unlock()
 	ms.quotaMaps.QuotaMaps[fs.Uid] = quotaMap
-	return nil
+	return quotaMap, nil
 }

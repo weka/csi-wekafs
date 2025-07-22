@@ -57,7 +57,7 @@ type ApiClient struct {
 	RotateEndpointOnEachRequest bool // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
 
 	fsCache   map[string]*fsCacheEntry
-	fsCacheMu sync.Mutex
+	fsCacheMu sync.RWMutex
 }
 
 type ApiClientOptions struct {

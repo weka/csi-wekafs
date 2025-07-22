@@ -1,11 +1,68 @@
 package wekafs
 
 import (
+	"context"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sync"
+	"time"
 )
+
+const LockTimeout = time.Millisecond * 3000
+
+// TimedRWMutex wraps sync.RWMutex with timeout behavior
+type TimedRWMutex struct {
+	mu sync.RWMutex
+}
+
+func (t *TimedRWMutex) Lock() { t.LockWithTimeout(LockTimeout) }
+
+// LockWithTimeout tries to acquire write lock within the given timeout
+func (t *TimedRWMutex) LockWithTimeout(timeout time.Duration) {
+	done := make(chan struct{})
+
+	go func() {
+		t.mu.Lock()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Lock acquired
+	case <-time.After(timeout):
+		log.Error().Msg("LockedRWMutex: Lock() too long")
+	}
+}
+
+func (t *TimedRWMutex) RLock() { t.RLockWithTimeout(LockTimeout) }
+
+// RLockWithTimeout tries to acquire read lock within the given timeout
+func (t *TimedRWMutex) RLockWithTimeout(timeout time.Duration) {
+	done := make(chan struct{})
+
+	go func() {
+		t.mu.RLock()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Lock acquired
+	case <-time.After(timeout):
+		log.Error().Msg("TimedRWMutex: RLock() too long")
+	}
+}
+
+func (t *TimedRWMutex) Unlock() {
+	t.mu.Unlock()
+}
+
+func (t *TimedRWMutex) RUnlock() {
+	t.mu.RUnlock()
+}
 
 // VolumeMetric represents the prometheusMetrics for a single Persistent Volume in Kubernetes
 type VolumeMetric struct {
@@ -16,12 +73,112 @@ type VolumeMetric struct {
 	apiClient        *apiclient.ApiClient // reference to the Weka API client
 }
 
+type PerInodeIndex struct {
+	TimedRWMutex
+	m map[uint64]*VolumeMetric
+}
+
+func (pi *PerInodeIndex) Get(inodeId uint64) *VolumeMetric {
+	pi.RLock()
+	defer pi.RUnlock()
+	if metric, exists := pi.m[inodeId]; exists {
+		return metric
+	}
+	return nil
+}
+
+type PerFsInodeIndex struct {
+	TimedRWMutex
+	m map[uuid.UUID]*PerInodeIndex // map of Filesystem UID to PerInodeIndex
+}
+
+type VmIndex struct {
+	TimedRWMutex
+	index *PerFsInodeIndex
+}
+
+func (vmi *VmIndex) GetForFilesystem(fsUid uuid.UUID) *PerInodeIndex {
+	if fsMetrics, exists := vmi.index.m[fsUid]; exists {
+		return fsMetrics
+	}
+	return nil
+}
+
+func (vmi *VmIndex) GetVolumeMetric(fsUid uuid.UUID, inodeId uint64) *VolumeMetric {
+	fsMetrics := vmi.GetForFilesystem(fsUid)
+
+	if fsMetrics == nil {
+		return nil // no metrics for this filesystem
+	}
+	fsMetrics.RLock()
+	defer fsMetrics.RUnlock()
+	if volumeMetric, exists := fsMetrics.m[inodeId]; exists {
+		return volumeMetric
+	}
+	return nil
+}
+
+func (vmi *VmIndex) Add(fsUid uuid.UUID, inodeId uint64, metric *VolumeMetric) {
+	if vmi.index == nil {
+		vmi.Lock()
+		vmi.index = &PerFsInodeIndex{
+			m: make(map[uuid.UUID]*PerInodeIndex),
+		}
+		vmi.Unlock()
+	}
+	vmi.RLock()
+	pi, exists := vmi.index.m[fsUid]
+	vmi.RUnlock()
+	if !exists {
+		pi = &PerInodeIndex{
+			m: make(map[uint64]*VolumeMetric),
+		}
+		vmi.Lock()
+		vmi.index.m[fsUid] = pi
+		vmi.Unlock()
+	}
+	pi.Lock()
+	defer pi.Unlock()
+	pi.m[inodeId] = metric
+}
+
+// Remove removes a VolumeMetric from the index based on filesystem UID and inode ID
+func (vmi *VmIndex) Remove(fsUid uuid.UUID, inodeId uint64) {
+	pi := vmi.GetForFilesystem(fsUid)
+	if pi == nil {
+		return // nothing to remove
+	}
+
+	pi.Lock()
+	defer pi.Unlock()
+	if _, exists := pi.m[inodeId]; exists {
+		delete(pi.m, inodeId)
+		if len(pi.m) == 0 { // if no metrics left for this filesystem
+			vmi.Lock()
+			defer vmi.Unlock()
+			delete(vmi.index.m, fsUid) // remove the filesystem entry
+		}
+	}
+}
+
+func NewVmFilesystemIndex() *VmIndex {
+	return &VmIndex{
+		index: &PerFsInodeIndex{
+			m: make(map[uuid.UUID]*PerInodeIndex),
+		},
+	}
+}
+
 type VolumeMetrics struct {
-	sync.RWMutex
+	TimedRWMutex
 	Metrics map[types.UID]*VolumeMetric
+	index   *VmIndex
 }
 
 func (vms *VolumeMetrics) HasVolumeMetric(pvUID types.UID) bool {
+	if vms.Metrics == nil {
+		return false
+	}
 	vms.RLock()
 	defer vms.RUnlock()
 	_, exists := vms.Metrics[pvUID]
@@ -37,23 +194,67 @@ func (vms *VolumeMetrics) GetVolumeMetric(pvUID types.UID) *VolumeMetric {
 	return nil
 }
 
-func (vms *VolumeMetrics) AddVolumeMetric(pvUID types.UID, metric *VolumeMetric) {
-	vms.Lock()
-	defer vms.Unlock()
-	if vms.Metrics == nil {
-		vms.Metrics = make(map[types.UID]*VolumeMetric)
+func (vms *VolumeMetrics) GetAllMetricsByFilesystemUid(ctx context.Context, fsUid uuid.UUID) []*VolumeMetric {
+	var metrics []*VolumeMetric
+	index := vms.index.GetForFilesystem(fsUid)
+	if index == nil {
+		log.Ctx(ctx).Debug().Msgf("No volume metrics found for filesystem %s", fsUid.String())
+		return metrics // return empty slice if no metrics found
 	}
-	vms.Metrics[pvUID] = metric
+	for _, vm := range index.m {
+		if vm != nil {
+			metrics = append(metrics, vm)
+		}
+	}
+	return metrics
+
 }
 
-func (vms *VolumeMetrics) RemoveVolumeMetric(pvUID types.UID) {
+func (vms *VolumeMetrics) AddVolumeMetric(ctx context.Context, pvUID types.UID, vm *VolumeMetric) {
+	if vm.volume != nil { // if the volume is not nil, we can add it to the index. should never happen, but just in case
+		if vm.volume.fileSystemObject == nil {
+			panic("VolumeMetric has no filesystem object, cannot add to index")
+		}
+		inodeId, err := vm.volume.getInodeId(ctx)
+		if err != nil || inodeId == 0 {
+			panic("Volume metric has no inode ID, cannot add to index")
+			return
+		}
+		vms.index.Add(vm.volume.fileSystemObject.Uid, inodeId, vm)
+	}
+	vms.Lock()
+	defer vms.Unlock()
+	vms.Metrics[pvUID] = vm
+}
+
+func (vms *VolumeMetrics) RemoveVolumeMetric(ctx context.Context, pvUID types.UID) {
+	logger := log.Ctx(ctx)
+	vms.RLock()
+	vm, exists := vms.Metrics[pvUID]
+	vms.RUnlock()
+	if !exists {
+		return // nothing to remove
+	}
+	fsObj := vm.volume.fileSystemObject
+	if fsObj == nil {
+		logger.Error().Msg("Failed to get filesystem object for volume metric")
+		return
+	}
+	inodeId, err := vm.volume.getInodeId(ctx)
+	if err != nil || inodeId == 0 {
+		logger.Error().Msg("Volume metric has no inode ID, cannot add to index")
+		return
+	}
+	vms.index.Remove(fsObj.Uid, inodeId)
 	vms.Lock()
 	defer vms.Unlock()
 	delete(vms.Metrics, pvUID)
+
 }
 
 func NewVolumeMetrics() *VolumeMetrics {
 	return &VolumeMetrics{
 		Metrics: make(map[types.UID]*VolumeMetric),
+		index:   NewVmFilesystemIndex(),
 	}
 }

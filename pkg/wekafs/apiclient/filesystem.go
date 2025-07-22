@@ -140,14 +140,13 @@ func (a *ApiClient) GetFileSystemByUid(ctx context.Context, uid uuid.UUID, fs *F
 }
 
 // FindFileSystemsByFilter returns result set of 0-many objects matching filter
-func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSystem, resultSet *[]FileSystem) error {
+func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSystem, resultSet *FileSystems) error {
 	op := "FindFileSystemsByFilter"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	ret := &FileSystems{}
-	q, _ := qs.Values(query)
-	err := a.Get(ctx, query.GetBasePath(a), q, ret)
+	err := a.Get(ctx, query.GetBasePath(a), nil, ret)
 	if err != nil {
 		return err
 	}
@@ -161,7 +160,7 @@ func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSyst
 
 // GetFileSystemByFilter expected to return exactly one result of FindFileSystemsByFilter (error)
 func (a *ApiClient) GetFileSystemByFilter(ctx context.Context, query *FileSystem) (*FileSystem, error) {
-	rs := &[]FileSystem{}
+	rs := &FileSystems{}
 	err := a.FindFileSystemsByFilter(ctx, query, rs)
 	if err != nil {
 		return &FileSystem{}, err
@@ -182,19 +181,35 @@ func (a *ApiClient) GetFileSystemByName(ctx context.Context, name string) (*File
 }
 
 // CachedGetFileSystemByName returns a cached filesystem object by name.
-// If forceFresh is true, it fetches a new object and updates the cache.
-func (a *ApiClient) CachedGetFileSystemByName(ctx context.Context, name string, forceFresh bool) (*FileSystem, error) {
-	const cacheTTL = 30 * time.Second
-
-	a.fsCacheMu.Lock()
+func (a *ApiClient) CachedGetFileSystemByName(ctx context.Context, name string, acceptedTtl time.Duration) (*FileSystem, error) {
 	if a.fsCache == nil {
+		a.fsCacheMu.Lock()
 		a.fsCache = make(map[string]*fsCacheEntry)
+		a.fsCacheMu.Unlock()
 	}
+	a.fsCacheMu.RLock()
 	entry, found := a.fsCache[name]
-	a.fsCacheMu.Unlock()
-
-	if found && !forceFresh && time.Since(entry.timestamp) < cacheTTL {
+	a.fsCacheMu.RUnlock()
+	if found && time.Since(entry.timestamp) < acceptedTtl {
 		entry.cacheHits++
+		return entry.fs, nil
+	}
+	a.fsCacheMu.Lock()
+	defer a.fsCacheMu.Unlock()
+
+	fsList := &FileSystems{}
+	err := a.FindFileSystemsByFilter(ctx, &FileSystem{}, fsList)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, fs := range *fsList {
+		a.fsCache[fs.Name] = &fsCacheEntry{fs: &fs, timestamp: time.Now(), cacheHits: 0}
+	}
+
+	entry, found = a.fsCache[name]
+	if found {
+		entry.cacheHits++ // increment cache hit count
 		return entry.fs, nil
 	}
 
@@ -202,10 +217,8 @@ func (a *ApiClient) CachedGetFileSystemByName(ctx context.Context, name string, 
 	if err != nil {
 		return nil, err
 	}
-
-	a.fsCacheMu.Lock()
+	// Update the cache with the new filesystem object
 	a.fsCache[name] = &fsCacheEntry{fs: fs, timestamp: time.Now()}
-	a.fsCacheMu.Unlock()
 
 	return fs, nil
 }

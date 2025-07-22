@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-logr/zerologr"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
@@ -108,7 +109,7 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		secrets:               NewSecretsStore(),
 		volumeMetrics:         NewVolumeMetrics(),
 		prometheusMetrics:     NewPrometheusMetrics(),
-		persistentVolumesChan: make(chan *v1.PersistentVolume, driver.config.wekaMetricsFetchConcurrentRequests),
+		persistentVolumesChan: make(chan *v1.PersistentVolume, 1000),
 		wg:                    sync.WaitGroup{},
 
 		quotaMaps: NewQuotaMapsPerFilesystem(),
@@ -224,7 +225,6 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		ms.prometheusMetrics.MonitoredPersistentVolumesGauge.Set(float64(len(ms.volumeMetrics.Metrics)))
 
 		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes, streaming them for processing")
-
 		for _, pv := range pvList.Items {
 			select {
 			case <-ctx.Done():
@@ -237,12 +237,12 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 
 		ms.pruneOldVolumes(ctx, pvList.Items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
 
-		dur := ms.getConfig().wekaMetricsFetchInterval
+		interval := ms.getConfig().wekaMetricsFetchInterval
 
-		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_duration", dur).Msg("Sent all volumes to processing, waiting for next fetch")
+		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_duration", interval).Msg("Sent all volumes to processing, waiting for next fetch")
 
 		// refresh list of volumes every wekaMetricsFetchInterval
-		time.Sleep(dur)
+		time.Sleep(interval)
 	}
 }
 
@@ -324,7 +324,7 @@ func (ms *MetricsServer) pruneVolumeMetric(ctx context.Context, pvUUID types.UID
 	}
 
 	ms.observedFilesystemUids.decRef(fsObj) // actually decrease refcounter
-	ms.volumeMetrics.RemoveVolumeMetric(pvUUID)
+	ms.volumeMetrics.RemoveVolumeMetric(ctx, pvUUID)
 	ms.removePrometheusMetricsForLabels(ctx, metric)
 	logger.Info().Str("pv_uid", string(pvUUID)).Msg("Removed persistent volume from metric collection")
 }
@@ -337,8 +337,8 @@ func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
 	logger := log.Ctx(ctx)
 
 	logger.Info().Msg("Starting processing of PersistentVolumes")
-
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -365,12 +365,13 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	ctx = context.WithValue(ctx, "start_time", time.Now())
+	startTime := time.Now()
 	defer func() {
-		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
+		dur := time.Since(startTime)
 		ms.prometheusMetrics.ProcessPvOperationsCount.Inc()
-		ms.prometheusMetrics.ProcessPvOperationsDurationSeconds.Add(dur)
-		ms.prometheusMetrics.ProcessPvOperationsDurationHistogram.Observe(dur)
+		ms.prometheusMetrics.ProcessPvOperationsDurationSeconds.Add(dur.Seconds())
+		ms.prometheusMetrics.ProcessPvOperationsDurationHistogram.Observe(dur.Seconds())
+		logger.Debug().Str("pv_name", pv.Name).Dur("duration", dur).Msg("Added PersistentVolume for metrics processing")
 	}()
 
 	// Validate the PersistentVolume validity
@@ -421,11 +422,17 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	volume.persistentVol = pv // Set the PersistentVolume reference in the Volume object
 	// Create a new VolumeMetric instance
 
-	fsObj, err := volume.getCachedFilesystemObj(ctx)
-	if err != nil {
-		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
-		return
+	fsObj, err := volume.apiClient.CachedGetFileSystemByName(ctx, volume.FilesystemName, ms.getConfig().wekaQuotaMapValidityDuration)
+	if err == nil {
+		volume.fileSystemObject = fsObj
+	} else {
+		fsObj, err = volume.getFilesystemObj(ctx, true)
+		if err != nil {
+			logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
+			return
+		}
 	}
+
 	if fsObj == nil {
 		logger.Error().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, skipping PersistentVolume")
 		return
@@ -439,14 +446,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		secret:           secret,
 		apiClient:        apiClient,
 	}
-	logger.Trace().Str("pv_name", pv.Name).Msg("Adding PersistentVolume for metrics processing")
-	ms.volumeMetrics.AddVolumeMetric(pv.UID, metric)
-
-	//optimize, so we add initial straight when adding new PV
-	if !ms.getConfig().useQuotaMapsForMetrics {
-		_ = ms.fetchSingleMetric(ctx, metric)
-	}
-
+	ms.volumeMetrics.AddVolumeMetric(ctx, pv.UID, metric)
 }
 
 func (ms *MetricsServer) ensurePersistentVolumeValid(pv *v1.PersistentVolume) error {
@@ -541,8 +541,8 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	return nil
 }
 
-func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
-	component := "FetchMetrics"
+func (ms *MetricsServer) FetchMetricsOneByOne(ctx context.Context) error {
+	component := "FetchMetricsOneByOne"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 
@@ -599,7 +599,43 @@ func (ms *MetricsServer) FetchMetrics(ctx context.Context) error {
 	return nil
 }
 
-func (ms *MetricsServer) fetchPvUsageStats(ctx context.Context, v *Volume) (*UsageStats, error) {
+func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclient.QuotaMap) {
+	component := "GetMetricsFromQuotaMap"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+	logger := log.Ctx(ctx)
+
+	if qm == nil {
+		logger.Error().Msg("QuotaMap is nil, cannot fetch vms")
+		return
+	}
+	vms := ms.volumeMetrics.GetAllMetricsByFilesystemUid(ctx, qm.FileSystemUid)
+	for _, vm := range vms {
+		inodeId, err := vm.volume.getInodeId(ctx)
+		if err != nil {
+			logger.Error().Err(err).Uint64("inode_id", inodeId).Msg("Failed to get inode ID for volume, skipping")
+			continue
+		}
+		q := qm.GetQuotaForInodeId(inodeId)
+		if q == nil {
+			logger.Warn().Uint64("inode_id", inodeId).Msg("No quota entry found for inode ID in cached quota object, skipping")
+			continue
+		}
+		vm.metrics = &PvStats{
+			Usage: &UsageStats{
+				Capacity:  int64(q.HardLimitBytes),
+				Used:      int64(q.UsedBytes),
+				Free:      int64(q.HardLimitBytes - q.UsedBytes),
+				Timestamp: q.LastUpdateTime,
+			},
+			Performance: nil,
+		}
+		ms.volumeMetricsChan <- vm // Send the metric to the MetricsServer's incoming requests channel
+	}
+}
+
+func (ms *MetricsServer) fetchPvUsageStatsFromWeka(ctx context.Context, v *Volume) (*UsageStats, error) {
 	inodeId, err := v.getInodeId(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inode ID for volume %s: %w", v.persistentVol.Name, err)
@@ -611,29 +647,45 @@ func (ms *MetricsServer) fetchPvUsageStats(ctx context.Context, v *Volume) (*Usa
 	if fsObj == nil {
 		return nil, fmt.Errorf("failed to get filesystem object for volume %s", v.persistentVol.Name)
 	}
-	var quotaEntry *apiclient.Quota
-	if ms.getConfig().useQuotaMapsForMetrics {
-		quotaMap, err := ms.GetQuotaMapForFilesystem(ctx, fsObj)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get quota map for filesystem %s: %w", fsObj.Name, err)
-		}
-		if quotaMap == nil {
-			return nil, fmt.Errorf("quota map is nil for filesystem %s", fsObj.Name)
-		}
-		// Find the quota entry for the inode ID
-		quotaEntry = quotaMap.GetQuotaForInodeId(inodeId)
-		if quotaEntry == nil {
-			return nil, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
-		}
-	} else {
-		// Fetch the quota entry directly from the API
-		quotaEntry, err = v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch quota for inode ID %d: %w", inodeId, err)
-		}
-		if quotaEntry == nil {
-			return nil, fmt.Errorf("no quota entry found for inode ID %d", inodeId)
-		}
+	quotaEntry, err := v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch quota for inode ID %d: %w", inodeId, err)
+	}
+	if quotaEntry == nil {
+		return nil, fmt.Errorf("no quota entry found for inode ID %d", inodeId)
+	}
+	return &UsageStats{
+
+		Capacity:  int64(quotaEntry.HardLimitBytes),
+		Used:      int64(quotaEntry.UsedBytes),
+		Free:      int64(quotaEntry.HardLimitBytes - quotaEntry.UsedBytes),
+		Timestamp: quotaEntry.LastUpdateTime,
+	}, nil
+}
+
+func (ms *MetricsServer) fetchSingePvUsageStatsFromQuotaMap(ctx context.Context, v *Volume) (*UsageStats, error) {
+	inodeId, err := v.getInodeId(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inode ID for volume %s: %w", v.persistentVol.Name, err)
+	}
+	fsObj, err := v.getFilesystemObj(ctx, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get filesystem object for volume %s: %w", v.persistentVol.Name, err)
+	}
+	if fsObj == nil {
+		return nil, fmt.Errorf("failed to get filesystem object for volume %s", v.persistentVol.Name)
+	}
+	quotaMap, err := ms.GetQuotaMapForFilesystem(ctx, fsObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quota map for filesystem %s: %w", fsObj.Name, err)
+	}
+	if quotaMap == nil {
+		return nil, fmt.Errorf("quota map is nil for filesystem %s", fsObj.Name)
+	}
+	// Find the quota entry for the inode ID
+	quotaEntry := quotaMap.GetQuotaForInodeId(inodeId)
+	if quotaEntry == nil {
+		return nil, fmt.Errorf("no quota entry found for inode ID %d in cached quota object for filesystem %s", inodeId, fsObj.Name)
 	}
 	return &UsageStats{
 
@@ -646,7 +698,7 @@ func (ms *MetricsServer) fetchPvUsageStats(ctx context.Context, v *Volume) (*Usa
 
 func (ms *MetricsServer) FetchPvStats(ctx context.Context, v *Volume) (*PvStats, error) {
 	ret := &PvStats{}
-	usageStats, err := ms.fetchPvUsageStats(ctx, v)
+	usageStats, err := ms.fetchSingePvUsageStatsFromQuotaMap(ctx, v)
 	ret.Usage = usageStats
 	return ret, err
 }
@@ -771,12 +823,11 @@ func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
 	logger.Info().Int("pv_count", len(keys)).Msg("Finished to report only PersistentVolume capacities")
 }
 
+// batchRefreshQuotaMaps refreshes the quota maps for all observed filesystems in batches.
+// It limits the number of concurrent goroutines to avoid overwhelming the API server.
+// It also updates asynchronously calls update of all volumeMetrics on that filesystem
 func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) {
 
-	if len(ms.observedFilesystemUids.GetUids()) == 0 {
-		time.Sleep(time.Second)
-		return
-	}
 	component := "batchRefreshQuotaMaps"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
@@ -786,7 +837,11 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 	concurrency := ms.getConfig().wekaQuotaMapFetchConcurrency
 	sem := make(chan struct{}, concurrency) // limit concurrent goroutines
 	uids := ms.observedFilesystemUids.GetUids()
-	logger := log.Ctx(ctx).With().Int("batch_size", len(uids)).Int("concurrency", concurrency).Logger()
+	if len(uids) == 0 {
+		return
+	}
+	batchSize := len(uids)
+	logger := log.Ctx(ctx).With().Int("batch_size", batchSize).Int("concurrency", concurrency).Logger()
 	logger.Info().Msg("Starting to update quota maps")
 
 	// update prometheusMetrics for batchRefreshQuotaMaps batches
@@ -804,6 +859,7 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 	countFailed := atomic.NewInt64(0)
 
 	cycleStart := time.Now()
+	sampledLogger := logger.Sample(&zerolog.BasicSampler{N: 50})
 	for fsUid, ofs := range uids {
 		if ofs == nil {
 			logger.Error().Str("fs_uid", fsUid.String()).Msg("Observed filesystem UID not found in the cache, skipping")
@@ -819,8 +875,14 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 			defer func() { <-sem }() // release the slot
 			countStarted.Inc()
 			start := time.Now()
-			err := ms.refreshQuotaMapPerFilesystem(ctx, fsObj, force)
-			duration.Add(time.Since(start).Seconds())
+			qm, err := ms.refreshQuotaMapPerFilesystem(ctx, fsObj, force)
+
+			// Update the metrics with the quota map if the fetch was successful
+			if qm != nil {
+				go ms.GetMetricsFromQuotaMap(ctx, qm)
+			}
+			dur := time.Since(start)
+			duration.Add(dur.Seconds())
 
 			if err != nil {
 				countFailed.Inc()
@@ -828,6 +890,8 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 			} else {
 				countSuccessful.Inc()
 			}
+			sampledLogger.Info().Int64("complete_count", countSuccessful.Load()+countFailed.Load()).Dur("duration", dur).Msg("Quota maps batch refresh progress")
+
 		}(fsObj)
 	}
 	cycleDuration := time.Since(cycleStart)
@@ -847,9 +911,9 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 		Int64("count_incomplete", countIncomplete).
 		Int64("count_completed", countComplete).
 		Msg("BATCH ENDED")
-
 }
 
+// PeriodicQuotaMapUpdater periodically updates the quota maps for all observed filesystems.
 func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 	component := "PeriodicQuotaMapUpdater"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
@@ -859,10 +923,6 @@ func (ms *MetricsServer) PeriodicQuotaMapUpdater(ctx context.Context) {
 
 	logger.Info().Msg("Starting PeriodicQuotaMapUpdater")
 
-	//ticker := ms.config.wekaMetricsFetchInterval
-	//if ticker <= 0 {
-	//	ticker = time.Minute // Default to 1 minute if not set
-	//}
 	ticker := time.Minute
 	for {
 		select {
@@ -896,9 +956,12 @@ func (ms *MetricsServer) RollingQuotaMapUpdaterForDebug(ctx context.Context) {
 	}
 }
 
-func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
+// PeriodicSingleMetricsFetcher periodically fetches metrics for all PersistentVolumes and reports them to Prometheus.
+// It runs in a separate goroutine and is controlled by a ticker based on the configured interval.
+// It is only relevant for the flow where metrics are fetched from WEKA one by one, not in batch.
+func (ms *MetricsServer) PeriodicSingleMetricsFetcher(ctx context.Context) {
 	// Periodically fetch prometheusMetrics for all persistent volumes
-	component := "PeriodicMetricsFetcher"
+	component := "PeriodicSingleMetricsFetcher"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
@@ -938,7 +1001,7 @@ func (ms *MetricsServer) PeriodicMetricsFetcher(ctx context.Context) {
 				defer func() { ms.capacityFetchRunning = false }()
 
 				logger.Info().Int("pv_count", len(ms.volumeMetrics.Metrics)).Msg("Fetching prometheusMetrics for PersistentVolumes")
-				err := ms.FetchMetrics(ctx)
+				err := ms.FetchMetricsOneByOne(ctx)
 				if err != nil {
 					logger.Error().Err(err).Msg("Error fetching prometheusMetrics")
 					ms.prometheusMetrics.PeriodicFetchMetricsSuccessCount.Inc()
@@ -998,9 +1061,10 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 
 		go ms.PersistentVolumeStreamer(ctx)
 		go ms.MetricsReportStreamer(ctx)
-		go ms.PeriodicMetricsFetcher(ctx)
 		if ms.getConfig().useQuotaMapsForMetrics {
 			go ms.PeriodicQuotaMapUpdater(ctx)
+		} else {
+			go ms.PeriodicSingleMetricsFetcher(ctx)
 		}
 		go ms.PersistentVolumeStreamProcessor(ctx)
 
