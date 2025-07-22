@@ -116,8 +116,8 @@ metricsServer:
   podLabels: {}
   # -- tolerations for metrics server only
   tolerations: *globalPluginTolerations
-  # -- concurrent requests for WEKA API (excluding quota maps updates)
-  maxConcurrentRequests: 20
+  # -- concurrent requests for WEKA API (excluding quota maps updates, used for resolving volume Quota entry and other operations)
+  maxConcurrentRequests: 100
   # -- metrics fetch interval in seconds, default is 300 seconds (every 5 minutes)
   metricsFetchIntervalSeconds: 300
   # -- termination grace period for metrics server pods
@@ -125,7 +125,7 @@ metricsServer:
   # -- enable leader election for metrics server
   enableLeaderElection: true
   # -- number of concurrent requests for metrics server to update quota lists for a whole filesystem
-  quotaUpdateConcurrentRequests: 10
+  quotaUpdateConcurrentRequests: 25
   # -- the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,
   #    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.
   #    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded
