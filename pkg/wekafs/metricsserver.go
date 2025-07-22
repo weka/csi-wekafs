@@ -440,7 +440,11 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	ms.observedFilesystemUids.incRef(fsObj, apiClient) // Add the filesystem to the observed list
 
 	// prepopulate the inode ID for the volume, this will be used to fetch metrics later to avoid it during AddMetric
-	_, _ = volume.getInodeId(ctx)
+	_, err = volume.getInodeId(ctx)
+	if err != nil {
+		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get inode ID for volume, skipping PersistentVolume")
+		return
+	}
 
 	metric := &VolumeMetric{
 		persistentVolume: pv,
