@@ -178,6 +178,25 @@ func (tc *TimedCounter) AddWithTimestamp(v float64, ts time.Time) {
 	tc.lastTs.Store(ts)
 }
 
+// Set sets the counter to value. Although breaks prometheus logics,
+// it is used when values are already accumulated externally
+func (tc *TimedCounter) Set(v float64) {
+	tc.val.Store(v)
+	tc.lastTs.Store(time.Now())
+}
+
+// SetWithTimestamp sets the counter to value and timestamp. Although breaks prometheus logics,
+// it is used when values are already accumulated externally
+func (tc *TimedCounter) SetWithTimestamp(v float64, ts time.Time) *prometheus.Desc {
+	tc.val.Store(v)
+	if ts.IsZero() {
+		tc.lastTs.Store(time.Now())
+	} else {
+		tc.lastTs.Store(ts)
+	}
+	return tc.desc
+}
+
 func (tc *TimedCounter) Describe(ch chan<- *prometheus.Desc) { ch <- tc.desc }
 func (tc *TimedCounter) Collect(ch chan<- prometheus.Metric) {
 	ts := tc.lastTs.Load()

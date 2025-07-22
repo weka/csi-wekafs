@@ -673,25 +673,6 @@ func (ms *MetricsServer) MetricsReportStreamer(ctx context.Context) {
 			}
 			u := metric.metrics.Usage
 			p := metric.metrics.Performance
-
-			var pDiff *apiclient.PerfStats
-			if p != nil {
-				lastStat := metric.volume.lastStats
-				if lastStat == nil {
-					pDiff = p
-				} else {
-					pDiff = &apiclient.PerfStats{
-						Reads:          p.Reads - lastStat.Reads,
-						Writes:         p.Writes - lastStat.Writes,
-						ReadBytes:      p.ReadBytes - lastStat.ReadBytes,
-						WriteBytes:     p.WriteBytes - lastStat.WriteBytes,
-						ReadLatencyUs:  p.ReadLatencyUs - lastStat.ReadLatencyUs,
-						WriteLatencyUs: p.WriteLatencyUs - lastStat.WriteLatencyUs,
-						Timestamp:      p.Timestamp,
-					}
-				}
-				metric.volume.lastStats = p
-			}
 			// enrich labels with persistent volume claim information
 			labelValues := ms.createPrometheusLabelsForMetric(metric)
 
@@ -701,16 +682,16 @@ func (ms *MetricsServer) MetricsReportStreamer(ctx context.Context) {
 				ms.prometheusMetrics.UsedBytes.WithLabelValues(labelValues...).SetWithTimestamp(float64(u.Used), u.Timestamp)
 				ms.prometheusMetrics.FreeBytes.WithLabelValues(labelValues...).SetWithTimestamp(float64(u.Free), u.Timestamp)
 			}
-			if pDiff != nil {
+			if p != nil {
 				// Report performance metrics if available
-				ms.prometheusMetrics.ReadsTotal.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.Reads), pDiff.Timestamp)
-				ms.prometheusMetrics.WritesTotal.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.Writes), pDiff.Timestamp)
-				ms.prometheusMetrics.ReadBytesTotal.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.ReadBytes), pDiff.Timestamp)
-				ms.prometheusMetrics.WriteBytes.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.WriteBytes), pDiff.Timestamp)
-				ms.prometheusMetrics.ReadDurationUs.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.ReadLatencyUs), pDiff.Timestamp)
-				ms.prometheusMetrics.WriteDurationUs.WithLabelValues(labelValues...).AddWithTimestamp(float64(pDiff.WriteLatencyUs), pDiff.Timestamp)
+				ms.prometheusMetrics.ReadsTotal.WithLabelValues(labelValues...).SetWithTimestamp(float64(p.Reads), p.Timestamp)
+				ms.prometheusMetrics.WritesTotal.WithLabelValues(labelValues...).SetWithTimestamp(float64(p.Writes), p.Timestamp)
+				ms.prometheusMetrics.ReadBytesTotal.WithLabelValues(labelValues...).SetWithTimestamp(float64(p.ReadBytes), p.Timestamp)
+				ms.prometheusMetrics.WriteBytes.WithLabelValues(labelValues...).SetWithTimestamp(float64(p.WriteBytes), p.Timestamp)
+				ms.prometheusMetrics.ReadDurationUs.WithLabelValues(labelValues...).SetWithTimestamp(float64(p.ReadLatencyUs), p.Timestamp)
+				ms.prometheusMetrics.WriteDurationUs.WithLabelValues(labelValues...).SetWithTimestamp(float64(p.WriteLatencyUs), p.Timestamp)
 			}
-			if u != nil || pDiff != nil {
+			if u != nil || p != nil {
 				ms.prometheusMetrics.ReportedMetricsSuccessCount.Inc()
 			} else {
 				ms.prometheusMetrics.ReportedMetricsFailureCount.Inc()
