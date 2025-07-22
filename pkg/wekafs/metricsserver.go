@@ -336,9 +336,9 @@ func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	logger.Info().Msg("Starting processing of PersistentVolumes")
+	logger.Info().Msg("Starting processing of PersistentVolumes, will log every 100 requests")
 	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
-
+	sampledLogger := logger.Sample(&zerolog.BasicSampler{N: 100})
 	for {
 		select {
 		case <-ctx.Done():
@@ -353,6 +353,7 @@ func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
 					<-sem // release semaphore
 				}()
 				ms.processSinglePersistentVolume(ctx, pv)
+				sampledLogger.Info().Str("pv_name", pv.Name).Msg("Processing persistent volume completed. This is sampled log")
 			}(pv)
 		}
 	}
