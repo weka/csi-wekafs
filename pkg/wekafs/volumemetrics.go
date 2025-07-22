@@ -78,6 +78,12 @@ type PerInodeIndex struct {
 	m map[uint64]*VolumeMetric
 }
 
+func NewPerInodeIndex() *PerInodeIndex {
+	return &PerInodeIndex{
+		m: make(map[uint64]*VolumeMetric),
+	}
+}
+
 func (pi *PerInodeIndex) Get(inodeId uint64) *VolumeMetric {
 	pi.RLock()
 	defer pi.RUnlock()
@@ -119,20 +125,11 @@ func (vmi *VmIndex) GetVolumeMetric(fsUid uuid.UUID, inodeId uint64) *VolumeMetr
 }
 
 func (vmi *VmIndex) Add(fsUid uuid.UUID, inodeId uint64, metric *VolumeMetric) {
-	if vmi.index == nil {
-		vmi.Lock()
-		vmi.index = &PerFsInodeIndex{
-			m: make(map[uuid.UUID]*PerInodeIndex),
-		}
-		vmi.Unlock()
-	}
 	vmi.RLock()
 	pi, exists := vmi.index.m[fsUid]
 	vmi.RUnlock()
 	if !exists {
-		pi = &PerInodeIndex{
-			m: make(map[uint64]*VolumeMetric),
-		}
+		pi = NewPerInodeIndex()
 		vmi.Lock()
 		vmi.index.m[fsUid] = pi
 		vmi.Unlock()
@@ -215,10 +212,9 @@ func (vms *VolumeMetrics) AddVolumeMetric(ctx context.Context, pvUID types.UID, 
 		if vm.volume.fileSystemObject == nil {
 			panic("VolumeMetric has no filesystem object, cannot add to index")
 		}
-		inodeId, err := vm.volume.getInodeId(ctx)
-		if err != nil || inodeId == 0 {
+		inodeId := vm.volume.inodeId
+		if inodeId == 0 {
 			panic("Volume metric has no inode ID, cannot add to index")
-			return
 		}
 		vms.index.Add(vm.volume.fileSystemObject.Uid, inodeId, vm)
 	}

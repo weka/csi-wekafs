@@ -439,6 +439,9 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	}
 	ms.observedFilesystemUids.incRef(fsObj, apiClient) // Add the filesystem to the observed list
 
+	// prepopulate the inode ID for the volume, this will be used to fetch metrics later to avoid it during AddMetric
+	_, _ = volume.getInodeId(ctx)
+
 	metric := &VolumeMetric{
 		persistentVolume: pv,
 		volume:           volume,
@@ -612,9 +615,9 @@ func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclie
 	}
 	vms := ms.volumeMetrics.GetAllMetricsByFilesystemUid(ctx, qm.FileSystemUid)
 	for _, vm := range vms {
-		inodeId, err := vm.volume.getInodeId(ctx)
-		if err != nil {
-			logger.Error().Err(err).Uint64("inode_id", inodeId).Msg("Failed to get inode ID for volume, skipping")
+		inodeId := vm.volume.inodeId
+		if inodeId == 0 {
+			logger.Error().Uint64("inode_id", inodeId).Msg("Failed to get inode ID for volume, skipping")
 			continue
 		}
 		q := qm.GetQuotaForInodeId(inodeId)
