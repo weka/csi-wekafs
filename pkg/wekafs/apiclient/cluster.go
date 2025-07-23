@@ -192,9 +192,30 @@ type Container struct {
 type ContainersResponse []Container
 
 func (a *ApiClient) getContainers(ctx context.Context) (*ContainersResponse, error) {
+	a.containersLock.RLock()
+	if a.containers != nil && a.containersUpdateTime.After(time.Now().Add(-time.Minute)) {
+		a.containersLock.RUnlock()
+		return a.containers, nil
+	}
+	a.containersLock.RUnlock()
+	// recheck if during lock this was updated
+	a.containersLock.RLock()
+	if a.containers != nil && a.containersUpdateTime.After(time.Now().Add(-time.Minute)) {
+		a.containersLock.RUnlock()
+		return a.containers, nil
+	}
+	a.containersLock.RUnlock()
+	a.containersLock.Lock()
+	defer a.containersLock.Unlock()
+
 	responseData := &ContainersResponse{}
 	err := a.Get(ctx, ApiPathContainersInfo, nil, responseData)
-	return responseData, err
+	if err != nil {
+		return responseData, err
+	}
+	a.containers = responseData
+	a.containersUpdateTime = time.Now()
+	return a.containers, nil
 }
 
 func (a *ApiClient) GetLocalContainer(ctx context.Context, allowProtocolContainers bool) (*Container, error) {
@@ -208,14 +229,14 @@ func (a *ApiClient) GetLocalContainer(ctx context.Context, allowProtocolContaine
 	var ret []Container
 	ret = filterFrontendContainers(ctx, a.hostname, *allContainers, false)
 	if len(ret) == 0 && allowProtocolContainers {
-		logger.Warn().Msg("No frontend containers found, trying to find backend containers with frontend cores")
+		logger.Debug().Msg("No frontend containers found, trying to find backend containers with frontend cores")
 		ret = filterFrontendContainers(ctx, a.hostname, *allContainers, true)
 	}
 
 	if len(ret) == 1 {
 		return &ret[0], nil
 	} else if len(ret) > 1 {
-		logger.Warn().Msg("Found more than one local client container, selecting one randomly")
+		logger.Trace().Msg("Found more than one local client container, selecting one randomly")
 		return &ret[rand.IntnRange(0, len(ret))], nil
 	} else {
 		err := errors.New("could not find any local client container")
