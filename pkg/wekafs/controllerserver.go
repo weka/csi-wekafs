@@ -408,7 +408,6 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
-	capacity := int64(0)
 	var backingType VolumeBackingType
 	driverName := cs.getConfig().GetDriver().name
 	defer func() {
@@ -418,9 +417,6 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		}
 		bt := string(backingType)
 		if bt != "" {
-			if capacity > 0 {
-				cs.metrics.Operations.DeleteVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(float64(capacity))
-			}
 			cs.metrics.Operations.DeleteVolumeCounter.WithLabelValues(driverName, result, bt).Inc()
 			cs.metrics.Operations.DeleteVolumeDuration.WithLabelValues(driverName, result, bt).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
 		}
@@ -458,10 +454,6 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	// obtain capacity and backing for metrics
 	backingType = volume.GetBackingType()
-	capacity, err = volume.GetCapacity(ctx)
-	if err != nil || capacity <= 0 {
-		logger.Warn().Err(err).Msg("Failed to fetch volume capacity, assuming it does not exist")
-	}
 
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
