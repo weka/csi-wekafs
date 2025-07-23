@@ -423,14 +423,6 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
-	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx, op)
-	defer dec()
-	defer cancel()
-	if err != nil {
-		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
-	}
-
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
@@ -454,6 +446,14 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	// obtain capacity and backing for metrics
 	backingType = volume.GetBackingType()
+
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
 
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
