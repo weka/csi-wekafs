@@ -42,7 +42,7 @@ func (ofu *ObservedFilesystems) incRef(fs *apiclient.FileSystem, apiClient *apic
 		defer ofu.Unlock()
 		ofu.uids[fs.Uid] = &ObservedFilesystem{
 			apiClient:  apiClient,
-			refCounter: 1,
+			refCounter: atomic.NewInt32(1), // start with a reference count of 1
 			fsObj:      fs,
 			fsUid:      fs.Uid,
 			lastSeen:   atomic.NewTime(time.Now()),
@@ -60,8 +60,8 @@ func (ofu *ObservedFilesystems) decRef(fs *apiclient.FileSystem) {
 	if exists {
 		of.Lock()
 		defer of.Unlock()
-		of.refCounter--
-		if of.refCounter <= 0 {
+		of.refCounter.Dec()
+		if of.refCounter.Load() <= 0 {
 			// remove the filesystem from the map if no references are left
 			delete(ofu.uids, fs.Uid)
 			ofu.ms.quotaMaps.DeleteLock(fs.Uid) // to avoid memory leaks, delete the lock after the last reference is removed
@@ -90,14 +90,14 @@ type ObservedFilesystem struct {
 	fsUid      uuid.UUID
 	fsObj      *apiclient.FileSystem
 	lastSeen   *atomic.Time
-	refCounter int
+	refCounter *atomic.Int32
 }
 
 func (ofu *ObservedFilesystem) incRef() {
 	of := ofu
 	of.Lock()
 	defer of.Unlock()
-	of.refCounter++
+	of.refCounter.Inc()
 	of.lastSeen.Store(time.Now())
 }
 
@@ -105,9 +105,7 @@ func (ofu *ObservedFilesystem) decRef() {
 	of := ofu
 	of.Lock()
 	defer of.Unlock()
-	if of.refCounter > 0 {
-		of.refCounter--
-	}
+	of.refCounter.Dec()
 }
 
 func (ofu *ObservedFilesystem) GetApiClient() *apiclient.ApiClient {
