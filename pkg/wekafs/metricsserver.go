@@ -594,17 +594,15 @@ func (ms *MetricsServer) FetchMetricsOneByOne(ctx context.Context) error {
 	defer logger.Info().Int("pv_count", len(keys)).Msg("Finished to fetch prometheusMetrics for PersistentVolumes")
 	for _, key := range keys {
 		vm := ms.volumeMetrics.GetVolumeMetric(key)
-		wg.Add(1)
 		sem <- struct{}{} // Acquire a slot in the semaphore
 
 		go func(vm *VolumeMetric) {
 			if vm == nil || vm.persistentVolume == nil {
-				logger.Error().Str("pv_uid", string(key)).Msg("VolumeMetric or PersistentVolume is nil, skipping")
-				wg.Done()
+				// could happen if was already pruned while waiting
+				logger.Trace().Str("pv_uid", string(key)).Msg("VolumeMetric or PersistentVolume is nil, skipping")
 				<-sem // Release the slot in the semaphore
 				return
 			}
-			defer wg.Done()
 			defer func() { <-sem }() // Release the slot in the semaphore
 
 			err := ms.fetchSingleMetric(ctx, vm) // Actually fetch the prometheusMetrics for the persistent volume
@@ -875,7 +873,8 @@ func (ms *MetricsServer) reportOnlyPvCapacities(ctx context.Context) {
 	for _, key := range keys {
 		metric := ms.volumeMetrics.GetVolumeMetric(key)
 		if metric == nil || metric.persistentVolume == nil {
-			logger.Warn().Str("pv_uid", string(key)).Msg("VolumeMetric or PersistentVolume is nil, skipping")
+			// could happen if was already pruned while waiting
+			logger.Trace().Str("pv_uid", string(key)).Msg("VolumeMetric or PersistentVolume is nil, skipping")
 			continue
 		}
 
