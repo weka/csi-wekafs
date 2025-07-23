@@ -43,6 +43,7 @@ LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data 
 LABEL url="https://www.weka.io"
 ARG LOCAR_VERSION=0.4.3
 RUN curl -L -o /locar https://github.com/weka/locar/releases/download/$LOCAR_VERSION/locar-$LOCAR_VERSION-$TARGETOS-$TARGETARCH
+RUN chmod +x /locar
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 COPY --from=go-builder /bin/metricsserver /metricsserver
 ARG binary=/bin/wekafsplugin
