@@ -448,13 +448,13 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	} else {
 		fsObj, err = volume.getFilesystemObj(ctx, true)
 	}
-
-	if err == apiclient.ObjectNotFoundError || fsObj == nil {
-		logger.Trace().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, skipping PersistentVolume")
-		// Check if the PersistentVolume is already being processed
-		if ms.volumeMetrics.HasVolumeMetric(pv.UID) {
+	if err != nil {
+		if err == apiclient.ObjectNotFoundError {
+			logger.Trace().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, pruning PersistentVolume")
 			ms.volumeMetrics.RemoveVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
+			return
 		}
+		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
 		return
 	}
 
@@ -465,7 +465,12 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	// prepopulate the inode ID for the volume, this will be used to fetch metrics later to avoid it during AddMetric
 	_, err = volume.getInodeId(ctx)
 	if err != nil {
-		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get inode ID for volume, skipping PersistentVolume")
+		if err == apiclient.ObjectNotFoundError {
+			logger.Trace().Err(err).Str("pv_name", pv.Name).Msg("Failed to get inode ID for volume, pruning PersistentVolume")
+			ms.volumeMetrics.RemoveVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
+			return
+		}
+		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem inode ID for volume, skipping PersistentVolume")
 		return
 	}
 
