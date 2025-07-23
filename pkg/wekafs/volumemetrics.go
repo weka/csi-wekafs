@@ -8,61 +8,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sync"
-	"time"
 )
-
-const LockTimeout = time.Millisecond * 3000
-
-// TimedRWMutex wraps sync.RWMutex with timeout behavior
-type TimedRWMutex struct {
-	mu sync.RWMutex
-}
-
-func (t *TimedRWMutex) Lock() { t.LockWithTimeout(LockTimeout) }
-
-// LockWithTimeout tries to acquire write lock within the given timeout
-func (t *TimedRWMutex) LockWithTimeout(timeout time.Duration) {
-	done := make(chan struct{})
-
-	go func() {
-		t.mu.Lock()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// Lock acquired
-	case <-time.After(timeout):
-		log.Error().Msg("LockedRWMutex: Lock() too long")
-	}
-}
-
-func (t *TimedRWMutex) RLock() { t.RLockWithTimeout(LockTimeout) }
-
-// RLockWithTimeout tries to acquire read lock within the given timeout
-func (t *TimedRWMutex) RLockWithTimeout(timeout time.Duration) {
-	done := make(chan struct{})
-
-	go func() {
-		t.mu.RLock()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// Lock acquired
-	case <-time.After(timeout):
-		log.Error().Msg("TimedRWMutex: RLock() too long")
-	}
-}
-
-func (t *TimedRWMutex) Unlock() {
-	t.mu.Unlock()
-}
-
-func (t *TimedRWMutex) RUnlock() {
-	t.mu.RUnlock()
-}
 
 // VolumeMetric represents the prometheusMetrics for a single Persistent Volume in Kubernetes
 type VolumeMetric struct {
@@ -74,7 +20,7 @@ type VolumeMetric struct {
 }
 
 type PerInodeIndex struct {
-	TimedRWMutex
+	sync.RWMutex
 	m map[uint64]*VolumeMetric
 }
 
@@ -94,12 +40,12 @@ func (pi *PerInodeIndex) Get(inodeId uint64) *VolumeMetric {
 }
 
 type PerFsInodeIndex struct {
-	TimedRWMutex
+	sync.RWMutex
 	m map[uuid.UUID]*PerInodeIndex // map of Filesystem UID to PerInodeIndex
 }
 
 type VmIndex struct {
-	TimedRWMutex
+	sync.RWMutex
 	index *PerFsInodeIndex
 }
 
@@ -167,7 +113,7 @@ func NewVmFilesystemIndex() *VmIndex {
 }
 
 type VolumeMetrics struct {
-	TimedRWMutex
+	sync.RWMutex
 	Metrics map[types.UID]*VolumeMetric
 	index   *VmIndex
 }

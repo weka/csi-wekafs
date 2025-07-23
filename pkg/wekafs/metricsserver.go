@@ -521,25 +521,18 @@ func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
 	ctx = log.Ctx(ctx).With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
-	ctx = context.WithValue(ctx, "start_time", time.Now())
+	StartTime := time.Now()
 
 	ms.prometheusMetrics.FetchSinglePvMetricsOperationsInvokeCount.Inc()
 	defer func() {
-		dur := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
+		dur := time.Since(StartTime).Seconds()
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsDurationSeconds.Add(dur)
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsDurationHistogram.Observe(dur)
 	}()
 
 	// Fetch prometheusMetrics for a single persistent volume
-	logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric")
-	defer logger.Trace().Str("pv_name", vm.persistentVolume.Name).Msg("Fetching Metric completed")
 	qosMetric, err := ms.FetchPvStats(ctx, vm.volume)
-	fsName := vm.volume.FilesystemName
 	if err != nil {
-		if !ms.getConfig().useQuotaMapsForMetrics {
-			logger.Warn().Err(err).Str("pv_name", vm.persistentVolume.Name).Str("filesystem_name", fsName).Msg("Failed to fetch metric, skipping. Consider increasing wekaMetricsFetchInterval")
-		}
 		ms.prometheusMetrics.FetchSinglePvMetricsOperationsFailureCount.Inc()
 		return fmt.Errorf("failed to fetch metric for persistent volume %s: %w", vm.persistentVolume.Name, err)
 	}
@@ -704,11 +697,28 @@ func (ms *MetricsServer) fetchSingePvUsageStatsFromQuotaMap(ctx context.Context,
 	}, nil
 }
 
-func (ms *MetricsServer) FetchPvStats(ctx context.Context, v *Volume) (*PvStats, error) {
+func (ms *MetricsServer) FetchPvStatsFromQuotaMap(ctx context.Context, v *Volume) (*PvStats, error) {
 	ret := &PvStats{}
 	usageStats, err := ms.fetchSingePvUsageStatsFromQuotaMap(ctx, v)
 	ret.Usage = usageStats
 	return ret, err
+}
+
+func (ms *MetricsServer) FetchPvStatsFromWeka(ctx context.Context, v *Volume) (*PvStats, error) {
+	ret := &PvStats{}
+	usageStats, err := ms.fetchPvUsageStatsFromWeka(ctx, v)
+	if err != nil {
+		return nil, err
+	}
+	ret.Usage = usageStats
+	return ret, nil
+}
+
+func (ms *MetricsServer) FetchPvStats(ctx context.Context, v *Volume) (*PvStats, error) {
+	if ms.getConfig().useQuotaMapsForMetrics {
+		return ms.FetchPvStatsFromQuotaMap(ctx, v)
+	}
+	return ms.FetchPvStatsFromWeka(ctx, v)
 }
 
 // MetricsReportStreamer listens on the volumeMetricsChan channel and reports prometheusMetrics to Prometheus.
@@ -815,8 +825,6 @@ func (ms *MetricsServer) PeriodicPersistentVolumeCapacityReporter(ctx context.Co
 			return
 		case <-ticker.C:
 			ms.reportOnlyPvCapacities(ctx)
-		default:
-			time.Sleep(100 * time.Millisecond) // Sleep to avoid busy waiting
 		}
 	}
 }
@@ -1100,13 +1108,15 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 
 		go ms.PersistentVolumeStreamer(ctx)
 		go ms.MetricsReportStreamer(ctx)
+		go ms.PersistentVolumeStreamProcessor(ctx)
+		go ms.PeriodicPersistentVolumeCapacityReporter(ctx)
+
+		// depending on the configuration, start either the periodic quota map updater or the periodic single metrics fetcher
 		if ms.getConfig().useQuotaMapsForMetrics {
 			go ms.PeriodicQuotaMapUpdater(ctx)
 		} else {
 			go ms.PeriodicSingleMetricsFetcher(ctx)
 		}
-		go ms.PersistentVolumeStreamProcessor(ctx)
-		go ms.PeriodicPersistentVolumeCapacityReporter(ctx)
 
 		<-ctx.Done()
 		log.Info().Msg("Leadership lost or shutdown, stopping...")
