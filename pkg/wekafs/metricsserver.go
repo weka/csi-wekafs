@@ -872,6 +872,10 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 	batchSize := len(uids)
 	logger := log.Ctx(ctx).With().Int("batch_size", batchSize).Int("concurrency", concurrency).Logger()
 	logger.Info().Msg("Starting to update quota maps")
+	if batchSize == 0 {
+		logger.Info().Msg("No observed filesystems to update, skipping batch refresh")
+		return
+	}
 
 	// update prometheusMetrics for batchRefreshQuotaMaps batches
 	ms.prometheusMetrics.QuotaUpdateBatchInvokeCount.Inc()
