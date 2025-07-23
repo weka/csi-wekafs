@@ -406,8 +406,11 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		return
 	}
 
-	logger.Debug().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received a new PersistentVolume for processing")
+	logger.Debug().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received a PersistentVolume for processing")
 
+	// TODO: there is a leak of counters here
+	// can happen if volume waited for processing in channel and was deleted meanwhile
+	// one of possible resolutions: update volume status from K8s and skip if it is not Bound/Released
 	ms.prometheusMetrics.server.PersistentVolumeAdditionsCount.Inc()
 
 	secret, err := ms.fetchSecret(ctx, pv.Spec.CSI.NodePublishSecretRef.Name, pv.Spec.CSI.NodePublishSecretRef.Namespace)
