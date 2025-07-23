@@ -23,7 +23,7 @@ metricsServer:
   # -- tolerations for metrics server only
   tolerations: {}
   # -- concurrent requests for WEKA API (excluding quota maps updates, used for resolving volume Quota entry and other operations)
-  maxConcurrentRequests: 100
+  maxConcurrentRequests: 50
   # -- metrics fetch interval in seconds, default is 300 seconds (every 5 minutes)
   metricsFetchIntervalSeconds: 300
   # -- termination grace period for metrics server pods
@@ -40,13 +40,13 @@ metricsServer:
   apiClientTimeoutSeconds: 180
   # -- Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).
   #    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.
-  #    This is enabled by default, but can be disabled if needed.
+  #    This is disabled by default.
   #    The drawback is that in such case, metrics will be reported less frequently, using cached values.
   #    Report timestamp will be recorded for each metric, so you can see when the last update was.
   #    This requires Prometheus server to honor timestamps.
   #    When false, all quota values will be fetched instantaneously, during metrics collection.
   #    Not recommended when having thousands of PVCs
-  enableBatchModeForQuotaUpdates: true
+  enableBatchModeForQuotaUpdates: false
 
 # -- Log level of CSI plugin
 logLevel: 6

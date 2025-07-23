@@ -423,7 +423,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	volume.persistentVol = pv // Set the PersistentVolume reference in the Volume object
 	// Create a new VolumeMetric instance
 
-	fsObj, err := volume.apiClient.CachedGetFileSystemByName(ctx, volume.FilesystemName, ms.getConfig().wekaQuotaMapValidityDuration)
+	fsObj, err := volume.apiClient.CachedGetFileSystemByName(ctx, volume.FilesystemName, ms.getConfig().quotaCacheValidityDuration)
 	if err == nil {
 		volume.fileSystemObject = fsObj
 	} else {
@@ -664,6 +664,17 @@ func (ms *MetricsServer) fetchPvUsageStatsFromWeka(ctx context.Context, v *Volum
 	}, nil
 }
 
+func (ms *MetricsServer) fetchPvUsageStatsFromWekaWithCache(ctx context.Context, v *Volume) (*UsageStats, error) {
+	if v.lastUsageStats == nil || time.Since(v.lastUsageStats.Timestamp) < ms.getConfig().quotaCacheValidityDuration {
+		usageStats, err := ms.fetchPvUsageStatsFromWeka(ctx, v)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch usage stats from Weka for volume %s: %w", v.persistentVol.Name, err)
+		}
+		v.lastUsageStats = usageStats
+	}
+	return v.lastUsageStats, nil
+}
+
 func (ms *MetricsServer) fetchSingePvUsageStatsFromQuotaMap(ctx context.Context, v *Volume) (*UsageStats, error) {
 	inodeId, err := v.getInodeId(ctx)
 	if err != nil {
@@ -706,7 +717,7 @@ func (ms *MetricsServer) FetchPvStatsFromQuotaMap(ctx context.Context, v *Volume
 
 func (ms *MetricsServer) FetchPvStatsFromWeka(ctx context.Context, v *Volume) (*PvStats, error) {
 	ret := &PvStats{}
-	usageStats, err := ms.fetchPvUsageStatsFromWeka(ctx, v)
+	usageStats, err := ms.fetchPvUsageStatsFromWekaWithCache(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -883,7 +894,7 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 		ts := ofs.lastQuotaUpdate.Load()
 		if ts.IsZero() {
 			countNeverUpdated++
-		} else if ofs.lastQuotaUpdate.Load().Before(time.Now().Add(-ms.getConfig().wekaQuotaMapValidityDuration)) {
+		} else if ofs.lastQuotaUpdate.Load().Before(time.Now().Add(-ms.getConfig().quotaCacheValidityDuration)) {
 			countExpired++
 		} else {
 			countUpToDate++

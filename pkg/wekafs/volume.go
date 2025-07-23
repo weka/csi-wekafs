@@ -59,7 +59,8 @@ type Volume struct {
 
 	inodeId uint64 // cached for better performance, used in metricsserver flow
 
-	persistentVol *v1.PersistentVolume // persistentVolName is the persistent volume object, used in metricsserver flow
+	persistentVol  *v1.PersistentVolume // persistentVolName is the persistent volume object, used in metricsserver flow
+	lastUsageStats *UsageStats
 }
 
 func (v *Volume) hasCustomEncryptionSettings() bool {
