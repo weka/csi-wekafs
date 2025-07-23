@@ -135,7 +135,7 @@ spec:
               protocol: TCP
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.controllerPort | default 9090 }}
-              name: controller-metrics
+              name: cs-metrics
               protocol: TCP
           {{- end }}
           livenessProbe:
