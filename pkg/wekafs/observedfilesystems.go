@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.uber.org/atomic"
+	"sort"
 	"sync"
 	"time"
 )
@@ -15,10 +16,31 @@ type ObservedFilesystems struct {
 	ms   *MetricsServer
 }
 
+func NewObservedFilesystems(ms *MetricsServer) *ObservedFilesystems {
+	return &ObservedFilesystems{
+		uids: make(map[uuid.UUID]*ObservedFilesystem),
+		ms:   ms,
+	}
+}
+
 func (ofu *ObservedFilesystems) GetMap() map[uuid.UUID]*ObservedFilesystem {
 	ofu.RLock()
 	defer ofu.RUnlock()
 	return ofu.uids // return a copy of the map
+}
+
+func (ofu *ObservedFilesystems) GetByQuotaUpdateTime() []*ObservedFilesystem {
+	ofu.RLock()
+	defer ofu.RUnlock()
+	var sorted []*ObservedFilesystem
+	for _, fs := range ofu.uids {
+		sorted = append(sorted, fs)
+	}
+	// Sort by lastQuotaUpdate time in descending order
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[j].lastQuotaUpdate.Load().After(sorted[i].lastQuotaUpdate.Load())
+	})
+	return sorted // return the sorted list of ObservedFilesystems so first one is the least recently updated
 }
 
 func (ofu *ObservedFilesystems) GetByUid(uid uuid.UUID) *ObservedFilesystem {
@@ -41,11 +63,12 @@ func (ofu *ObservedFilesystems) incRef(fs *apiclient.FileSystem, apiClient *apic
 		ofu.Lock()
 		defer ofu.Unlock()
 		ofu.uids[fs.Uid] = &ObservedFilesystem{
-			apiClient:  apiClient,
-			refCounter: atomic.NewInt32(1), // start with a reference count of 1
-			fsObj:      fs,
-			fsUid:      fs.Uid,
-			lastSeen:   atomic.NewTime(time.Now()),
+			apiClient:       apiClient,
+			refCounter:      atomic.NewInt32(1), // start with a reference count of 1
+			fsObj:           fs,
+			fsUid:           fs.Uid,
+			lastSeen:        atomic.NewTime(time.Now()),
+			lastQuotaUpdate: atomic.NewTime(time.Time{}),
 		}
 	}
 }
@@ -77,19 +100,14 @@ func (ofu *ObservedFilesystems) GetApiClient(uid uuid.UUID) *apiclient.ApiClient
 	return existing.apiClient // return the API client for the filesystem
 }
 
-func NewObservedFilesystems(ms *MetricsServer) *ObservedFilesystems {
-	return &ObservedFilesystems{
-		uids: make(map[uuid.UUID]*ObservedFilesystem),
-		ms:   ms,
-	}
-}
-
 type ObservedFilesystem struct {
 	sync.Mutex
-	apiClient  *apiclient.ApiClient // the API client for this filesystem
-	fsUid      uuid.UUID
-	fsObj      *apiclient.FileSystem
-	lastSeen   *atomic.Time
+	apiClient       *apiclient.ApiClient // the API client for this filesystem
+	fsUid           uuid.UUID
+	fsObj           *apiclient.FileSystem
+	lastSeen        *atomic.Time
+	lastQuotaUpdate *atomic.Time // last time the quota was updated
+
 	refCounter *atomic.Int32
 }
 

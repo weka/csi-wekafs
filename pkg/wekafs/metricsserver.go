@@ -867,11 +867,23 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 	startTime := time.Now()
 
 	concurrency := ms.getConfig().wekaQuotaMapFetchConcurrency
-	sem := make(chan struct{}, concurrency) // limit concurrent goroutines
-	uids := ms.observedFilesystems.GetMap()
-	batchSize := len(uids)
-	logger := log.Ctx(ctx).With().Int("batch_size", batchSize).Int("concurrency", concurrency).Logger()
-	logger.Info().Msg("Starting to update quota maps")
+	sortedObservedFilesystems := ms.observedFilesystems.GetByQuotaUpdateTime()
+	countNeverUpdated := 0
+	countUpToDate := 0
+	countExpired := 0
+	for _, ofs := range sortedObservedFilesystems {
+		ts := ofs.lastQuotaUpdate.Load()
+		if ts.IsZero() {
+			countNeverUpdated++
+		} else if ofs.lastQuotaUpdate.Load().Before(time.Now().Add(-ms.getConfig().wekaQuotaMapValidityDuration)) {
+			countExpired++
+		} else {
+			countUpToDate++
+		}
+	}
+	batchSize := len(sortedObservedFilesystems)
+	logger := log.Ctx(ctx)
+	logger.Info().Int("never_updated", countNeverUpdated).Int("up_to_date", countUpToDate).Int("expired", countExpired).Int("total", batchSize).Msg("Starting to update quota maps")
 	if batchSize == 0 {
 		logger.Info().Msg("No observed filesystems to update, skipping batch refresh")
 		return
@@ -884,7 +896,7 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 		ms.prometheusMetrics.QuotaUpdateBatchSuccessCount.Inc()
 		ms.prometheusMetrics.QuotaUpdateBatchDurationSeconds.Add(dur)
 		ms.prometheusMetrics.QuotaUpdateBatchDurationHistogram.Observe(dur)
-		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(len(uids)))
+		ms.prometheusMetrics.QuotaUpdateBatchSize.Set(float64(batchSize))
 	}()
 	duration := atomic.NewFloat64(0)
 	countStarted := atomic.NewInt64(0)
@@ -893,19 +905,17 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 
 	cycleStart := time.Now()
 	sampledLogger := logger.Sample(&zerolog.BasicSampler{N: 50})
-	for fsUid, ofs := range uids {
-		if ofs == nil {
-			logger.Error().Str("fs_uid", fsUid.String()).Msg("Observed filesystem UID not found in the cache, skipping")
-			continue
-		}
+	concurrencySem := make(chan struct{}, concurrency) // limit concurrent goroutines
+
+	for _, ofs := range sortedObservedFilesystems {
 		fsObj := ofs.GetFileSystem(ctx, true)
 		if fsObj == nil {
-			logger.Error().Str("fs_uid", fsUid.String()).Msg("FileSystem object is nil, skipping")
+			logger.Error().Str("fs_uid", ofs.fsUid.String()).Msg("FileSystem object is nil, skipping")
 			continue
 		}
-		sem <- struct{}{} // acquire a slot
+		concurrencySem <- struct{}{} // acquire a slot
 		go func(fsObj *apiclient.FileSystem) {
-			defer func() { <-sem }() // release the slot
+			defer func() { <-concurrencySem }() // release the slot
 			countStarted.Inc()
 			start := time.Now()
 			qm, err := ms.refreshQuotaMapPerFilesystem(ctx, fsObj, force)
@@ -922,6 +932,7 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 				logger.Error().Err(err).Str("filesystem_name", fsObj.Name).Msg("Failed to update quota map for filesystem")
 			} else {
 				countSuccessful.Inc()
+				ofs.lastQuotaUpdate.Store(qm.LastUpdate)
 			}
 			sampledLogger.Info().Int64("complete_count", countSuccessful.Load()+countFailed.Load()).Dur("duration", dur).Msg("Quota maps batch refresh progress")
 
