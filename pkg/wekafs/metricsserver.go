@@ -226,17 +226,19 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 
 		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes, streaming them for processing")
 
+		// Always sort the response so we get the volumes in same order for processing (especially if trimmed)
+		slices.SortFunc(pvList.Items, func(a, b v1.PersistentVolume) int {
+			if a.GetUID() < b.GetUID() {
+				return 0
+			}
+			return 1
+		},
+		)
+
 		// Limit the number of PersistentVolumes to the specified limit, but first sorting them so we always stream the same volumes in the same order
 		if len(pvList.Items) > volumeLimit {
 			logger.Info().Int("pv_count", len(pvList.Items)).Int("limit", volumeLimit).Msg("Trimming PersistentVolumes list to the limit")
 			// Sort the PersistentVolumes by name to ensure consistent ordering
-			slices.SortFunc(pvList.Items, func(a, b v1.PersistentVolume) int {
-				if a.GetUID() < b.GetUID() {
-					return 0
-				}
-				return 1
-			},
-			)
 			pvList.Items = pvList.Items[:volumeLimit] // trim the list to the limit
 			logger.Warn().Int("trimmed_pv_count", len(pvList.Items)).Msg("Trimmed PersistentVolumes list to the limit")
 		}
