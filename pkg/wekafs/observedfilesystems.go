@@ -9,28 +9,28 @@ import (
 	"time"
 )
 
-type ObservedFilesystemUids struct {
+type ObservedFilesystems struct {
 	sync.RWMutex
-	uids map[uuid.UUID]*ObservedFilesystemUid // map[filesystemUUID]int, where int is the number of references to this filesystem
+	uids map[uuid.UUID]*ObservedFilesystem // map[filesystemUUID]int, where int is the number of references to this filesystem
 	ms   *MetricsServer
 }
 
-func (ofu *ObservedFilesystemUids) GetUids() map[uuid.UUID]*ObservedFilesystemUid {
+func (ofu *ObservedFilesystems) GetMap() map[uuid.UUID]*ObservedFilesystem {
 	ofu.RLock()
 	defer ofu.RUnlock()
 	return ofu.uids // return a copy of the map
 }
 
-func (ofu *ObservedFilesystemUids) GetByUid(uid uuid.UUID) *ObservedFilesystemUid {
+func (ofu *ObservedFilesystems) GetByUid(uid uuid.UUID) *ObservedFilesystem {
 	ofu.RLock()
 	defer ofu.RUnlock()
 	if existing, exists := ofu.uids[uid]; exists {
-		return existing // return the ObservedFilesystemUid for the given UID
+		return existing // return the ObservedFilesystem for the given UID
 	}
 	return nil
 }
 
-func (ofu *ObservedFilesystemUids) incRef(fs *apiclient.FileSystem, apiClient *apiclient.ApiClient) {
+func (ofu *ObservedFilesystems) incRef(fs *apiclient.FileSystem, apiClient *apiclient.ApiClient) {
 	if fs == nil || fs.Uid == uuid.Nil {
 		return // nothing to do
 	}
@@ -40,7 +40,7 @@ func (ofu *ObservedFilesystemUids) incRef(fs *apiclient.FileSystem, apiClient *a
 	} else {
 		ofu.Lock()
 		defer ofu.Unlock()
-		ofu.uids[fs.Uid] = &ObservedFilesystemUid{
+		ofu.uids[fs.Uid] = &ObservedFilesystem{
 			apiClient:  apiClient,
 			refCounter: 1,
 			fsObj:      fs,
@@ -50,7 +50,7 @@ func (ofu *ObservedFilesystemUids) incRef(fs *apiclient.FileSystem, apiClient *a
 	}
 }
 
-func (ofu *ObservedFilesystemUids) decRef(fs *apiclient.FileSystem) {
+func (ofu *ObservedFilesystems) decRef(fs *apiclient.FileSystem) {
 	if fs == nil || fs.Uid == uuid.Nil {
 		return // nothing to do
 	}
@@ -69,7 +69,7 @@ func (ofu *ObservedFilesystemUids) decRef(fs *apiclient.FileSystem) {
 	}
 }
 
-func (ofu *ObservedFilesystemUids) GetApiClient(uid uuid.UUID) *apiclient.ApiClient {
+func (ofu *ObservedFilesystems) GetApiClient(uid uuid.UUID) *apiclient.ApiClient {
 	existing := ofu.GetByUid(uid)
 	if existing == nil {
 		return nil
@@ -77,14 +77,14 @@ func (ofu *ObservedFilesystemUids) GetApiClient(uid uuid.UUID) *apiclient.ApiCli
 	return existing.apiClient // return the API client for the filesystem
 }
 
-func NewObservedFilesystemUids(ms *MetricsServer) *ObservedFilesystemUids {
-	return &ObservedFilesystemUids{
-		uids: make(map[uuid.UUID]*ObservedFilesystemUid),
+func NewObservedFilesystems(ms *MetricsServer) *ObservedFilesystems {
+	return &ObservedFilesystems{
+		uids: make(map[uuid.UUID]*ObservedFilesystem),
 		ms:   ms,
 	}
 }
 
-type ObservedFilesystemUid struct {
+type ObservedFilesystem struct {
 	sync.Mutex
 	apiClient  *apiclient.ApiClient // the API client for this filesystem
 	fsUid      uuid.UUID
@@ -93,7 +93,7 @@ type ObservedFilesystemUid struct {
 	refCounter int
 }
 
-func (ofu *ObservedFilesystemUid) incRef() {
+func (ofu *ObservedFilesystem) incRef() {
 	of := ofu
 	of.Lock()
 	defer of.Unlock()
@@ -101,7 +101,7 @@ func (ofu *ObservedFilesystemUid) incRef() {
 	of.lastSeen.Store(time.Now())
 }
 
-func (ofu *ObservedFilesystemUid) decRef() {
+func (ofu *ObservedFilesystem) decRef() {
 	of := ofu
 	of.Lock()
 	defer of.Unlock()
@@ -110,11 +110,11 @@ func (ofu *ObservedFilesystemUid) decRef() {
 	}
 }
 
-func (ofu *ObservedFilesystemUid) GetApiClient() *apiclient.ApiClient {
+func (ofu *ObservedFilesystem) GetApiClient() *apiclient.ApiClient {
 	return ofu.apiClient // return the API client for this filesystem
 }
 
-func (ofu *ObservedFilesystemUid) GetFileSystem(ctx context.Context, fromCache bool) *apiclient.FileSystem {
+func (ofu *ObservedFilesystem) GetFileSystem(ctx context.Context, fromCache bool) *apiclient.FileSystem {
 	ofu.Lock()
 	defer ofu.Unlock()
 	if ofu.fsObj == nil || !fromCache || ofu.lastSeen.Load().Add(1*time.Minute).Before(time.Now()) {

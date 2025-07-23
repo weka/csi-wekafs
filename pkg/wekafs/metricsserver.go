@@ -60,8 +60,8 @@ type MetricsServer struct {
 	persistentVolumesChan chan *v1.PersistentVolume // channel for streaming PersistentVolume objects for further processing
 	volumeMetricsChan     chan *VolumeMetric        // channel for incoming requests
 
-	quotaMaps              *QuotaMapsPerFilesystem
-	observedFilesystemUids *ObservedFilesystemUids // to track observed filesystem UIDs and their reference counts and API clients (for quota maps periodic updates)
+	quotaMaps           *QuotaMapsPerFilesystem
+	observedFilesystems *ObservedFilesystems // to track observed filesystem UIDs and their reference counts and API clients (for quota maps periodic updates)
 
 	sync.Mutex
 	wg sync.WaitGroup // WaitGroup to manage goroutines
@@ -114,7 +114,7 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 
 		quotaMaps: NewQuotaMapsPerFilesystem(),
 	}
-	ret.observedFilesystemUids = NewObservedFilesystemUids(ret)
+	ret.observedFilesystems = NewObservedFilesystems(ret)
 
 	ret.prometheusMetrics.FetchMetricsFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
 	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
@@ -323,7 +323,7 @@ func (ms *MetricsServer) pruneVolumeMetric(ctx context.Context, pvUUID types.UID
 		logger.Error().Err(err).Str("pv_uid", string(pvUUID)).Msg("Failed to get filesystem object for volume metric, skipping removal")
 	}
 
-	ms.observedFilesystemUids.decRef(fsObj) // actually decrease refcounter
+	ms.observedFilesystems.decRef(fsObj) // actually decrease refcounter
 	ms.volumeMetrics.RemoveVolumeMetric(ctx, pvUUID)
 	ms.removePrometheusMetricsForLabels(ctx, metric)
 	logger.Info().Str("pv_uid", string(pvUUID)).Msg("Removed persistent volume from metric collection")
@@ -438,7 +438,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		logger.Error().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, skipping PersistentVolume")
 		return
 	}
-	ms.observedFilesystemUids.incRef(fsObj, apiClient) // Add the filesystem to the observed list
+	ms.observedFilesystems.incRef(fsObj, apiClient) // Add the filesystem to the observed list
 
 	// prepopulate the inode ID for the volume, this will be used to fetch metrics later to avoid it during AddMetric
 	_, err = volume.getInodeId(ctx)
@@ -868,10 +868,7 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 
 	concurrency := ms.getConfig().wekaQuotaMapFetchConcurrency
 	sem := make(chan struct{}, concurrency) // limit concurrent goroutines
-	uids := ms.observedFilesystemUids.GetUids()
-	if len(uids) == 0 {
-		return
-	}
+	uids := ms.observedFilesystems.GetMap()
 	batchSize := len(uids)
 	logger := log.Ctx(ctx).With().Int("batch_size", batchSize).Int("concurrency", concurrency).Logger()
 	logger.Info().Msg("Starting to update quota maps")

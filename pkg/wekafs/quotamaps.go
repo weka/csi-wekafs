@@ -131,7 +131,7 @@ func (ms *MetricsServer) refreshQuotaMapPerFilesystem(ctx context.Context, fs *a
 		return existingQuotaMap, nil // no need to update, the quotaMap is already up-to-date
 	}
 
-	apiClient := ms.observedFilesystemUids.GetApiClient(fs.Uid)
+	apiClient := ms.observedFilesystems.GetApiClient(fs.Uid)
 	if apiClient == nil {
 		return nil, fmt.Errorf("no API client found for filesystem UID %s", fs.Uid)
 	}
