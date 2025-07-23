@@ -331,9 +331,12 @@ func (ms *MetricsServer) pruneVolumeMetric(ctx context.Context, pvUUID types.UID
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	defer ms.prometheusMetrics.server.PersistentVolumeRemovalsCount.Inc()
-
 	metric := ms.volumeMetrics.GetVolumeMetric(pvUUID)
+	if metric == nil {
+		return // nothing to remove, if it was already removed by another goroutine
+	}
+
+	defer ms.prometheusMetrics.server.PersistentVolumeRemovalsCount.Inc()
 
 	// decrease refcounter to a filesystem
 	fsObj, err := metric.volume.getFilesystemObj(ctx, true)
@@ -408,11 +411,6 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 
 	logger.Debug().Str("pv_name", pv.Name).Str("phase", string(pv.Status.Phase)).Msg("Received a PersistentVolume for processing")
 
-	// TODO: there is a leak of counters here
-	// can happen if volume waited for processing in channel and was deleted meanwhile
-	// one of possible resolutions: update volume status from K8s and skip if it is not Bound/Released
-	ms.prometheusMetrics.server.PersistentVolumeAdditionsCount.Inc()
-
 	secret, err := ms.fetchSecret(ctx, pv.Spec.CSI.NodePublishSecretRef.Name, pv.Spec.CSI.NodePublishSecretRef.Namespace)
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to fetch secret for PersistentVolume, skipping")
@@ -449,16 +447,19 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		volume.fileSystemObject = fsObj
 	} else {
 		fsObj, err = volume.getFilesystemObj(ctx, true)
-		if err != nil {
-			logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
-			return
-		}
 	}
 
-	if fsObj == nil {
-		logger.Error().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, skipping PersistentVolume")
+	if err == apiclient.ObjectNotFoundError || fsObj == nil {
+		logger.Trace().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, skipping PersistentVolume")
+		// Check if the PersistentVolume is already being processed
+		if ms.volumeMetrics.HasVolumeMetric(pv.UID) {
+			ms.volumeMetrics.RemoveVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
+		}
 		return
 	}
+
+	ms.prometheusMetrics.server.PersistentVolumeAdditionsCount.Inc()
+
 	ms.observedFilesystems.incRef(fsObj, apiClient) // Add the filesystem to the observed list
 
 	// prepopulate the inode ID for the volume, this will be used to fetch metrics later to avoid it during AddMetric
@@ -1109,9 +1110,6 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	ms.Unlock()
 
 	ms.initManager(ctx) // Initialize the controller-runtime manager
-
-	// Add a Runnable that only runs when this pod is elected leader
-	// TODO: make sure that we do not continue further till leader election lease is acquired
 
 	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
 	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
