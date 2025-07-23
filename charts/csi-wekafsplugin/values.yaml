@@ -129,7 +129,7 @@ metricsServer:
   # -- the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,
   #    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.
   #    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded
-  quotaMapValiditySeconds: 300
+  quotaCacheValiditySeconds: 300
 # -- Timeout for API client requests, in seconds. Default is 120 seconds. Increased to 180 seconds to allow for larger operations like quotamap fetching
   apiClientTimeoutSeconds: 180
   # -- Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).

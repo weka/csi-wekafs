@@ -78,8 +78,8 @@ spec:
           {{- if .Values.metricsServer.quotaUpdateConcurrentRequests }}
             - "--wekametricsquotaupdateconcurrentrequests={{ .Values.metricsServer.quotaUpdateConcurrentRequests }}"
           {{- end }}
-          {{- if .Values.metricsServer.quotaMapValiditySeconds }}
-            - "--wekametricsquotamapvalidityseconds={{ .Values.metricsServer.quotaMapValiditySeconds }}"
+          {{- if .Values.metricsServer.quotaCacheValiditySeconds }}
+            - "--wekametricsquotacachevalidityseconds={{ .Values.metricsServer.quotaCacheValiditySeconds }}"
           {{- end }}
           {{- if .Values.metricsServer.apiClientTimeoutSeconds }}
             - "--wekaapitimeoutseconds={{ .Values.metricsServer.apiClientTimeoutSeconds }}"
