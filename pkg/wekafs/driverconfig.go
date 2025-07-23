@@ -17,40 +17,40 @@ func (i *MutuallyExclusiveMountOptsStrings) Set(value string) error {
 }
 
 type DriverConfig struct {
-	DynamicVolPath                     string
-	VolumePrefix                       string
-	SnapshotPrefix                     string
-	SeedSnapshotPrefix                 string
-	allowAutoFsCreation                bool
-	allowAutoFsExpansion               bool
-	allowSnapshotsOfDirectoryVolumes   bool
-	advertiseSnapshotSupport           bool
-	advertiseVolumeCloneSupport        bool
-	allowInsecureHttps                 bool
-	alwaysAllowSnapshotVolumes         bool
-	mutuallyExclusiveOptions           []mutuallyExclusiveMountOptionSet
-	maxConcurrencyPerOp                map[string]int64
-	grpcRequestTimeout                 time.Duration
-	allowProtocolContainers            bool
-	allowNfsFailback                   bool
-	useNfs                             bool
-	interfaceGroupName                 string
-	clientGroupName                    string
-	nfsProtocolVersion                 string
-	csiVersion                         string
-	skipGarbageCollection              bool
-	waitForObjectDeletion              bool
-	allowEncryptionWithoutKms          bool
-	driverRef                          *WekaFsDriver
-	tracingUrl                         string
-	manageNodeTopologyLabels           bool
-	wekaMetricsFetchInterval           time.Duration
-	quotaCacheValidityDuration         time.Duration // Duration for which the quota map is considered valid
-	wekaMetricsFetchConcurrentRequests int64
-	enableMetricsServerLeaderElection  bool
-	wekaQuotaMapFetchConcurrency       int
-	useQuotaMapsForMetrics             bool
-	wekaApiTimeout                     time.Duration // Timeout for Weka API requests
+	DynamicVolPath                    string
+	VolumePrefix                      string
+	SnapshotPrefix                    string
+	SeedSnapshotPrefix                string
+	allowAutoFsCreation               bool
+	allowAutoFsExpansion              bool
+	allowSnapshotsOfDirectoryVolumes  bool
+	advertiseSnapshotSupport          bool
+	advertiseVolumeCloneSupport       bool
+	allowInsecureHttps                bool
+	alwaysAllowSnapshotVolumes        bool
+	mutuallyExclusiveOptions          []mutuallyExclusiveMountOptionSet
+	maxConcurrencyPerOp               map[string]int64
+	grpcRequestTimeout                time.Duration
+	allowProtocolContainers           bool
+	allowNfsFailback                  bool
+	useNfs                            bool
+	interfaceGroupName                string
+	clientGroupName                   string
+	nfsProtocolVersion                string
+	csiVersion                        string
+	skipGarbageCollection             bool
+	waitForObjectDeletion             bool
+	allowEncryptionWithoutKms         bool
+	driverRef                         *WekaFsDriver
+	tracingUrl                        string
+	manageNodeTopologyLabels          bool
+	metricsFetchInterval              time.Duration
+	quotaCacheValidityDuration        time.Duration // Duration for which the quota map is considered valid
+	metricsFetchConcurrentRequests    int64
+	enableMetricsServerLeaderElection bool
+	quotaFetchConcurrentRequests      int
+	useQuotaMapsForMetrics            bool
+	wekaApiTimeout                    time.Duration // Timeout for Weka API requests
 }
 
 func (dc *DriverConfig) Log() {
@@ -78,10 +78,10 @@ func (dc *DriverConfig) Log() {
 		Str("tracing_url", dc.tracingUrl).
 		Bool("manage_node_topology_labels", dc.manageNodeTopologyLabels).
 		Str("nfs_protocol_version", dc.nfsProtocolVersion).
-		Str("weka_metrics_fetch_interval", dc.wekaMetricsFetchInterval.String()).
-		Int64("weka_metrics_fetch_concurrent_requests", dc.wekaMetricsFetchConcurrentRequests).
+		Str("weka_metrics_fetch_interval", dc.metricsFetchInterval.String()).
+		Int64("weka_metrics_fetch_concurrent_requests", dc.metricsFetchConcurrentRequests).
 		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
-		Int("weka_metrics_quota_map_concurrent_requests", dc.wekaQuotaMapFetchConcurrency).
+		Int("weka_metrics_quota_map_concurrent_requests", dc.quotaFetchConcurrentRequests).
 		Int("weka_metrics_quota_cache_validity_duration_seconds", int(dc.quotaCacheValidityDuration.Seconds())).
 		Dur("weka_api_timeout", dc.wekaApiTimeout).
 		Bool("use_quota_maps_for_metrics", dc.useQuotaMapsForMetrics).
@@ -133,39 +133,39 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
 
 	return &DriverConfig{
-		DynamicVolPath:                     dynamicVolPath,
-		VolumePrefix:                       VolumePrefix,
-		SnapshotPrefix:                     SnapshotPrefix,
-		SeedSnapshotPrefix:                 SeedSnapshotPrefix,
-		allowAutoFsCreation:                allowAutoFsCreation,
-		allowAutoFsExpansion:               allowAutoFsExpansion,
-		allowSnapshotsOfDirectoryVolumes:   allowSnapshotsOfDirectoryVolumes,
-		advertiseSnapshotSupport:           !suppressnapshotSupport,
-		advertiseVolumeCloneSupport:        !suppressVolumeCloneSupport,
-		allowInsecureHttps:                 allowInsecureHttps,
-		alwaysAllowSnapshotVolumes:         alwaysAllowSnapshotVolumes,
-		mutuallyExclusiveOptions:           MutuallyExclusiveMountOptions,
-		maxConcurrencyPerOp:                concurrency,
-		grpcRequestTimeout:                 grpcRequestTimeout,
-		allowProtocolContainers:            allowProtocolContainers,
-		allowNfsFailback:                   allowNfsFailback,
-		useNfs:                             useNfs,
-		interfaceGroupName:                 interfaceGroupName,
-		clientGroupName:                    clientGroupName,
-		nfsProtocolVersion:                 nfsProtocolVersion,
-		csiVersion:                         version,
-		skipGarbageCollection:              skipGarbageCollection,
-		waitForObjectDeletion:              waitForObjectDeletion,
-		allowEncryptionWithoutKms:          allowEncryptionWithoutKms,
-		tracingUrl:                         tracingUrl,
-		manageNodeTopologyLabels:           manageNodeTopologyLabels,
-		wekaMetricsFetchInterval:           wekaMetricsFetchInterval,
-		wekaMetricsFetchConcurrentRequests: wekaMetricsFetchConcurrentRequests,
-		enableMetricsServerLeaderElection:  enableMetricsServerLeaderElection,
-		useQuotaMapsForMetrics:             useQuotaMapsForMetrics,
-		wekaQuotaMapFetchConcurrency:       wekaMetricsQuotaUpdateConcurrentRequests,
-		quotaCacheValidityDuration:         wekaMetricsQuotaMapValidityDuration,
-		wekaApiTimeout:                     wekaApiTimeout,
+		DynamicVolPath:                    dynamicVolPath,
+		VolumePrefix:                      VolumePrefix,
+		SnapshotPrefix:                    SnapshotPrefix,
+		SeedSnapshotPrefix:                SeedSnapshotPrefix,
+		allowAutoFsCreation:               allowAutoFsCreation,
+		allowAutoFsExpansion:              allowAutoFsExpansion,
+		allowSnapshotsOfDirectoryVolumes:  allowSnapshotsOfDirectoryVolumes,
+		advertiseSnapshotSupport:          !suppressnapshotSupport,
+		advertiseVolumeCloneSupport:       !suppressVolumeCloneSupport,
+		allowInsecureHttps:                allowInsecureHttps,
+		alwaysAllowSnapshotVolumes:        alwaysAllowSnapshotVolumes,
+		mutuallyExclusiveOptions:          MutuallyExclusiveMountOptions,
+		maxConcurrencyPerOp:               concurrency,
+		grpcRequestTimeout:                grpcRequestTimeout,
+		allowProtocolContainers:           allowProtocolContainers,
+		allowNfsFailback:                  allowNfsFailback,
+		useNfs:                            useNfs,
+		interfaceGroupName:                interfaceGroupName,
+		clientGroupName:                   clientGroupName,
+		nfsProtocolVersion:                nfsProtocolVersion,
+		csiVersion:                        version,
+		skipGarbageCollection:             skipGarbageCollection,
+		waitForObjectDeletion:             waitForObjectDeletion,
+		allowEncryptionWithoutKms:         allowEncryptionWithoutKms,
+		tracingUrl:                        tracingUrl,
+		manageNodeTopologyLabels:          manageNodeTopologyLabels,
+		metricsFetchInterval:              wekaMetricsFetchInterval,
+		metricsFetchConcurrentRequests:    wekaMetricsFetchConcurrentRequests,
+		enableMetricsServerLeaderElection: enableMetricsServerLeaderElection,
+		useQuotaMapsForMetrics:            useQuotaMapsForMetrics,
+		quotaFetchConcurrentRequests:      wekaMetricsQuotaUpdateConcurrentRequests,
+		quotaCacheValidityDuration:        wekaMetricsQuotaMapValidityDuration,
+		wekaApiTimeout:                    wekaApiTimeout,
 	}
 }
 

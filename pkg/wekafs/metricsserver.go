@@ -116,8 +116,8 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 	}
 	ret.observedFilesystems = NewObservedFilesystems(ret)
 
-	ret.prometheusMetrics.FetchMetricsFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
-	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(ret.getConfig().wekaMetricsFetchInterval.Seconds())
+	ret.prometheusMetrics.FetchMetricsFrequencySeconds.Set(ret.getConfig().metricsFetchInterval.Seconds())
+	ret.prometheusMetrics.QuotaUpdateFrequencySeconds.Set(ret.getConfig().metricsFetchInterval.Seconds())
 
 	return ret
 
@@ -237,11 +237,11 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 
 		ms.pruneOldVolumes(ctx, pvList.Items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
 
-		interval := ms.getConfig().wekaMetricsFetchInterval
+		interval := ms.getConfig().metricsFetchInterval
 
 		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_duration", interval).Msg("Sent all volumes to processing, waiting for next fetch")
 
-		// refresh list of volumes every wekaMetricsFetchInterval
+		// refresh list of volumes every metricsFetchInterval
 		time.Sleep(interval)
 	}
 }
@@ -337,7 +337,7 @@ func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
 	logger := log.Ctx(ctx)
 
 	logger.Info().Msg("Starting processing of PersistentVolumes")
-	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
+	sem := make(chan struct{}, ms.getConfig().metricsFetchConcurrentRequests)
 	sampledLogger := logger.Sample(&zerolog.BasicSampler{N: 100})
 	for {
 		select {
@@ -551,7 +551,7 @@ func (ms *MetricsServer) FetchMetricsOneByOne(ctx context.Context) error {
 
 	ctx = context.WithValue(ctx, "start_time", time.Now())
 	wg := &sync.WaitGroup{}
-	sem := make(chan struct{}, ms.getConfig().wekaMetricsFetchConcurrentRequests)
+	sem := make(chan struct{}, ms.getConfig().quotaFetchConcurrentRequests)
 	keys := ms.fetchMetricKeys(ctx)
 	ms.prometheusMetrics.FetchMetricsBatchSize.Set(float64(len(keys)))
 	ms.prometheusMetrics.FetchMetricsBatchOperationsInvokeCount.Inc()
@@ -565,8 +565,8 @@ func (ms *MetricsServer) FetchMetricsOneByOne(ctx context.Context) error {
 		}
 		ms.prometheusMetrics.FetchMetricsBatchOperationsDurationSeconds.Add(dur)
 		ms.prometheusMetrics.FetchMetricsBatchOperationsDurationHistogram.Observe(dur)
-		if dur > float64(ms.getConfig().wekaMetricsFetchInterval.Seconds()) {
-			logger.Warn().Int("pv_count", len(keys)).Dur("fetch_duration", time.Duration(dur*float64(time.Second))).Msg("Fetching metrics took longer than the configured interval, consider increasing wekaMetricsFetchInterval or wekaMetricsFetchConcurrentRequests")
+		if dur > float64(ms.getConfig().metricsFetchInterval.Seconds()) {
+			logger.Warn().Int("pv_count", len(keys)).Dur("fetch_duration", time.Duration(dur*float64(time.Second))).Msg("Fetching metrics took longer than the configured interval, consider increasing metricsFetchInterval or metricsFetchConcurrentRequests")
 		} else {
 			logger.Info().Int("pv_count", len(keys)).Dur("fetch_duration", time.Duration(dur*float64(time.Second))).Msg("Fetched metrics for PersistentVolumes")
 		}
@@ -885,7 +885,7 @@ func (ms *MetricsServer) batchRefreshQuotaMaps(ctx context.Context, force bool) 
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	startTime := time.Now()
 
-	concurrency := ms.getConfig().wekaQuotaMapFetchConcurrency
+	concurrency := ms.getConfig().quotaFetchConcurrentRequests
 	sortedObservedFilesystems := ms.observedFilesystems.GetByQuotaUpdateTime()
 	countNeverUpdated := 0
 	countUpToDate := 0
@@ -1030,9 +1030,9 @@ func (ms *MetricsServer) PeriodicSingleMetricsFetcher(ctx context.Context) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	logger.Info().Str("interval", ms.getConfig().wekaMetricsFetchInterval.String()).Msg("Starting collection of WEKA metrics for PVs")
+	logger.Info().Str("interval", ms.getConfig().metricsFetchInterval.String()).Msg("Starting collection of WEKA metrics for PVs")
 
-	ticker := ms.config.wekaMetricsFetchInterval
+	ticker := ms.config.metricsFetchInterval
 	if ticker <= 0 {
 		ticker = time.Minute // Default to 1 minute if not set
 	}
