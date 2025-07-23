@@ -22,7 +22,6 @@ import (
 	"math"
 	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	clog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"slices"
@@ -109,7 +108,7 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 		secrets:               NewSecretsStore(),
 		volumeMetrics:         NewVolumeMetrics(),
 		prometheusMetrics:     NewPrometheusMetrics(),
-		persistentVolumesChan: make(chan *v1.PersistentVolume, 1000),
+		persistentVolumesChan: make(chan *v1.PersistentVolume, MetricsServerVolumeLimit),
 		wg:                    sync.WaitGroup{},
 
 		quotaMaps: NewQuotaMapsPerFilesystem(),
@@ -198,18 +197,19 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 	for {
 		logger.Info().Msg("Fetching existing persistent volumes")
 		pvList := &v1.PersistentVolumeList{}
-		opts := &client.ListOptions{}
+
+		volumeLimit := MetricsServerVolumeLimit
 
 		// override the maximum count of PersistentVolumes to fetch from environment variable if set
 		maxCountStr := os.Getenv("MAXIMUM_PERSISTENT_VOLUME_COUNT")
 		if maxCountStr != "" {
 			maxCount, err := strconv.ParseInt(maxCountStr, 10, 64)
 			if err == nil { // handle error (e.g., log or set a default value)
-				opts.Limit = maxCount
+				volumeLimit = int(maxCount)
 			}
 		}
 
-		err := ms.manager.GetClient().List(ctx, pvList, opts)
+		err := ms.manager.GetClient().List(ctx, pvList)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
 			ms.prometheusMetrics.FetchPvBatchOperationFailureCount.Inc()
@@ -225,6 +225,22 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		ms.prometheusMetrics.MonitoredPersistentVolumesGauge.Set(float64(len(ms.volumeMetrics.Metrics)))
 
 		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes, streaming them for processing")
+
+		// Limit the number of PersistentVolumes to the specified limit, but first sorting them so we always stream the same volumes in the same order
+		if len(pvList.Items) > volumeLimit {
+			logger.Info().Int("pv_count", len(pvList.Items)).Int("limit", volumeLimit).Msg("Trimming PersistentVolumes list to the limit")
+			// Sort the PersistentVolumes by name to ensure consistent ordering
+			slices.SortFunc(pvList.Items, func(a, b v1.PersistentVolume) int {
+				if a.GetUID() < b.GetUID() {
+					return 0
+				}
+				return 1
+			},
+			)
+			pvList.Items = pvList.Items[:volumeLimit] // trim the list to the limit
+			logger.Warn().Int("trimmed_pv_count", len(pvList.Items)).Msg("Trimmed PersistentVolumes list to the limit")
+		}
+
 		for _, pv := range pvList.Items {
 			select {
 			case <-ctx.Done():
