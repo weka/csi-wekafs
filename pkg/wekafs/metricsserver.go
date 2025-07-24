@@ -478,7 +478,8 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	// prepopulate the inode ID for the volume, this will be used to fetch metrics later to avoid it during AddMetric
 	_, err = volume.getInodeId(ctx)
 	if err != nil {
-		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem inode ID for volume, skipping PersistentVolume")
+		// this could happen if the volume is not yet created or is in an invalid state
+		logger.Trace().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem inode ID for volume, skipping PersistentVolume")
 		return
 	}
 
