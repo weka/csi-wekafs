@@ -41,66 +41,66 @@ type PrometheusMetrics struct {
 	server struct {
 		// metricsserver metrics
 		// Fetching PersistentVolume Objects from Kubernetes API. Refers to the number of batch requests made to fetch PVs.
-		FetchPvBatchOperationsInvokeCount       *TimedCounter
-		FetchPvBatchOperationsSuccessCount      *TimedCounter
-		FetchPvBatchOperationFailureCount       *TimedCounter // total number of failed operations to fetch PVs
-		FetchPvBatchOperationsDurationSeconds   *TimedCounter
-		FetchPvBatchOperationsDurationHistogram *TimedHistogram
-		FetchPvBatchSize                        *TimedGauge // total number of PVs fetched in the last batch
+		FetchPvBatchOperationsInvokeCount       prometheus.Counter
+		FetchPvBatchOperationsSuccessCount      prometheus.Counter
+		FetchPvBatchOperationFailureCount       prometheus.Counter // total number of failed operations to fetch PVs
+		FetchPvBatchOperationsDurationSeconds   prometheus.Counter
+		FetchPvBatchOperationsDurationHistogram prometheus.Histogram
+		FetchPvBatchSize                        prometheus.Gauge
 
 		// streaming Pv objects
-		StreamPvOperationsCount *TimedCounter // total number of operations performed on streaming PVs
+		StreamPvOperationsCount prometheus.Counter // total number of operations performed on streaming PVs
 
 		// processing PersistentVolume Objects. Refers to the number of operations performed on single PV
-		ProcessPvOperationsCount             *TimedCounter
-		ProcessPvOperationsDurationSeconds   *TimedCounter
-		ProcessPvOperationsDurationHistogram *TimedHistogram
+		ProcessPvOperationsCount             prometheus.Counter
+		ProcessPvOperationsDurationSeconds   prometheus.Counter
+		ProcessPvOperationsDurationHistogram prometheus.Histogram
 
-		FetchMetricsBatchOperationsInvokeCount *TimedCounter
+		FetchMetricsBatchOperationsInvokeCount prometheus.Counter
 		// fetching metric batches. refer to batches of periodic metrics fetch. Basically, this number should never be larger than fetch metrics interval
-		FetchMetricsBatchOperationsSuccessCount      *TimedCounter
-		FetchMetricsBatchOperationsFailureCount      *TimedCounter
-		FetchMetricsBatchOperationsDurationSeconds   *TimedCounter
-		FetchMetricsBatchOperationsDurationHistogram *TimedHistogram
-		FetchMetricsBatchSize                        *TimedGauge
+		FetchMetricsBatchOperationsSuccessCount      prometheus.Counter
+		FetchMetricsBatchOperationsFailureCount      prometheus.Counter
+		FetchMetricsBatchOperationsDurationSeconds   prometheus.Counter
+		FetchMetricsBatchOperationsDurationHistogram prometheus.Histogram
+		FetchMetricsBatchSize                        prometheus.Gauge
 		FetchMetricsFrequencySeconds                 prometheus.Gauge // frequency of fetch metrics in seconds, taken from the configuration
 
-		FetchSinglePvMetricsOperationsInvokeCount  *TimedCounter
-		FetchSinglePvMetricsOperationsSuccessCount *TimedCounter
+		FetchSinglePvMetricsOperationsInvokeCount  prometheus.Counter
+		FetchSinglePvMetricsOperationsSuccessCount prometheus.Counter
 		// fetching single metrics. refer to single metrics fetch from Weka cluster
-		FetchSinglePvMetricsOperationsFailureCount      *TimedCounter
-		FetchSinglePvMetricsOperationsDurationSeconds   *TimedCounter
-		FetchSinglePvMetricsOperationsDurationHistogram *TimedHistogram
+		FetchSinglePvMetricsOperationsFailureCount      prometheus.Counter
+		FetchSinglePvMetricsOperationsDurationSeconds   prometheus.Counter
+		FetchSinglePvMetricsOperationsDurationHistogram prometheus.Histogram
 
 		PersistentVolumeAdditionsCount  prometheus.Counter
 		PersistentVolumeRemovalsCount   prometheus.Counter
-		MonitoredPersistentVolumesGauge *TimedGauge
+		MonitoredPersistentVolumesGauge prometheus.Gauge
 
-		PruneVolumesBatchInvokeCount       *TimedCounter
-		PruneVolumesBatchDurationSeconds   *TimedCounter
-		PruneVolumesBatchDurationHistogram *TimedHistogram
-		PruneVolumesBatchSize              *TimedGauge // total number of volumes pruned in the last batch
+		PruneVolumesBatchInvokeCount       prometheus.Counter
+		PruneVolumesBatchDurationSeconds   prometheus.Counter
+		PruneVolumesBatchDurationHistogram prometheus.Histogram
+		PruneVolumesBatchSize              prometheus.Gauge
 
-		PeriodicFetchMetricsInvokeCount  *TimedCounter // total number of periodic fetch metrics invocations
-		PeriodicFetchMetricsSkipCount    *TimedCounter
-		PeriodicFetchMetricsSuccessCount *TimedCounter
-		PeriodicFetchMetricsFailureCount *TimedCounter
+		PeriodicFetchMetricsInvokeCount  prometheus.Counter // total number of periodic fetch metrics invocations
+		PeriodicFetchMetricsSkipCount    prometheus.Counter
+		PeriodicFetchMetricsSuccessCount prometheus.Counter
+		PeriodicFetchMetricsFailureCount prometheus.Counter
 
-		QuotaMapRefreshInvokeCount       *TimedCounterVec   // total number of quota map updates
-		QuotaMapRefreshSuccessCount      *TimedCounterVec   // total number of successful quota map updates per filesystem
-		QuotaMapRefreshFailureCount      *TimedCounterVec   // total number of quota map updates
-		QuotaMapRefreshDurationSeconds   *TimedCounterVec   // total duration of quota map updates per filesystem in seconds
-		QuotaMapRefreshDurationHistogram *TimedHistogramVec // histogram of durations for quota map updates per filesystem
+		QuotaMapRefreshInvokeCount       *prometheus.CounterVec   // total number of quota map updates
+		QuotaMapRefreshSuccessCount      *prometheus.CounterVec   // total number of successful quota map updates per filesystem
+		QuotaMapRefreshFailureCount      *prometheus.CounterVec   // total number of quota map updates
+		QuotaMapRefreshDurationSeconds   *prometheus.CounterVec   // total duration of quota map updates per filesystem in seconds
+		QuotaMapRefreshDurationHistogram *prometheus.HistogramVec // histogram of durations for quota map updates per filesystem
 
-		QuotaUpdateBatchInvokeCount       *TimedCounter    // total number of all quota updates
-		QuotaUpdateBatchSuccessCount      *TimedCounter    // total number of all quota updates
-		QuotaUpdateBatchDurationSeconds   *TimedCounter    // total duration of all quota updates in seconds
-		QuotaUpdateBatchDurationHistogram *TimedHistogram  // histogram of durations for quota updates
-		QuotaUpdateBatchSize              *TimedGauge      // total number of quotas updated in the last batch, or number of distinct observed filesystems
-		QuotaUpdateFrequencySeconds       prometheus.Gauge // frequency of quota updates in seconds, taken from the configuration
+		QuotaUpdateBatchInvokeCount       prometheus.Counter   // total number of all quota updates
+		QuotaUpdateBatchSuccessCount      prometheus.Counter   // total number of all quota updates
+		QuotaUpdateBatchDurationSeconds   prometheus.Counter   // total duration of all quota updates in seconds
+		QuotaUpdateBatchDurationHistogram prometheus.Histogram // histogram of durations for quota updates
+		QuotaUpdateBatchSize              prometheus.Gauge     // total number of quotas updated in the last batch, or number of distinct observed filesystems
+		QuotaUpdateFrequencySeconds       prometheus.Gauge     // frequency of quota updates in seconds, taken from the configuration
 
-		ReportedMetricsSuccessCount *TimedCounter // number of metrics reported to Prometheus across all . Should be equal to FetchSinglePvMetricsOperationsInvokeCount
-		ReportedMetricsFailureCount *TimedCounter // number of metrics that were not valid for reporting, e.g. appeared empty
+		ReportedMetricsSuccessCount prometheus.Counter // number of metrics reported to Prometheus across all . Should be equal to FetchSinglePvMetricsOperationsInvokeCount
+		ReportedMetricsFailureCount prometheus.Counter // number of metrics that were not valid for reporting, e.g. appeared empty
 
 	}
 }
@@ -545,7 +545,7 @@ func (m *PrometheusMetrics) Init() {
 	// metricsserver own metrics
 
 	// metrics for fetching PersistentVolume objects from Kubernetes API
-	m.server.FetchPvBatchOperationsInvokeCount = NewTimedCounter(
+	m.server.FetchPvBatchOperationsInvokeCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -554,7 +554,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchPvBatchOperationsSuccessCount = NewTimedCounter(
+	m.server.FetchPvBatchOperationsSuccessCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -563,7 +563,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchPvBatchOperationFailureCount = NewTimedCounter(
+	m.server.FetchPvBatchOperationFailureCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -572,7 +572,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchPvBatchOperationsDurationSeconds = NewTimedCounter(
+	m.server.FetchPvBatchOperationsDurationSeconds = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -581,7 +581,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchSinglePvMetricsOperationsDurationSeconds = NewTimedCounter(
+	m.server.FetchSinglePvMetricsOperationsDurationSeconds = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -590,7 +590,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchPvBatchOperationsDurationHistogram = NewTimedHistogram(
+	m.server.FetchPvBatchOperationsDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -600,7 +600,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchPvBatchSize = NewTimedGauge(
+	m.server.FetchPvBatchSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -610,7 +610,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for streaming PersistentVolume objects
-	m.server.StreamPvOperationsCount = NewTimedCounter(
+	m.server.StreamPvOperationsCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -620,7 +620,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for processing PersistentVolume objects
-	m.server.ProcessPvOperationsCount = NewTimedCounter(
+	m.server.ProcessPvOperationsCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -629,7 +629,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.ProcessPvOperationsDurationSeconds = NewTimedCounter(
+	m.server.ProcessPvOperationsDurationSeconds = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -638,7 +638,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.ProcessPvOperationsDurationHistogram = NewTimedHistogram(
+	m.server.ProcessPvOperationsDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -649,7 +649,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for fetching metrics from Weka cluster
-	m.server.FetchMetricsBatchOperationsInvokeCount = NewTimedCounter(
+	m.server.FetchMetricsBatchOperationsInvokeCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -658,7 +658,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchMetricsBatchOperationsSuccessCount = NewTimedCounter(
+	m.server.FetchMetricsBatchOperationsSuccessCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -667,7 +667,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchMetricsBatchOperationsFailureCount = NewTimedCounter(
+	m.server.FetchMetricsBatchOperationsFailureCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -676,7 +676,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchMetricsBatchOperationsDurationSeconds = NewTimedCounter(
+	m.server.FetchMetricsBatchOperationsDurationSeconds = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -685,7 +685,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchMetricsBatchOperationsDurationHistogram = NewTimedHistogram(
+	m.server.FetchMetricsBatchOperationsDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -695,7 +695,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchMetricsBatchSize = NewTimedGauge(
+	m.server.FetchMetricsBatchSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -713,7 +713,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchSinglePvMetricsOperationsInvokeCount = NewTimedCounter(
+	m.server.FetchSinglePvMetricsOperationsInvokeCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -722,7 +722,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchSinglePvMetricsOperationsSuccessCount = NewTimedCounter(
+	m.server.FetchSinglePvMetricsOperationsSuccessCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -731,7 +731,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchSinglePvMetricsOperationsFailureCount = NewTimedCounter(
+	m.server.FetchSinglePvMetricsOperationsFailureCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -740,7 +740,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchSinglePvMetricsOperationsDurationSeconds = NewTimedCounter(
+	m.server.FetchSinglePvMetricsOperationsDurationSeconds = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -749,7 +749,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchSinglePvMetricsOperationsDurationHistogram = NewTimedHistogram(
+	m.server.FetchSinglePvMetricsOperationsDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -779,7 +779,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for PersistentVolumes currently monitored by the metrics server
-	m.server.MonitoredPersistentVolumesGauge = NewTimedGauge(
+	m.server.MonitoredPersistentVolumesGauge = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -789,7 +789,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for pruning volumes batch
-	m.server.PruneVolumesBatchInvokeCount = NewTimedCounter(
+	m.server.PruneVolumesBatchInvokeCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -798,7 +798,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.PruneVolumesBatchDurationSeconds = NewTimedCounter(
+	m.server.PruneVolumesBatchDurationSeconds = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -807,7 +807,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.PruneVolumesBatchDurationHistogram = NewTimedHistogram(
+	m.server.PruneVolumesBatchDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -817,7 +817,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.PruneVolumesBatchSize = NewTimedGauge(
+	m.server.PruneVolumesBatchSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -827,7 +827,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for periodic fetch metrics
-	m.server.PeriodicFetchMetricsInvokeCount = NewTimedCounter(
+	m.server.PeriodicFetchMetricsInvokeCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -836,7 +836,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.PeriodicFetchMetricsSkipCount = NewTimedCounter(
+	m.server.PeriodicFetchMetricsSkipCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -845,7 +845,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.PeriodicFetchMetricsSuccessCount = NewTimedCounter(
+	m.server.PeriodicFetchMetricsSuccessCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -854,7 +854,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.PeriodicFetchMetricsFailureCount = NewTimedCounter(
+	m.server.PeriodicFetchMetricsFailureCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -864,7 +864,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for quota map updates
-	m.server.QuotaMapRefreshInvokeCount = NewTimedCounterVec(
+	m.server.QuotaMapRefreshInvokeCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -874,7 +874,7 @@ func (m *PrometheusMetrics) Init() {
 		LabelsForFilesystemOps,
 	)
 
-	m.server.QuotaMapRefreshSuccessCount = NewTimedCounterVec(
+	m.server.QuotaMapRefreshSuccessCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -884,7 +884,7 @@ func (m *PrometheusMetrics) Init() {
 		LabelsForFilesystemOps,
 	)
 
-	m.server.QuotaMapRefreshFailureCount = NewTimedCounterVec(
+	m.server.QuotaMapRefreshFailureCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -894,7 +894,7 @@ func (m *PrometheusMetrics) Init() {
 		LabelsForFilesystemOps,
 	)
 
-	m.server.QuotaMapRefreshDurationSeconds = NewTimedCounterVec(
+	m.server.QuotaMapRefreshDurationSeconds = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -904,7 +904,7 @@ func (m *PrometheusMetrics) Init() {
 		LabelsForFilesystemOps,
 	)
 
-	m.server.QuotaMapRefreshDurationHistogram = NewTimedHistogramVec(
+	m.server.QuotaMapRefreshDurationHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -916,7 +916,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for quota update batches
-	m.server.QuotaUpdateBatchInvokeCount = NewTimedCounter(
+	m.server.QuotaUpdateBatchInvokeCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -925,7 +925,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.QuotaUpdateBatchSuccessCount = NewTimedCounter(
+	m.server.QuotaUpdateBatchSuccessCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -934,7 +934,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.QuotaUpdateBatchDurationSeconds = NewTimedCounter(
+	m.server.QuotaUpdateBatchDurationSeconds = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -943,7 +943,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.QuotaUpdateBatchDurationHistogram = NewTimedHistogram(
+	m.server.QuotaUpdateBatchDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -953,7 +953,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.QuotaUpdateBatchSize = NewTimedGauge(
+	m.server.QuotaUpdateBatchSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -971,7 +971,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.ReportedMetricsSuccessCount = NewTimedCounter(
+	m.server.ReportedMetricsSuccessCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -980,7 +980,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.ReportedMetricsFailureCount = NewTimedCounter(
+	m.server.ReportedMetricsFailureCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
