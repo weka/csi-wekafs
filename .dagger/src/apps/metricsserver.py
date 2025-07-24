@@ -37,20 +37,42 @@ async def publish_metricsserver(src: Directory, sock: Socket, repository: str, v
     return await metricsserver.publish(f"{repository}:{version}")
 
 
-async def publish_metricsserver_helm_chart(src: Directory, sock: Socket, repository: str, version: str = "",
-                                          gh_token: Optional[Secret] = None) -> str:
+async def publish_metricsserver_helm_chart(
+        src: Directory,
+        sock: Socket,
+        repository: str,
+        version: str = "",
+        gh_token: Optional[Secret] = None,
+        registry_secret: Optional[dagger.Secret] = None, # file in format of fr3hx7l7h3p9/anton@weka.io:AUTH_TOKEN_FROM https://cloud.oracle.com/identity/domains/my-profile/auth-tokens?region=eu-frankfurt-1
+) -> str:
     from containers.builders import helm_builder_container
 
     version = await _calc_metricsserver_version(src, version)
 
-    await (
+    builder = await (
         (await helm_builder_container(sock, gh_token))
         .with_directory("/src", src)
         .with_workdir("/src")
-        .with_exec(["sh", "-ec", f"""
+    )
+
+    if registry_secret is not None:
+        builder = builder.with_mounted_secret("/registry-secret", registry_secret)
+
+    base_repository = repository.rpartition("/")[0]
+    base_repository = base_repository.rpartition("/")[0] # cutting out helm, then cutting out namespace. very bound to OCI atm and broken for others
+    await (
+        builder.with_exec(["sh", "-ec", f"""
     helm package charts/metricsserver --version {version} --app-version {version} --destination charts/
         """])
         .with_exec(["sh", "-ec", f"""
+        if [ -f /registry-secret ]; then
+            AUTH=$(cat /registry-secret)
+            USERNAME=$(echo $AUTH | cut -d: -f1)
+            PASSWORD=$(echo $AUTH | cut -d: -f2-)
+            echo "Logging in to Helm registry {repository} as $USERNAME"
+            helm registry login {base_repository} -u $USERNAME -p $PASSWORD
+            echo "Pushing Helm chart to {repository}"
+        fi
         helm push charts/metricsserver-*.tgz oci://{repository}
 """])
         .stdout()
