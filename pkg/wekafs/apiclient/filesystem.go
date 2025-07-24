@@ -180,7 +180,7 @@ func (a *ApiClient) GetFileSystemByName(ctx context.Context, name string) (*File
 	return a.GetFileSystemByFilter(ctx, query)
 }
 
-// CachedGetFileSystemByName returns a cached filesystem object by name.
+// CachedGetFileSystemByName returns a cached filesystem object by name. if the object is not found in the cache or the cache is stale, it fetches the filesystem list and updates the cache.
 func (a *ApiClient) CachedGetFileSystemByName(ctx context.Context, name string, acceptedTtl time.Duration) (*FileSystem, error) {
 	if a.fsCache == nil {
 		a.fsCacheMu.Lock()

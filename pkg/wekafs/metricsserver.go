@@ -235,36 +235,49 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		},
 		)
 
-		// Limit the number of PersistentVolumes to the specified limit, but first sorting them so we always stream the same volumes in the same order
-		if len(pvList.Items) > volumeLimit {
-			logger.Info().Int("pv_count", len(pvList.Items)).Int("limit", volumeLimit).Msg("Trimming PersistentVolumes list to the limit")
-			// Sort the PersistentVolumes by name to ensure consistent ordering
-			pvList.Items = pvList.Items[:volumeLimit] // trim the list to the limit
-			logger.Warn().Int("trimmed_pv_count", len(pvList.Items)).Msg("Trimmed PersistentVolumes list to the limit")
-		}
+		var items []*v1.PersistentVolume
 
 		for _, pv := range pvList.Items {
+			// Validate the PersistentVolume validity
+			err := ms.ensurePersistentVolumeValid(&pv)
+			if err != nil {
+				logger.Trace().Str("pv_name", pv.Name).Err(err).Msg("Skipping processing a PersistentVolume, not valid")
+				return
+			}
+			items = append(items, &pv)
+		}
+
+		// Limit the number of PersistentVolumes to the specified limit, but first sorting them so we always stream the same volumes in the same order
+		if len(items) > volumeLimit {
+			logger.Info().Int("pv_count", len(items)).Int("limit", volumeLimit).Msg("Trimming PersistentVolumes list to the limit")
+			// Sort the PersistentVolumes by name to ensure consistent ordering
+			items = items[:volumeLimit] // trim the list to the limit
+			logger.Warn().Int("trimmed_pv_count", len(items)).Msg("Trimmed PersistentVolumes list to the limit")
+		}
+		ms.prometheusMetrics.server.StreamPvBatchSize.Set(float64(len(pvList.Items)))
+		ms.prometheusMetrics.server.FetchPvBatchSize.Set(float64(len(items)))
+
+		for _, pv := range items {
 			select {
 			case <-ctx.Done():
 				return
-			case out <- &pv:
-				ms.prometheusMetrics.server.FetchPvBatchOperationsSuccessCount.Inc()
+			case out <- pv:
+				ms.prometheusMetrics.server.StreamPvOperationsCount.Inc()
 			}
-			ms.prometheusMetrics.server.StreamPvOperationsCount.Inc()
 		}
 
-		ms.pruneOldVolumes(ctx, pvList.Items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
+		ms.pruneOldVolumes(ctx, items) // after all PVs are already streamed, prune old volumes (those that are not in the current list but were measured before)
 
 		interval := ms.getConfig().metricsFetchInterval
 
-		logger.Info().Int("pv_count", len(pvList.Items)).Dur("wait_duration", interval).Msg("Sent all volumes to processing, waiting for next fetch")
+		logger.Info().Int("pv_count_total", len(pvList.Items)).Int("pv_count_eligible", len(items)).Dur("wait_duration", interval).Msg("Sent all volumes to processing, waiting for next fetch")
 
 		// refresh list of volumes every metricsFetchInterval
 		time.Sleep(interval)
 	}
 }
 
-func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList []v1.PersistentVolume) {
+func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList []*v1.PersistentVolume) {
 	component := "pruneOldVolumes"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
 	defer span.End()
@@ -374,6 +387,7 @@ func (ms *MetricsServer) PersistentVolumeStreamProcessor(ctx context.Context) {
 					<-sem // release semaphore
 				}()
 				ms.processSinglePersistentVolume(ctx, pv)
+				ms.prometheusMetrics.server.FetchPvBatchOperationsSuccessCount.Inc()
 				sampledLogger.Info().Str("pv_name", pv.Name).Msg("Processing persistent volume completed. This is sampled log")
 			}(pv)
 		}
@@ -393,7 +407,6 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		ms.prometheusMetrics.server.ProcessPvOperationsCount.Inc()
 		ms.prometheusMetrics.server.ProcessPvOperationsDurationSeconds.Add(dur.Seconds())
 		ms.prometheusMetrics.server.ProcessPvOperationsDurationHistogram.Observe(dur.Seconds())
-		logger.Debug().Str("pv_name", pv.Name).Dur("duration", dur).Msg("Added PersistentVolume for metrics processing")
 	}()
 
 	// Validate the PersistentVolume validity
