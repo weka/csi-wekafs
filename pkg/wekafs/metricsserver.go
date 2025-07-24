@@ -251,7 +251,6 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 			logger.Info().Int("pv_count", len(items)).Int("limit", volumeLimit).Msg("Trimming PersistentVolumes list to the limit")
 			// Sort the PersistentVolumes by name to ensure consistent ordering
 			items = items[:volumeLimit] // trim the list to the limit
-			logger.Warn().Int("trimmed_pv_count", len(items)).Msg("Trimmed PersistentVolumes list to the limit")
 		}
 		ms.prometheusMetrics.server.StreamPvBatchSize.Set(float64(len(pvList.Items)))
 		ms.prometheusMetrics.server.FetchPvBatchSize.Set(float64(len(items)))
@@ -309,14 +308,6 @@ func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList []*v1.Persi
 				logger.Debug().Str("pv_uid", string(uid)).Msg("No volume metric found for UID, skipping prune")
 				continue // no metric to prune
 			}
-			//if vm.metrics.Usage != nil {
-			//	if vm.metrics.Usage.Timestamp.After(time.Now().Add(-ms.getConfig().metricsFetchInterval)) {
-			//		continue // we want to leave the metric if it was updated recently
-			//	}
-			//	pruneCount++
-			//	ms.pruneVolumeMetric(ctx, uid)
-			//	}
-			//}
 			pruneCount++
 			ms.pruneVolumeMetric(ctx, uid)
 		}
