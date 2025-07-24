@@ -3,7 +3,7 @@
 csiDriverName: "csi.weka.io"
 
 image:
-  repository: images.scalar.dev.weka.io:5002/csi-metricsserver
+  repository: eu-frankfurt-1.ocir.io/fr3hx7l7h3p9/metricsserver
   pullPolicy: Always
   tag: ""
 imagePullSecret: ""
