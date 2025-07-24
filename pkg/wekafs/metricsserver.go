@@ -304,6 +304,19 @@ func (ms *MetricsServer) pruneOldVolumes(ctx context.Context, pvList []*v1.Persi
 	// Remove metrics for UIDs not present in the current PV list
 	for _, uid := range uids {
 		if _, exists := currentUIDs[uid]; !exists {
+			vm := ms.volumeMetrics.GetVolumeMetric(uid)
+			if vm == nil {
+				logger.Debug().Str("pv_uid", string(uid)).Msg("No volume metric found for UID, skipping prune")
+				continue // no metric to prune
+			}
+			//if vm.metrics.Usage != nil {
+			//	if vm.metrics.Usage.Timestamp.After(time.Now().Add(-ms.getConfig().metricsFetchInterval)) {
+			//		continue // we want to leave the metric if it was updated recently
+			//	}
+			//	pruneCount++
+			//	ms.pruneVolumeMetric(ctx, uid)
+			//	}
+			//}
 			pruneCount++
 			ms.pruneVolumeMetric(ctx, uid)
 		}
