@@ -241,7 +241,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 			err := ms.ensurePersistentVolumeValid(&pv)
 			if err != nil {
 				logger.Trace().Str("pv_name", pv.Name).Err(err).Msg("Skipping processing a PersistentVolume, not valid")
-				return
+				continue
 			}
 			items = append(items, &pv)
 		}
