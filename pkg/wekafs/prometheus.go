@@ -72,8 +72,8 @@ type PrometheusMetrics struct {
 		FetchSinglePvMetricsOperationsDurationSeconds   *TimedCounter
 		FetchSinglePvMetricsOperationsDurationHistogram *TimedHistogram
 
-		PersistentVolumeAdditionsCount  *TimedCounter
-		PersistentVolumeRemovalsCount   *TimedCounter
+		PersistentVolumeAdditionsCount  prometheus.Counter
+		PersistentVolumeRemovalsCount   prometheus.Counter
 		MonitoredPersistentVolumesGauge *TimedGauge
 
 		PruneVolumesBatchInvokeCount       *TimedCounter
@@ -760,7 +760,7 @@ func (m *PrometheusMetrics) Init() {
 	)
 
 	// metrics for PersistentVolumes added/removed from metrics collection
-	m.server.PersistentVolumeAdditionsCount = NewTimedCounter(
+	m.server.PersistentVolumeAdditionsCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
@@ -769,7 +769,7 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.PersistentVolumeRemovalsCount = NewTimedCounter(
+	m.server.PersistentVolumeRemovalsCount = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,

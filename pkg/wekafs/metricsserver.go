@@ -443,22 +443,29 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	// Create a new VolumeMetric instance
 
 	fsObj, err := volume.apiClient.CachedGetFileSystemByName(ctx, volume.FilesystemName, ms.getConfig().quotaCacheValidityDuration)
-	if err == nil {
-		volume.fileSystemObject = fsObj
-	} else {
-		fsObj, err = volume.getFilesystemObj(ctx, true)
-	}
 	if err != nil {
+		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
+		if err == apiclient.ObjectNotFoundError {
+			logger.Trace().Str("pv_name", pv.Name).Msg("Filesystem object not found for volume, pruning PersistentVolume")
+			ms.pruneVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
+		}
+		return
+	}
+
+	// we still want to validate the object, by UID call is faster than by name
+	volume.fileSystemObject = fsObj
+	ensuredFsObj := &apiclient.FileSystem{}
+	if err := volume.apiClient.GetFileSystemByUid(ctx, fsObj.Uid, ensuredFsObj, false); err != nil {
 		if err == apiclient.ObjectNotFoundError {
 			logger.Trace().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, pruning PersistentVolume")
-			ms.volumeMetrics.RemoveVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
+			ms.pruneVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
 			return
 		}
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
 		return
 	}
 
-	ms.prometheusMetrics.server.PersistentVolumeAdditionsCount.Inc()
+	volume.fileSystemObject = ensuredFsObj // ensure the filesystem object is valid
 
 	ms.observedFilesystems.incRef(fsObj, apiClient) // Add the filesystem to the observed list
 
@@ -482,6 +489,7 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		apiClient:        apiClient,
 	}
 	ms.volumeMetrics.AddVolumeMetric(ctx, pv.UID, metric)
+	ms.prometheusMetrics.server.PersistentVolumeAdditionsCount.Inc()
 }
 
 func (ms *MetricsServer) ensurePersistentVolumeValid(pv *v1.PersistentVolume) error {
