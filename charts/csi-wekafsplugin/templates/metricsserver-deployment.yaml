@@ -49,7 +49,7 @@ spec:
       hostNetwork: true
       {{- end }}
       containers:
-        - name: wekafs
+        - name: metrics-server
           image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
           imagePullPolicy: Always
           args:
@@ -126,5 +126,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      resources:
+        {{- toYaml .Values.metricsServer.resources | nindent 8}}
       terminationGracePeriodSeconds: {{ .Values.metricsServer.terminationGracePeriodSeconds | default 30 }}
 {{- end }}

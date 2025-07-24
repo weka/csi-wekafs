@@ -183,6 +183,11 @@ metrics:
   attacherPort: 9095
   # -- Metrics server metrics port
   metricsServerPort: 9096
+  # -- Resources for metrics server pods
+  resources:
+    requests:
+      cpu: 2
+      memory: 4Gi
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
