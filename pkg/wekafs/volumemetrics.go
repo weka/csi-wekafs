@@ -170,21 +170,21 @@ func (vms *VolumeMetrics) AddVolumeMetric(ctx context.Context, pvUID types.UID, 
 }
 
 func (vms *VolumeMetrics) RemoveVolumeMetric(ctx context.Context, pvUID types.UID) {
-	logger := log.Ctx(ctx)
 	vms.RLock()
 	vm, exists := vms.Metrics[pvUID]
 	vms.RUnlock()
 	if !exists {
 		return // nothing to remove
 	}
-	fsObj := vm.volume.fileSystemObject
-	if fsObj == nil {
-		logger.Error().Msg("Failed to get filesystem object for volume metric")
+	if vm.volume == nil {
 		return
 	}
-	inodeId, err := vm.volume.getInodeId(ctx)
-	if err != nil || inodeId == 0 {
-		logger.Error().Msg("Volume metric has no inode ID, cannot add to index")
+	fsObj := vm.volume.fileSystemObject
+	if fsObj == nil {
+		return
+	}
+	inodeId := vm.volume.inodeId
+	if inodeId == 0 {
 		return
 	}
 	vms.index.Remove(fsObj.Uid, inodeId)
