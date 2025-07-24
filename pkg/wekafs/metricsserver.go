@@ -229,7 +229,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		// Always sort the response so we get the volumes in same order for processing (especially if trimmed)
 		slices.SortFunc(pvList.Items, func(a, b v1.PersistentVolume) int {
 			if a.GetUID() < b.GetUID() {
-				return 0
+				return -1
 			}
 			return 1
 		},
