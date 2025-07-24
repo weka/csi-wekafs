@@ -98,7 +98,7 @@ type PrometheusMetrics struct {
 		QuotaUpdateBatchDurationSeconds   prometheus.Counter   // total duration of all quota updates in seconds
 		QuotaUpdateBatchDurationHistogram prometheus.Histogram // histogram of durations for quota updates
 		QuotaUpdateBatchSize              prometheus.Gauge     // total number of quotas updated in the last batch, or number of distinct observed filesystems
-		QuotaUpdateFrequencySeconds       prometheus.Gauge     // frequency of quota updates in seconds, taken from the configuration
+		QuotaCacheValiditySeconds         prometheus.Gauge     // frequency of quota updates in seconds, taken from the configuration
 
 		ReportedMetricsSuccessCount prometheus.Counter // number of metrics reported to Prometheus across all . Should be equal to FetchSinglePvMetricsOperationsInvokeCount
 		ReportedMetricsFailureCount prometheus.Counter // number of metrics that were not valid for reporting, e.g. appeared empty
@@ -972,12 +972,12 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.QuotaUpdateFrequencySeconds = prometheus.NewGauge(
+	m.server.QuotaCacheValiditySeconds = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: MetricsServerSubsystem,
-			Name:      "quota_update_frequency_seconds",
-			Help:      "Frequency, or interval of per filesystem quota updates in seconds, taken from the configuration. Too high value may lead to stale quotas or API overload",
+			Name:      "quota_cache_validity_seconds",
+			Help:      "Time period in which fetched quota is considered valid so no new requests are performed. Higher value may lead to stale quota information, lower value may lead to quota API overload",
 		},
 	)
 
@@ -1053,7 +1053,7 @@ func (m *PrometheusMetrics) Init() {
 		m.server.QuotaUpdateBatchDurationSeconds,
 		m.server.QuotaUpdateBatchDurationHistogram,
 		m.server.QuotaUpdateBatchSize,
-		m.server.QuotaUpdateFrequencySeconds,
+		m.server.QuotaCacheValiditySeconds,
 		m.server.ReportedMetricsSuccessCount,
 		m.server.ReportedMetricsFailureCount,
 	)

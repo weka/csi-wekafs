@@ -116,7 +116,7 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 	ret.observedFilesystems = NewObservedFilesystems(ret)
 
 	ret.prometheusMetrics.server.FetchMetricsFrequencySeconds.Set(ret.getConfig().metricsFetchInterval.Seconds())
-	ret.prometheusMetrics.server.QuotaUpdateFrequencySeconds.Set(ret.getConfig().metricsFetchInterval.Seconds())
+	ret.prometheusMetrics.server.QuotaCacheValiditySeconds.Set(ret.getConfig().quotaCacheValidityDuration.Seconds())
 
 	return ret
 
