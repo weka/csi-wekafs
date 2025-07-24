@@ -91,6 +91,7 @@ class CsiWekafs:
                            helm_repository: str = "images.scalar.dev.weka.io:5002/helm",
                            version: Optional[str] = None,
                            gh_token: Optional[dagger.Secret] = None,
+                           registry_secret: Optional[dagger.Secret] = None, # file in format of fr3hx7l7h3p9/anton@weka.io:AUTH_TOKEN_FROM https://cloud.oracle.com/identity/domains/my-profile/auth-tokens?region=eu-frankfurt-1
                            ) -> str:
         """Build and publish metrics server to Scalar registry"""
         from apps.metricsserver import publish_metricsserver, publish_metricsserver_helm_chart
@@ -103,6 +104,7 @@ class CsiWekafs:
                                                                    repository=helm_repository,
                                                                    version=version or "",
                                                                    gh_token=gh_token,
+                                                                   registry_secret=registry_secret,
                                                                    )
         return metricsserver_helm
 
@@ -129,6 +131,22 @@ class CsiWekafs:
             cachebuster=cachebuster
         )
         return install
+
+
+    @function
+    async def publish_oracle(self,
+                            csi: Annotated[dagger.Directory, Ignore(CSI_EXCLUDE_LIST)],
+                            sock: dagger.Socket,
+                            registry_secret: dagger.Secret, # file in format of fr3hx7l7h3p9/anton@weka.io:AUTH_TOKEN_FROM https://cloud.oracle.com/identity/domains/my-profile/auth-tokens?region=eu-frankfurt-1
+                            repository: str = "eu-frankfurt-1.ocir.io/fr3hx7l7h3p9/metricsserver",
+                            helm_repository: str = "eu-frankfurt-1.ocir.io/fr3hx7l7h3p9/helm",
+                            version: Optional[str] = None,
+                            gh_token: Optional[dagger.Secret] = None,
+                            ) -> str:
+        """Deploy metrics server using Helm charts"""
+        from apps.metricsserver import install_helm_chart
+        metricsserver_helm = await self.build_scalar(csi, sock, repository, helm_repository, version, gh_token, registry_secret=registry_secret)
+        print("published {metricsserver_helm} to {repository}")
 
     @function
     async def metricsserver_explore(self,
