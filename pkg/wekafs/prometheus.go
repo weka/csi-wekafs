@@ -50,6 +50,7 @@ type PrometheusMetrics struct {
 
 		// streaming Pv objects
 		StreamPvOperationsCount prometheus.Counter // total number of operations performed on streaming PVs
+		StreamPvBatchSize       prometheus.Gauge
 
 		// processing PersistentVolume Objects. Refers to the number of operations performed on single PV
 		ProcessPvOperationsCount             prometheus.Counter
@@ -616,6 +617,15 @@ func (m *PrometheusMetrics) Init() {
 			Subsystem: MetricsServerSubsystem,
 			Name:      "stream_pv_operations_count_total",
 			Help:      "Total number of operations performed on streaming PersistentVolume objects",
+		},
+	)
+
+	m.server.StreamPvBatchSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: MetricsNamespace,
+			Subsystem: MetricsServerSubsystem,
+			Name:      "stream_pv_batch_size",
+			Help:      "Size of the batch of streaming PersistentVolume objects",
 		},
 	)
 

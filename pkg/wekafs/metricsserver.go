@@ -220,7 +220,6 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		d := time.Since(ctx.Value("start_time").(time.Time)).Seconds()
 		ms.prometheusMetrics.server.FetchPvBatchOperationsInvokeCount.Inc()
 		ms.prometheusMetrics.server.FetchPvBatchOperationsDurationSeconds.Add(d)
-		ms.prometheusMetrics.server.FetchPvBatchSize.Set(float64(len(pvList.Items)))
 		ms.prometheusMetrics.server.FetchPvBatchOperationsDurationHistogram.Observe(d)
 		ms.prometheusMetrics.server.MonitoredPersistentVolumesGauge.Set(float64(len(ms.volumeMetrics.Metrics)))
 
@@ -409,10 +408,9 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 		ms.prometheusMetrics.server.ProcessPvOperationsDurationHistogram.Observe(dur.Seconds())
 	}()
 
-	// Validate the PersistentVolume validity
-	err := ms.ensurePersistentVolumeValid(pv)
-	if err != nil {
-		logger.Trace().Str("pv_name", pv.Name).Err(err).Msg("Skipping processing a PersistentVolume, not valid")
+	// if volume was marked for deletion, do nothing
+	if pv.DeletionTimestamp != nil {
+		// do nothing here, we will prune it later
 		return
 	}
 
@@ -458,10 +456,6 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	fsObj, err := volume.apiClient.CachedGetFileSystemByName(ctx, volume.FilesystemName, ms.getConfig().quotaCacheValidityDuration)
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
-		if err == apiclient.ObjectNotFoundError {
-			logger.Trace().Str("pv_name", pv.Name).Msg("Filesystem object not found for volume, pruning PersistentVolume")
-			ms.pruneVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
-		}
 		return
 	}
 
@@ -469,11 +463,6 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	volume.fileSystemObject = fsObj
 	ensuredFsObj := &apiclient.FileSystem{}
 	if err := volume.apiClient.GetFileSystemByUid(ctx, fsObj.Uid, ensuredFsObj, false); err != nil {
-		if err == apiclient.ObjectNotFoundError {
-			logger.Trace().Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, filesystem is nil, pruning PersistentVolume")
-			ms.pruneVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
-			return
-		}
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem object for volume, skipping PersistentVolume")
 		return
 	}
@@ -485,11 +474,6 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	// prepopulate the inode ID for the volume, this will be used to fetch metrics later to avoid it during AddMetric
 	_, err = volume.getInodeId(ctx)
 	if err != nil {
-		if err == apiclient.ObjectNotFoundError {
-			logger.Trace().Err(err).Str("pv_name", pv.Name).Msg("Failed to get inode ID for volume, pruning PersistentVolume")
-			ms.volumeMetrics.RemoveVolumeMetric(ctx, pv.UID) // Remove the VolumeMetric if it was not yet pruned
-			return
-		}
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to get filesystem inode ID for volume, skipping PersistentVolume")
 		return
 	}
@@ -503,6 +487,8 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 	}
 	ms.volumeMetrics.AddVolumeMetric(ctx, pv.UID, metric)
 	ms.prometheusMetrics.server.PersistentVolumeAdditionsCount.Inc()
+	logger.Debug().Str("pv_name", pv.Name).Dur("duration", time.Since(startTime)).Msg("Added PersistentVolume for metrics processing")
+
 }
 
 func (ms *MetricsServer) ensurePersistentVolumeValid(pv *v1.PersistentVolume) error {
