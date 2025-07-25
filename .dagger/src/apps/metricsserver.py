@@ -62,7 +62,7 @@ async def publish_metricsserver_helm_chart(
     base_repository = base_repository.rpartition("/")[0] # cutting out helm, then cutting out namespace. very bound to OCI atm and broken for others
     await (
         builder.with_exec(["sh", "-ec", f"""
-    helm package charts/metricsserver --version {version} --app-version {version} --destination charts/
+    helm package charts/csi-metricsserver --version {version} --app-version {version} --destination charts/
         """])
         .with_exec(["sh", "-ec", f"""
         if [ -f /registry-secret ]; then
@@ -73,11 +73,11 @@ async def publish_metricsserver_helm_chart(
             helm registry login {base_repository} -u $USERNAME -p $PASSWORD
             echo "Pushing Helm chart to {repository}"
         fi
-        helm push charts/metricsserver-*.tgz oci://{repository}
+        helm push charts/csi-metricsserver-*.tgz oci://{repository}
 """])
         .stdout()
     )
-    return f"{repository}/metricsserver:{version}"
+    return f"{repository}/csi-metricsserver:{version}"
 
 
 async def install_helm_chart(
