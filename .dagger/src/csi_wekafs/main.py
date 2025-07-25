@@ -66,7 +66,7 @@ class CsiWekafs:
             .with_directory("/src", csi)
             .with_workdir("/src")
             .with_exec(["sh", "-ec", f"""
-        helm package charts/metricsserver --version {version} --destination charts/
+        helm package charts/csi-metricsserver --version {version} --destination charts/
             """])
             .directory("/src/charts")
         )
@@ -134,19 +134,21 @@ class CsiWekafs:
 
 
     @function
-    async def publish_oracle(self,
+    async def publish_quay(self,
                             csi: Annotated[dagger.Directory, Ignore(CSI_EXCLUDE_LIST)],
                             sock: dagger.Socket,
                             registry_secret: dagger.Secret, # file in format of fr3hx7l7h3p9/anton@weka.io:AUTH_TOKEN_FROM https://cloud.oracle.com/identity/domains/my-profile/auth-tokens?region=eu-frankfurt-1
-                            repository: str = "eu-frankfurt-1.ocir.io/fr3hx7l7h3p9/metricsserver",
-                            helm_repository: str = "eu-frankfurt-1.ocir.io/fr3hx7l7h3p9/helm",
+                            repository: str = "quay.io/weka.io/csi-metricsserver",
+                            helm_repository: str = "quay.io/weka.io/helm",
                             version: Optional[str] = None,
                             gh_token: Optional[dagger.Secret] = None,
                             ) -> str:
         """Deploy metrics server using Helm charts"""
         from apps.metricsserver import install_helm_chart
         metricsserver_helm = await self.build_scalar(csi, sock, repository, helm_repository, version, gh_token, registry_secret=registry_secret)
-        print("published {metricsserver_helm} to {repository}")
+        ret = f"published {metricsserver_helm} to {repository}"
+        print(ret)
+        return ret
 
     @function
     async def metricsserver_explore(self,
