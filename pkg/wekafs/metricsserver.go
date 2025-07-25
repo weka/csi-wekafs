@@ -702,7 +702,7 @@ func (ms *MetricsServer) fetchPvUsageStatsFromWeka(ctx context.Context, v *Volum
 }
 
 func (ms *MetricsServer) fetchPvUsageStatsFromWekaWithCache(ctx context.Context, v *Volume) (*UsageStats, error) {
-	if v.lastUsageStats == nil || time.Since(v.lastUsageStats.Timestamp) < ms.getConfig().quotaCacheValidityDuration {
+	if v.lastUsageStats == nil || time.Since(v.lastUsageStats.Timestamp) > ms.getConfig().quotaCacheValidityDuration {
 		usageStats, err := ms.fetchPvUsageStatsFromWeka(ctx, v)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch usage stats from Weka for volume %s: %w", v.persistentVol.Name, err)
