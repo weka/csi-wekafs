@@ -7,7 +7,7 @@ require {
         type unlabeled_t;
         type container_var_lib_t;
         type container_t;
-        class file { create open getattr setattr read write append rename link unlink ioctl lock };
+        class file { create open getattr setattr read write append rename link unlink ioctl lock map };
         class dir { add_name create getattr ioctl link lock open read remove_name rename reparent rmdir search setattr unlink write };
         attribute spoolfile, file_type, non_security_file_type, non_auth_file_type;
 }
@@ -18,6 +18,6 @@ typeattribute wekafs_csi_volume_t spoolfile, file_type, non_security_file_type, 
 
 #============= container_t ==============
 if (container_use_wekafs) {
-    allow container_t wekafs_csi_volume_t:file { create open getattr setattr read write append rename link unlink ioctl lock };
+    allow container_t wekafs_csi_volume_t:file { create open getattr setattr read write append rename link unlink ioctl lock map };
     allow container_t wekafs_csi_volume_t:dir { add_name create getattr ioctl link lock open read remove_name rename reparent rmdir search setattr unlink write };
 }
