@@ -53,6 +53,10 @@ type ApiClient struct {
 	containerName              string
 	NfsInterfaceGroupName      string
 	NfsClientGroupName         string
+
+	containers           *ContainersResponse
+	containersUpdateTime time.Time
+	containersLock       sync.RWMutex
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
