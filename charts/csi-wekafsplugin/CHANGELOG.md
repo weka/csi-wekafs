@@ -2,10 +2,12 @@
 
 ## What's Changed
 ### Improvements
-* feat(CSI-360): make node topology labeling configurable in favor of auxilary management via operator by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/526
+* feat(CSI-376): improve lookup of local containers to rely on driver interface before REST API by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/551
 ### Bug Fixes
-* fix: minimize race condition on weka driver check by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/527
+* fix(CSI-375): deletion of volume may be stuck if its contents were already trashed by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/550
+* fix(CSI-377): node labels are cleaned up upon startup / termination even if labels managed externally by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/553
+* fix(CSI-373): cannot mmap() on weka CSI volumes with SELinux enforced by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/554
 ### Miscellaneous
-* chore(deps): update codacy/git-version action to v2.8.2 by @renovate in https://github.com/weka/csi-wekafs/pull/520
+* chore(deps): update sidecars as of 2025-07-27 by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/556
 
 
