@@ -130,9 +130,6 @@
                 "livenessprobesidecar": {
                     "type": "string"
                 },
-                "nodeinfo": {
-                    "type": "string"
-                },
                 "provisionersidecar": {
                     "type": "string"
                 },
