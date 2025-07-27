@@ -318,9 +318,13 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
 
+		// only if we manage node labels, first clean up before starting node server
+		if driver.config.manageNodeTopologyLabels {
+			log.Info().Msg("Cleaning up node stale labels")
+			driver.CleanupNodeLabels(ctx)
+		}
+
 		// bring up node part
-		log.Info().Msg("Cleaning up node stale labels")
-		driver.CleanupNodeLabels(ctx)
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
 	} else {
@@ -333,7 +337,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	defer stop()
 	go func() {
 		<-termContext.Done()
-		if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
+		if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll && driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
 			driver.CleanupNodeLabels(ctx)
 			log.Info().Msg("Cleanup completed, stopping server")
