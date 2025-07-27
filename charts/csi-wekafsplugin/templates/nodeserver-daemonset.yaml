@@ -164,9 +164,6 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
-            - mountPath: /etc/nodeinfo
-              name: nodeinfo
-              readOnly: true
 {{- if .Values.legacyVolumeSecretName }}
             - mountPath: /legacy-volume-access
               name: legacy-volume-access
@@ -262,8 +259,6 @@ spec:
             type: File
           name: selinux-config
       {{- end }}
-        - name: nodeinfo
-          emptyDir: {}
 {{- if .Values.legacyVolumeSecretName }}
         - name: legacy-volume-access
           secret:
