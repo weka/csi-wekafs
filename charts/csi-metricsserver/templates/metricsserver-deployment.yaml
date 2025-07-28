@@ -11,8 +11,6 @@ metadata:
     {{- toYaml .Values.metricsServer.labels | nindent 4 }}
     {{- end }}
 spec:
-  strategy:
-    type: Recreate
   selector:
     matchLabels:
       app: {{ .Release.Name }}-metrics-server
@@ -32,7 +30,7 @@ spec:
       annotations:
         prometheus.io/scrape: 'true'
         prometheus.io/path: '/metrics'
-        prometheus.io/port: '{{.Values.metricsServer.port | default 9096}}'
+        prometheus.io/port: '{{.Values.metrics.metricsServerPort | default 9096}}'
     {{- end }}
     spec:
       {{- if .Values.metricsServer.affinity }}
@@ -48,8 +46,8 @@ spec:
       hostNetwork: true
       {{- end }}
       containers:
-        - name: metrics-server
-          image:  "{{ .Values.image.repository }}:{{if not (empty .Values.image.tag)}}{{ .Values.image.tag }}{{else}}{{ .Chart.Version }}{{end}}"
+        - name: wekafs
+          image: "{{ .Values.image.repository }}:{{if not (empty .Values.image.tag)}}{{ .Values.image.tag }}{{else}}{{ .Chart.Version }}{{end}}"
           imagePullPolicy: Always
           command:
             - /metricsserver
@@ -61,7 +59,7 @@ spec:
             - "--tracingurl={{ .Values.tracingUrl }}"
           {{- end }}
             - "--enablemetrics"
-            - "--metricsport={{ .Values.metricsServer.port | default 9096 }}"
+            - "--metricsport={{ .Values.metrics.metricsServerPort | default 9096 }}"
           {{- if .Values.pluginConfig.allowInsecureHttps }}
             - "--allowinsecurehttps"
           {{- end }}
@@ -77,48 +75,20 @@ spec:
           {{- if .Values.metricsServer.enableLeaderElection | default false }}
             - "--enablemetricsserverleaderelection"
           {{- end }}
-          {{- if .Values.metricsServer.quotaUpdateConcurrentRequests }}
-            - "--wekametricsquotaupdateconcurrentrequests={{ .Values.metricsServer.quotaUpdateConcurrentRequests }}"
-          {{- end }}
-          {{- if .Values.metricsServer.quotaCacheValiditySeconds }}
-            - "--wekametricsquotacachevalidityseconds={{ .Values.metricsServer.quotaCacheValiditySeconds }}"
-          {{- end }}
-          {{- if .Values.metricsServer.apiClientTimeoutSeconds }}
-            - "--wekaapitimeoutseconds={{ .Values.metricsServer.apiClientTimeoutSeconds }}"
-          {{- end }}
-          {{- if .Values.metricsServer.enableBatchModeForQuotaUpdates | default false }}
-            - "--fetchquotasinbatchmode"
-          {{- end }}
           ports:
-            - containerPort: {{ .Values.metricsServer.service.port | default 9096 }}
+            {{- if .Values.metrics.enabled }}
+            - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
               name: ms-metrics
               protocol: TCP
-            - containerPort: {{ .Values.metricsServer.readinessPort | default 8081 }}
-              name: healthz
-              protocol: TCP
+            {{- end }}
           livenessProbe:
             failureThreshold: 5
             httpGet:
               path: /healthz
-              port: {{ .Values.metricsServer.readinessPort | default 8081 }}
-            periodSeconds: 10
+              port: healthz
+            initialDelaySeconds: 10
             timeoutSeconds: 3
-          {{- if .Values.metricsServer.enableLeaderElection }}
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: {{ .Values.metricsServer.readinessPort | default 8081 }}
-            failureThreshold: 5
-            periodSeconds: 10
-            timeoutSeconds: 5
-            initialDelaySeconds: 60
-          {{- end }}
-          startupProbe:
-            failureThreshold: 60
-            periodSeconds: 5
-            httpGet:
-              path: /healthz
-              port: {{ .Values.metricsServer.readinessPort | default 8081 }}
+            periodSeconds: 2
           env:
             - name: CSI_DRIVER_NAME
               value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
@@ -134,8 +104,6 @@ spec:
             - name: OTEL_DEPLOYMENT_IDENTIFIER
               value: {{ .Values.tracingDeploymentIdentifier }}
             {{- end }}
-            - name: READINESS_PORT
-              value: "{{ .Values.metricsServer.readinessPort | default 8081 }}"
       {{- with .Values.metricsServer.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

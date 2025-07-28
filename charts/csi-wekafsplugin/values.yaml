@@ -120,7 +120,7 @@ metricsServer:
   maxConcurrentRequests: 50
   # -- metrics fetch interval in seconds, default is 60 seconds.
   #    Only expired metrics will be updated, set by quotaCacheValiditySeconds
-  metricsFetchIntervalSeconds: 60
+  metricsFetchIntervalSeconds: 10
   # -- termination grace period for metrics server pods
   terminationGracePeriodSeconds: 10
   # -- enable leader election for metrics server
