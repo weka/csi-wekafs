@@ -1119,6 +1119,13 @@ func (ms *MetricsServer) PeriodicSingleMetricsFetcher(ctx context.Context) {
 			ms.prometheusMetrics.server.PeriodicFetchMetricsInvokeCount.Inc()
 			// Start the fetch in a goroutine to avoid blocking the periodic fetch
 			go func() {
+				// Create a new context with tracing and logging for every fetch cycle
+				component := "PeriodicSingleMetricsFetchCycle"
+				ctx, span := otel.Tracer(TracerName).Start(ctx, component)
+				defer span.End()
+				ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
+				logger := log.Ctx(ctx)
+
 				// Start the fetch in a goroutine to avoid blocking the periodic fetch
 				// Check if the fetch is already running to avoid concurrent fetches
 				if ms.capacityFetchRunning {
