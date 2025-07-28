@@ -71,7 +71,8 @@ func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient
 	if refCount.Load() > 0 && !m.isMounted() {
 		logger.Warn().Str("mount_point", m.getMountPoint()).Int32("refcount", refCount.Load()).Msg("Mount not exists although should!")
 	}
-	if refCount.Load() >= 0 {
+
+	if refCount.Load() == 0 {
 		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
 			return err
 		}
@@ -108,11 +109,12 @@ func (m *wekafsMount) decRef(ctx context.Context) error {
 		logger.Trace().Int32("refcount", refCount.Load()).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
 		refCount.Dec()
 	}
-	if refCount.Load() == 0 {
+	if refCount.Load() <= 0 {
 		if m.isMounted() {
 			if err := m.doUnmount(ctx); err != nil {
 				return err
 			}
+			refCount.Store(0) // Reset refCount to 0 after unmount
 		}
 	}
 	return nil
