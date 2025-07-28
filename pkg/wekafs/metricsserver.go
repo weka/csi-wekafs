@@ -1101,10 +1101,13 @@ func (ms *MetricsServer) PeriodicSingleMetricsFetcher(ctx context.Context) {
 
 	logger.Info().Str("interval", ms.getConfig().metricsFetchInterval.String()).Msg("Starting collection of WEKA metrics for PVs")
 
-	ticker := ms.config.metricsFetchInterval
-	if ticker <= 0 {
-		ticker = time.Minute // Default to 1 minute if not set
-	}
+	// every 30 seconds do the round of fetching metrics. Only the outdated metrics will be fetched, not the full list of PVs
+	// If the fetch takes longer than the metricsFetchInterval, the next fetch will be skipped and warning log will be emitted.
+	// the reason for 30 seconds is to avoid overwhelming the WEKA API with requests, especially if there are many PersistentVolumes.
+	// so instead of fetching all outdated metrics once in a minute, we evenly distribute the fetches over the minute.
+	// too short interval will cause too high CPU usage due to iterating over the metrics list.
+	// too long interval will cause the metrics to be outdated for too long and then all metrics will be fetched at once, which can cause uneven load on the WEKA API.
+	ticker := time.Second * 30
 	for {
 		select {
 		case <-ctx.Done():
