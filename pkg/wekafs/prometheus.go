@@ -66,9 +66,9 @@ type PrometheusMetrics struct {
 		FetchMetricsBatchSize                        prometheus.Gauge
 		FetchMetricsFrequencySeconds                 prometheus.Gauge // frequency of fetch metrics in seconds, taken from the configuration
 
-		FetchSinglePvMetricsOperationsInvokeCount  prometheus.Counter
-		FetchSinglePvMetricsOperationsSuccessCount prometheus.Counter
 		// fetching single metrics. refer to single metrics fetch from Weka cluster
+		FetchSinglePvMetricsOperationsInvokeCount       prometheus.Counter
+		FetchSinglePvMetricsOperationsSuccessCount      prometheus.Counter
 		FetchSinglePvMetricsOperationsFailureCount      prometheus.Counter
 		FetchSinglePvMetricsOperationsDurationSeconds   prometheus.Counter
 		FetchSinglePvMetricsOperationsDurationHistogram prometheus.Histogram
@@ -582,15 +582,6 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
-	m.server.FetchSinglePvMetricsOperationsDurationSeconds = prometheus.NewCounter(
-		prometheus.CounterOpts{
-			Namespace: MetricsNamespace,
-			Subsystem: MetricsServerSubsystem,
-			Name:      "fetch_pv_batch_operations_duration_seconds",
-			Help:      "Total duration of operations to fetch PersistentVolume objects from Kubernetes API in seconds",
-		},
-	)
-
 	m.server.FetchPvBatchOperationsDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: MetricsNamespace,
@@ -1017,6 +1008,7 @@ func (m *PrometheusMetrics) Init() {
 		m.server.FetchPvBatchOperationsDurationHistogram,
 		m.server.FetchPvBatchSize,
 		m.server.StreamPvOperationsCount,
+		m.server.StreamPvBatchSize,
 		m.server.ProcessPvOperationsCount,
 		m.server.ProcessPvOperationsDurationSeconds,
 		m.server.ProcessPvOperationsDurationHistogram,
