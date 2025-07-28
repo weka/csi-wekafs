@@ -120,14 +120,9 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 		logger.Trace().Str("output", string(output)).Msg("Locar output")
 	} else {
 		logger.Debug().Msg("Using default deletion method")
-		go func() {
-			// this is a workaround to avoid deadlocks in case of multiple volumes being deleted at the same time
-			gc.Lock()
-			gc.Unlock()
-			if err := os.RemoveAll(volumeTrashLoc); err != nil {
-				logger.Error().Err(err).Str("path", volumeTrashLoc).Msg("Failed to perform garbage collection")
-			}
-		}()
+		if err := os.RemoveAll(volumeTrashLoc); err != nil {
+			logger.Error().Err(err).Str("path", volumeTrashLoc).Msg("Failed to perform garbage collection")
+		}
 	}
 	logger.Debug().Msg("Garbage collection completed")
 	gc.Lock()

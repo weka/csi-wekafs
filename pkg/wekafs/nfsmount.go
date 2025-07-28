@@ -103,8 +103,8 @@ func (m *nfsMount) decRef(ctx context.Context) error {
 		logger.Error().Int32("refcount", refCount.Load()).Msg("During decRef negative refcount encountered, probably due to failed unmount")
 	}
 	if refCount.Load() > 0 {
-		logger.Trace().Int32("refcount", refCount.Load()).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
 		refCount.Dec()
+		logger.Trace().Int32("refcount", refCount.Load()).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
 	}
 	if refCount.Load() <= 0 {
 		if m.isMounted() {
