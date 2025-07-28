@@ -163,7 +163,7 @@ jobs:
         run: |
           helm package charts/csi-metricsserver
           FILENAME="csi-metricsserver-${{ steps.helm_metricsserver_version.outputs.helm_metricsserver_version }}.tgz"
-          mv metricsserver-0.1.0.tgz "$FILENAME"
+          mv csi-metricsserver-0.1.0.tgz "$FILENAME"
           # TODO: remove this when we have a proper versioning for metricsserver
           AWS_REGION=${{ secrets.AWS_ACCESS_SECRET_KEY }}
           S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
