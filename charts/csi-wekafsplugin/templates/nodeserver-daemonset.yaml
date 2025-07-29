@@ -129,7 +129,7 @@ spec:
           {{- end }}
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.nodePort }}
-              name: metrics
+              name: ns-metrics
               protocol: TCP
           {{- end }}
           {{- end }}

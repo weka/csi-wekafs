@@ -158,7 +158,7 @@ spec:
               protocol: TCP
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.controllerPort | default 9090 }}
-              name: metrics
+              name: cs-metrics
               protocol: TCP
           {{- end }}
           livenessProbe:
@@ -257,7 +257,7 @@ spec:
           {{- if .Values.metrics.enabled }}
           ports:
             - containerPort: {{ .Values.metrics.attacherPort | default 9095 }}
-              name: pr-metrics
+              name: at-metrics
               protocol: TCP
           {{- end }}
           {{- if .Values.controller.resources.csiAttacher }}
