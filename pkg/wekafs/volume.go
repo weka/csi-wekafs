@@ -299,14 +299,14 @@ func (v *Volume) isAllowedForDeletion(ctx context.Context) bool {
 }
 
 // getUnderlyingSnapshots intended to return list of Weka snapshots that exist for filesystem
-func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snapshot, error) {
+func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*apiclient.Snapshots, error) {
 	op := "getUnderlyingSnapshots"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("filesystem", v.FilesystemName).Logger()
 
-	snapshots := &[]apiclient.Snapshot{}
+	snapshots := &apiclient.Snapshots{}
 	if v.apiClient == nil {
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}
