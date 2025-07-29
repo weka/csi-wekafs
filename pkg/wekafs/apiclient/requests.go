@@ -196,13 +196,15 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 }
 
 // request wraps do with retries and some more error handling
-func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
-	op := "ApiClientRequest"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
-	defer span.End()
-	ctx = log.With().Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
+func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v ApiObjectResponse) apiError {
+	//op := "ApiClientRequest"
+	//ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	//defer span.End()
+	//ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	f := func() apiError {
+
+		// perform the request here
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
 		if a.handleTransientErrors(ctx, reqErr) != nil { // transient network errors
 			a.rotateEndpoint(ctx)
@@ -231,6 +233,16 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 		}
 		switch s {
 		case http.StatusOK:
+			if rawResponse.NextToken != "" {
+				_, ok := v.(ApiObjectResponse)
+				if ok {
+					if v.SupportsPagination() {
+						if rawResponse.NextToken != "" {
+							return ApiResponseNextPage{NextPageToken: rawResponse.NextToken}
+						}
+					}
+				}
+			}
 			return nil
 		case http.StatusUnauthorized:
 			logger.Warn().Msg("Got Authorization failure on request, trying to re-login")
@@ -251,34 +263,78 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 }
 
 // Request makes sure that client is logged in and has a non-expired token
-func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
+func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, Response ApiObjectResponse) error {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "ApiClientRequest")
+	defer span.End()
+	logger := log.Ctx(ctx)
+
 	if err := a.Init(ctx); err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("Failed to re-authenticate on repeating request")
+		logger.Error().Err(err).Msg("Failed to re-authenticate on repeating request")
 		return err
 	}
-	err := a.request(ctx, Method, Path, Payload, Query, Response)
-	if err != nil {
-		return err
+	if a.RotateEndpointOnEachRequest {
+		a.rotateEndpoint(ctx)
+	}
+
+	rt := reflect.TypeOf(Response)
+	newObj := reflect.New(rt.Elem()).Interface().(ApiObjectResponse)
+
+	nextPageNeeded := true
+	pagesFetched := 0
+	for nextPageNeeded {
+		pagesFetched++
+		err := a.request(ctx, Method, Path, Payload, Query, Response)
+		if err != nil {
+			switch e := err.(type) {
+			case ApiResponseNextPage:
+				if Response.SupportsPagination() {
+					err2 := newObj.CombinePartialResponse(Response)
+					if err2 != nil {
+						log.Ctx(ctx).Error().Err(err2).Msg("Failed to combine partial response")
+						return err2
+					}
+					Response = newObj
+				} else {
+					break
+				}
+
+				if e.NextPageToken != "" {
+					Query.Set("next_token", e.NextPageToken)
+					nextPageNeeded = true
+
+				} else {
+					nextPageNeeded = false
+				}
+			default:
+				return err
+			}
+		} else {
+			nextPageNeeded = false
+		}
+		if pagesFetched > 1 {
+			logger.Trace().Int("pages_fetched", pagesFetched).Msg("Fetched more than one page response")
+		}
+
 	}
 	return nil
 }
 
 // Get is shortcut for Request("GET" ...)
-func (a *ApiClient) Get(ctx context.Context, Path string, Query url.Values, Response interface{}) error {
+func (a *ApiClient) Get(ctx context.Context, Path string, Query url.Values, Response ApiObjectResponse) error {
 	return a.Request(ctx, "GET", Path, nil, Query, Response)
 }
 
 // Post is shortcut for Request("POST" ...)
-func (a *ApiClient) Post(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
+func (a *ApiClient) Post(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response ApiObjectResponse) error {
 	return a.Request(ctx, "POST", Path, Payload, Query, Response)
 }
 
 // Put is shortcut for Request("PUT" ...)
-func (a *ApiClient) Put(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
+func (a *ApiClient) Put(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response ApiObjectResponse) error {
 	return a.Request(ctx, "PUT", Path, Payload, Query, Response)
 }
 
 // Delete is shortcut for Request("DELETE" ...)
-func (a *ApiClient) Delete(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
+func (a *ApiClient) Delete(ctx context.Context, Path string, Payload *[]byte, Query url.Values, Response ApiObjectResponse) error {
 	return a.Request(ctx, "DELETE", Path, Payload, Query, Response)
 }

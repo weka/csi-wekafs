@@ -38,6 +38,14 @@ type Quota struct {
 	Status         string    `json:"status,omitempty"`
 }
 
+func (q *Quota) SupportsPagination() bool {
+	return false
+}
+
+func (q *Quota) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("implement me")
+}
+
 func (q *Quota) String() string {
 	return fmt.Sprintln("Quota(fsUid:", q.FilesystemUid, "inodeId:", q.InodeId, "type:", q.GetQuotaType(), "capacity:", q.GetCapacityLimit(), "status:", q.Status, ")")
 }
@@ -86,6 +94,20 @@ func (q *Quota) GetCapacityLimit() uint64 {
 		return q.HardLimitBytes
 	}
 	return q.SoftLimitBytes
+}
+
+type Quotas []*Quota
+
+func (q Quotas) SupportsPagination() bool {
+	return true
+}
+func (q Quotas) CombinePartialResponse(next ApiObjectResponse) error {
+	// this is a list, so we just append the data
+	if partialList, ok := next.(*Quotas); ok {
+		q = append(q, *partialList...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response")
 }
 
 type QuotaCreateRequest struct {
@@ -267,11 +289,11 @@ func (a *ApiClient) WaitForQuotaActive(ctx context.Context, q *Quota) error {
 	return nil
 }
 
-func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultSet *[]Quota) error {
+func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultSet *Quotas) error {
 	if query.FilesystemUid == uuid.Nil {
 		return RequestMissingParams
 	}
-	ret := &[]Quota{}
+	ret := &Quotas{}
 	err := a.Get(ctx, query.GetBasePath(a), nil, ret)
 	if err != nil {
 		return err
@@ -324,7 +346,7 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 }
 
 func (a *ApiClient) GetQuotaByFilter(ctx context.Context, query *Quota) (*Quota, error) {
-	rs := &[]Quota{}
+	rs := &Quotas{}
 	err := a.FindQuotaByFilter(ctx, query, rs)
 	if err != nil {
 		return nil, err
