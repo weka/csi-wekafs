@@ -129,6 +129,9 @@ spec:
           {{- if .Values.pluginConfig.encryption.allowEncryptionWithoutKms}}
             - "--allowencryptionwithoutkms"
           {{- end}}
+          {{- if .Values.pluginConfig.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.pluginConfig.apiTimeoutSeconds }}"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
