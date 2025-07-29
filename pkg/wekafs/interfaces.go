@@ -48,3 +48,10 @@ type AnyMount interface {
 type VolumeBackingType string
 type VolumeType string
 type CsiPluginMode string
+
+type DataTransport string
+type UnmountFunc func()
+
+type wekafsMountsMap map[string]*atomic.Int32
+
+type nfsMountsMap map[string]*atomic.Int32
