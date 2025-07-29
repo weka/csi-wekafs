@@ -44,6 +44,7 @@ type DriverConfig struct {
 	driverRef                        *WekaFsDriver
 	tracingUrl                       string
 	manageNodeTopologyLabels         bool
+	wekaApiTimeout                    time.Duration // Timeout for Weka API requests
 }
 
 func (dc *DriverConfig) Log() {
@@ -70,6 +71,8 @@ func (dc *DriverConfig) Log() {
 		Bool("allow_async_object_deletion", dc.allowAsyncObjectDeletion).
 		Str("tracing_url", dc.tracingUrl).
 		Bool("manage_node_topology_labels", dc.manageNodeTopologyLabels).
+		Dur("weka_api_timeout", dc.wekaApiTimeout).
+		Str("nfs_protocol_version", dc.nfsProtocolVersion).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -87,6 +90,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowEncryptionWithoutKms bool,
 	tracingUrl string,
 	manageNodeTopologyLabels bool,
+	wekaApiTimeout time.Duration,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -136,6 +140,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowEncryptionWithoutKms:        allowEncryptionWithoutKms,
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
+		wekaApiTimeout:                    wekaApiTimeout,
 	}
 }
 
