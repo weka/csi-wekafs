@@ -23,12 +23,6 @@ import (
 	"time"
 )
 
-const (
-	SnapshotTypeUnifiedSnap = "wekasnap/v2"
-	ProcModulesPath         = "/proc/modules"
-	ProcWekafsInterface     = "/proc/wekafs/interface"
-)
-
 var ProcMountsPath = "/proc/mounts"
 
 func generateInnerPathForDirBasedVol(dynamicVolPath, csiVolName string) string {
