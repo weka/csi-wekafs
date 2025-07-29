@@ -21,6 +21,15 @@ type ApiStore struct {
 	locks    sync.Map // map[uint32]*sync.Mutex
 }
 
+func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
+	s := &ApiStore{
+		apis:     make(map[uint32]*apiclient.ApiClient),
+		config:   config,
+		Hostname: hostname,
+	}
+	return s
+}
+
 // getByHash returns pointer to existing API if found by hash, or nil
 func (api *ApiStore) getByHash(key uint32) *apiclient.ApiClient {
 	api.RLock()
@@ -32,6 +41,8 @@ func (api *ApiStore) getByHash(key uint32) *apiclient.ApiClient {
 }
 
 func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, error) {
+	api.RLock()
+	defer api.RUnlock()
 	for _, val := range api.apis {
 		if val.ClusterGuid == guid {
 			return val, nil
@@ -188,15 +199,6 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 	}
 	logger.Trace().Msg("Successfully initialized API backend for request")
 	return client, nil
-}
-
-func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
-	s := &ApiStore{
-		apis:     make(map[uint32]*apiclient.ApiClient),
-		config:   config,
-		Hostname: hostname,
-	}
-	return s
 }
 
 func (api *ApiStore) getLockForHash(hash uint32) *sync.Mutex {
