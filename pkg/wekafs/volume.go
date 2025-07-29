@@ -56,6 +56,8 @@ type Volume struct {
 
 	fileSystemObject *apiclient.FileSystem
 	snapshotObject   *apiclient.Snapshot
+
+	inodeId uint64 // cached for better performance, used in metricsserver flow
 }
 
 func (v *Volume) hasCustomEncryptionSettings() bool {
@@ -733,8 +735,18 @@ func (v *Volume) getInodeId(ctx context.Context) (inode uint64, retErr error) {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
+	if v.inodeId != 0 {
+		logger.Trace().Uint64("inode_id", v.inodeId).Msg("Using cached inode ID")
+		return v.inodeId, nil
+	}
+
 	if v.apiClient.SupportsResolvePathToInode() {
-		return v.getInodeIdFromApi(ctx)
+		inodeId, err := v.getInodeIdFromApi(ctx)
+		if err != nil {
+			return inodeId, err
+		}
+		v.inodeId = inodeId
+		return v.inodeId, nil
 	}
 	err, unmount := v.MountUnderlyingFS(ctx)
 	defer deferUmount(unmount, &retErr)
@@ -755,7 +767,9 @@ func (v *Volume) getInodeId(ctx context.Context) (inode uint64, retErr error) {
 		return 0, errors.New(fmt.Sprintf("failed to obtain inodeId from %s", v.mountPath))
 	}
 	logger.Debug().Uint64("inode_id", stat.Ino).Msg("Succesfully fetched root inode ID")
-	return stat.Ino, nil
+	v.inodeId = stat.Ino
+
+	return v.inodeId, nil
 }
 
 func (v *Volume) getInodeIdFromApi(ctx context.Context) (uint64, error) {
@@ -1519,6 +1533,11 @@ func (v *Volume) Delete(ctx context.Context) error {
 		logger.Error().Err(err).Msg("Failed to delete volume")
 		return err
 	}
+	// invalidate caches:
+	v.inodeId = 0
+	v.fileSystemObject = nil
+	v.snapshotObject = nil
+
 	logger.Debug().Msg("Deletion of volume completed successfully")
 	return nil
 }
