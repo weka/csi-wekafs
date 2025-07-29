@@ -53,10 +53,10 @@ func (a *ApiClient) Login(ctx context.Context) error {
 	logger.Debug().Msg("Successfully connected to cluster API")
 
 	if a.Credentials.AutoUpdateEndpoints {
-		if err := a.UpdateApiEndpoints(ctx); err != nil {
+		if err := a.UpdateApiEndpointsFromCluster(ctx); err != nil {
 			logger.Error().Err(err).Msg("Failed to update actual API endpoints")
 		} else {
-			logger.Debug().Strs("new_api_endpoints", maps.Keys(a.actualApiEndpoints)).Str("current_endpoint", a.getEndpoint(ctx).String()).Msg("Updated API endpoints")
+			logger.Debug().Strs("new_api_endpoints", maps.Keys(a.apiEndpoints.GetEndpoints())).Str("current_endpoint", a.getEndpoint(ctx).String()).Msg("Updated API endpoints")
 		}
 	} else {
 		logger.Debug().Str("current_endpoint", a.getEndpoint(ctx).String()).Msg("Auto update of API endpoints is disabled")
