@@ -30,10 +30,6 @@ import (
 	"syscall"
 )
 
-const MountBasePath = "/run/weka-fs-mounts/"
-
-var DefaultVolumePermissions fs.FileMode = 0750
-
 type WekaFsDriver struct {
 	name              string
 	nodeID            string
@@ -54,11 +50,6 @@ type WekaFsDriver struct {
 }
 
 type VolumeType string
-
-var (
-	vendorVersion           = "dev"
-	ClusterApiNotFoundError = errors.New("could not get API client by cluster guid")
-)
 
 // Die used to intentionally panic and exit, while updating termination log
 func Die(exitMsg string) {
@@ -273,19 +264,6 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 }
 
 type CsiPluginMode string
-
-const (
-	VolumeTypeDirV1   VolumeType = "dir/v1"  // if specified in storage class, create directory-backed volumes. FS name must be set in SC as well
-	VolumeTypeUnified VolumeType = "weka/v2" // no need to specify this in storageClass
-	VolumeTypeUNKNOWN VolumeType = "AMBIGUOUS_VOLUME_TYPE"
-	VolumeTypeEmpty   VolumeType = ""
-
-	CsiModeNode       CsiPluginMode = "node"
-	CsiModeController CsiPluginMode = "controller"
-	CsiModeAll        CsiPluginMode = "all"
-)
-
-var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeUnified}
 
 func GetCsiPluginMode(mode *string) CsiPluginMode {
 	ret := CsiPluginMode(*mode)
