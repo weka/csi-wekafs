@@ -32,10 +32,11 @@ const (
 type Quota struct {
 	FilesystemUid  uuid.UUID `json:"-"`
 	InodeId        uint64    `json:"inode_id,omitempty"`
-	TotalBytes     uint64    `json:"total_bytes,omitempty"`
+	UsedBytes      uint64    `json:"used_bytes,omitempty"`
 	HardLimitBytes uint64    `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64    `json:"soft_limit_bytes,omitempty"`
 	Status         string    `json:"status,omitempty"`
+	LastUpdateTime time.Time `json:"-"`
 }
 
 func (q *Quota) SupportsPagination() bool {
@@ -342,6 +343,7 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 	}
 	ret.FilesystemUid = fs.Uid
 	ret.InodeId = inodeId
+	ret.LastUpdateTime = time.Now()
 	return ret, nil
 }
 
@@ -358,7 +360,7 @@ func (a *ApiClient) GetQuotaByFilter(ctx context.Context, query *Quota) (*Quota,
 		return nil, MultipleObjectsFoundError
 	}
 	result := &(*rs)[0]
-	return result, nil
+	return *result, nil
 }
 
 func (a *ApiClient) IsQuotaActive(ctx context.Context, query *Quota) (done bool, err error) {
