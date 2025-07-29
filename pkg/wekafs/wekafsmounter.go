@@ -42,17 +42,6 @@ func (m *wekafsMounter) Disable() {
 	m.enabled = false
 }
 
-func mountBaseDirForRole(mode CsiPluginMode) string {
-	switch mode {
-	case CsiModeNode:
-		return "/run/weka-fs-mounts-node"
-	case CsiModeController:
-		return "/run/weka-fs-mounts-controller"
-	default:
-		return "/run/weka-fs-mounts"
-	}
-}
-
 func (m *wekafsMounter) getGarbageCollector() *innerPathVolGc {
 	return m.gc
 }
@@ -64,11 +53,11 @@ func newWekafsMounter(ctx context.Context, driver *WekaFsDriver) *wekafsMounter 
 		selinuxSupport = &[]bool{true}[0]
 	}
 	mounter := &wekafsMounter{
-		mountMap: wekafsMountsMap{},
+		mountMap:       wekafsMountsMap{},
 		selinuxSupport: selinuxSupport,
-		config: driver.config,
-		mountBaseDir: mountBaseDirForRole(driver.csiMode),
-		enabled: true,
+		config:         driver.config,
+		mountBaseDir:   mountBaseDirForRole(driver.csiMode),
+		enabled:        true,
 	}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
@@ -150,11 +139,12 @@ func (m *wekafsMounter) LogActiveMounts(ctx context.Context) {
 		for refIndex := range m.mountMap {
 			if mapEntry, ok := m.mountMap[refIndex]; ok {
 				parts := strings.Split(refIndex, "^")
+				c := mapEntry.Load()
 				mountPoint := parts[0]
 				actuallyMounted := PathIsWekaMount(ctx, mountPoint)
-				logger := log.With().Str("mount_point", mountPoint).Str("mount_options", parts[1]).Int("refcount", mapEntry).Bool("in_proc_mounts", actuallyMounted).Logger()
+				logger := log.With().Str("mount_point", mountPoint).Str("mount_options", parts[1]).Int32("refcount", mapEntry.Load()).Bool("in_proc_mounts", actuallyMounted).Logger()
 
-				if mapEntry > 0 {
+				if c > 0 {
 					active++
 					if !actuallyMounted {
 						logger.Warn().Msg("Mount has positive refcount but is not in /proc/mounts")
@@ -180,7 +170,7 @@ func (m *wekafsMounter) gcInactiveMounts(ctx context.Context) {
 	if len(m.mountMap) > 0 {
 		for refIndex := range m.mountMap {
 			if mapEntry, ok := m.mountMap[refIndex]; ok {
-				if mapEntry == 0 {
+				if mapEntry.Load() == 0 {
 					parts := strings.Split(refIndex, "^")
 					mountPoint := parts[0]
 					logger := log.With().Str("mount_point", mountPoint).Str("mount_options", parts[1]).Logger()

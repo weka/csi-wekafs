@@ -3,13 +3,14 @@ package wekafs
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"k8s.io/mount-utils"
 	"path"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"k8s.io/mount-utils"
 )
 
 type nfsMounter struct {
@@ -54,11 +55,11 @@ func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 		selinuxSupport = &[]bool{true}[0]
 	}
 	mounter := &nfsMounter{
-		mountMap: make(nfsMountsMap),
-		selinuxSupport: selinuxSupport,
+		mountMap:              make(nfsMountsMap),
+		selinuxSupport:        selinuxSupport,
 		exclusiveMountOptions: driver.config.mutuallyExclusiveOptions,
-		mountBaseDir: mountBaseDirForRole(driver.csiMode),
-		enabled: false,
+		mountBaseDir:          mountBaseDirForRole(driver.csiMode),
+		enabled:               false,
 	}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
@@ -147,9 +148,9 @@ func (m *nfsMounter) LogActiveMounts(ctx context.Context) {
 		for refIndex := range m.mountMap {
 			if mapEntry, ok := m.mountMap[refIndex]; ok {
 				parts := strings.Split(refIndex, "^")
-				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int("refcount", mapEntry).Logger()
+				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int32("refcount", mapEntry.Load()).Logger()
 
-				if mapEntry > 0 {
+				if mapEntry.Load() > 0 {
 					logger.Trace().Msg("Mount is active")
 					count++
 				} else {
@@ -168,7 +169,7 @@ func (m *nfsMounter) gcInactiveMounts(ctx context.Context) {
 	if len(m.mountMap) > 0 {
 		for refIndex := range m.mountMap {
 			if mapEntry, ok := m.mountMap[refIndex]; ok {
-				if mapEntry == 0 {
+				if mapEntry.Load() == 0 {
 					parts := strings.Split(refIndex, "^")
 					logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Logger()
 					logger.Trace().Msg("Removing inactive mount from map")

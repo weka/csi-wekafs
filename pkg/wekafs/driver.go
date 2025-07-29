@@ -300,7 +300,7 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		if d.config.useNfs {
 			return "nfs"
 		}
-		wekaRunning := isWekaRunning()
+		wekaRunning := isWekaRunning(ctx)
 		if d.config.allowNfsFailback && !wekaRunning {
 			return "nfs"
 		}
@@ -463,7 +463,7 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 			_ = conn.Close()
 
 			if !d.config.useNfs && !d.config.allowNfsFailback {
-				if !isWekaRunning() {
+				if !isWekaRunning(ctx) {
 					return fmt.Errorf("weka client not running on leader node")
 				}
 			}
