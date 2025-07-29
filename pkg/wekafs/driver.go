@@ -105,13 +105,6 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		driver.ns = &NodeServer{}
 	}
 
-	if driver.csiMode == CsiModeMetricsServer || driver.csiMode == CsiModeAll {
-		log.Info().Msg("Loading MetricsServer")
-		driver.Ms = NewMetricsServer(driver)
-	} else {
-		driver.Ms = nil
-	}
-
 	s := NewNonBlockingGRPCServer(driver.csiMode)
 
 	termContext, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
@@ -129,7 +122,6 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 			driver.CleanupNodeLabels(ctx)
 			log.Info().Msg("Cleanup of node labels completed")
 		}
-		driver.Ms.Stop(ctx)
 		s.Stop()
 		log.Info().Msg("Server stopped")
 		os.Exit(1)
@@ -139,10 +131,6 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	if s.csiMode != CsiModeMetricsServer {
 		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 		s.Wait()
-	}
-	if s.csiMode == CsiModeMetricsServer {
-		driver.Ms.Start(ctx)
-		driver.Ms.Wait()
 	}
 }
 
