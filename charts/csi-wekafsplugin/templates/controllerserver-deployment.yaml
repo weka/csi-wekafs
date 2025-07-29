@@ -146,6 +146,9 @@ spec:
           {{- if .Values.pluginConfig.encryption.allowEncryptionWithoutKms}}
             - "--allowencryptionwithoutkms"
           {{- end}}
+          {{- if .Values.pluginConfig.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.pluginConfig.apiTimeoutSeconds }}"
+          {{- end }}
           {{- if .Values.pluginConfig.setOwnershipOnDynamicFilesystems }}
             - "--setownershipondynamicfilesystems"
           {{- end }}

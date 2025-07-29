@@ -21,6 +21,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
@@ -636,4 +638,52 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
 		return ""
 	}
+}
+
+// getOwnNamespace returns the namespace the pod is running in
+func getOwnNamespace() (string, error) {
+	// First try environment variable
+	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
+		return ns, nil
+	}
+
+	// Try to read from service account
+	nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return "", fmt.Errorf("failed to detect namespace: %w", err)
+	}
+	return string(nsBytes), nil
+}
+
+// stripUnnecessaryPVFields creates a minimal PV with only fields needed for capacity validation
+func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
+	pv, ok := obj.(*v1.PersistentVolume)
+	if !ok {
+		return obj, nil
+	}
+
+	// Build minimal PV object
+	minimal := &v1.PersistentVolume{
+		TypeMeta: pv.TypeMeta,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            pv.ObjectMeta.Name,
+			UID:             pv.ObjectMeta.UID,
+			ResourceVersion: pv.ObjectMeta.ResourceVersion,
+		},
+		Spec: v1.PersistentVolumeSpec{
+			Capacity: pv.Spec.Capacity, // Need for capacity validation
+		},
+		Status: v1.PersistentVolumeStatus{
+			Phase: pv.Status.Phase, // Need to check if Bound or Released
+		},
+	}
+
+	if pv.Spec.CSI != nil {
+		minimal.Spec.PersistentVolumeSource.CSI = &v1.CSIPersistentVolumeSource{
+			Driver:       pv.Spec.CSI.Driver,       // Need to filter by driver
+			VolumeHandle: pv.Spec.CSI.VolumeHandle, // Need to extract filesystem path
+		}
+	}
+
+	return minimal, nil
 }

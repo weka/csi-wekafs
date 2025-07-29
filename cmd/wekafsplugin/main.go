@@ -100,6 +100,7 @@ var (
 	allowAsyncObjectDeletion             = flag.Bool("allowasyncobjectdeletion", false, "Allow deletion of volumes in asynchronous manner. Improves speed of multiple volume deletions but might leave some objects in Weka cluster. Use with caution.")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
+	wekaApiTimeoutSeconds                = flag.Int("wekaapitimeoutseconds", 60, "Timeout for Weka API requests in seconds")
 	enforceDirVolTotalCapacity           = flag.Bool("enforcedirvoltotalcapacity", false, "Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)")
 	setOwnershipOnDynamicFilesystems     = flag.Bool("setownershipondynamicfilesystems", false, "Set ownership on Dynamic Filesystems (only OrgAdmin/CSI user that created the filesystem will be able to mount it")
 	// Set by the build process
@@ -242,6 +243,7 @@ func handle(ctx context.Context) {
 		*allowEncryptionWithoutKms,
 		*tracingUrl,
 		*manageNodeTopologyLabels,
+		time.Duration(*wekaApiTimeoutSeconds)*time.Second,
 		*wekafsContainerName,
 		*enforceDirVolTotalCapacity,
 		*setOwnershipOnDynamicFilesystems,

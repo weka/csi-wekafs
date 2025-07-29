@@ -1595,8 +1595,8 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		return deleteFunc(fsObj)
 	}
 
+	v.server.getBackgroundTasksWg().Add(1)
 	go func() {
-		v.server.getBackgroundTasksWg().Add(1)
 		_ = deleteFunc(fsObj)
 		v.server.getBackgroundTasksWg().Done()
 	}()
@@ -1671,11 +1671,11 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 	if !v.server.getConfig().allowAsyncObjectDeletion {
 		return v.waitForSnapshotDeletion(ctx, logger, snapUid)
 	}
+	v.server.getBackgroundTasksWg().Add(1)
 	go func() {
-		v.server.getBackgroundTasksWg().Add(1)
 		_ = v.waitForSnapshotDeletion(ctx, logger, snapUid)
+		v.server.getBackgroundTasksWg().Done()
 	}()
-	v.server.getBackgroundTasksWg().Done()
 	return nil
 }
 

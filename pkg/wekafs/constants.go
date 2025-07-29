@@ -64,7 +64,7 @@ const (
 	ProcModulesPath             = "/proc/modules"
 	ProcWekafsInterface         = "/proc/wekafs/interface"
 	SnapshotsSubDirectory       = ".snapshots"
-	MaxHashLengthForObjectNames = 12            // Max length of hash for object names due to limitations of WEKA filesystem /snapshot names
+	MaxHashLengthForObjectNames = 12 // Max length of hash for object names due to limitations of WEKA filesystem /snapshot names
 
 	// Volume Backing types
 	VolumeBackingTypeDirectory  VolumeBackingType = "DIRECTORY"
@@ -72,7 +72,7 @@ const (
 	VolumeBackingTypeSnapshot   VolumeBackingType = "SNAPSHOT"
 	VolumeBackingTypeHybrid     VolumeBackingType = "HYBRID"
 
-	// Volume Types (inside volumeHandle / volumeId)
+	// Volume types (inside volumeHandle / volumeId)
 	VolumeTypeDirV1         VolumeType = "dir/v1"  // if specified in storage class, create directory-backed volumes. FS name must be set in SC as well
 	VolumeTypeUnified       VolumeType = "weka/v2" // no need to specify this in storageClass
 	VolumeTypeUNKNOWN       VolumeType = "AMBIGUOUS_VOLUME_TYPE"
@@ -96,6 +96,20 @@ const (
 
 	// Garbage Collection
 	inactiveMountGcPeriod = time.Minute * 10
+
+	// Leader Election
+
+	// LeaderStateDir is the directory where leader state files are stored
+	LeaderStateDir = "/leader-state"
+	// LeaderReadyFile signals to sidecars that this pod is the leader
+	LeaderReadyFile = "/leader-state/leader_ready"
+	// HealthProbePort is the port for the health probe endpoint
+	HealthProbePort = "8081"
+
+	// Capacity Tracker
+	capacityRefreshInterval = 5 * time.Second  // How often to refresh from K8s
+	pendingReservationTTL   = 30 * time.Minute // Threshold to warn about stale pending reservations
+
 )
 
 var (

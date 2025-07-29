@@ -38,11 +38,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-const (
-	capacityRefreshInterval = 5 * time.Second  // How often to refresh from K8s
-	pendingReservationTTL   = 30 * time.Minute // Threshold to warn about stale pending reservations
-)
-
 // CapacityReservation tracks a volume create request that passed validation
 // but hasn't been confirmed in Kubernetes yet
 type CapacityReservation struct {
@@ -162,7 +157,7 @@ func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
 		config:          driver.config,
 		semaphores:      make(map[string]*SemaphoreWrapper),
 		backgroundTasks: new(sync.WaitGroup),
-		metrics:    NewControllerServerMetrics(),
+		metrics:         NewControllerServerMetrics(),
 		manager:         driver.manager,
 	}
 
@@ -758,14 +753,6 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	// obtain capacity and backing for metrics
 	backingType = volume.GetBackingType()
-
-	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx, op)
-	defer dec()
-	defer cancel()
-	if err != nil {
-		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
-	}
 
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
