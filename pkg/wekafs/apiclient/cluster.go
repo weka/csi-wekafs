@@ -98,6 +98,14 @@ type LoginResponse struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
+func (lr *LoginResponse) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
+func (lr *LoginResponse) SupportsPagination() bool {
+	return false
+}
+
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token,omitempty"`
 }
@@ -109,10 +117,27 @@ type RefreshResponse struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+func (rr *RefreshResponse) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
+func (rr *RefreshResponse) SupportsPagination() bool {
+	return false
+}
+
 type TokenExpiryResponse struct {
 	AccessTokenExpiry  int64 `json:"access_token_expiry"`
 	RefreshTokenExpiry int64 `json:"refresh_token_expiry"`
 }
+
+func (ter *TokenExpiryResponse) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
+func (ter *TokenExpiryResponse) SupportsPagination() bool {
+	return false
+}
+
 type Capacity struct {
 	TotalBytes         uint64 `json:"total_bytes"`
 	HotSpareBytes      uint64 `json:"hot_spare_bytes"`
@@ -128,6 +153,14 @@ type ClusterInfoResponse struct {
 	Capacity    Capacity  `json:"capacity,omitempty"`
 }
 
+func (cir *ClusterInfoResponse) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
+func (cir *ClusterInfoResponse) SupportsPagination() bool {
+	return false
+}
+
 type WhoamiResponse struct {
 	OrgId    int         `json:"org_id,omitempty"`
 	Username string      `json:"username,omitempty"`
@@ -135,6 +168,14 @@ type WhoamiResponse struct {
 	Uid      uuid.UUID   `json:"uid,omitempty"`
 	Role     ApiUserRole `json:"role,omitempty"`
 	OrgName  string      `json:"org_name,omitempty"`
+}
+
+func (war *WhoamiResponse) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
+func (war *WhoamiResponse) SupportsPagination() bool {
+	return false
 }
 
 type Container struct {
@@ -200,6 +241,18 @@ type Container struct {
 }
 
 type ContainersResponse []Container
+
+func (c *ContainersResponse) SupportsPagination() bool {
+	return true
+}
+
+func (c *ContainersResponse) CombinePartialResponse(next ApiObjectResponse) error {
+	if nextContainers, ok := next.(*ContainersResponse); ok {
+		*c = append(*c, *nextContainers...)
+		return nil
+	}
+	return fmt.Errorf("cannot combine response of type %T with ContainersResponse", next)
+}
 
 func (a *ApiClient) getContainers(ctx context.Context) (*ContainersResponse, error) {
 	a.containersLock.RLock()

@@ -21,6 +21,14 @@ type Kms struct {
 	Params  KmsParams `json:"params"`
 }
 
+func (k *Kms) SupportsPagination() bool {
+	return false
+}
+
+func (k *Kms) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
 type KmsParams struct {
 	MasterKeyName string        `json:"master_key_name"`
 	BaseUrl       string        `json:"base_url"`
