@@ -17,6 +17,7 @@ import (
 
 // do Makes a basic API call to the client, returns an *ApiResponse that includes raw data, error message etc.
 func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values) (*ApiResponse, apiError) {
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 	//construct URL path
 	if len(a.Credentials.Endpoints) < 1 {
 		return &ApiResponse{}, &ApiNoEndpointsError{
@@ -24,7 +25,15 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 	}
 	u := a.getUrl(ctx, Path)
-
+	status := "ERROR"
+	defer func() {
+		path := generalizeUrlPathForMetrics(Path)
+		guid := a.ClusterGuid.String()
+		ip := a.getEndpoint(ctx).IpAddress
+		dn := a.driverName
+		a.metrics.requestCounters.WithLabelValues(dn, guid, ip, Method, path, status).Inc()
+		a.metrics.requestDurations.WithLabelValues(dn, guid, ip, Method, path, status).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+	}()
 	//construct base request and add auth if exists
 	var body *bytes.Reader
 	if Payload != nil {
@@ -58,34 +67,25 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	}
 	logger := log.Ctx(ctx)
 
-	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
+	logger.Trace().Str("method", Method).Str("url", a.getEndpoint(ctx).String()+r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
 
 	//perform the request and update endpoint with stats
-	endpoint := a.getEndpoint(ctx)
-	endpoint.requestCount++
-	start := time.Now()
 	response, err := a.client.Do(r)
 
 	if err != nil {
-		endpoint.transportErrCount++
+		status = "transport_error"
 		return nil, &transportError{err}
 	}
 
 	if response == nil {
-		endpoint.noRespCount++
+		status = "no_response_from_server"
 		return nil, &transportError{errors.New("received no response")}
 	}
 
-	// update endpoint stats for success and total duration
-	endpoint.requestDurationTotal += time.Since(start)
-	if response.StatusCode != http.StatusOK {
-		endpoint.failCount++
-	}
-
 	responseBody, err := io.ReadAll(response.Body)
-	logger.Trace().Str("response", maskPayload(string(responseBody))).Msg("")
+	logger.Trace().Str("response", maskPayload(string(responseBody))).Str("duration", time.Since(ctx.Value("startTime").(time.Time)).String()).Msg("")
 	if err != nil {
-		endpoint.parseErrCount++
+		status = "response_parse_error"
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
@@ -101,7 +101,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	Response := &ApiResponse{}
 	err = json.Unmarshal(responseBody, Response)
-	endpoint.parseErrCount++
+	status = "response_parse_error"
 	Response.HttpStatusCode = response.StatusCode
 	if err != nil {
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
@@ -113,18 +113,20 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	}
-
+	status = fmt.Sprintf("http_%d", response.StatusCode)
 	switch response.StatusCode {
 	case http.StatusOK: //200
 		return Response, nil
 	case http.StatusCreated: //201
+		status = "success"
 		return Response, nil
 	case http.StatusAccepted: //202
+		status = "success"
 		return Response, nil
 	case http.StatusNoContent: //203
+		status = "success"
 		return Response, nil
 	case http.StatusBadRequest: //400
-		endpoint.http400ErrCount++
 		return Response, &ApiBadRequestError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -133,7 +135,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusUnauthorized: //401
-		endpoint.http401ErrCount++
 		return Response, &ApiAuthorizationError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -142,7 +143,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusNotFound: //404
-		endpoint.http404ErrCount++
 		return Response, &ApiNotFoundError{
 			Err:         nil,
 			Text:        "Object not found",
@@ -151,7 +151,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusConflict: //409
-		endpoint.http409ErrCount++
 		return Response, &ApiConflictError{
 			ApiError: ApiError{
 				Err:         nil,
@@ -164,7 +163,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	case http.StatusInternalServerError: //500
-		endpoint.http500ErrCount++
 		return Response, &ApiInternalError{
 			Err:         nil,
 			Text:        Response.Message,
@@ -174,7 +172,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	case http.StatusServiceUnavailable: //503
-		endpoint.http503ErrCount++
 		return Response, &ApiNotAvailableError{
 			Err:         nil,
 			Text:        Response.Message,
@@ -184,7 +181,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	default:
-		endpoint.generalErrCount++
+		status = "general_api_error"
 		return Response, &ApiError{
 			Err:         err,
 			Text:        "General failure during API command",
