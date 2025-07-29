@@ -233,3 +233,16 @@ func maskPayload(payload string) string {
 	ret, _ := json.Marshal(masked)
 	return string(ret)
 }
+
+func generalizeUrlPathForMetrics(urlPath string) string {
+	// Replace any numeric IDs in the URL path with a placeholder
+	re := regexp.MustCompile(`[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`)
+	// Replace GUIDs with a placeholder
+	path := re.ReplaceAllString(urlPath, "{guid}")
+	re = regexp.MustCompile(`\b\d+\b`)
+	path = re.ReplaceAllString(path, "{id}")
+	if strings.HasSuffix(path, "/") {
+		return path[:len(path)-1]
+	}
+	return path
+}
