@@ -82,7 +82,7 @@ func (fs *FileSystem) GetFsIdAsInt() int {
 
 type FileSystems []FileSystem
 
-func (f FileSystems) SupportsPagination() bool {
+func (f *FileSystems) SupportsPagination() bool {
 	return true
 }
 
@@ -99,11 +99,11 @@ type FileSystemMountToken struct {
 	FilesystemName string `json:"filesystem_name,omitempty"`
 }
 
-func (f FileSystemMountToken) SupportsPagination() bool {
+func (f *FileSystemMountToken) SupportsPagination() bool {
 	return false
 }
 
-func (f FileSystemMountToken) CombinePartialResponse(next ApiObjectResponse) error {
+func (f *FileSystemMountToken) CombinePartialResponse(next ApiObjectResponse) error {
 	panic("implement me")
 }
 

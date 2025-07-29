@@ -240,13 +240,13 @@ type Container struct {
 
 type ContainersResponse []Container
 
-func (c ContainersResponse) SupportsPagination() bool {
+func (c *ContainersResponse) SupportsPagination() bool {
 	return true
 }
 
-func (c ContainersResponse) CombinePartialResponse(next ApiObjectResponse) error {
+func (c *ContainersResponse) CombinePartialResponse(next ApiObjectResponse) error {
 	if nextContainers, ok := next.(*ContainersResponse); ok {
-		c = append(c, *nextContainers...)
+		*c = append(*c, *nextContainers...)
 		return nil
 	}
 	return fmt.Errorf("cannot combine response of type %T with ContainersResponse", next)

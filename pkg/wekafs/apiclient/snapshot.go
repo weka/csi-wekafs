@@ -45,11 +45,15 @@ func (snap *Snapshot) String() string {
 
 type Snapshots []*Snapshot
 
-func (s Snapshots) SupportsPagination() bool {
-	return false
+func (s *Snapshots) SupportsPagination() bool {
+	return true
 }
-func (s Snapshots) CombinePartialResponse(next ApiObjectResponse) error {
-	panic("implement me")
+func (s *Snapshots) CombinePartialResponse(next ApiObjectResponse) error {
+	if nextSnap, ok := next.(*Snapshots); ok {
+		*s = append(*s, *nextSnap...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response type: %T", next)
 }
 
 // FindSnapshotsByFilter returns result set of 0-many objects matching filter

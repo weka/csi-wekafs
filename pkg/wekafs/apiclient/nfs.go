@@ -414,14 +414,14 @@ func (a *ApiClient) GetNfsClientGroups(ctx context.Context, clientGroups *NfsCli
 
 type NfsClientGroups []*NfsClientGroup
 
-func (n NfsClientGroups) SupportsPagination() bool {
+func (n *NfsClientGroups) SupportsPagination() bool {
 	return true
 }
 
-func (n NfsClientGroups) CombinePartialResponse(next ApiObjectResponse) error {
+func (n *NfsClientGroups) CombinePartialResponse(next ApiObjectResponse) error {
 	if partialList, ok := next.(*NfsClientGroups); ok {
 		// this is a list, so we just append the data
-		n = append(n, *partialList...)
+		*n = append(*n, *partialList...)
 		return nil
 	}
 	return fmt.Errorf("invalid partial response")

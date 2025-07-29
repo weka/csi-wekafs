@@ -99,13 +99,13 @@ func (q *Quota) GetCapacityLimit() uint64 {
 
 type Quotas []*Quota
 
-func (q Quotas) SupportsPagination() bool {
+func (q *Quotas) SupportsPagination() bool {
 	return true
 }
-func (q Quotas) CombinePartialResponse(next ApiObjectResponse) error {
+func (q *Quotas) CombinePartialResponse(next ApiObjectResponse) error {
 	// this is a list, so we just append the data
 	if partialList, ok := next.(*Quotas); ok {
-		q = append(q, *partialList...)
+		*q = append(*q, *partialList...)
 		return nil
 	}
 	return fmt.Errorf("invalid partial response")
