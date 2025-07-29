@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
 	"io"
 	"net/http"
 	"net/url"
 	"reflect"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 )
 
 // do Makes a basic API call to the client, returns an *ApiResponse that includes raw data, error message etc.
@@ -141,7 +142,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusForbidden: //403
-		endpoint.http403ErrCount++
 		return Response, &ApiForbiddenError{
 			Err:         err,
 			Text:        "Permission denied",

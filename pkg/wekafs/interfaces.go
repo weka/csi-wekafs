@@ -8,11 +8,6 @@ import (
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
-const (
-	dataTransportNfs    DataTransport = "nfs"
-	dataTransportWekafs DataTransport = "wekafs"
-)
-
 type AnyServer interface {
 	getMounter(ctx context.Context) AnyMounter
 	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter

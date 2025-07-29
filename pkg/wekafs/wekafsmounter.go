@@ -12,10 +12,6 @@ import (
 	"k8s.io/mount-utils"
 )
 
-const (
-	inactiveMountGcPeriod = time.Minute * 10
-)
-
 type wekafsMounter struct {
 	mountMap                wekafsMountsMap
 	lock                    sync.Mutex

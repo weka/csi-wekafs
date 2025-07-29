@@ -20,21 +20,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"io/fs"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -60,8 +55,6 @@ const (
 	HealthProbePort = "8081"
 )
 
-var DefaultVolumePermissions fs.FileMode = 0750
-
 type WekaFsDriver struct {
 	name              string
 	nodeID            string
@@ -85,10 +78,7 @@ type WekaFsDriver struct {
 
 type VolumeType string
 
-var (
-	vendorVersion           = "dev"
-	ClusterApiNotFoundError = errors.New("could not get API client by cluster guid")
-)
+type VolumeBackingType string
 
 // Die used to intentionally panic and exit, while updating termination log
 func Die(exitMsg string) {
@@ -593,19 +583,6 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 }
 
 type CsiPluginMode string
-
-const (
-	VolumeTypeDirV1   VolumeType = "dir/v1"  // if specified in storage class, create directory-backed volumes. FS name must be set in SC as well
-	VolumeTypeUnified VolumeType = "weka/v2" // no need to specify this in storageClass
-	VolumeTypeUNKNOWN VolumeType = "AMBIGUOUS_VOLUME_TYPE"
-	VolumeTypeEmpty   VolumeType = ""
-
-	CsiModeNode       CsiPluginMode = "node"
-	CsiModeController CsiPluginMode = "controller"
-	CsiModeAll        CsiPluginMode = "all"
-)
-
-var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeUnified}
 
 func GetCsiPluginMode(mode *string) CsiPluginMode {
 	ret := CsiPluginMode(*mode)

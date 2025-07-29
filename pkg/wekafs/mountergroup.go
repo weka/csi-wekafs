@@ -11,8 +11,6 @@ type MounterGroup struct {
 	wekafs AnyMounter
 }
 
-var TransportPreference []DataTransport = []DataTransport{dataTransportWekafs, dataTransportNfs}
-
 func NewMounterGroup(ctx context.Context, driver *WekaFsDriver) *MounterGroup {
 	ret := &MounterGroup{}
 	log.Info().Msg("Configuring Mounter Group")

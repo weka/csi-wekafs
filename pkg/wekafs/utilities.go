@@ -25,11 +25,6 @@ import (
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
-const (
-	SnapshotTypeUnifiedSnap = "wekasnap/v2"
-	ProcModulesPath         = "/proc/modules"
-)
-
 var ProcMountsPath = "/proc/mounts"
 
 func generateInnerPathForDirBasedVol(dynamicVolPath, csiVolName string) string {

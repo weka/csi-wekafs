@@ -6,10 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"hash/fnv"
-	"k8s.io/helm/pkg/urlutil"
 	"math/rand"
 	"net"
 	"net/http"
@@ -18,6 +15,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 type ApiUserRole string

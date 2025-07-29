@@ -13,10 +13,6 @@ import (
 	"sync"
 )
 
-const garbagePath = ".__internal__wekafs-async-delete"
-
-//const garbageCollectionMaxThreads = 32
-
 type innerPathVolGc struct {
 	isRunning  map[string]bool
 	isDeferred map[string]bool
