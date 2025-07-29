@@ -4,6 +4,7 @@ go 1.24.2
 
 require (
 	github.com/container-storage-interface/spec v1.11.0
+	github.com/go-logr/zerologr v1.2.3
 	github.com/google/go-querystring v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.7.0
@@ -24,7 +25,7 @@ require (
 	k8s.io/api v0.34.2
 	k8s.io/apimachinery v0.34.2
 	k8s.io/client-go v0.34.2
-	k8s.io/mount-utils v0.33.1
+	k8s.io/mount-utils v0.33.2
 	sigs.k8s.io/controller-runtime v0.22.4
 )
 

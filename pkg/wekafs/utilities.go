@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -640,19 +641,48 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 	}
 }
 
-// getOwnNamespace returns the namespace the pod is running in
-func getOwnNamespace() (string, error) {
-	// First try environment variable
-	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
-		return ns, nil
+// hashString is a simple hash function that takes a string and returns a hash value in the range [0, n)
+func hashString(s string, n int) int {
+	if n == 0 {
+		return 0
 	}
 
-	// Try to read from service account
-	nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-	if err != nil {
-		return "", fmt.Errorf("failed to detect namespace: %w", err)
+	// Create a new FNV-1a hash
+	h := fnv.New32a()
+
+	// Write the string to the hash
+	_, _ = h.Write([]byte(s))
+
+	// Get the hash sum as a uint32
+	hashValue := h.Sum32()
+
+	// Return the hash value in the range of [0, n)
+	return int(hashValue % uint32(n))
+}
+
+func getOwnNamespace() (string, error) {
+	file := "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	// Check if the file exists
+	if _, err := os.Stat(file); err != nil {
+		if os.IsNotExist(err) {
+			// If the file does not exist, return a default namespace
+			if os.Getenv("LEADER_ELECTION_NAMESPACE") != "" {
+				return os.Getenv("LEADER_ELECTION_NAMESPACE"), nil
+			}
+		}
 	}
-	return string(nsBytes), nil
+	// read namespace from file
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to read namespace from %s: %w", file, err)
+	}
+	namespace := strings.TrimSpace(string(data))
+	if namespace != "" {
+		return namespace, nil
+	}
+
+	return "", errors.New("namespace not found or not set in environment variable LEADER_ELECTION_NAMESPACE")
+	// Get the namespace from the environment variable
 }
 
 // stripUnnecessaryPVFields creates a minimal PV with only fields needed for capacity validation
