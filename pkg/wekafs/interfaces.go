@@ -48,3 +48,6 @@ type AnyMount interface {
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
 }
+
+type VolumeType string
+type CsiPluginMode string

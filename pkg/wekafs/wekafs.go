@@ -21,15 +21,11 @@ import (
 	"os"
 )
 
-type VolumeType string
-
 // Die used to intentionally panic and exit, while updating termination log
 func Die(exitMsg string) {
 	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
 	panic(exitMsg)
 }
-
-type CsiPluginMode string
 
 func GetCsiPluginMode(mode *string) CsiPluginMode {
 	ret := CsiPluginMode(*mode)
