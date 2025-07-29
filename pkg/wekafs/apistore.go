@@ -134,7 +134,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 		AllowInsecureHttps: api.config.allowInsecureHttps,
 		Hostname:           hostname,
 		DriverName:         api.config.GetDriver().name,
-		ApiTimeout:         api.config.wekaApiTimeout,
+		ApiTimeout:         apiclient.ApiHttpTimeOutSeconds,
 	})
 
 	if err != nil {
@@ -201,4 +201,9 @@ func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
 		Hostname: hostname,
 	}
 	return s
+}
+
+func (api *ApiStore) getLockForHash(hash uint32) *sync.Mutex {
+	lockIface, _ := api.locks.LoadOrStore(hash, &sync.Mutex{})
+	return lockIface.(*sync.Mutex)
 }

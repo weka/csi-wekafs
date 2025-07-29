@@ -43,22 +43,22 @@ func (snap *Snapshot) String() string {
 	return fmt.Sprintln("Snapshot(snapUid:", snap.Uid, "name:", snap.Name, "writable:", snap.IsWritable, "locator:", snap.Locator, "created on:", snap.CreationTime)
 }
 
-type SnapshotList []*Snapshot
+type Snapshots []*Snapshot
 
-func (s SnapshotList) SupportsPagination() bool {
+func (s Snapshots) SupportsPagination() bool {
 	return false
 }
-func (s SnapshotList) CombinePartialResponse(next ApiObjectResponse) error {
+func (s Snapshots) CombinePartialResponse(next ApiObjectResponse) error {
 	panic("implement me")
 }
 
 // FindSnapshotsByFilter returns result set of 0-many objects matching filter
-func (a *ApiClient) FindSnapshotsByFilter(ctx context.Context, query *Snapshot, resultSet *SnapshotList) error {
+func (a *ApiClient) FindSnapshotsByFilter(ctx context.Context, query *Snapshot, resultSet *Snapshots) error {
 	op := "FindSnapshotsByFilter"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	ret := &SnapshotList{}
+	ret := &Snapshots{}
 	q, _ := qs.Values(query)
 	err := a.Get(ctx, query.GetBasePath(a), q, ret)
 	if err != nil {
@@ -72,7 +72,7 @@ func (a *ApiClient) FindSnapshotsByFilter(ctx context.Context, query *Snapshot, 
 	return nil
 }
 
-func (a *ApiClient) FindSnapshotsByFilesystem(ctx context.Context, query *FileSystem, resultSet *SnapshotList) error {
+func (a *ApiClient) FindSnapshotsByFilesystem(ctx context.Context, query *FileSystem, resultSet *Snapshots) error {
 	if query == nil || query.Uid == uuid.Nil {
 		return errors.New("cannot search for snapshots without explicit filesystem Uid")
 	}
@@ -89,7 +89,7 @@ func (a *ApiClient) GetSnapshotByFilter(ctx context.Context, query *Snapshot) (*
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
-	rs := &SnapshotList{}
+	rs := &Snapshots{}
 	err := a.FindSnapshotsByFilter(ctx, query, rs)
 	if err != nil {
 		return &Snapshot{}, err

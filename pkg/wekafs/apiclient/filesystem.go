@@ -64,13 +64,15 @@ func (fs *FileSystem) CombinePartialResponse(next ApiObjectResponse) error {
 	panic("implement me")
 }
 
-func (f FileSystems) SupportsPagination() bool {
+type FileSystems []FileSystem
+
+func (f *FileSystems) SupportsPagination() bool {
 	return true
 }
 
-func (f FileSystems) CombinePartialResponse(next ApiObjectResponse) error {
+func (f *FileSystems) CombinePartialResponse(next ApiObjectResponse) error {
 	if nextFs, ok := next.(*FileSystems); ok {
-		f = append(f, *nextFs...)
+		*f = append(*f, *nextFs...)
 		return nil
 	}
 	return fmt.Errorf("invalid partial response type: %T", next)
