@@ -1,6 +1,9 @@
 package apiclient
 
-import "fmt"
+import (
+	"fmt"
+	"hash/fnv"
+)
 
 type KmsVaultCredentials struct {
 	KeyIdentifier string
@@ -36,4 +39,23 @@ type Credentials struct {
 func (c *Credentials) String() string {
 	return fmt.Sprintf("%s://%s:%s@%s",
 		c.HttpScheme, c.Username, c.Organization, c.Endpoints)
+}
+
+func (c *Credentials) Hash() uint32 {
+	h := fnv.New32a()
+	s := fmt.Sprintln(
+		c.Username,
+		c.Password,
+		c.Organization,
+		c.HttpScheme,
+		c.Endpoints,
+		c.LocalContainerName,
+		c.AutoUpdateEndpoints,
+		c.CaCertificate,
+		c.NfsTargetIPs,
+		c.KmsPreexistingCredentialsForVolumeEncryption.InsecureString(),
+		c.KmsKeyManagementCredentials.InsecureString(),
+	)
+	h.Write([]byte(s))
+	return h.Sum32()
 }
