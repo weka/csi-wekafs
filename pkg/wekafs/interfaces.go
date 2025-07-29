@@ -49,10 +49,6 @@ type AnyMount interface {
 	getLastUsed() time.Time
 }
 
-type nfsMountsMap map[string]*atomic.Int32 // we only follow the mountPath and number of references
-type wekafsMountsMap map[string]*atomic.Int32
-type DataTransport string
-type UnmountFunc func()
 type VolumeBackingType string
 type VolumeType string
 type CsiPluginMode string
