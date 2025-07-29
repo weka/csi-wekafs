@@ -188,6 +188,8 @@ func (a *ApiClient) retryBackoff(ctx context.Context, attempts int, sleep time.D
 	maxAttempts := attempts
 	if err := f(); err != nil {
 		switch s := err.(type) {
+		case ApiResponseNextPage:
+			return s // This is not an error, just a signal to continue with the next page
 		case ApiNonTransientError:
 			log.Ctx(ctx).Trace().Msg("Non-transient error returned from API, stopping further attempts")
 			// Return the original error for later checking

@@ -11,7 +11,7 @@ import (
 func TestFindNfsPermissionsByFilesystemName(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
 
-	var permissions []NfsPermission
+	var permissions NfsPermissions
 	err := apiClient.FindNfsPermissionsByFilesystem(context.Background(), "snapvolFilesystem", &permissions)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, permissions)
@@ -31,7 +31,7 @@ func TestFindNfsPermissionsByFilesystemName(t *testing.T) {
 func TestNfsClientGroup(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
 
-	var clientGroups []NfsClientGroup
+	clientGroups := &NfsClientGroups{}
 	var cg = &NfsClientGroup{
 		Uid: uuid.New(),
 	}
@@ -61,7 +61,7 @@ func TestNfsClientGroup(t *testing.T) {
 	assert.Empty(t, cg.Rules)
 
 	// Test GetGroups
-	err = apiClient.GetNfsClientGroups(context.Background(), &clientGroups)
+	err = apiClient.GetNfsClientGroups(context.Background(), clientGroups)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, clientGroups)
 
@@ -83,9 +83,9 @@ func TestNfsClientGroup(t *testing.T) {
 	r := &NfsClientGroupDeleteRequest{Uid: cg.Uid}
 	err = apiClient.DeleteNfsClientGroup(context.Background(), r)
 	assert.NoError(t, err)
-	err = apiClient.GetNfsClientGroups(context.Background(), &clientGroups)
+	err = apiClient.GetNfsClientGroups(context.Background(), clientGroups)
 	assert.NoError(t, err)
-	for _, r := range clientGroups {
+	for _, r := range *clientGroups {
 		if r.Uid == cg.Uid {
 			t.Errorf("Failed to delete group")
 		}
@@ -152,7 +152,7 @@ func TestNfsEnsureNfsPermissions(t *testing.T) {
 func TestInterfaceGroup(t *testing.T) {
 	apiClient := GetApiClientForTest(t)
 
-	var igs []InterfaceGroup
+	igs := &InterfaceGroups{}
 	var ig = &InterfaceGroup{
 		Uid: uuid.New(),
 	}
@@ -175,11 +175,11 @@ func TestInterfaceGroup(t *testing.T) {
 
 	// Test Create
 	// Test GetGroups
-	err := apiClient.GetInterfaceGroups(context.Background(), &igs)
+	err := apiClient.GetInterfaceGroups(context.Background(), igs)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, igs)
-	if len(igs) > 0 {
-		assert.NotEmpty(t, igs[0].Ips)
+	if len(*igs) > 0 {
+		assert.NotEmpty(t, (*igs)[0].Ips)
 	}
 }
 
