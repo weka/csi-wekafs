@@ -117,6 +117,9 @@ spec:
           {{- if .Values.pluginConfig.manageNodeTopologyLabels }}
             - "--managenodetopologylabels"
           {{- end }}
+          {{- if .Values.pluginConfig.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.pluginConfig.apiTimeoutSeconds }}"
+          {{- end }}
           {{- if or .Values.node.livenessProbeEnabled .Values.metrics.enabled }}
           ports:
           {{- if .Values.node.livenessProbeEnabled }}

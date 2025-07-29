@@ -15,12 +15,43 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 	ctx := context.Background()
 	nodeId := "localhost"
 	mutuallyExclusive := MutuallyExclusiveMountOptsStrings{"readcache,writecache,coherent,forcedirect", "sync,async", "ro,rw"}
-	driverConfig := NewDriverConfig("csi-volumes", "csi-vol-", "csi-snap-", "csi-seed-snap-",
-		true, true, true, true, true,
-		true, true, mutuallyExclusive,
-		1, 1, 1, 1, 1, 1, 1, 10, 5,
-		true, true, true, "", "", "4.1", "v1", false, false, true,
-		"", false, "", false, false)
+	driverConfig := NewDriverConfig(
+		"csi-volumes",
+		"csi-vol-", "csi-snap-",
+		"csi-seed-snap-",
+		true,
+		true,
+		true,
+		true,
+		true,
+		true,
+		true,
+		mutuallyExclusive,
+		1,
+		1,
+		1,
+		1,
+		1,
+		1,
+		1,
+		10, 5,
+		true,
+		true,
+		true,
+		"",
+		"",
+		"4.1",
+		"v1",
+		false,
+		false,
+		true,
+		"",
+		false,
+		120*time.Second,
+		"",
+		false,
+		false,
+	)
 	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", CsiModeAll, false, driverConfig)
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)

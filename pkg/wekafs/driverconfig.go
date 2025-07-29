@@ -46,6 +46,7 @@ type DriverConfig struct {
 	driverRef                        *WekaFsDriver
 	tracingUrl                       string
 	manageNodeTopologyLabels         bool
+	wekaApiTimeout                    time.Duration // Timeout for Weka API requests
 	wekafsContainerName              string
 	enforceDirVolTotalCapacity       bool
 	setOwnershipOnDynamicFilesystems bool
@@ -76,6 +77,8 @@ func (dc *DriverConfig) Log() {
 		Bool("allow_async_object_deletion", dc.allowAsyncObjectDeletion).
 		Str("tracing_url", dc.tracingUrl).
 		Bool("manage_node_topology_labels", dc.manageNodeTopologyLabels).
+		Dur("weka_api_timeout", dc.wekaApiTimeout).
+		Str("nfs_protocol_version", dc.nfsProtocolVersion).
 		Str("wekafs_container_name", dc.wekafsContainerName).
 		Bool("enforce_dir_vol_total_capacity", dc.enforceDirVolTotalCapacity).
 		Bool("set_ownership_on_dynamic_filesystems", dc.setOwnershipOnDynamicFilesystems).
@@ -97,6 +100,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowEncryptionWithoutKms bool,
 	tracingUrl string,
 	manageNodeTopologyLabels bool,
+	wekaApiTimeout time.Duration,
 	wekafsContainerName string,
 	enforceDirVolTotalCapacity bool,
 	setOwnershipOnDynamicFilesystems bool,
@@ -151,6 +155,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowEncryptionWithoutKms:        allowEncryptionWithoutKms,
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
+		wekaApiTimeout:                    wekaApiTimeout,
 		wekafsContainerName:              wekafsContainerName,
 		enforceDirVolTotalCapacity:       enforceDirVolTotalCapacity,
 		setOwnershipOnDynamicFilesystems: setOwnershipOnDynamicFilesystems,
