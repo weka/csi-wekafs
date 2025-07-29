@@ -585,3 +585,23 @@ func getDataTransportFromMountPath(mountPoint string) DataTransport {
 	// just default
 	return dataTransportWekafs
 }
+
+// Die used to intentionally panic and exit, while updating termination log
+func Die(exitMsg string) {
+	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+	panic(exitMsg)
+}
+
+func GetCsiPluginMode(mode *string) CsiPluginMode {
+	ret := CsiPluginMode(*mode)
+	switch ret {
+	case CsiModeNode,
+		CsiModeController,
+		CsiModeAll,
+		CsiModeMetricsServer:
+		return ret
+	default:
+		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
+		return ""
+	}
+}
