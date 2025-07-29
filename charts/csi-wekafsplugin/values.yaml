@@ -201,3 +201,5 @@ pluginConfig:
   skipGarbageCollection: false
   # -- Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false.
   manageNodeTopologyLabels: true
+  # -- WEKA API timeout, default 60 seconds
+  apiTimeoutSeconds: 60
