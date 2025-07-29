@@ -30,7 +30,7 @@ var creds apiclient.Credentials
 var endpoint string
 var fsName string
 
-var client *apiclient.ApiClient
+var globalClient *apiclient.ApiClient
 
 func TestMain(m *testing.M) {
 	flag.StringVar(&endpoint, "api-endpoint", "localhost:14000", "API endpoint for tests")
@@ -45,8 +45,13 @@ func TestMain(m *testing.M) {
 
 func GetApiClientForTest(t *testing.T) *apiclient.ApiClient {
 	creds.Endpoints = []string{endpoint}
-	if client == nil {
-		apiClient, err := apiclient.NewApiClient(context.Background(), creds, true, endpoint)
+	if globalClient == nil {
+		apiClient, err := apiclient.NewApiClient(context.Background(), creds, apiclient.ApiClientOptions{
+			AllowInsecureHttps: true,
+			Hostname:           endpoint,
+			DriverName:         "csi.weka.io",
+			ApiTimeout:         apiclient.ApiHttpTimeOutSeconds,
+		})
 		if err != nil {
 			t.Fatalf("Failed to create API client: %v", err)
 		}
@@ -56,9 +61,9 @@ func GetApiClientForTest(t *testing.T) *apiclient.ApiClient {
 		if err := apiClient.Login(context.Background()); err != nil {
 			t.Fatalf("Failed to login: %v", err)
 		}
-		client = apiClient
+		globalClient = apiClient
 	}
-	return client
+	return globalClient
 }
 
 func TestVolume_getFilesystemFreeSpaceByApi(t *testing.T) {
