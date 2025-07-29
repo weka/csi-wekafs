@@ -46,6 +46,12 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 		"",
 		false,
 		120*time.Second,
+		60*time.Second,
+		5,
+		false,
+		10,
+		60*time.Second,
+		false,
 	)
 	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", CsiModeAll, false, driverConfig)
 	if err != nil {
