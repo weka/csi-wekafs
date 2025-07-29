@@ -39,12 +39,8 @@ import (
 )
 
 const (
-	deviceID                            = "deviceID"
-	maxVolumeIdLength                   = 1920
-	TracerName                          = "weka-csi"
-	ControlServerAdditionalMountOptions = MountOptionAcl + "," + MountOptionWriteCache
-	capacityRefreshInterval             = 5 * time.Second  // How often to refresh from K8s
-	pendingReservationTTL               = 30 * time.Minute // Threshold to warn about stale pending reservations
+	capacityRefreshInterval = 5 * time.Second  // How often to refresh from K8s
+	pendingReservationTTL   = 30 * time.Minute // Threshold to warn about stale pending reservations
 )
 
 // CapacityReservation tracks a volume create request that passed validation
