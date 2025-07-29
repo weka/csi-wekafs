@@ -190,7 +190,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
-            - name: POD_NAMESPACE
+            - name: LEADER_ELECTION_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
