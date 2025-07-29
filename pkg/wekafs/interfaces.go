@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.uber.org/atomic"
 )
 
 type AnyServer interface {
@@ -33,8 +34,8 @@ type AnyMounter interface {
 	Disable()
 }
 
-type nfsMountsMap map[string]int // we only follow the mountPath and number of references
-type wekafsMountsMap map[string]int
+type nfsMountsMap map[string]*atomic.Int32 // we only follow the mountPath and number of references
+type wekafsMountsMap map[string]*atomic.Int32
 type DataTransport string
 
 func (d DataTransport) Unknown() bool {

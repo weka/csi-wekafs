@@ -687,3 +687,14 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 
 	return minimal, nil
 }
+
+func mountBaseDirForRole(mode CsiPluginMode) string {
+	switch mode {
+	case CsiModeNode:
+		return "/run/weka-fs-mounts-node"
+	case CsiModeController:
+		return "/run/weka-fs-mounts-controller"
+	default:
+		return "/run/weka-fs-mounts"
+	}
+}
