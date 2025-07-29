@@ -16,10 +16,6 @@ import (
 	"time"
 )
 
-const (
-	MaxSnapshotDeletionDuration = time.Hour * 2 // Max time to delete snapshot
-)
-
 type Snapshot struct {
 	id                  string
 	FilesystemName      string
