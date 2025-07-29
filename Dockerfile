@@ -23,6 +23,7 @@ ADD pkg /src/pkg
 RUN true
 ADD cmd /src/cmd
 RUN true
+RUN go mod download
 
 
 RUN echo Building package
@@ -30,6 +31,13 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X mai
 
 RUN echo Building wait-for-leader utility
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-extldflags '-static'" -o "/bin/wait-for-leader" /src/cmd/wait-for-leader
+
+RUN echo Building metricsserver
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-extldflags '-static'" -o "/bin/metricsserverr" /src/cmd/metricsserver
+
+FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS ubibuilder
+RUN microdnf install -y util-linux libselinux-utils pciutils binutils jq procps less container-selinux
+RUN microdnf clean all && rm -rf /var/cache/dnf
 
 FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH}
 LABEL maintainers="WekaIO, LTD"
@@ -50,6 +58,7 @@ LABEL summary="This image is used by WEKA CSI Plugin and incorporates both Contr
 LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data platform for AI"
 LABEL url="https://www.weka.io"
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
+COPY --from=go-builder --chmod=755 /bin/metricsserver /metricsserver
 COPY --from=go-builder /bin/wait-for-leader /wait-for-leader
 COPY --from=go-builder /src/locar /locar
 ARG binary=/bin/wekafsplugin
