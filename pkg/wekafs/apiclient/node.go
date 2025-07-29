@@ -28,6 +28,14 @@ type WekaNode struct {
 	Status      string    `json:"status"`
 }
 
+func (n *WekaNode) SupportsPagination() bool {
+	return false
+}
+
+func (n *WekaNode) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
 func (n *WekaNode) String() string {
 	return fmt.Sprintln("WekaNode Id:", n.Id, "roles:", n.Roles)
 }
@@ -83,7 +91,21 @@ func (n *WekaNode) isDrive() bool {
 	return n.hasRole(NodeRoleDrive)
 }
 
-func (a *ApiClient) GetNodes(ctx context.Context, nodes *[]WekaNode) error {
+type WekaNodes []*WekaNode
+
+func (w *WekaNodes) SupportsPagination() bool {
+	return true
+}
+
+func (w *WekaNodes) CombinePartialResponse(next ApiObjectResponse) error {
+	if partialList, ok := next.(*WekaNodes); ok {
+		*w = append(*w, *partialList...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response")
+}
+
+func (a *ApiClient) GetNodes(ctx context.Context, nodes *WekaNodes) error {
 	node := &WekaNode{}
 
 	err := a.Get(ctx, node.GetBasePath(a), nil, nodes)
@@ -93,8 +115,8 @@ func (a *ApiClient) GetNodes(ctx context.Context, nodes *[]WekaNode) error {
 	return nil
 }
 
-func (a *ApiClient) GetNodesByRole(ctx context.Context, role string, nodes *[]WekaNode) error {
-	res := &[]WekaNode{}
+func (a *ApiClient) GetNodesByRole(ctx context.Context, role string, nodes *WekaNodes) error {
+	res := &WekaNodes{}
 	err := a.GetNodes(ctx, res)
 	if err != nil {
 		return nil
