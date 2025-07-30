@@ -258,6 +258,9 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 		logger.Error().Err(err).Msg("Failed to re-authenticate on repeating request")
 		return err
 	}
+	if a.RotateEndpointOnEachRequest {
+		a.rotateEndpoint(ctx)
+	}
 
 	rt := reflect.TypeOf(Response)
 	newObj := reflect.New(rt.Elem()).Interface().(ApiObjectResponse)
