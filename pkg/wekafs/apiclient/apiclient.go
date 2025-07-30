@@ -36,8 +36,7 @@ type ApiClient struct {
 	ClusterGuid                 uuid.UUID
 	ClusterName                 string
 	MountEndpoints              []string
-	actualApiEndpoints          map[string]*ApiEndPoint
-	currentEndpoint             string
+	apiEndpoints                *ApiEndPoints
 	apiToken                    string
 	apiTokenExpiryDate          time.Time
 	refreshToken                string
@@ -97,7 +96,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 		Credentials:        credentials,
 		CompatibilityMap:   &WekaCompatibilityMap{},
 		hostname:           opts.Hostname,
-		actualApiEndpoints: make(map[string]*ApiEndPoint),
+		apiEndpoints:       NewApiEndPoints(),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
 	a.resetDefaultEndpoints(ctx)

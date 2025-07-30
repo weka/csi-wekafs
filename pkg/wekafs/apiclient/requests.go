@@ -59,34 +59,25 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	}
 	logger := log.Ctx(ctx)
 
-	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
+	logger.Trace().Str("method", Method).Str("url", a.getEndpoint(ctx).String()+r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
 
 	//perform the request and update endpoint with stats
-	endpoint := a.getEndpoint(ctx)
-	endpoint.requestCount++
-	start := time.Now()
 	response, err := a.client.Do(r)
 
 	if err != nil {
-		endpoint.transportErrCount++
+
 		return nil, &transportError{err}
 	}
 
 	if response == nil {
-		endpoint.noRespCount++
+
 		return nil, &transportError{errors.New("received no response")}
 	}
 
-	// update endpoint stats for success and total duration
-	endpoint.requestDurationTotal += time.Since(start)
-	if response.StatusCode != http.StatusOK {
-		endpoint.failCount++
-	}
-
 	responseBody, err := io.ReadAll(response.Body)
-	logger.Trace().Str("response", maskPayload(string(responseBody))).Msg("")
+	logger.Trace().Str("response", maskPayload(string(responseBody))).Str("duration", time.Since(ctx.Value("startTime").(time.Time)).String()).Msg("")
 	if err != nil {
-		endpoint.parseErrCount++
+
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
@@ -102,7 +93,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	Response := &ApiResponse{}
 	err = json.Unmarshal(responseBody, Response)
-	endpoint.parseErrCount++
+
 	Response.HttpStatusCode = response.StatusCode
 	if err != nil {
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
@@ -125,7 +116,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	case http.StatusNoContent: //203
 		return Response, nil
 	case http.StatusBadRequest: //400
-		endpoint.http400ErrCount++
 		return Response, &ApiBadRequestError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -134,7 +124,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusUnauthorized: //401
-		endpoint.http401ErrCount++
 		return Response, &ApiAuthorizationError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -143,7 +132,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusNotFound: //404
-		endpoint.http404ErrCount++
 		return Response, &ApiNotFoundError{
 			Err:         nil,
 			Text:        "Object not found",
@@ -152,7 +140,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusConflict: //409
-		endpoint.http409ErrCount++
 		return Response, &ApiConflictError{
 			ApiError: ApiError{
 				Err:         nil,
@@ -165,7 +152,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	case http.StatusInternalServerError: //500
-		endpoint.http500ErrCount++
 		return Response, &ApiInternalError{
 			Err:         nil,
 			Text:        Response.Message,
@@ -175,7 +161,6 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	case http.StatusServiceUnavailable: //503
-		endpoint.http503ErrCount++
 		return Response, &ApiNotAvailableError{
 			Err:         nil,
 			Text:        Response.Message,
@@ -185,7 +170,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	default:
-		endpoint.generalErrCount++
+
 		return Response, &ApiError{
 			Err:         err,
 			Text:        "General failure during API command",
