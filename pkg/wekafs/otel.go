@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-func TracerProvider(version string, url string, csiRole CsiPluginMode) (*sdktrace.TracerProvider, error) {
+func TracerProvider(version string, url string, csiRole CsiPluginMode, deploymentIdentifier string) (*sdktrace.TracerProvider, error) {
 	// Ensure default SDK resources and the required service name are set.
 	hostname, _ := os.Hostname()
 	attributes := []attribute.KeyValue{
@@ -20,7 +20,6 @@ func TracerProvider(version string, url string, csiRole CsiPluginMode) (*sdktrac
 		attribute.String("weka.csi.mode", string(csiRole)),
 		attribute.String("weka.csi.version", version),
 	}
-	deploymentIdentifier := os.Getenv("OTEL_DEPLOYMENT_IDENTIFIER")
 	if deploymentIdentifier != "" {
 		attributes = append(attributes, attribute.String("deployment_identifier", deploymentIdentifier))
 	}
