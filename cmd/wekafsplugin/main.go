@@ -160,12 +160,14 @@ func main() {
 	} else {
 		url = ""
 	}
-	tp, err = wekafs.TracerProvider(version, url, csiMode)
+	deploymentIdentifier := os.Getenv("OTEL_DEPLOYMENT_IDENTIFIER")
+
+	tp, err = wekafs.TracerProvider(version, url, csiMode, deploymentIdentifier)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
 	} else {
 		otel.SetTracerProvider(tp)
-		log.Info().Str("tracing_url", url).Msg("OpenTelemetry tracing initialized")
+		log.Info().Str("tracing_url", url).Str("deployment_identifier", deploymentIdentifier).Msg("OpenTelemetry tracing initialized")
 		ctx, cancel := context.WithCancel(ctx)
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
