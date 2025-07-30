@@ -52,6 +52,7 @@ type ApiClient struct {
 	containerName               string
 	NfsInterfaceGroupName       string
 	NfsClientGroupName          string
+	metrics                     *ApiMetrics
 	driverName                  string
 	RotateEndpointOnEachRequest bool // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
 
