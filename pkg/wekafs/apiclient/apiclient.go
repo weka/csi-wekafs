@@ -58,6 +58,9 @@ type ApiClient struct {
 	containers           *ContainersResponse
 	containersUpdateTime time.Time
 	containersLock       sync.RWMutex
+
+	fsCache   map[string]*fsCacheEntry
+	fsCacheMu sync.RWMutex
 }
 
 type ApiClientOptions struct {
