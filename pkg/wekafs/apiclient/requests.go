@@ -65,19 +65,16 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	response, err := a.client.Do(r)
 
 	if err != nil {
-
 		return nil, &transportError{err}
 	}
 
 	if response == nil {
-
 		return nil, &transportError{errors.New("received no response")}
 	}
 
 	responseBody, err := io.ReadAll(response.Body)
 	logger.Trace().Str("response", maskPayload(string(responseBody))).Str("duration", time.Since(ctx.Value("startTime").(time.Time)).String()).Msg("")
 	if err != nil {
-
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
