@@ -96,9 +96,12 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
 
-		// bring up node part
-		log.Info().Msg("Cleaning up node stale labels")
-		driver.CleanupNodeLabels(ctx)
+		// only if we manage node labels, first clean up before starting node server
+		if driver.config.manageNodeTopologyLabels {
+			log.Info().Msg("Cleaning up node stale labels")
+			driver.CleanupNodeLabels(ctx)
+		}
+
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver)
 	} else {
