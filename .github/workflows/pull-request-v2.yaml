@@ -67,16 +67,8 @@ jobs:
 
   publish-docker-image:
     needs: build-binaries
-    name: build-docker-${{ matrix.os }}-${{ matrix.arch }}
+    name: build-docker
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [ amd64, arm64 ]
-        os: [ linux ]
-
-    env:
-      TARGETARCH: ${{ matrix.arch }}
-      TARGETOS: ${{ matrix.os }}
 
     steps:
       - name: Checkout Code
@@ -102,7 +94,7 @@ jobs:
             echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Download binary for ${{ matrix.os }}-${{ matrix.arch }}
+      - name: Download binaries
         uses: actions/download-artifact@v4
         with:
           path: ./build
@@ -118,20 +110,22 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           registry: quay.io
 
-      - name: Build and push image for ${{ matrix.os }}-${{ matrix.arch }}
+      - name: Build and push Docker images
         id: build_and_push
         uses: docker/build-push-action@v6
-        continue-on-error: true
         with:
+          platforms: linux/amd64,linux/arm64
           context: .
-          build-contexts: |
-            plugin=build/${{ matrix.os }}-${{ matrix.arch }}
           file: Dockerfile-gha
           push: true
           pull: true
           tags: '${{ secrets.DOCKER_REGISTRY_NAME }}/csi-wekafs:${{ steps.version.outputs.version }}'
-          cache-from: type=gha,key=wekacsiplugin-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,key=wekacsiplugin-${{ matrix.arch }}
+          cache-from: |
+            type=gha,key=wekacsiplugin-amd64
+            type=gha,key=wekacsiplugin-arm64
+          cache-to: |
+            type=gha,mode=max,key=wekacsiplugin-amd64
+            type=gha,mode=max,key=wekacsiplugin-arm64
           labels: |
             revision=${{ steps.version.outputs.version }}
             quay.expires-after=14d
@@ -140,9 +134,6 @@ jobs:
           provenance: false
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
-            TARGETARCH=${{ matrix.arch }}
-            TARGETOS=${{ matrix.os }}  
-
 
   build-sanity-image:
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') && github.event.pull_request.draft == false }}
