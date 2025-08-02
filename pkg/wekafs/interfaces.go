@@ -3,6 +3,7 @@ package wekafs
 import (
 	"context"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,7 @@ type AnyServer interface {
 	isInDevMode() bool
 	getDefaultMountOptions() MountOptions
 	getNodeId() string
+	getBackgroundTasksWg() *sync.WaitGroup
 }
 
 type AnyMounter interface {

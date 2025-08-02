@@ -40,7 +40,7 @@ type DriverConfig struct {
 	nfsProtocolVersion               string
 	csiVersion                       string
 	skipGarbageCollection            bool
-	waitForObjectDeletion            bool
+	allowAsyncObjectDeletion         bool
 	allowEncryptionWithoutKms        bool
 	driverRef                        *WekaFsDriver
 	tracingUrl                       string
@@ -68,7 +68,7 @@ func (dc *DriverConfig) Log() {
 		Str("interface_group_name", dc.interfaceGroupName).
 		Str("client_group_name", dc.clientGroupName).
 		Bool("skip_garbage_collection", dc.skipGarbageCollection).
-		Bool("wait_for_object_deletion", dc.waitForObjectDeletion).
+		Bool("allow_async_object_deletion", dc.allowAsyncObjectDeletion).
 		Str("tracing_url", dc.tracingUrl).
 		Bool("manage_node_topology_labels", dc.manageNodeTopologyLabels).
 		Msg("Starting driver with the following configuration")
@@ -134,7 +134,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		nfsProtocolVersion:               nfsProtocolVersion,
 		csiVersion:                       version,
 		skipGarbageCollection:            skipGarbageCollection,
-		waitForObjectDeletion:            waitForObjectDeletion,
+		allowAsyncObjectDeletion:         waitForObjectDeletion,
 		allowEncryptionWithoutKms:        allowEncryptionWithoutKms,
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
