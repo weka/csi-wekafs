@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"sync"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -33,6 +34,30 @@ type identityServer struct {
 	name    string
 	version string
 	config  *DriverConfig
+}
+
+func (ids *identityServer) getMounter() AnyMounter {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getApiStore() *ApiStore {
+	panic("not implemented")
+}
+
+func (ids *identityServer) isInDevMode() bool {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getDefaultMountOptions() MountOptions {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getNodeId() string {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getBackgroundTasksWg() *sync.WaitGroup {
+	panic("not implemented")
 }
 
 //goland:noinspection GoExportedFuncWithUnexportedType
