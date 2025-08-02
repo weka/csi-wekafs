@@ -337,14 +337,18 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	defer stop()
 	go func() {
 		<-termContext.Done()
-		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) && driver.config.manageNodeTopologyLabels {
-			log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
-			driver.CleanupNodeLabels(ctx)
-			log.Info().Msg("Cleanup completed, stopping server")
-		} else {
-			log.Info().Msg("Received SIGTERM/SIGINT, stopping server")
-		}
+		log.Info().Msg("Received SIGTERM/SIGINT, stopping server")
 		s.Stop()
+		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) && driver.config.manageNodeTopologyLabels {
+			log.Info().Msg("Running cleanup of node labels")
+			driver.CleanupNodeLabels(ctx)
+			log.Info().Msg("Cleanup of node labels completed")
+		}
+		if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+			log.Info().Msg("Waiting for background tasks to complete")
+			driver.cs.getBackgroundTasksWg().Wait()
+			log.Info().Msg("Background tasks completed")
+		}
 		log.Info().Msg("Server stopped")
 		os.Exit(1)
 
