@@ -55,7 +55,7 @@ type NodeServer struct {
 	caps              []*csi.NodeServiceCapability
 	nodeID            string
 	maxVolumesPerNode int64
-	mounter           AnyMounter
+	mounters          *MounterGroup
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
@@ -87,8 +87,12 @@ func (ns *NodeServer) getApiStore() *ApiStore {
 	return ns.api
 }
 
-func (ns *NodeServer) getMounter() AnyMounter {
-	return ns.mounter
+func (ns *NodeServer) getMounter(ctx context.Context) AnyMounter {
+	return ns.mounters.GetPreferredMounter(ctx)
+}
+
+func (ns *NodeServer) getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter {
+	return ns.mounters.GetMounterByTransport(ctx, transport)
 }
 
 //goland:noinspection GoUnusedParameter
@@ -194,7 +198,10 @@ func getVolumeStats(volumePath string) (volumeStats *VolumeStats, err error) {
 	return &VolumeStats{capacityBytes, usedBytes, availableBytes, inodes, inodesUsed, inodesFree}, nil
 }
 
-func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter AnyMounter, config *DriverConfig) *NodeServer {
+func NewNodeServer(driver *WekaFsDriver) *NodeServer {
+	if driver == nil {
+		panic("Driver is nil")
+	}
 	//goland:noinspection GoBoolExpressions
 	return &NodeServer{
 		caps: getNodeServiceCapabilities(
@@ -204,17 +211,17 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 				csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
 			},
 		),
-		nodeID:            nodeId,
-		maxVolumesPerNode: maxVolumesPerNode,
-		mounter:           mounter,
-		api:               api,
-		config:            config,
+		nodeID:            driver.nodeID,
+		maxVolumesPerNode: driver.maxVolumesPerNode,
+		mounters:          driver.mounters,
+		api:               driver.api,
+		config:            driver.config,
 		semaphores:        make(map[string]*semaphore.Weighted),
 		backgroundTasksWg: new(sync.WaitGroup),
 	}
 }
 
-func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSemaphore) {
 	logger := log.Ctx(ctx)
 	ns.initializeSemaphore(ctx, op)
 	sem := ns.semaphores[op]
@@ -537,7 +544,7 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	if ns.config.manageNodeTopologyLabels {
 		// this will either overwrite or add the keys based on the driver name
 		segments[fmt.Sprintf(TopologyLabelNodePattern, driverName)] = ns.nodeID
-		segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = string(ns.getMounter().getTransport())
+		segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = string(ns.getMounter(ctx).getTransport()) // for backward compatibility, return the preferred transport
 		segments[fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)] = "true"
 	} else {
 		logger.Warn().Msg("Node topology labels management is disabled, using global label only")

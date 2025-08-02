@@ -13,7 +13,8 @@ const (
 )
 
 type AnyServer interface {
-	getMounter() AnyMounter
+	getMounter(ctx context.Context) AnyMounter
+	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
 	isInDevMode() bool
@@ -32,6 +33,9 @@ type AnyMounter interface {
 	schedulePeriodicMountGc()
 	getGarbageCollector() *innerPathVolGc
 	getTransport() DataTransport
+	isEnabled() bool
+	Enable()
+	Disable()
 }
 
 type nfsMountsMap map[string]int // we only follow the mountPath and number of references

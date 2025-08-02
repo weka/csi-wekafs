@@ -258,10 +258,10 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 		return snapshots, nil
 	}
 
-	if fsObj.IsRemoving {
-		// assume snapshots are not relevant in such case
-		return snapshots, nil
-	}
+	//if fsObj.IsRemoving {
+	//	// assume snapshots are not relevant in such case
+	//	return snapshots, nil
+	//}
 
 	err = v.apiClient.FindSnapshotsByFilesystem(ctx, fsObj, snapshots)
 	if err != nil {
@@ -684,7 +684,7 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 
 func (v *Volume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
-		return v.server.getMounter().getGarbageCollector().triggerGcVolume(ctx, v)
+		return v.server.getMounter(ctx).getGarbageCollector().triggerGcVolume(ctx, v)
 	}
 	return v.Delete(ctx)
 }
@@ -914,13 +914,12 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	if v.server.getMounter() == nil {
+	if v.server.getMounter(ctx) == nil {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
 
 	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
-
-	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	mount, err, unmountFunc := v.server.getMounter(ctx).mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := func() {}
 	if err == nil {
 		v.mountPath = mount
@@ -942,12 +941,20 @@ func (v *Volume) UnmountUnderlyingFS(ctx context.Context) error {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	if v.server.getMounter() == nil {
-		Die("Volume unmount could not be done since mounter not defined on it")
+	mountTransport := getDataTransportFromMountPath(v.mountPath)
+
+	mounter := v.server.getMounter(ctx)
+	if mountTransport == "" {
+		logger.Debug().Msg("Could not identify transport from mount path, assuming default")
+	} else {
+		mounter = v.server.getMounterByTransport(ctx, mountTransport)
+	}
+	if mounter == nil {
+		return errors.New(string("could not find mounter for transport " + mountTransport))
 	}
 
 	mountOpts := v.getMountOptions(ctx)
-	err := v.server.getMounter().unmountWithOptions(ctx, v.FilesystemName, mountOpts)
+	err := mounter.unmountWithOptions(ctx, v.FilesystemName, mountOpts)
 
 	if err == nil {
 		v.mountPath = ""
@@ -1521,7 +1528,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Debug().Str("filesystem", v.FilesystemName).Msg("Deleting filesystem")
-	fsObj, err := v.getFilesystemObj(ctx, true)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to fetch filesystem for deletion")
 		return status.Errorf(codes.Internal, "Failed to fetch filesystem for deletion: %s, %e", v.FilesystemName, err)
@@ -1533,7 +1540,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 	}
 
 	deleteFunc := func(fsObj *apiclient.FileSystem) error {
-		if v.server.getMounter().getTransport() == dataTransportNfs {
+		if v.server.getMounter(ctx).getTransport() == dataTransportNfs {
 			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
 			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
 			if err != nil {

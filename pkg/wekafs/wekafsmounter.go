@@ -5,6 +5,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,25 @@ type wekafsMounter struct {
 	selinuxSupport          *bool
 	gc                      *innerPathVolGc
 	allowProtocolContainers bool
+	enabled                 bool
+}
+
+func (m *wekafsMounter) isEnabled() bool {
+	return m.enabled
+}
+
+func (m *wekafsMounter) Enable() {
+	if !m.enabled {
+		log.Ctx(context.Background()).Info().Msg("Enabling WekaFS mounter")
+	}
+	m.enabled = true
+}
+
+func (m *wekafsMounter) Disable() {
+	if m.enabled {
+		log.Ctx(context.Background()).Info().Msg("Disabling WekaFS mounter")
+	}
+	m.enabled = false
 }
 
 func (m *wekafsMounter) getGarbageCollector() *innerPathVolGc {
@@ -34,7 +54,7 @@ func newWekafsMounter(driver *WekaFsDriver) *wekafsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
+	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport, enabled: true}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc()
@@ -52,7 +72,7 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		kMounter:                m.kMounter,
 		fsName:                  fsName,
 		debugPath:               m.debugPath,
-		mountPoint:              "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+		mountPoint:              path.Join(MountBasePath, string(m.getTransport()), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:            options,
 		allowProtocolContainers: m.allowProtocolContainers,
 	}
