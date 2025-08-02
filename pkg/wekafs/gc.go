@@ -60,24 +60,29 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 		return err
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
+	fullPath := filepath.Join(path, volume.GetFullPath(ctx))
+	if !fileExists(fullPath) {
+		logger.Debug().Str("full_path", fullPath).Msg("Volume contents not found, maybe already moved to trash, skipping")
+		return nil
+	}
+
+	newPath := filepath.Join(volumeTrashLoc, filepath.Base(fullPath))
+	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Moving volume contents to trash")
+
+	gc.Lock()
+	defer gc.Unlock()
 	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
 		if !os.IsExist(err) {
 			logger.Error().Str("garbage_collection_path", volumeTrashLoc).Err(err).Msg("Failed to create garbage collector directory")
 			return err
 		}
 	}
-	fullPath := filepath.Join(path, volume.GetFullPath(ctx))
-	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Moving volume contents to trash")
-	newPath := filepath.Join(volumeTrashLoc, filepath.Base(fullPath))
-	if !fileExists(fullPath) {
-		logger.Debug().Str("full_path", fullPath).Msg("Volume contents not found, maybe already moved to trash, skipping")
-		return nil
-	}
 	if err := os.Rename(fullPath, newPath); err != nil {
 		logger.Error().Err(err).Str("full_path", fullPath).
 			Str("volume_trash_location", volumeTrashLoc).Msg("Failed to move volume contents to volumeTrashLoc")
 		return err
 	}
+
 	// NOTE: there is a problem of directory leaks here. If the volume innerPath is deeper than /csi-volumes/vol-name,
 	// e.g. if using statically provisioned volume, we move only the deepest directory
 	// so if the volume is dir/v1/<filesystem>/this/is/a/path/to/volume, we might move only the `volume`
