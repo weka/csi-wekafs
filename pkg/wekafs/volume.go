@@ -22,27 +22,6 @@ import (
 	"time"
 )
 
-const (
-	MaxHashLengthForObjectNames = 12
-	SnapshotsSubDirectory       = ".snapshots"
-)
-
-type VolumeBackingType string
-
-const (
-	VolumeBackingTypeDirectory  VolumeBackingType = "DIRECTORY"
-	VolumeBackingTypeFilesystem VolumeBackingType = "FILESYSTEM"
-	VolumeBackingTypeSnapshot   VolumeBackingType = "SNAPSHOT"
-	VolumeBackingTypeHybrid     VolumeBackingType = "HYBRID"
-)
-
-var KnownBackingTypes = []VolumeBackingType{VolumeBackingTypeDirectory, VolumeBackingTypeFilesystem, VolumeBackingTypeSnapshot}
-
-var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
-var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
-
-var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
-
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)
 type Volume struct {
 	id                    string
@@ -1218,10 +1197,10 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	maxStorageCapacity, err := v.getMaxCapacity(ctx)
 	logger.Trace().Int64("max_capacity", maxStorageCapacity).Msg("Validating enough capacity on storage for creating the volume")
 	if err != nil {
-		return status.Errorf(codes.Internal, fmt.Sprintf("CreateVolume: Cannot obtain free capacity for volume %s", v.GetId()))
+		return status.Errorf(codes.Internal, "CreateVolume: Cannot obtain free capacity for volume %s", v.GetId())
 	}
 	if capacity > maxStorageCapacity {
-		return status.Errorf(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
+		return status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity)
 	}
 
 	encryptionParams, err := v.ensureEncryptionParams(ctx)
@@ -1233,7 +1212,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		// filesystem size might be larger than free space, check it
 		fsSize := Max(capacity, v.initialFilesystemSize)
 		if fsSize > maxStorageCapacity {
-			return status.Errorf(codes.OutOfRange, fmt.Sprintf("Minimum filesystem size %d is set in storageClass, which exceeds total free capacity %d", fsSize, maxStorageCapacity))
+			return status.Errorf(codes.OutOfRange, "Minimum filesystem size %d is set in storageClass, which exceeds total free capacity %d", fsSize, maxStorageCapacity)
 		}
 		if fsSize > capacity {
 			logger.Trace().Int64("filesystem_size", fsSize).Msg("Overriding filesystem size to initial capacity set in storageClass")

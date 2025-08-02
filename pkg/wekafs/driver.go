@@ -1,19 +1,3 @@
-/*
-Copyright 2017 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package wekafs
 
 import (
@@ -21,18 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
-	"io/fs"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"os/signal"
 	"syscall"
 )
-
-const MountBasePath = "/run/weka-fs-mounts/"
-
-var DefaultVolumePermissions fs.FileMode = 0750
 
 type WekaFsDriver struct {
 	name              string
@@ -51,19 +31,7 @@ type WekaFsDriver struct {
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig
-}
-
-type VolumeType string
-
-var (
-	vendorVersion           = "dev"
-	ClusterApiNotFoundError = errors.New("could not get API client by cluster guid")
-)
-
-// Die used to intentionally panic and exit, while updating termination log
-func Die(exitMsg string) {
-	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
-	panic(exitMsg)
+	k8sApiClient   *kubernetes.Clientset
 }
 
 func NewWekaFsDriver(
@@ -105,12 +73,18 @@ func NewWekaFsDriver(
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
 
-	driver.mounters = NewMounterGroup(driver)
-	// Create GRPC servers
+	if driver.csiMode != CsiModeMetricsServer {
+		driver.mounters = NewMounterGroup(driver)
 
-	// identity server runs always
-	log.Info().Msg("Loading IdentityServer")
-	driver.ids = NewIdentityServer(driver)
+		log.Info().Msg("Loading IdentityServer")
+		driver.ids = NewIdentityServer(driver)
+
+	} else {
+		log.Info().Msg("Running in Metrics Server mode, skipping IdentityServer and MounterGroup initialization")
+		driver.ids = nil
+		driver.mounters = nil
+	}
+	// Create GRPC servers
 
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
@@ -128,7 +102,6 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 			driver.CleanupNodeLabels(ctx)
 		}
 
-		// bring up node part
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver)
 	} else {
@@ -158,27 +131,55 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	}()
 
-	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
-	s.Wait()
+	if s.csiMode != CsiModeMetricsServer {
+		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
+		s.Wait()
+	}
+}
+
+func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
+	if d.k8sApiClient == nil {
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			if errors.Is(err, rest.ErrNotInCluster) {
+				log.Trace().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+				// Fallback to using kubeconfig from the local environment
+				kubeconfig := os.Getenv("KUBECONFIG")
+				if kubeconfig == "" {
+					log.Error().Msg("KUBECONFIG environment variable is not set")
+					return nil
+				}
+				config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
+					return nil
+				}
+			} else {
+				log.Error().Err(err).Msg("Failed to create in-cluster config")
+				return nil
+			}
+		}
+
+		clientset, err := kubernetes.NewForConfig(config)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create Kubernetes client")
+			return nil
+		}
+		d.k8sApiClient = clientset
+	}
+	return d.k8sApiClient
 }
 
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create in-cluster config")
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create Kubernetes client")
-		return
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(ctx, d.nodeID, v1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node object from Kubernetes")
 		return
@@ -215,7 +216,7 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		return
 	}
 
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = d.GetK8sApiClient().CoreV1().Nodes().Update(ctx, node, v1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return
@@ -235,19 +236,13 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 	}
 	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
 
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create in-cluster config")
+	client := d.GetK8sApiClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create Kubernetes client")
-		return
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	node, err := client.CoreV1().Nodes().Get(ctx, d.nodeID, v1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node")
 		return
@@ -258,44 +253,11 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 		log.Info().Str("label", label).Str("node", node.Name).Msg("Removing label from node")
 	}
 
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	_, err = client.CoreV1().Nodes().Update(ctx, node, v1.UpdateOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return
 	}
 
 	log.Info().Msg("Successfully removed labels from node")
-
-	//output, err := exec.Command("/bin/kubectl", "label", "node", d.nodeID, labelsString).Output()
-	//if err != nil {
-	//	log.Error().Err(err).Str("output", string(output)).Msg("Failed to remove labels from node")
-	//}
-}
-
-type CsiPluginMode string
-
-const (
-	VolumeTypeDirV1   VolumeType = "dir/v1"  // if specified in storage class, create directory-backed volumes. FS name must be set in SC as well
-	VolumeTypeUnified VolumeType = "weka/v2" // no need to specify this in storageClass
-	VolumeTypeUNKNOWN VolumeType = "AMBIGUOUS_VOLUME_TYPE"
-	VolumeTypeEmpty   VolumeType = ""
-
-	CsiModeNode       CsiPluginMode = "node"
-	CsiModeController CsiPluginMode = "controller"
-	CsiModeAll        CsiPluginMode = "all"
-)
-
-var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeUnified}
-
-func GetCsiPluginMode(mode *string) CsiPluginMode {
-	ret := CsiPluginMode(*mode)
-	switch ret {
-	case CsiModeNode,
-		CsiModeController,
-		CsiModeAll:
-		return ret
-	default:
-		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
-		return ""
-	}
 }

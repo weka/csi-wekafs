@@ -34,15 +34,15 @@ import (
 //goland:noinspection GoExportedFuncWithUnexportedType
 func NewNonBlockingGRPCServer(mode CsiPluginMode) *nonBlockingGRPCServer {
 	return &nonBlockingGRPCServer{
-		csiMmode: mode,
+		csiMode: mode,
 	}
 }
 
 // NonBlocking server
 type nonBlockingGRPCServer struct {
-	wg       sync.WaitGroup
-	server   *grpc.Server
-	csiMmode CsiPluginMode
+	wg      sync.WaitGroup
+	server  *grpc.Server
+	csiMode CsiPluginMode
 }
 
 func (s *nonBlockingGRPCServer) Start(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
@@ -95,13 +95,13 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 		log.Info().Msg("Registering GRPC IdentityServer")
 		csi.RegisterIdentityServer(server, ids)
 	}
-	if s.csiMmode == CsiModeController || s.csiMmode == CsiModeAll {
+	if s.csiMode == CsiModeController || s.csiMode == CsiModeAll {
 		if cs != nil {
 			log.Info().Msg("Registering GRPC ControllerServer")
 			csi.RegisterControllerServer(server, cs)
 		}
 	}
-	if s.csiMmode == CsiModeNode || s.csiMmode == CsiModeAll {
+	if s.csiMode == CsiModeNode || s.csiMode == CsiModeAll {
 		if ns != nil {
 			log.Info().Msg("Registering GRPC NodeServer")
 			csi.RegisterNodeServer(server, ns)

@@ -23,12 +23,6 @@ import (
 	"time"
 )
 
-const (
-	SnapshotTypeUnifiedSnap = "wekasnap/v2"
-	ProcModulesPath         = "/proc/modules"
-	ProcWekafsInterface     = "/proc/wekafs/interface"
-)
-
 var ProcMountsPath = "/proc/mounts"
 
 func generateInnerPathForDirBasedVol(dynamicVolPath, csiVolName string) string {
@@ -405,10 +399,10 @@ func validateVolumeId(volumeId string) error {
 		if re.MatchString(volumeId) {
 			return nil
 		} else {
-			return errors.New(fmt.Sprintln("Volume ID does not match regex:", r, volumeId))
+			return status.Errorf(codes.InvalidArgument, "volume ID %s does not match regex: %s", r, volumeId)
 		}
 	}
-	return status.Errorf(codes.InvalidArgument, fmt.Sprintf("unsupported volumeId %s for type %s", volumeId, volumeType))
+	return status.Errorf(codes.InvalidArgument, "unsupported volumeId %s for type %s", volumeId, volumeType)
 }
 
 func validateSnapshotId(snapshotId string) error {
@@ -590,4 +584,24 @@ func getDataTransportFromMountPath(mountPoint string) DataTransport {
 	}
 	// just default
 	return dataTransportWekafs
+}
+
+// Die used to intentionally panic and exit, while updating termination log
+func Die(exitMsg string) {
+	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+	panic(exitMsg)
+}
+
+func GetCsiPluginMode(mode *string) CsiPluginMode {
+	ret := CsiPluginMode(*mode)
+	switch ret {
+	case CsiModeNode,
+		CsiModeController,
+		CsiModeAll,
+		CsiModeMetricsServer:
+		return ret
+	default:
+		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
+		return ""
+	}
 }

@@ -16,10 +16,6 @@ import (
 	"time"
 )
 
-const (
-	MaxSnapshotDeletionDuration = time.Hour * 2 // Max time to delete snapshot
-)
-
 type Snapshot struct {
 	id                  string
 	FilesystemName      string
@@ -135,7 +131,7 @@ func (s *Snapshot) Create(ctx context.Context) error {
 	snap := &apiclient.Snapshot{}
 
 	if err := s.apiClient.CreateSnapshot(ctx, sr, snap); err != nil {
-		return status.Errorf(codes.Internal, fmt.Sprintln("Failed to create snapshot", err.Error()))
+		return status.Errorf(codes.Internal, "Failed to create snapshot: %v", err)
 	}
 	logger.Info().Str("snapshot", s.SnapshotName).
 		Str("snapshot_uid", snap.Uid.String()).
