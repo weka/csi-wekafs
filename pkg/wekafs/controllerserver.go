@@ -211,7 +211,10 @@ func (cs *ControllerServer) initializeSemaphore(ctx context.Context, op string) 
 	if _, ok := cs.semaphores[op]; ok {
 		return
 	}
-	m := cs.getConfig().maxConcurrencyPerOp[op]
+	m, ok := cs.getConfig().maxConcurrencyPerOp[op]
+	if !ok { // if not set, default to 1
+		m = 1
+	}
 	logger := log.Ctx(ctx)
 	logger.Info().Str("op", op).Int64("max_concurrency", m).Msg("Initializing semaphore")
 	sem := semaphore.NewWeighted(m)
