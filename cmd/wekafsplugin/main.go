@@ -97,6 +97,7 @@ var (
 	allowAsyncObjectDeletion             = flag.Bool("allowasyncobjectdeletion", false, "Allow deletion of volumes in asynchronous manner. Improves speed of multiple volume deletions but might leave some objects in Weka cluster. Use with caution.")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
+	wekaApiTimeoutSeconds                = flag.Int("wekaapitimeoutseconds", 60, "Timeout for Weka API requests in seconds")
 	// Set by the build process
 	version = ""
 )
@@ -236,6 +237,7 @@ func handle(ctx context.Context) {
 		*allowEncryptionWithoutKms,
 		*tracingUrl,
 		*manageNodeTopologyLabels,
+		time.Duration(*wekaApiTimeoutSeconds)*time.Second,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, csiMode, *selinuxSupport, config)
 	if err != nil {
