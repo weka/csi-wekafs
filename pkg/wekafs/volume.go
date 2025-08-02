@@ -1565,7 +1565,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 	}
 	v.fileSystemObject = nil
 
-	if v.server.getConfig().waitForObjectDeletion {
+	if !v.server.getConfig().allowAsyncObjectDeletion {
 		return deleteFunc(fsObj)
 	}
 
@@ -1621,8 +1621,8 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 	snapUid := snapObj.Uid
 	logger.Trace().Str("snapshot_uid", snapUid.String()).Msg("Attempting deletion of snapshot")
 	v.snapshotObject = nil
-	fsd := &apiclient.SnapshotDeleteRequest{Uid: snapObj.Uid}
-	err = v.apiClient.DeleteSnapshot(ctx, fsd)
+	snd := &apiclient.SnapshotDeleteRequest{Uid: snapObj.Uid}
+	err = v.apiClient.DeleteSnapshot(ctx, snd)
 	if err != nil {
 		if err == apiclient.ObjectNotFoundError {
 			logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot not found, assuming repeating request")
@@ -1638,9 +1638,9 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 		}
 		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Str("snapshot_uid", snapUid.String()).
 			Msg("Failed to delete snapshot")
-		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
+		return status.Errorf(codes.Internal, "Failed to delete snapshot %s: %s", v.SnapshotName, err)
 	}
-	if v.server.getConfig().waitForObjectDeletion {
+	if !v.server.getConfig().allowAsyncObjectDeletion {
 		return v.waitForSnapshotDeletion(ctx, logger, snapUid)
 	}
 	go func() { _ = v.waitForSnapshotDeletion(ctx, logger, snapUid) }()
