@@ -7,5 +7,4 @@ if [[ $1 != "--keep" ]]; then
 fi
 
 env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-X main.version=dev' -o .tmp-bin/plugin_linux ../../cmd/wekafsplugin/*.go
-docker-compose build
-docker-compose up ${TO_STOP} --always-recreate
+docker compose up ${TO_STOP} --always-recreate
