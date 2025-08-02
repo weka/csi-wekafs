@@ -25,18 +25,7 @@ helm repo add csi-wekafs https://weka.github.io/csi-wekafs
 helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
 ```
 
-> **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
-> Refer to [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md) for additional information
-
-> **NOTE:** Since version 0.7.0, Weka CSI plugin transitions to API-based deployment model which requires API
-> connectivity and credentials parameters to be set in Storage Class.
->
-> Kubernetes does not allow storage class modification for existing volumes, hence the
-> recommended upgrade process is re-deploying new persistent volumes based on new storage class format.
->
-> However, for sake of more convenient migration, a `legacySecretName` parameter can be set that will
-> bind existing legacy volumes to a Weka cluster API and allow volume expansion.
->
+> **NOTE:** Since version 3.0.0, WEKA CSI plugin removes support for legacy volumes (not having an API binding)
 > For further information, refer [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
 ## Usage
@@ -91,7 +80,6 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | node.terminationGracePeriodSeconds | int | `10` | termination grace period for node pods |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
-| legacyVolumeSecretName | string | `""` | for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin |
 | priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |
 | selinuxSupport | string | `"off"` | Support SELinux labeling for Persistent Volumes, may be either `off`, `mixed`, `enforced` (default off)    In `enforced` mode, CSI node components will only start on nodes having a label `selinuxNodeLabel` below    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!    NOTE: SELinux support is enabled automatically on clusters recognized as RedHat OpenShift Container Platform |
 | selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
