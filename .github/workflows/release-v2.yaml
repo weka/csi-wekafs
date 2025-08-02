@@ -64,6 +64,11 @@ jobs:
               exit 2
           fi
 
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install gh jq -y
+
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -123,7 +128,7 @@ jobs:
           for GOARCH in amd64 arm64; do
             mkdir -p build/$GOOS-$GOARCH
             echo "Building for GOOS=$GOOS GOARCH=$GOARCH"
-            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -o build/$GOOS-$GOARCH ./cmd/**
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -o build/$GOOS-$GOARCH/wekafsplugin ./cmd/wekafsplugin
           done
 
       - name: Upload binaries
@@ -209,10 +214,14 @@ jobs:
 
   release:
     needs:
-      - build-binaries
+      - publish-docker-image
 
     runs-on: ubuntu-latest
     steps:
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install gh jq -y
 
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -333,6 +342,7 @@ jobs:
 
       # https://colinwilson.uk/2022/01/27/how-to-sign-helm-charts-using-chart-releaser-action/
       - name: Prepare GPG key
+        if: ${{ !inputs.performDryRun }}
         run: |
           gpg_dir=.cr-gpg
           mkdir "$gpg_dir"
