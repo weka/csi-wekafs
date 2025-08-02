@@ -218,6 +218,8 @@ jobs:
       - name: Load Docker image with lock
         run: |
           LOCKFILE="/tmp/docker-load-sanity-${{ github.sha }}.lock"
+          ls /tmp
+          
           (
             flock 200
 
@@ -228,8 +230,9 @@ jobs:
               echo "Image sanity:${{ github.sha }} already loaded"
             fi
 
-            rm -ef ././${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }} || true
           ) 200>"$LOCKFILE"
+          rm -rf ./${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }}
+          rm -rf $LOCKFILE
 
       # RUN SANITY TESTS
       - run: docker compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
