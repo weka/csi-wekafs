@@ -100,7 +100,7 @@ var (
 	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
 	wekafsContainerName                  = flag.String("wekafscontainername", "", "Name of the Weka container to use for mounting filesystems")
 	skipGarbageCollection                = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
-	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
+	allowAsyncObjectDeletion             = flag.Bool("allowasyncobjectdeletion", false, "Allow deletion of volumes in asynchronous manner. Improves speed of multiple volume deletions but might leave some objects in Weka cluster. Use with caution.")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
 	enforceDirVolTotalCapacity           = flag.Bool("enforcedirvoltotalcapacity", false, "Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)")
@@ -240,7 +240,7 @@ func handle(ctx context.Context) {
 		*nfsProtocolVersion,
 		version,
 		*skipGarbageCollection,
-		*waitForObjectDeletion,
+		*allowAsyncObjectDeletion,
 		*allowEncryptionWithoutKms,
 		*tracingUrl,
 		*manageNodeTopologyLabels,
