@@ -164,11 +164,6 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
-            {{- if .Values.legacyVolumeSecretName }}
-            - mountPath: /legacy-volume-access
-              name: legacy-volume-access
-              readOnly: true
-            {{- end }}
             {{- if or (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") (eq .Values.selinuxSupport "enforced") }}
             - mountPath: /etc/selinux/config
               name: selinux-config
@@ -264,9 +259,4 @@ spec:
             path: /sys/fs/selinux
             type: Directory
           name: selinux-fs
-      {{- end }}
-      {{- if .Values.legacyVolumeSecretName }}
-        - name: legacy-volume-access
-          secret:
-            secretName: {{ .Values.legacyVolumeSecretName }}
       {{- end }}
