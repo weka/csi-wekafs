@@ -238,6 +238,12 @@ pluginConfig:
     snapshotVolumesWithoutQuotaEnforcement: false
     # -- Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)
     enforceDirVolTotalCapacity: false
+    # -- Should the CSI plugin wait for object deletion before reporting completion.
+    #    If true, the plugin will report success on deletion of volumes while the actual deletion of objects will be done in the background.
+    #    If false, the plugin will report success only after the objects are deleted on WEKA cluster.
+    #    Usually, async deletion would drastically increase speed of volume deletions, since deletion is performed serially.
+    #    However, it may cause objects on Weka cluster to remain if the plugin crashes or is restarted before the deletion is completed.
+    allowAsyncObjectDeletion: true
   mutuallyExclusiveMountOptions:
     - "readcache,writecache,coherent,forcedirect"
     - "sync,async"
@@ -262,8 +268,6 @@ pluginConfig:
     wekafsContainerName: ""
   # -- Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false
   skipGarbageCollection: false
-  # -- Wait for WEKA filesystem / snapshot deletion before acknowledging the corresponding CSI volume deletion. Default false
-  waitForObjectDeletion: false
   # -- Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false.
   manageNodeTopologyLabels: true
   # -- Automatically set ownership (exclusive permissions to mount a filesystem) on dynamically created filesystem-backed volumes
