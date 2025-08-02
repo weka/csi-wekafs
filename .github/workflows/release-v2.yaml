@@ -1,5 +1,4 @@
 name: release-v2
-
 on:
   workflow_dispatch:
     inputs:
@@ -207,8 +206,11 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
 
+
+
   release:
     needs:
+      - publish-docker-image
       - build-binaries
 
     runs-on: ubuntu-latest
@@ -333,6 +335,7 @@ jobs:
 
       # https://colinwilson.uk/2022/01/27/how-to-sign-helm-charts-using-chart-releaser-action/
       - name: Prepare GPG key
+        if: ${{ !inputs.performDryRun }}
         run: |
           gpg_dir=.cr-gpg
           mkdir "$gpg_dir"
