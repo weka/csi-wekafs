@@ -3,6 +3,7 @@ package wekafs
 import (
 	"context"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.uber.org/atomic"
 	"sync"
 	"time"
 )
@@ -32,11 +33,6 @@ type AnyMounter interface {
 	Disable()
 }
 
-type nfsMountsMap map[string]int // we only follow the mountPath and number of references
-type wekafsMountsMap map[string]int
-type DataTransport string
-type UnmountFunc func()
-
 type AnyMount interface {
 	isMounted() bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
@@ -52,3 +48,10 @@ type AnyMount interface {
 type VolumeBackingType string
 type VolumeType string
 type CsiPluginMode string
+
+type DataTransport string
+type UnmountFunc func()
+
+type wekafsMountsMap map[string]*atomic.Int32
+
+type nfsMountsMap map[string]*atomic.Int32

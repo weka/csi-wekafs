@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.uber.org/atomic"
 	"k8s.io/mount-utils"
 	"os"
 	"strings"
@@ -58,25 +59,24 @@ func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) e
 	m.mounter.lock.Lock()
 	defer m.mounter.lock.Unlock()
 	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
-	if !ok {
-		refCount = 0
-	}
-	if refCount == 0 {
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
-	}
-	if refCount > 0 && !m.isMounted() {
-		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", refCount).Msg("Mount not exists although should!")
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
-	}
-	refCount++
-	m.mounter.mountMap[m.getRefcountIdx()] = refCount
 
+	if !ok || refCount == nil {
+		refCount = atomic.NewInt32(0)
+		m.mounter.mountMap[m.getRefcountIdx()] = refCount
+	}
+
+	if refCount.Load() > 0 && !m.isMounted() {
+		logger.Warn().Str("mount_point", m.getMountPoint()).Int32("refcount", refCount.Load()).Msg("Mount not exists although should!")
+	}
+
+	if refCount.Load() == 0 {
+		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
+			return err
+		}
+	}
+	refCount.Inc()
 	logger.Trace().
-		Int("refcount", refCount).
+		Int32("refcount", refCount.Load()).
 		Strs("mount_options", m.getMountOptions().Strings()).
 		Str("filesystem_name", m.fsName).
 		Str("mount_point", m.getMountPoint()).
@@ -94,22 +94,24 @@ func (m *nfsMount) decRef(ctx context.Context) error {
 	defer m.mounter.lock.Unlock()
 	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
 	if !ok {
-		logger.Error().Int("refcount", refCount).Str("mount_options", m.getMountOptions().String()).Str("mount_point", m.getMountPoint()).Msg("During decRef refcount not found")
-		refCount = 0
-	}
-	if refCount < 0 {
-		logger.Error().Int("refcount", refCount).Msg("During decRef negative refcount encountered, probably due to failed unmount")
-	}
-	if refCount > 0 {
-		logger.Trace().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
-		refCount--
+		logger.Error().Str("mount_options", m.getMountOptions().String()).Str("mount_point", m.getMountPoint()).Msg("During decRef refcount not found")
+		refCount = atomic.NewInt32(0)
 		m.mounter.mountMap[m.getRefcountIdx()] = refCount
 	}
-	if refCount == 0 {
+
+	if refCount.Load() < 0 {
+		logger.Error().Int32("refcount", refCount.Load()).Msg("During decRef negative refcount encountered, probably due to failed unmount")
+	}
+	if refCount.Load() > 0 {
+		refCount.Dec()
+		logger.Trace().Int32("refcount", refCount.Load()).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
+	}
+	if refCount.Load() <= 0 {
 		if m.isMounted() {
 			if err := m.doUnmount(ctx); err != nil {
 				return err
 			}
+			refCount.Store(0) // Reset refCount to 0 after unmount
 		}
 	}
 	return nil
