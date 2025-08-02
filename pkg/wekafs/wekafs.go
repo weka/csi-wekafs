@@ -459,6 +459,13 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 				driver.config.manageNodeTopologyLabels {
 				driver.CleanupNodeLabels(ctx)
 			}
+
+			if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+				log.Info().Msg("Waiting for background tasks to complete")
+				driver.cs.getBackgroundTasksWg().Wait()
+				log.Info().Msg("Background tasks completed")
+			}
+
 			cancelRun()
 		})
 	}()
@@ -483,7 +490,14 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 			driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Cleanup of node labels...")
 			driver.CleanupNodeLabels(ctx)
+			log.Info().Msg("Cleanup of node labels completed")
 		}
+		if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+			log.Info().Msg("Waiting for background tasks to complete")
+			driver.cs.getBackgroundTasksWg().Wait()
+			log.Info().Msg("Background tasks completed")
+		}
+
 		s.Stop()
 		log.Info().Msg("Server stopped")
 		os.Exit(1)

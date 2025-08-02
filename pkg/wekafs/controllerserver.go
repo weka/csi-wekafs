@@ -72,9 +72,14 @@ type ControllerServer struct {
 	api             *ApiStore
 	config          *DriverConfig
 	semaphores      map[string]*semaphore.Weighted
+	backgroundTasks *sync.WaitGroup
 	manager         ctrl.Manager     // For listing PVs via K8s client
 	capacityTracker *CapacityTracker // Tracks confirmed + pending capacity
 	sync.Mutex
+}
+
+func (cs *ControllerServer) getBackgroundTasksWg() *sync.WaitGroup {
+	return cs.backgroundTasks
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
@@ -146,14 +151,15 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
-	cs := &ControllerServer{
-		caps:       capabilities,
-		nodeID:     nodeID,
-		mounter:    mounter,
-		api:        api,
-		config:     config,
-		semaphores: make(map[string]*semaphore.Weighted),
-		manager:    manager,
+	return &ControllerServer{
+		caps:            capabilities,
+		nodeID:          nodeID,
+		mounter:         mounter,
+		api:             api,
+		config:          config,
+		semaphores:      make(map[string]*semaphore.Weighted),
+		backgroundTasks: new(sync.WaitGroup),
+		manager:         manager,
 	}
 
 	// Initialize capacity tracker if manager available
