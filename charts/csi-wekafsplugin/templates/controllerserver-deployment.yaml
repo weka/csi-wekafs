@@ -104,6 +104,7 @@ spec:
             - "--concurrency.expandVolume={{ .Values.controller.concurrency.expandVolume | default "1" }}"
             - "--concurrency.createSnapshot={{ .Values.controller.concurrency.createSnapshot | default "1" }}"
             - "--concurrency.deleteSnapshot={{ .Values.controller.concurrency.deleteSnapshot | default "1" }}"
+            - "--concurrency.modifyVolume={{ .Values.controller.concurrency.modifyVolume | default "1" }}"
           {{- end }}
           {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
             - "--usenfs"
@@ -276,6 +277,9 @@ spec:
           {{- end }}
             - "--workers={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
+          {{- if semverCompare ">=1.31.0" .Capabilities.KubeVersion.Version }}
+            - "--feature-gates=VolumeAttributesClass=true"
+          {{- end }}
           {{- if .Values.controller.configureResizerLeaderElection }}
           livenessProbe:
             httpGet:

@@ -33,6 +33,7 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 		1,
 		1,
 		10,
+		1,
 		true,
 		true,
 		true,

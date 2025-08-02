@@ -99,11 +99,6 @@ func (cs *ControllerServer) ControllerGetVolume(context.Context, *csi.Controller
 	panic("implement me")
 }
 
-//goland:noinspection GoUnusedParameter
-func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
-	panic("implement me")
-}
-
 func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
 	if driver == nil {
 		panic("driver is nil")
@@ -113,6 +108,7 @@ func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
 		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod support
+		csi.ControllerServiceCapability_RPC_MODIFY_VOLUME,
 	}
 	if driver.config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
@@ -320,8 +316,26 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	// set params to have all relevant mount options (default + those received in params) to be passed as part of volumeContext
 	// omit the container_name though as it should only be set via API secret and not via mount options
-	params["mountOptions"] = volume.getMountOptions(ctx).AsVolumeContext()
 	params["provisionedByCsiVersion"] = cs.getConfig().GetVersion()
+
+	mountOptionsInMap := false
+
+	err = cs.getConfig().GetDriver().SetVolumeMountOptionsInMap(ctx, volume.GetId(), volume.getMountOptions(ctx).AsVolumeContext())
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to set volume mount options in map")
+	} else {
+		mountOptionsInMap = true
+	}
+	if !mountOptionsInMap {
+		params["mountOptions"] = volume.getMountOptions(ctx).AsVolumeContext()
+	} else {
+		delete(params, "mountOptions")
+	}
+	// remove unnecessary parameters from volumeContext
+	volumeContext := params
+	for _, key := range []string{"filesystemGroupName", "initialFilesystemSizeGB"} {
+		delete(volumeContext, key)
+	}
 
 	if err != nil {
 		if !volExists {
@@ -339,7 +353,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			Volume: &csi.Volume{
 				VolumeId:           volume.GetId(),
 				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
-				VolumeContext:      params,
+				VolumeContext:      volumeContext,
 				ContentSource:      volume.getCsiContentSource(ctx),
 				AccessibleTopology: cs.generateAccessibleTopology(),
 			},
@@ -355,7 +369,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				Volume: &csi.Volume{
 					VolumeId:           volume.GetId(),
 					CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
-					VolumeContext:      params,
+					VolumeContext:      volumeContext,
 					ContentSource:      volume.getCsiContentSource(ctx),
 					AccessibleTopology: cs.generateAccessibleTopology(),
 				},
@@ -460,6 +474,9 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	if err != nil {
 		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
 	}
+
+	// Delete volume mount options from map
+	cs.getConfig().GetDriver().DeleteVolumeMountOptionsFromMap(ctx, volume.GetId())
 
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
@@ -587,6 +604,86 @@ func CreateSnapshotError(ctx context.Context, errorCode codes.Code, errorMessage
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
 	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error creating snapshot")
 	return &csi.CreateSnapshotResponse{}, err
+}
+
+func ModifyVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.ControllerModifyVolumeResponse, error) {
+	err := status.Error(errorCode, strings.ToLower(errorMessage))
+	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error modifying volume")
+	return &csi.ControllerModifyVolumeResponse{}, err
+}
+
+//goland:noinspection GoUnusedParameter
+func (cs *ControllerServer) ControllerModifyVolume(ctx context.Context, req *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
+	op := "ModifyVolume"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	volumeID := req.GetVolumeId()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).
+		Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).
+		Str("volume_id", volumeID).Logger().WithContext(ctx)
+
+	logger := log.Ctx(ctx)
+	result := "FAILURE"
+
+	params := req.GetMutableParameters()
+	logger.Info().Str("volume_id", volumeID).Fields(params).Msg(">>>> Received request")
+	defer func() {
+		level := zerolog.InfoLevel
+		if result != "SUCCESS" {
+			level = zerolog.ErrorLevel
+		}
+		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
+	}()
+
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return ModifyVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
+	if len(req.GetVolumeId()) == 0 {
+		return ModifyVolumeError(ctx, codes.InvalidArgument, "Volume ID not specified")
+	}
+
+	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets)
+
+	if err != nil {
+		// this case can happen only if we had client that failed to initialise, and not if we do not have a client at all
+		return ModifyVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
+	}
+
+	volume, err := NewVolumeFromId(ctx, req.GetVolumeId(), client, cs)
+	if err != nil {
+		return ModifyVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
+	}
+
+	ok, err := volume.Exists(ctx)
+	if err != nil {
+		return ModifyVolumeError(ctx, codes.NotFound, err.Error())
+	}
+	if !ok {
+		return ModifyVolumeError(ctx, codes.NotFound, "Volume does not exist")
+	}
+
+	for param, value := range params {
+		switch param {
+		case "mountOptions":
+			logger.Debug().Str("volume_id", volume.GetId()).Str("mount_options", value).Msg("Modifying volume mount options")
+			err = cs.getConfig().GetDriver().SetVolumeMountOptionsInMap(ctx, volume.GetId(), value)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to set volume mount options in map")
+				return ModifyVolumeError(ctx, codes.Internal, "Failed to set volume mount options in map")
+			}
+
+		default:
+			return ModifyVolumeError(ctx, codes.InvalidArgument, fmt.Sprintf("Cannot modify parameter %s via ModifyVolume", param))
+		}
+	}
+
+	result = "SUCCESS"
+	return &csi.ControllerModifyVolumeResponse{}, nil
 }
 
 func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (*csi.CreateSnapshotResponse, error) {
