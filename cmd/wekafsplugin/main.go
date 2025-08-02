@@ -98,6 +98,12 @@ var (
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
 	wekaApiTimeoutSeconds                = flag.Int("wekaapitimeoutseconds", 60, "Timeout for Weka API requests in seconds")
+	wekametricsfetchintervalseconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
+	wekametricsfetchconcurrentrequests       = flag.Int64("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
+	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
+	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
+	wekaMetricsQuotaMapValidity              = flag.Int("wekametricsquotacachevalidityseconds", 60, "Duration for which the quota map is considered valid")
+	useBatchMode                             = flag.Bool("fetchquotasinbatchmode", false, "Use batch mode for metrics server, fetch all filesystem quotas in one go")
 	// Set by the build process
 	version = ""
 )
@@ -136,7 +142,7 @@ func main() {
 		fmt.Println(baseName, version)
 		return
 	}
-	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode {
+	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode && csiMode != wekafs.CsiModeMetricsServer {
 		log.Panic().Str("requestedCsiMode", string(csiMode)).Msg("Invalid mode specified for CSI driver")
 	}
 	log.Info().Str("csi_mode", string(csiMode)).Bool("selinux_mode", *selinuxSupport).Msg("Started CSI driver")
@@ -238,6 +244,12 @@ func handle(ctx context.Context) {
 		*tracingUrl,
 		*manageNodeTopologyLabels,
 		time.Duration(*wekaApiTimeoutSeconds)*time.Second,
+		time.Duration(*wekametricsfetchintervalseconds)*time.Second,
+		*wekametricsfetchconcurrentrequests,
+		*enableMetricsServerLeaderElection,
+		*wekaMetricsQuotaUpdateConcurrentRequests,
+		time.Duration(*wekaMetricsQuotaMapValidity)*time.Second,
+		*useBatchMode,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, csiMode, *selinuxSupport, config)
 	if err != nil {

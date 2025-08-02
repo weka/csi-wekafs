@@ -46,7 +46,9 @@ type nonBlockingGRPCServer struct {
 }
 
 func (s *nonBlockingGRPCServer) Start(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
-
+	if s == nil {
+		return
+	}
 	s.wg.Add(1)
 
 	go s.serve(endpoint, ids, cs, ns)
@@ -59,6 +61,9 @@ func (s *nonBlockingGRPCServer) Wait() {
 }
 
 func (s *nonBlockingGRPCServer) Stop() {
+	if s == nil || s.server == nil {
+		return
+	}
 	s.server.GracefulStop()
 }
 
@@ -68,30 +73,32 @@ func (s *nonBlockingGRPCServer) ForceStop() {
 
 func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
 
-	proto, addr, err := parseEndpoint(endpoint)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
+	var listener net.Listener
+	if s.csiMode != CsiModeMetricsServer {
+		proto, addr, err := parseEndpoint(endpoint)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
 
-	if proto == "unix" {
-		addr = "/" + addr
-		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
-			Die(fmt.Sprintf("Failed to remove %s, error: %s", addr, err.Error()))
+		if proto == "unix" {
+			addr = "/" + addr
+			if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
+				Die(fmt.Sprintf("Failed to remove %s, error: %s", addr, err.Error()))
+			}
+		}
+
+		listener, err = net.Listen(proto, addr)
+		if err != nil {
+			Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
 		}
 	}
-
-	listener, err := net.Listen(proto, addr)
-	if err != nil {
-		Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
-	}
-
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(logGRPC),
 	}
 	server := grpc.NewServer(opts...)
 	s.server = server
 
-	if ids != nil {
+	if s.csiMode != CsiModeMetricsServer {
 		log.Info().Msg("Registering GRPC IdentityServer")
 		csi.RegisterIdentityServer(server, ids)
 	}
@@ -108,7 +115,9 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 		}
 	}
 
-	log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
+	if s.csiMode != CsiModeMetricsServer {
+		log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
+	}
 
 	if err := server.Serve(listener); err != nil {
 		Die(err.Error())

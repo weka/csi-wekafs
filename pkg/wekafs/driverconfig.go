@@ -45,6 +45,12 @@ type DriverConfig struct {
 	tracingUrl                       string
 	manageNodeTopologyLabels         bool
 	wekaApiTimeout                    time.Duration // Timeout for Weka API requests
+	metricsFetchInterval              time.Duration
+	quotaCacheValidityDuration        time.Duration // Duration for which the quota map is considered valid
+	metricsFetchConcurrentRequests    int64
+	enableMetricsServerLeaderElection bool
+	quotaFetchConcurrentRequests      int
+	useQuotaMapsForMetrics            bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -73,6 +79,12 @@ func (dc *DriverConfig) Log() {
 		Bool("manage_node_topology_labels", dc.manageNodeTopologyLabels).
 		Dur("weka_api_timeout", dc.wekaApiTimeout).
 		Str("nfs_protocol_version", dc.nfsProtocolVersion).
+		Str("weka_metrics_fetch_interval", dc.metricsFetchInterval.String()).
+		Int64("weka_metrics_fetch_concurrent_requests", dc.metricsFetchConcurrentRequests).
+		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
+		Int("weka_metrics_quota_map_concurrent_requests", dc.quotaFetchConcurrentRequests).
+		Int("weka_metrics_quota_cache_validity_duration_seconds", int(dc.quotaCacheValidityDuration.Seconds())).
+		Bool("use_quota_maps_for_metrics", dc.useQuotaMapsForMetrics).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -91,6 +103,12 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	tracingUrl string,
 	manageNodeTopologyLabels bool,
 	wekaApiTimeout time.Duration,
+	wekaMetricsFetchInterval time.Duration,
+	wekaMetricsFetchConcurrentRequests int64,
+	enableMetricsServerLeaderElection bool,
+	wekaMetricsQuotaUpdateConcurrentRequests int,
+	wekaMetricsQuotaMapValidityDuration time.Duration,
+	useQuotaMapsForMetrics bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -141,6 +159,12 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
 		wekaApiTimeout:                    wekaApiTimeout,
+		metricsFetchInterval:              wekaMetricsFetchInterval,
+		metricsFetchConcurrentRequests:    wekaMetricsFetchConcurrentRequests,
+		enableMetricsServerLeaderElection: enableMetricsServerLeaderElection,
+		useQuotaMapsForMetrics:            useQuotaMapsForMetrics,
+		quotaFetchConcurrentRequests:      wekaMetricsQuotaUpdateConcurrentRequests,
+		quotaCacheValidityDuration:        wekaMetricsQuotaMapValidityDuration,
 	}
 }
 
