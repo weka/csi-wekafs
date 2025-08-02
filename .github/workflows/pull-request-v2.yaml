@@ -1,0 +1,455 @@
+name: pull-request-v2
+on:
+  pull_request:
+    paths-ignore:
+      - '.github/**'
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.8.2
+        with:
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Set package version
+        id: version
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      # GO APP BUILD
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build Go binaries
+        run: |
+          echo "Building Go binaries for version: ${{ steps.version.outputs.version }}"
+          go mod download
+          GOOS=linux
+          for GOARCH in amd64 arm64; do
+            mkdir -p build/$GOOS-$GOARCH
+            echo "Building for GOOS=$GOOS GOARCH=$GOARCH"
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -o build/$GOOS-$GOARCH/wekafsplugin ./cmd/wekafsplugin
+          done
+
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: wekafsplugin-binaries-${{ github.sha }}
+          path: build
+          retention-days: 1
+
+  publish-docker-image:
+    needs: build-binaries
+    name: build-docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.8.2
+        with:
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Set package version
+        id: version
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: ./build
+          name: wekafsplugin-binaries-${{ github.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: quay.io
+
+      - name: Build and push Docker images
+        id: build_and_push
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: Dockerfile-gha
+          push: true
+          pull: true
+          tags: '${{ secrets.DOCKER_REGISTRY_NAME }}/csi-wekafs:${{ steps.version.outputs.version }}'
+          cache-from: |
+            type=gha,key=wekacsiplugin-amd64
+            type=gha,key=wekacsiplugin-arm64
+          cache-to: |
+            type=gha,mode=max,key=wekacsiplugin-amd64
+            type=gha,mode=max,key=wekacsiplugin-arm64
+          labels: |
+            revision=${{ steps.version.outputs.version }}
+            quay.expires-after=14d
+            version=${{ steps.version.outputs.version }}
+            release=${{ steps.version.outputs.version }}
+          provenance: false
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+
+  build-sanity-image:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') && github.event.pull_request.draft == false }}
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      # DOWNLOAD BINARY ARTIFACTS
+      - name: Download binary for
+        uses: actions/download-artifact@v4
+        with:
+          path: ./build
+          name: wekafsplugin-binaries-${{ github.sha }}
+
+      - run: echo "${{ secrets.WEKAFS_API_SECRET_YAML }}" > tests/csi-sanity/wekafs-api-secret.yaml
+
+      - uses: docker/setup-buildx-action@v3
+        with:
+          version: latest
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - uses: docker/build-push-action@v6
+        id: build_and_push
+        with:
+          context: .
+          file: tests/csi-sanity/Dockerfile
+          cache-from: type=gha,key=wekacsisanity
+          cache-to: type=gha,mode=max,key=wekacsisanity
+          tags: sanity:${{ github.sha }}
+          load: true
+          outputs: type=docker,dest=/tmp/sanity-${{ github.sha }}.tar
+
+      - name: Upload Docker image tar
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanity-${{ github.sha }}.tar
+          path: /tmp/sanity-${{ github.sha }}.tar
+          retention-days: 1
+
+  test-sanity:
+    name: test-sanity-${{ matrix.SANITY_FUNCTION }}
+    needs: build-sanity-image
+    strategy:
+        matrix:
+            SANITY_FUNCTION: [ directory_nfs, snapshot_nfs, filesystem_nfs  ]
+
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Create random COMPOSE_PROJECT_NAME
+        id: create_project_name
+        run: |
+          # Generate a unique project name based on the commit SHA
+          function_name="${{ matrix.SANITY_FUNCTION }}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          COMPOSE_PROJECT_NAME="${function_name}-${SHORT_SHA}"
+          echo "COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}" >> $GITHUB_OUTPUT
+
+
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
+      - name: Download Docker image tar
+        uses: actions/download-artifact@v4
+        with:
+          name: sanity-${{ github.sha }}.tar
+          path: ./${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }}
+
+      - name: Load Docker image with lock
+        run: |
+          LOCKFILE="/tmp/docker-load-sanity-${{ github.sha }}.lock"
+          ls /tmp
+          
+          (
+            flock 200
+
+            if ! docker image inspect sanity:${{ github.sha }} > /dev/null 2>&1; then
+              echo "Image not found, loading..."
+              docker load -i ./${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }}/sanity-${{ github.sha }}.tar
+            else
+              echo "Image sanity:${{ github.sha }} already loaded"
+            fi
+
+          ) 200>"$LOCKFILE"
+          rm -rf ./${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }}
+          rm -rf $LOCKFILE
+
+      # RUN SANITY TESTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-sanity.yaml up $COMPOSE_DEFAULTS
+        env:
+          SANITY_FUNCTION: ${{ matrix.SANITY_FUNCTION }}
+          IMAGE_TAG: ${{ github.sha }}
+          COMPOSE_PROJECT_NAME: ${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }}
+          COMPOSE_DEFAULTS: '--exit-code-from=sanity --always-recreate-deps --force-recreate --abort-on-container-exit'
+          PLUGIN_VERBOSITY: ${{ vars.PLUGIN_VERBOSITY }}
+          SANITY_PARAMS: ${{ vars.SANITY_PARAMS }}
+          SANITY_VERBOSITY: ${{ vars.SANITY_VERBOSITY }}
+          TRACING_SETTING: ${{ vars.TRACING_SETTING }}
+          OTEL_DEPLOYMENT_IDENTIFIER: csi-sanity-${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }}
+
+  publish-helm-csi:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.8.2
+        with:
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Set package version
+        id: version
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      # HELM
+      - name: Get Helm chart version
+        id: helm_version
+        run: |
+          out="$(echo "${{ steps.version.outputs.version }}" | sed 's/^v//1')"
+          echo "helm_version=$out" >> $GITHUB_OUTPUT
+
+      - name: Update Helm chart version
+        uses: mikefarah/yq@master
+        with:
+          cmd: |
+            BASEDIR=charts/csi-wekafsplugin
+            DRIVER_VERSION="$(echo ${{ steps.version.outputs.version }} | sed 's/^v//1')"
+            CHART_VERSION="${{ steps.helm_version.outputs.helm_version }}"
+            APP_VERSION="${{ steps.version.outputs.version }}"
+            yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
+            yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
+            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
+            yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
+            echo ------------------ values ------------------
+            cat $BASEDIR/values.yaml
+            echo --------------------chart ------------------
+            cat $BASEDIR/Chart.yaml
+
+      - name: helm-docs
+        uses: addnab/docker-run-action@v3
+        with:
+          image: jnorwood/helm-docs:latest
+          options: -v ${{ github.workspace }}:/data
+          run: |
+            cd /data
+            helm-docs -s file -c charts -o ../../README.md -t ../README.md.gotmpl
+            helm-docs -s file -c charts
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.10.0
+
+      - name: update Helm schema
+        run: |
+          helm plugin install https://github.com/karuppiah7890/helm-schema-gen.git
+          helm schema-gen charts/csi-wekafsplugin/values.yaml >| charts/csi-wekafsplugin/values.schema.json 
+
+      # UPLOAD CHART TO S3
+      - name: Create Helm package
+        id: helm-package
+        run: |
+          helm package charts/csi-wekafsplugin
+          FILENAME="csi-wekafsplugin-${{ steps.helm_version.outputs.helm_version }}.tgz"
+          AWS_REGION=${{ secrets.AWS_ACCESS_SECRET_KEY }}
+          S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }}
+          URL="https://$S3_BUCKET_NAME.s3.$AWS_REGION.amazonaws.com"
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Install AWS CLI
+        id: install-aws-cli
+        uses: unfor19/install-aws-cli-action@v1
+        with:
+          version: 2
+
+      - name: Upload Helm package to S3
+        id: helm-s3-upload
+        run: |
+          export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY}}"
+          export AWS_REGION="${{ secrets.AWS_REGION }}"
+          aws s3 cp ${{ steps.helm-package.outputs.filename }} "s3://${{ vars.AWS_BUCKET }}/"
+          echo "link=https://${{ vars.AWS_BUCKET }}.s3.${AWS_REGION}.amazonaws.com/${{ steps.helm-package.outputs.filename }}" >> $GITHUB_OUTPUT
+
+      - uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_USERNAME: csiBot
+          SLACK_ICON_EMOJI: ":robot_face:"
+          SLACK_TITLE: "New build was pushed"
+          SLACK_MESSAGE: "```helm upgrade csi-wekafs -n csi-wekafs --create-namespace -i  ${{ steps.helm-s3-upload.outputs.link }} --set logLevel=6```"
+          SLACK_FOOTER: "Package path: ${{ steps.helm-s3-upload.outputs.link }}"
+        if: ${{ steps.helm-s3-upload.outputs.link != '' }}
+
+  test-helm-csi:
+    needs: publish-docker-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.8.2
+        with:
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Set package version
+        id: version
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      # HELM UPDATE CHART
+      - name: Get Helm chart version
+        id: helm_version
+        run: |
+          out="$(echo "${{ steps.version.outputs.version }}" | sed 's/^v//1')"
+          echo "helm_version=$out" >> $GITHUB_OUTPUT
+
+      - name: Update Helm chart version
+        uses: mikefarah/yq@master
+        with:
+          cmd: |
+            BASEDIR=charts/csi-wekafsplugin
+            DRIVER_VERSION="$(echo ${{ steps.version.outputs.version }} | sed 's/^v//1')"
+            CHART_VERSION="${{ steps.helm_version.outputs.helm_version }}"
+            APP_VERSION="${{ steps.version.outputs.version }}"
+            yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
+            yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
+            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
+            yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
+            echo ------------------ values ------------------
+            cat $BASEDIR/values.yaml
+            echo --------------------chart ------------------
+            cat $BASEDIR/Chart.yaml
+
+      - name: helm-docs
+        uses: addnab/docker-run-action@v3
+        with:
+          image: jnorwood/helm-docs:latest
+          options: -v ${{ github.workspace }}:/data
+          run: |
+            cd /data
+            helm-docs -s file -c charts -o ../../README.md -t ../README.md.gotmpl 
+            helm-docs -s file -c charts
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.10.0
+
+      - name: update Helm schema
+        run: |
+          helm plugin install https://github.com/karuppiah7890/helm-schema-gen.git
+          helm schema-gen charts/csi-wekafsplugin/values.yaml >| charts/csi-wekafsplugin/values.schema.json 
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          check-latest: true
+
+      # TEST CHART
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.7.0
+
+      - name: Run chart-testing (list-changed)
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --chart-dirs charts --target-branch ${{ github.event.repository.default_branch }})
+          if [[ -n "$changed" ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run chart-testing (lint)
+        run: ct lint --chart-dirs charts --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.12.0
+
+      - name: Run chart-testing (install)
+        id: helm-test
+        run: |
+          ct install --print-config --chart-dirs charts --all --debug --helm-extra-args "--timeout 60s"

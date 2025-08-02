@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  plugin_controller:
+    image: sanity:${IMAGE_TAG:-latest}
+    command: timeout 10m wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/controller.sock --csimode=controller -allowautofscreation -allowautofsexpansion -allowsnapshotsofdirectoryvolumes -alwaysallowsnapshotvolumes -usenfs -interfacegroupname=NFS ${TRACING_SETTING}
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    privileged: true
+    network_mode: host
+    healthcheck:
+      test: pgrep -f wekafsplugin >/dev/null
+      start_period: 1s
+      timeout: 1s
+      retries: 3
+      interval: 3s
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
+    init: true
+  plugin_node:
+    image: sanity:${IMAGE_TAG:-latest}
+    command: timeout 10m wekafsplugin -nodeid 1 -v ${PLUGIN_VERBOSITY} --allowinsecurehttps --endpoint=unix://tmp/weka-csi-test/node.sock --csimode=node -allowautofscreation -allowautofsexpansion -allowsnapshotsofdirectoryvolumes -alwaysallowsnapshotvolumes -usenfs -interfacegroupname=NFS ${TRACING_SETTING}
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    privileged: true
+    network_mode: host
+    healthcheck:
+      test: pgrep -f wekafsplugin >/dev/null
+      start_period: 1s
+      timeout: 1s
+      retries: 3
+      interval: 3s
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
+    init: true
+  sanity:
+    image: sanity:${IMAGE_TAG:-latest}
+    command: run_sanity ${SANITY_PARAMS} ${SANITY_FUNCTION} ${SANITY_VERBOSITY}
+    network_mode: host
+    volumes:
+      - test-volume:/tmp/weka-csi-test
+    depends_on:
+      - plugin_controller
+      - plugin_node
+    healthcheck:
+      test: pgrep -f csi-sanity >/dev/null
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
+    init: true
+volumes:
+  test-volume:
