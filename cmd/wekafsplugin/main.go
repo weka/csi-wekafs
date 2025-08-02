@@ -97,7 +97,7 @@ var (
 	clientGroupName                      = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
 	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
 	skipGarbageCollection                = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
-	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
+	allowAsyncObjectDeletion             = flag.Bool("allowasyncobjectdeletion", false, "Allow deletion of volumes in asynchronous manner. Improves speed of multiple volume deletions but might leave some objects in Weka cluster. Use with caution.")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
 	// Set by the build process
@@ -234,7 +234,7 @@ func handle(ctx context.Context) {
 		*nfsProtocolVersion,
 		version,
 		*skipGarbageCollection,
-		*waitForObjectDeletion,
+		*allowAsyncObjectDeletion,
 		*allowEncryptionWithoutKms,
 		*tracingUrl,
 		*manageNodeTopologyLabels,

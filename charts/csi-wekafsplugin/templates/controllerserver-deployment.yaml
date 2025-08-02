@@ -123,8 +123,8 @@ spec:
           {{- if (.Values.pluginConfig.skipGarbageCollection | default false) }}
             - "--skipgarbagecollection"
           {{- end }}
-          {{- if (.Values.pluginConfig.waitForObjectDeletion | default false) }}
-            - "--waitforobjectdeletion"
+          {{- if (.Values.pluginConfig.allowedOperations.allowAsyncObjectDeletion | default false) }}
+            - "--allowasyncobjectdeletion"
           {{- end }}
           {{- if .Values.pluginConfig.encryption.allowEncryptionWithoutKms}}
             - "--allowencryptionwithoutkms"
