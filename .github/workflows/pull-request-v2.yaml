@@ -168,7 +168,7 @@ jobs:
         id: build_and_push
         with:
           context: .
-          file: tests/csi-sanity/DockerfileV2
+          file: tests/csi-sanity/Dockerfile
           cache-from: type=gha,key=wekacsisanity
           cache-to: type=gha,mode=max,key=wekacsisanity
           tags: sanity:${{ github.sha }}
@@ -235,7 +235,7 @@ jobs:
           rm -rf $LOCKFILE
 
       # RUN SANITY TESTS
-      - run: docker compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-sanity.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: ${{ matrix.SANITY_FUNCTION }}
           IMAGE_TAG: ${{ github.sha }}
