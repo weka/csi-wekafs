@@ -157,7 +157,7 @@ func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateReq
 }
 
 func (a *ApiClient) WaitFilesystemReady(ctx context.Context, fsName string, waitPeriodMax time.Duration) (*FileSystem, error) {
-	logger := log.Ctx(ctx).With().Str("filesysem", fsName).Logger()
+	logger := log.Ctx(ctx).With().Str("filesystem", fsName).Logger()
 	for start := time.Now(); time.Since(start) < waitPeriodMax; {
 		fs, err := a.GetFileSystemByName(ctx, fsName)
 		if err != nil || fs == nil {

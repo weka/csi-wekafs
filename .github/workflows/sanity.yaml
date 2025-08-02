@@ -46,8 +46,11 @@ jobs:
     needs: build
     runs-on: self-hosted
     steps:
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: docker-compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-nosnapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: legacy_sanity
 
@@ -55,8 +58,11 @@ jobs:
     needs: legacy_sanity
     runs-on: self-hosted
     steps:
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: directory_volume_and_snapshots
 
@@ -64,8 +70,11 @@ jobs:
     needs: directory_volume_and_snapshots
     runs-on: self-hosted
     steps:
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: docker-compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: directory_volume_and_snapshots_nfs
 
@@ -73,8 +82,11 @@ jobs:
     needs: directory_volume_and_snapshots_nfs
     runs-on: self-hosted
     steps:
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots
 
@@ -82,8 +94,11 @@ jobs:
     needs: snaphot_volumes_with_2nd_level_shapshots
     runs-on: self-hosted
     steps:
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: docker-compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: snaphot_volumes_with_2nd_level_shapshots_nfs
 
@@ -91,8 +106,11 @@ jobs:
     needs: snaphot_volumes_with_2nd_level_shapshots_nfs
     runs-on: self-hosted
     steps:
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: docker-compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: filesystem_volumes
 
@@ -100,7 +118,10 @@ jobs:
     needs: filesystem_volumes
     runs-on: self-hosted
     steps:
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v1
+
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - run: docker-compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
+      - run: docker compose -f tests/csi-sanity/docker-compose-nfs-snapshotcaps.yaml up $COMPOSE_DEFAULTS
         env:
           SANITY_FUNCTION: filesystem_volumes_nfs
