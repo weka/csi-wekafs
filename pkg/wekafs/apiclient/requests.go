@@ -25,7 +25,15 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 	}
 	u := a.getUrl(ctx, Path)
-
+	status := "ERROR"
+	defer func() {
+		path := generalizeUrlPathForMetrics(Path)
+		guid := a.ClusterGuid.String()
+		ip := a.getEndpoint(ctx).IpAddress
+		dn := a.driverName
+		a.metrics.requestCounters.WithLabelValues(dn, guid, ip, Method, path, status).Inc()
+		a.metrics.requestDurations.WithLabelValues(dn, guid, ip, Method, path, status).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+	}()
 	//construct base request and add auth if exists
 	var body *bytes.Reader
 	if Payload != nil {
@@ -65,16 +73,19 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	response, err := a.client.Do(r)
 
 	if err != nil {
+		status = "transport_error"
 		return nil, &transportError{err}
 	}
 
 	if response == nil {
+		status = "no_response_from_server"
 		return nil, &transportError{errors.New("received no response")}
 	}
 
 	responseBody, err := io.ReadAll(response.Body)
 	logger.Trace().Str("response", maskPayload(string(responseBody))).Str("duration", time.Since(ctx.Value("startTime").(time.Time)).String()).Msg("")
 	if err != nil {
+		status = "response_parse_error"
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
@@ -91,6 +102,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	Response := &ApiResponse{}
 	err = json.Unmarshal(responseBody, Response)
 
+	status = "response_parse_error"
 	Response.HttpStatusCode = response.StatusCode
 	if err != nil {
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
@@ -102,7 +114,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	}
-
+	status = fmt.Sprintf("http_%d", response.StatusCode)
 	switch response.StatusCode {
 	case http.StatusOK: //200
 		return Response, nil
@@ -167,7 +179,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	default:
-
+		status = "general_api_error"
 		return Response, &ApiError{
 			Err:         err,
 			Text:        "General failure during API command",

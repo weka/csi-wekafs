@@ -14,7 +14,7 @@ import (
 
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
-	sync.Mutex
+	sync.RWMutex
 	apis     map[uint32]*apiclient.ApiClient
 	config   *DriverConfig
 	Hostname string
@@ -23,6 +23,8 @@ type ApiStore struct {
 
 // getByHash returns pointer to existing API if found by hash, or nil
 func (api *ApiStore) getByHash(key uint32) *apiclient.ApiClient {
+	api.RLock()
+	defer api.RUnlock()
 	if val, ok := api.apis[key]; ok {
 		return val
 	}
@@ -131,28 +133,22 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	lock.Lock()
 	defer lock.Unlock()
 
+	logger.Debug().Msg("Looking for API client from creds")
+	if existingApi := api.getByHash(credsHash); existingApi != nil {
+		return existingApi, nil
+	}
+
 	newClient, err := apiclient.NewApiClient(ctx, credentials, apiclient.ApiClientOptions{
 		AllowInsecureHttps: api.config.allowInsecureHttps,
 		Hostname:           hostname,
 		DriverName:         api.config.GetDriver().name,
 		ApiTimeout:         apiclient.ApiHttpTimeOutSeconds * time.Second,
 	})
-
 	if err != nil {
-		return nil, errors.New("could not create API client object from supplied params")
+		logger.Error().Err(err).Msg("Failed to create API client from credentials")
+		return nil, err
 	}
-	hash := newClient.Hash()
 
-	if existingApi := api.getByHash(hash); existingApi != nil {
-		logger.Trace().Str("api_client", credentials.String()).Msg("Found an existing Weka API client")
-		return existingApi, nil
-	}
-	api.Lock()
-	if api.getByHash(hash) != nil {
-		api.Unlock()
-		return api.getByHash(hash), nil
-	}
-	api.Unlock()
 	if err := newClient.Init(ctx); err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize API client")
 		return nil, err
@@ -174,7 +170,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	}
 	api.Lock()
 	defer api.Unlock()
-	api.apis[hash] = newClient
+	api.apis[credsHash] = newClient
 
 	return newClient, nil
 }
@@ -196,7 +192,6 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 
 func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
 	s := &ApiStore{
-		Mutex:    sync.Mutex{},
 		apis:     make(map[uint32]*apiclient.ApiClient),
 		config:   config,
 		Hostname: hostname,
