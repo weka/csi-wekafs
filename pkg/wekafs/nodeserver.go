@@ -59,7 +59,12 @@ type NodeServer struct {
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
+	backgroundTasksWg *sync.WaitGroup // used to wait for background tasks to finish before shutting down the server
 	sync.Mutex
+}
+
+func (ns *NodeServer) getBackgroundTasksWg() *sync.WaitGroup {
+	return ns.backgroundTasksWg
 }
 
 func (ns *NodeServer) getNodeId() string {
@@ -205,6 +210,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 		api:               api,
 		config:            config,
 		semaphores:        make(map[string]*semaphore.Weighted),
+		backgroundTasksWg: new(sync.WaitGroup),
 	}
 }
 
