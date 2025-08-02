@@ -27,6 +27,17 @@ const (
 	SnapshotsSubDirectory       = ".snapshots"
 )
 
+type VolumeBackingType string
+
+const (
+	VolumeBackingTypeDirectory  VolumeBackingType = "DIRECTORY"
+	VolumeBackingTypeFilesystem VolumeBackingType = "FILESYSTEM"
+	VolumeBackingTypeSnapshot   VolumeBackingType = "SNAPSHOT"
+	VolumeBackingTypeHybrid     VolumeBackingType = "HYBRID"
+)
+
+var KnownBackingTypes = []VolumeBackingType{VolumeBackingTypeDirectory, VolumeBackingTypeFilesystem, VolumeBackingTypeSnapshot}
+
 var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
 var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
 
@@ -496,6 +507,19 @@ func (v *Volume) getMaxCapacity(ctx context.Context) (int64, error) {
 
 func (v *Volume) GetType() VolumeType {
 	return VolumeTypeUnified
+}
+
+func (v *Volume) GetBackingType() VolumeBackingType {
+	if v.isOnSnapshot() {
+		if v.hasInnerPath() {
+			return VolumeBackingTypeHybrid
+		}
+		return VolumeBackingTypeSnapshot
+	}
+	if v.hasInnerPath() {
+		return VolumeBackingTypeDirectory
+	}
+	return VolumeBackingTypeFilesystem
 }
 
 func (v *Volume) getCapacityFromQuota(ctx context.Context) (int64, error) {
