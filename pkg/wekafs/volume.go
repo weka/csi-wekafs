@@ -49,9 +49,14 @@ type Volume struct {
 	enforceCapacity       bool
 	initialFilesystemSize int64
 	mountOptions          MountOptions
-	encrypted             bool
+	encrypted             *bool // to support also encryption state fetched from actual filesystem when not set
 	manageEncryptionKeys  bool
 	encryptWithoutKms     bool
+
+	kmsVaultNamespace     string
+	kmsVaultKeyIdentifier string
+	kmsVaultRoleId        string
+	KmsVaultSecretId      string
 
 	srcVolume   *Volume
 	srcSnapshot *Snapshot
@@ -60,6 +65,10 @@ type Volume struct {
 
 	fileSystemObject *apiclient.FileSystem
 	snapshotObject   *apiclient.Snapshot
+}
+
+func (v *Volume) hasCustomEncryptionSettings() bool {
+	return v.kmsVaultNamespace != "" || v.kmsVaultKeyIdentifier != "" || v.kmsVaultRoleId != "" || v.KmsVaultSecretId != ""
 }
 
 //goland:noinspection GoUnusedParameter
@@ -168,9 +177,55 @@ func (v *Volume) isFilesystem() bool {
 	return !v.isOnSnapshot() && !v.hasInnerPath()
 }
 
-// isEncrypted returns true if the volume is encrypted
-func (v *Volume) isEncrypted() bool {
-	return v.encrypted
+// isEncrypted returns true if the volume is encrypted or false if it is not. If fetching the encryption status fails, an error is returned
+func (v *Volume) isEncrypted(ctx context.Context) (bool, error) {
+	if v.encrypted != nil {
+		return *v.encrypted, nil
+	}
+	if !v.isFilesystem() {
+		return false, nil
+	}
+
+	if v.encrypted == nil {
+		// TODO: maybe we should move it into a separate method that is explicitly invoked when Volume is constructed from VolumeID rather than doing it here
+		if exists, err := v.Exists(ctx); err == nil {
+			if v.apiClient != nil {
+				fsObj, err := v.getFilesystemObj(ctx, true)
+				if err != nil {
+					return false, err
+				}
+				if exists {
+					v.encrypted = &fsObj.IsEncrypted
+					if fsObj.IsEncrypted {
+						if v.kmsVaultRoleId == "" && &fsObj.KmsRole != nil {
+							v.kmsVaultRoleId = fsObj.KmsRole
+						}
+						if v.kmsVaultNamespace == "" && &fsObj.KmsNamespace != nil {
+							v.kmsVaultNamespace = fsObj.KmsNamespace
+						}
+						if v.kmsVaultKeyIdentifier == "" && &fsObj.KmsKeyIdentifier != nil {
+							v.kmsVaultKeyIdentifier = fsObj.KmsKeyIdentifier
+						}
+						if v.kmsVaultRoleId == "" && &fsObj.KmsRole != nil {
+							v.kmsVaultRoleId = fsObj.KmsRole
+						}
+					}
+				} else {
+					v.encrypted = &[]bool{false}[0]
+				}
+			}
+		}
+	}
+	return *v.encrypted, nil
+}
+
+// isEncryptedSafe returns true if the volume is encrypted or false if it is not. If fetching the encryption status fails, false is returned
+func (v *Volume) isEncryptedSafe(ctx context.Context) bool {
+	enc, err := v.isEncrypted(ctx)
+	if err != nil {
+		return false
+	}
+	return enc
 }
 
 // hasUnderlyingSnapshots returns True if volume is a FS (not its snapshot) and has any weka snapshots beneath it
@@ -1181,8 +1236,12 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err != nil {
 			return err
 		}
+		isEncrypted, err := v.isEncrypted(ctx)
+		if err != nil {
+			return status.Errorf(codes.Internal, "Failed to check if volume is encrypted: %s", err.Error())
+		}
 
-		if v.isEncrypted() && fsObj != nil && !fsObj.IsEncrypted {
+		if isEncrypted && fsObj != nil && !fsObj.IsEncrypted {
 			return status.Errorf(codes.InvalidArgument, "Cannot create encrypted snapshot-backed volume on unencrypted filesystem")
 		}
 
@@ -1199,8 +1258,12 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 		// if it was a snapshot and had inner path, it anyway should already exist.
 		// So creating inner path only in such case
+		isEncrypted, err := v.isEncrypted(ctx)
+		if err != nil {
+			return status.Errorf(codes.Internal, "Failed to check if volume is encrypted: %s", err.Error())
+		}
 
-		if v.isEncrypted() {
+		if isEncrypted {
 			if v.apiClient == nil {
 				return errors.New("cannot create encrypted volume without API binding")
 			}
@@ -1266,12 +1329,15 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 
 func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.EncryptionParams, error) {
 	encryptionParams := apiclient.EncryptionParams{
-		Encrypted:  v.isEncrypted(),
-		AllowNoKms: v.encryptWithoutKms,
-		//TODO: add KMS keys on Phase 2
+		Encrypted:             v.isEncryptedSafe(ctx),
+		AllowNoKms:            v.encryptWithoutKms,
+		KmsVaultRoleId:        v.kmsVaultRoleId,
+		KmsVaultSecretId:      v.KmsVaultSecretId,
+		KmsVaultNamespace:     v.kmsVaultNamespace,
+		KmsVaultKeyIdentifier: v.kmsVaultKeyIdentifier,
 	}
 
-	if v.isEncrypted() {
+	if v.isEncryptedSafe(ctx) {
 		if !v.isFilesystem() {
 			// encryption is only set for filesystems, snapshot- and directory-backed volumes are not setting those params
 			return encryptionParams, nil
@@ -1284,15 +1350,17 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 		}
 
 		if v.manageEncryptionKeys {
-			// TODO: remove this line when encryption keys per filesystem is supported
-			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported yet")
+			// TODO: remove this line when CSI automatically supports provisioning of new keys on vault.
+			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Automatic management of encryption keys is not supported by current version of WEKA CSI Plugin")
+		}
 
-			// flow for encryption keys per filesystem
+		if v.hasCustomEncryptionSettings() {
+			// flow for custom encryption settings, e.g. key per filesystem
 			if !v.apiClient.SupportsCustomEncryptionSettings() {
-				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported on the cluster")
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with custom settings per filesystem is not supported by current version of WEKA cluster")
 			}
 			if !v.apiClient.AllowsCustomEncryptionSettings(ctx) {
-				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support encryption keys per filesystem")
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support custom encryption settings per filesystem")
 			}
 		} else {
 			if !v.apiClient.IsEncryptionEnabled(ctx) {
@@ -1303,6 +1371,74 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 		}
 	}
 	return encryptionParams, nil
+}
+
+func (v *Volume) enrichWithEncryptionParams(ctx context.Context) {
+	op := "enrichWithEncryptionParams"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	changed := false
+	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
+	if v.isEncryptedSafe(ctx) && v.apiClient != nil {
+		c := v.apiClient
+		if c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.RoleId != "" {
+			v.kmsVaultRoleId = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.RoleId
+			changed = true
+		}
+		if c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.SecretId != "" {
+			v.KmsVaultSecretId = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.SecretId
+			changed = true
+		}
+		// this param can be overridden by storage class
+		if v.kmsVaultNamespace == "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace != "" {
+			v.kmsVaultNamespace = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace
+			changed = true
+		}
+		// this param can be overridden by storage class
+		if v.kmsVaultKeyIdentifier == "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier != "" {
+			v.kmsVaultKeyIdentifier = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier
+			changed = true
+		}
+	}
+	if changed {
+		logger.Debug().Str("kms_namespace", v.kmsVaultNamespace).
+			Str("kms_key_identifier", v.kmsVaultKeyIdentifier).
+			Str("kms_role_id", func() string {
+				if v.kmsVaultRoleId != "" {
+					return "***masked***"
+				} else {
+					return ""
+				}
+			}()).
+			Str("kms_secret_id", func() string {
+				if v.KmsVaultSecretId != "" {
+					return "***masked***"
+				} else {
+					return ""
+				}
+			}()).
+			Msg("Enriched volume with encryption parameters")
+	}
+}
+
+func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
+	logger := log.Ctx(ctx)
+	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside filesystem .fsnapshots to mimic Weka snapshot behavior")
+
+	err, unmount := v.MountUnderlyingFS(ctx)
+	defer unmount()
+	if err != nil {
+		return err
+	}
+	volPath := v.GetFullPath(ctx)
+
+	if err := os.MkdirAll(volPath, DefaultVolumePermissions); err != nil {
+		logger.Error().Err(err).Str("volume_path", volPath).Msg("Failed to create volume debug directory")
+		return err
+	}
+	logger.Debug().Str("full_path", v.GetFullPath(ctx)).Msg("Successully created debug directory")
+	return nil
 }
 
 func (v *Volume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, error) {
@@ -1621,10 +1757,10 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		if err != nil {
 			return errors.Join(err, errors.New("failed to parse 'encrypted' parameter"))
 		}
-		v.encrypted = encrypted
+		v.encrypted = &encrypted
 	}
 	if val, ok := params["manageEncryptionKeys"]; ok {
-		if !v.encrypted {
+		if !v.isEncryptedSafe(ctx) {
 			return errors.New("manageEncryptionKeys is only supported for encrypted volumes")
 		}
 		manageKeys, err := strconv.ParseBool(val)
@@ -1634,8 +1770,8 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		v.manageEncryptionKeys = manageKeys
 	}
 	if val, ok := params["encryptWithoutKms"]; ok {
-		if !v.encrypted {
-			return errors.New("encryptWithoutKms is only supported for encrypted volumes")
+		if !v.isEncryptedSafe(ctx) {
+			return errors.New("manageEncryptionKeys is only supported for encrypted volumes")
 		}
 
 		encryptWithoutKms, err := strconv.ParseBool(val)
@@ -1644,6 +1780,21 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		}
 		v.encryptWithoutKms = encryptWithoutKms
 	}
+
+	// obtain advanced KMS parameters
+	if val, ok := params["kmsVaultNamespace"]; ok {
+		if !v.isEncryptedSafe(ctx) {
+			return errors.New("kmsVaultNamespace is only supported for encrypted volumes")
+		}
+		v.kmsVaultNamespace = val
+	}
+	if val, ok := params["kmsVaultKeyIdentifier"]; ok {
+		if !v.isEncryptedSafe(ctx) {
+			return errors.New("kmsVaultKeyIdentifier is only supported for encrypted volumes")
+		}
+		v.kmsVaultKeyIdentifier = val
+	}
+
 	return nil
 }
 
