@@ -1,3 +1,4 @@
+ARG UBI_HASH=9.6-1754000177
 FROM golang:1.24-alpine AS go-builder
 ARG TARGETARCH
 ARG TARGETOS
@@ -27,15 +28,14 @@ RUN true
 RUN echo Building package
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/*
 
-FROM alpine:3.18
+FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS ubibuilder
+RUN microdnf install -y util-linux libselinux-utils pciutils binutils jq procps less container-selinux
+RUN microdnf clean all && rm -rf /var/cache/dnf
+
+FROM ubibuilder
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 
-RUN apk add --no-cache util-linux libselinux libselinux-utils util-linux  \
-    pciutils usbutils coreutils binutils findutils  \
-    grep bash nfs-utils rpcbind ca-certificates jq
-# Update CA certificates
-RUN update-ca-certificates
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
 LABEL maintainer="csi@weka.io"
