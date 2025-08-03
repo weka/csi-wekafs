@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"hash/fnv"
 	"k8s.io/helm/pkg/urlutil"
 	"math/rand"
 	"net"
@@ -52,6 +51,7 @@ type ApiClient struct {
 	containerName               string
 	NfsInterfaceGroupName       string
 	NfsClientGroupName          string
+	metrics                     *ApiMetrics
 	driverName                  string
 	RotateEndpointOnEachRequest bool // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
 
@@ -110,7 +110,6 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 	}
 
 	logger.Trace().Bool("insecure_skip_verify", opts.AllowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
-	a.clientHash = a.generateHash()
 	return a, nil
 }
 
@@ -169,29 +168,6 @@ func (a *ApiClient) handleTransientErrors(ctx context.Context, err error) error 
 func (a *ApiClient) getUrl(ctx context.Context, path string) string {
 	u, _ := urlutil.URLJoin(a.getBaseUrl(ctx), path)
 	return u
-}
-
-// generateHash used for storing multiple clients in hash table. Hash() is created once as connection params might change
-func (a *ApiClient) generateHash() uint32 {
-	h := fnv.New32a()
-	s := fmt.Sprintln(
-		a.Credentials.Username,
-		a.Credentials.Password,
-		a.Credentials.Organization,
-		a.Credentials.Endpoints,
-		a.Credentials.NfsTargetIPs,
-		a.Credentials.LocalContainerName,
-		a.Credentials.CaCertificate,
-		a.Credentials.KmsPreexistingCredentialsForVolumeEncryption.InsecureString(),
-		a.Credentials.KmsKeyManagementCredentials.InsecureString(),
-	)
-	_, _ = h.Write([]byte(s))
-	return h.Sum32()
-}
-
-// Hash returns the client hash as it was generated once client was initialized
-func (a *ApiClient) Hash() uint32 {
-	return a.clientHash
 }
 
 // retryBackoff performs operation and retries on transient failures. Does not retry on ApiNonTransientError
