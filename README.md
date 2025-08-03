@@ -139,6 +139,7 @@ make build
 | pluginConfig.mountProtocol.wekafsContainerName | string | `""` | NOTE: for multiple clusters setup, set specific container name rather than attempt to identify it automatically |
 | pluginConfig.skipGarbageCollection | bool | `false` | Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false |
 | pluginConfig.manageNodeTopologyLabels | bool | `true` | Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false. |
+| pluginConfig.apiTimeoutSeconds | int | `60` | WEKA API timeout, default 60 seconds |
 | pluginConfig.setOwnershipOnDynamicFilesystems | bool | `false` | NOTE: This functionality requires WEKA software of version 5.1.0 and above |
 
 ----------------------------------------------
