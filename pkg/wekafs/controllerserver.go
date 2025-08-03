@@ -41,13 +41,18 @@ const (
 
 type ControllerServer struct {
 	csi.UnimplementedControllerServer
-	caps       []*csi.ControllerServiceCapability
-	nodeID     string
-	mounter    AnyMounter
-	api        *ApiStore
-	config     *DriverConfig
-	semaphores map[string]*semaphore.Weighted
+	caps            []*csi.ControllerServiceCapability
+	nodeID          string
+	mounter         AnyMounter
+	api             *ApiStore
+	config          *DriverConfig
+	semaphores      map[string]*semaphore.Weighted
+	backgroundTasks *sync.WaitGroup
 	sync.Mutex
+}
+
+func (cs *ControllerServer) getBackgroundTasksWg() *sync.WaitGroup {
+	return cs.backgroundTasks
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
@@ -120,12 +125,13 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
 	return &ControllerServer{
-		caps:       capabilities,
-		nodeID:     nodeID,
-		mounter:    mounter,
-		api:        api,
-		config:     config,
-		semaphores: make(map[string]*semaphore.Weighted),
+		caps:            capabilities,
+		nodeID:          nodeID,
+		mounter:         mounter,
+		api:             api,
+		config:          config,
+		semaphores:      make(map[string]*semaphore.Weighted),
+		backgroundTasks: new(sync.WaitGroup),
 	}
 }
 

@@ -157,7 +157,7 @@ func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateReq
 }
 
 func (a *ApiClient) WaitFilesystemReady(ctx context.Context, fsName string, waitPeriodMax time.Duration) (*FileSystem, error) {
-	logger := log.Ctx(ctx).With().Str("filesysem", fsName).Logger()
+	logger := log.Ctx(ctx).With().Str("filesystem", fsName).Logger()
 	for start := time.Now(); time.Since(start) < waitPeriodMax; {
 		fs, err := a.GetFileSystemByName(ctx, fsName)
 		if err != nil || fs == nil {
@@ -236,9 +236,15 @@ func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsN
 		logger.Debug().Int("permissions", len(*permissions)).Str("filesystem", fsName).Msg("Found stale NFS permissions, deleting")
 	}
 	for _, p := range *permissions {
-		err = a.DeleteNfsPermission(ctx, &NfsPermissionDeleteRequest{Uid: p.Uid})
+		for i := 0; i < 5; i++ {
+			err = a.DeleteNfsPermission(ctx, &NfsPermissionDeleteRequest{Uid: p.Uid})
+			if err == nil {
+				break
+			}
+			time.Sleep(time.Second)
+		}
 		if err != nil {
-			logger.Error().Err(err).Str("permission", p.Uid.String()).Str("filesystem", p.Filesystem).Str("client_group", p.Group).Msg("Failed to delete NFS permission")
+			logger.Error().Err(err).Str("permission", p.Uid.String()).Str("filesystem", p.Filesystem).Str("client_group", p.Group).Msg("Failed to delete NFS permission after 5 attempts")
 			return err
 		}
 	}
