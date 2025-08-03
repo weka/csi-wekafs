@@ -43,6 +43,7 @@ type WekaFsDriver struct {
 	ids            *identityServer
 	ns             *NodeServer
 	cs             *ControllerServer
+	ms             *MetricsServer
 	api            *ApiStore
 	mounters       *MounterGroup
 	csiMode        CsiPluginMode
@@ -125,6 +126,12 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		driver.ns = NewNodeServer(driver)
 	} else {
 		driver.ns = &NodeServer{}
+	}
+
+	if driver.csiMode == CsiModeMetricsServer || driver.csiMode == CsiModeAll {
+		log.Info().Msg("Loading MetricsServer")
+		driver.ms = NewMetricsServer(driver)
+		driver.ms.Start(ctx)
 	}
 
 	s := NewNonBlockingGRPCServer(driver.csiMode)
@@ -246,6 +253,10 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 		s.Wait()
 	}
+	if driver.csiMode == CsiModeMetricsServer {
+		driver.ms.Wait()
+	}
+
 }
 
 func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
