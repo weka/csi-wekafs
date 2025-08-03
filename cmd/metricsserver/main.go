@@ -110,7 +110,9 @@ func main() {
 	} else {
 		url = ""
 	}
-	tp, err = wekafs.TracerProvider(version, url, csiMode)
+	deploymentIdentifier := os.Getenv("OTEL_DEPLOYMENT_IDENTIFIER")
+
+	tp, err = wekafs.TracerProvider(version, url, csiMode, deploymentIdentifier)
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
