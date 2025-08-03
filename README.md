@@ -114,6 +114,7 @@ make build
 | pluginConfig.allowedOperations.snapshotDirectoryVolumes | bool | `false` | Create snapshots of legacy (dir/v1) volumes. By default disabled.    Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful) |
 | pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement | bool | `false` | Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced |
 | pluginConfig.allowedOperations.enforceDirVolTotalCapacity | bool | `false` | Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning) |
+| pluginConfig.allowedOperations.allowAsyncObjectDeletion | bool | `true` | Should the CSI plugin wait for object deletion before reporting completion.    If true, the plugin will report success on deletion of volumes while the actual deletion of objects will be done in the background.    If false, the plugin will report success only after the objects are deleted on WEKA cluster.    Usually, async deletion would drastically increase speed of volume deletions, since deletion is performed serially.    However, it may cause objects on Weka cluster to remain if the plugin crashes or is restarted before the deletion is completed. |
 | pluginConfig.mutuallyExclusiveMountOptions[0] | string | `"readcache,writecache,coherent,forcedirect"` |  |
 | pluginConfig.mutuallyExclusiveMountOptions[1] | string | `"sync,async"` |  |
 | pluginConfig.mutuallyExclusiveMountOptions[2] | string | `"ro,rw"` |  |
@@ -125,7 +126,6 @@ make build
 | pluginConfig.mountProtocol.nfsProtocolVersion | string | `"4.1"` | Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions |
 | pluginConfig.mountProtocol.wekafsContainerName | string | `""` | NOTE: for multiple clusters setup, set specific container name rather than attempt to identify it automatically |
 | pluginConfig.skipGarbageCollection | bool | `false` | Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false |
-| pluginConfig.waitForObjectDeletion | bool | `false` | Wait for WEKA filesystem / snapshot deletion before acknowledging the corresponding CSI volume deletion. Default false |
 | pluginConfig.manageNodeTopologyLabels | bool | `true` | Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false. |
 | pluginConfig.setOwnershipOnDynamicFilesystems | bool | `false` | NOTE: This functionality requires WEKA software of version 5.1.0 and above |
 
