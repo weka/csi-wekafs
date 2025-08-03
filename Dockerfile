@@ -1,4 +1,4 @@
-ARG UBI_HASH=9.5-1736404036
+ARG UBI_HASH=9.6-1754000177
 FROM golang:1.24-alpine AS go-builder
 ARG TARGETARCH
 ARG TARGETOS
@@ -28,9 +28,9 @@ RUN true
 RUN echo Building package
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/*
 
-FROM registry.access.redhat.com/ubi9/ubi:${UBI_HASH} AS ubibuilder
-RUN dnf install -y util-linux libselinux-utils pciutils binutils jq procps less container-selinux
-RUN dnf clean all && rm -rf /var/cache/dnf
+FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS ubibuilder
+RUN microdnf install -y util-linux libselinux-utils pciutils binutils jq procps less container-selinux
+RUN microdnf clean all && rm -rf /var/cache/dnf
 
 FROM ubibuilder
 LABEL maintainers="WekaIO, LTD"
