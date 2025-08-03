@@ -3,7 +3,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-![Version: 2.7.5](https://img.shields.io/badge/Version-2.7.5-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.7.5](https://img.shields.io/badge/AppVersion-v2.7.5-informational?style=flat-square)
+![Version: 2.7.6-SNAPSHOT.16.sha.bc45309](https://img.shields.io/badge/Version-2.7.6--SNAPSHOT.16.sha.bc45309-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.7.6-SNAPSHOT.16.sha.bc45309](https://img.shields.io/badge/AppVersion-v2.7.6--SNAPSHOT.16.sha.bc45309-informational?style=flat-square)
 
 ## Homepage
 https://github.com/weka/csi-wekafs
@@ -48,7 +48,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.7.5"` | CSI driver version |
+| csiDriverVersion | string | `"2.7.6-SNAPSHOT.16.sha.bc45309"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.16.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.9.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.3.0"` | CSI provisioner sidecar image URL |
@@ -56,7 +56,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.14.0"` | CSI resizer sidecar image URL |
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.3.0"` | CSI snapshotter sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.7.5"` | CSI driver tag |
+| images.csidriverTag | string | `"2.7.6-SNAPSHOT.16.sha.bc45309"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -110,6 +110,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | pluginConfig.allowedOperations.autoExpandFilesystems | bool | `true` | Allow automatic expansion of filesystem on which Weka snapshot-backed CSI volumes,    e.g. in case a required volume capacity exceeds the size of filesystem.    Note: the filesystem is not expanded automatically when a new directory-backed volume is provisioned |
 | pluginConfig.allowedOperations.snapshotDirectoryVolumes | bool | `false` | Create snapshots of legacy (dir/v1) volumes. By default disabled.    Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful) |
 | pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement | bool | `false` | Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced |
+| pluginConfig.allowedOperations.allowAsyncObjectDeletion | bool | `true` | Should the CSI plugin wait for object deletion before reporting completion.    If true, the plugin will report success on deletion of volumes while the actual deletion of objects will be done in the background.    If false, the plugin will report success only after the objects are deleted on WEKA cluster.    Usually, async deletion would drastically increase speed of volume deletions, since deletion is performed serially.    However, it may cause objects on Weka cluster to remain if the plugin crashes or is restarted before the deletion is completed. |
 | pluginConfig.mutuallyExclusiveMountOptions[0] | string | `"readcache,writecache,coherent,forcedirect"` |  |
 | pluginConfig.mutuallyExclusiveMountOptions[1] | string | `"sync,async"` |  |
 | pluginConfig.mutuallyExclusiveMountOptions[2] | string | `"ro,rw"` |  |
@@ -120,7 +121,6 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | pluginConfig.mountProtocol.clientGroupName | string | `""` | Specify existing client group name for NFS configuration. If not set, "WekaCSIPluginClients" group will be created |
 | pluginConfig.mountProtocol.nfsProtocolVersion | string | `"4.1"` | Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions |
 | pluginConfig.skipGarbageCollection | bool | `false` | Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false |
-| pluginConfig.waitForObjectDeletion | bool | `false` | Wait for WEKA filesystem / snapshot deletion before acknowledging the corresponding CSI volume deletion. Default false |
 | pluginConfig.manageNodeTopologyLabels | bool | `true` | Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false. |
 
 ----------------------------------------------

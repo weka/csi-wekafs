@@ -251,6 +251,9 @@
                 "allowedOperations": {
                     "type": "object",
                     "properties": {
+                        "allowAsyncObjectDeletion": {
+                            "type": "boolean"
+                        },
                         "autoCreateFilesystems": {
                             "type": "boolean"
                         },
@@ -320,9 +323,6 @@
                     }
                 },
                 "skipGarbageCollection": {
-                    "type": "boolean"
-                },
-                "waitForObjectDeletion": {
                     "type": "boolean"
                 }
             }
