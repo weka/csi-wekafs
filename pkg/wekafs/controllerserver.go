@@ -33,13 +33,6 @@ import (
 	"time"
 )
 
-const (
-	deviceID                            = "deviceID"
-	maxVolumeIdLength                   = 1920
-	TracerName                          = "weka-csi"
-	ControlServerAdditionalMountOptions = MountOptionAcl + "," + MountOptionWriteCache
-)
-
 type ControllerServer struct {
 	csi.UnimplementedControllerServer
 	caps            []*csi.ControllerServiceCapability

@@ -7,11 +7,6 @@ import (
 	"time"
 )
 
-const (
-	dataTransportNfs    DataTransport = "nfs"
-	dataTransportWekafs DataTransport = "wekafs"
-)
-
 type AnyServer interface {
 	getMounter(ctx context.Context) AnyMounter
 	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
@@ -53,3 +48,7 @@ type AnyMount interface {
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
 }
+
+type VolumeBackingType string
+type VolumeType string
+type CsiPluginMode string
