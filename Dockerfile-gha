@@ -28,3 +28,5 @@ COPY LICENSE /licenses
 RUN curl -sSL -o /locar https://github.com/weka/locar/releases/download/${LOCAR_VERSION}/locar-${LOCAR_VERSION}-${TARGETOS}-${TARGETARCH} && \
     chmod 655 /locar
 COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/wekafsplugin /wekafsplugin
+COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/metricsserver /metricsserver
+
