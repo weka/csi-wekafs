@@ -8,8 +8,7 @@ on:
 
 jobs:
   push-dev:
-    runs-on:
-      group: large-runners-public
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pages: write
