@@ -25,7 +25,7 @@ helm repo add csi-wekafs https://weka.github.io/csi-wekafs
 helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
 ```
 
-> **NOTE:** Since version 3.0.0, WEKA CSI plugin removes support for legacy volumes (not having an API binding)
+> **NOTE:** Since version 3.0.0, WEKA CSI Plugin removes support for legacy volumes without API binding.
 > For further information, refer [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
 > **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
@@ -136,6 +136,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | pluginConfig.allowInsecureHttps | bool | `false` | Allow insecure HTTPS (skip TLS certificate verification) |
 | pluginConfig.allowedOperations.autoCreateFilesystems | bool | `true` | Allow automatic provisioning of CSI volumes based on distinct Weka filesystem |
 | pluginConfig.allowedOperations.autoExpandFilesystems | bool | `true` | Allow automatic expansion of filesystem on which Weka snapshot-backed CSI volumes,    e.g. in case a required volume capacity exceeds the size of filesystem.    Note: the filesystem is not expanded automatically when a new directory-backed volume is provisioned |
+| pluginConfig.allowedOperations.snapshotDirectoryVolumes | bool | `false` | Create snapshots of directory-backed (dir/v1) volumes. By default disabled.    Note: when enabled, every snapshot of a directory-backed volume creates a full filesystem snapshot (wasteful) |
 | pluginConfig.allowedOperations.enforceDirVolTotalCapacity | bool | `false` | Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning) |
 | pluginConfig.allowedOperations.snapshotDirectoryVolumes | bool | `false` | Create snapshots of legacy (dir/v1) volumes. By default disabled.    Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful) |
 | pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement | bool | `false` | Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced |
