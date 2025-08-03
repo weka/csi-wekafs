@@ -471,7 +471,7 @@ jobs:
             yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-metricsserver"' $BASEDIR/Chart.yaml
-            yq -i '.image.tag = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
+            yq -i '.image.tag = "'$APP_VERSION'"' $BASEDIR/values.yaml
             echo ------------------ values ------------------
             cat $BASEDIR/values.yaml
             echo --------------------chart ------------------
@@ -615,13 +615,13 @@ jobs:
       - name: Run chart-testing (list-changed)
         id: list-changed
         run: |
-          changed=$(ct list-changed --chart-dirs charts/csi-wekafsplugin --target-branch ${{ github.event.repository.default_branch }})
+          changed=$(ct list-changed --chart-dirs charts --excluded-charts csi-metricsserver --target-branch ${{ github.event.repository.default_branch }})
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Run chart-testing (lint)
-        run: ct lint --chart-dirs charts/csi-wekafsplugin --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
+        run: ct lint --charts charts/csi-wekafsplugin --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
 
       - name: Create kind cluster
         uses: helm/kind-action@v1.12.0
@@ -629,7 +629,7 @@ jobs:
       - name: Run chart-testing (install)
         id: helm-test
         run: |
-          ct install --print-config --chart-dirs charts/csi-wekafsplugin --all --debug --helm-extra-args "--timeout 60s"
+          ct install --print-config --charts charts/csi-wekafsplugin --debug --helm-extra-args "--timeout 60s"
 
 
   test-helm-metricsserver:
@@ -677,7 +677,7 @@ jobs:
             yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-metricsserver"' $BASEDIR/Chart.yaml
-            yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
+            yq -i '.image.tag = "'$APP_VERSION'"' $BASEDIR/values.yaml
             echo ------------------ values ------------------
             cat $BASEDIR/values.yaml
             echo --------------------chart ------------------
@@ -714,13 +714,13 @@ jobs:
       - name: Run chart-testing (list-changed)
         id: list-changed
         run: |
-          changed=$(ct list-changed --chart-dirs charts/csi-metricsserver --target-branch ${{ github.event.repository.default_branch }})
+          changed=$(ct list-changed --chart-dirs charts --excluded-charts csi-wekafsplugin --target-branch ${{ github.event.repository.default_branch }})
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Run chart-testing (lint)
-        run: ct lint --chart-dirs charts/csi-metricsserver --all --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
+        run: ct lint --charts charts/csi-metricsserver --debug --validate-maintainers=false --target-branch ${{ github.event.repository.default_branch }}
 
       - name: Create kind cluster
         uses: helm/kind-action@v1.12.0
@@ -728,4 +728,4 @@ jobs:
       - name: Run chart-testing (install)
         id: helm-test
         run: |
-          ct install --print-config --chart-dirs charts/csi-metricsserver --all --debug --helm-extra-args "--timeout 60s"
+          ct install --print-config --charts charts/csi-metricsserver --debug --helm-extra-args "--timeout 60s"
