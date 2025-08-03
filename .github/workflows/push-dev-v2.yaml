@@ -1,4 +1,4 @@
-name: push-dev
+name: push-dev-v2
 on:
   push:
     branches:
@@ -349,4 +349,3 @@ jobs:
           author_email: botty@weka.io
           github_token: ${{ secrets.BOTTY_GH_TOKEN }}
           branch: dev
-        if: steps.helm-test.outputs.passed == 'true'
