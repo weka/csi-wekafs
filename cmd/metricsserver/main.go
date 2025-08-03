@@ -111,7 +111,6 @@ func main() {
 	} else {
 		url = ""
 	}
-
 	deploymentIdentifier := os.Getenv("OTEL_DEPLOYMENT_IDENTIFIER")
 
 	tp, err = wekafs.TracerProvider(version, url, csiMode, deploymentIdentifier)
