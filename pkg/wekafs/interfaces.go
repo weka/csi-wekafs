@@ -17,7 +17,6 @@ type AnyServer interface {
 	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
-	isInDevMode() bool
 	getDefaultMountOptions() MountOptions
 	getNodeId() string
 	getBackgroundTasksWg() *sync.WaitGroup
@@ -44,7 +43,6 @@ type DataTransport string
 type UnmountFunc func()
 
 type AnyMount interface {
-	isInDevMode() bool
 	isMounted() bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error

@@ -64,10 +64,6 @@ func (cs *ControllerServer) getNodeId() string {
 	return cs.nodeID
 }
 
-func (cs *ControllerServer) isInDevMode() bool {
-	return cs.getConfig().isInDevMode()
-}
-
 func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }
@@ -265,7 +261,6 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	// check if with current API client state we can modify this volume or not
-	// (basically only legacy dirVolume with xAttr fallback can be operated without API client)
 	if err := volume.CanBeOperated(); err != nil {
 		return CreateVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}

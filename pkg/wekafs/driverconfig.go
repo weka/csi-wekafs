@@ -26,7 +26,6 @@ type DriverConfig struct {
 	allowSnapshotsOfDirectoryVolumes bool
 	advertiseSnapshotSupport         bool
 	advertiseVolumeCloneSupport      bool
-	debugPath                        string
 	allowInsecureHttps               bool
 	alwaysAllowSnapshotVolumes       bool
 	mutuallyExclusiveOptions         []mutuallyExclusiveMountOptionSet
@@ -74,7 +73,7 @@ func (dc *DriverConfig) Log() {
 		Msg("Starting driver with the following configuration")
 
 }
-func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
+func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfDirectoryVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
@@ -120,7 +119,6 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowSnapshotsOfDirectoryVolumes: allowSnapshotsOfDirectoryVolumes,
 		advertiseSnapshotSupport:         !suppressnapshotSupport,
 		advertiseVolumeCloneSupport:      !suppressVolumeCloneSupport,
-		debugPath:                        debugPath,
 		allowInsecureHttps:               allowInsecureHttps,
 		alwaysAllowSnapshotVolumes:       alwaysAllowSnapshotVolumes,
 		mutuallyExclusiveOptions:         MutuallyExclusiveMountOptions,
@@ -139,10 +137,6 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
 	}
-}
-
-func (dc *DriverConfig) isInDevMode() bool {
-	return dc.debugPath != ""
 }
 
 func (dc *DriverConfig) GetVersion() string {
