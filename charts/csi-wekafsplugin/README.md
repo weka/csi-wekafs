@@ -138,6 +138,8 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | pluginConfig.objectNaming.volumePrefix | string | `"csivol-"` | Prefix that will be added to names of Weka cluster filesystems / snapshots assocciated with CSI volume,    must not exceed 7 symbols. |
 | pluginConfig.setOwnershipOnDynamicFilesystems | bool | `false` | NOTE: This functionality requires WEKA software of version 5.1.0 and above |
 | pluginConfig.skipGarbageCollection | bool | `false` | Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false |
+| pluginConfig.manageNodeTopologyLabels | bool | `true` | Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false. |
+| pluginConfig.setOwnershipOnDynamicFilesystems | bool | `false` | NOTE: This functionality requires WEKA software of version 5.1.0 and above |
 | pluginConfig.waitForObjectDeletion | bool | `false` | Wait for WEKA filesystem / snapshot deletion before acknowledging the corresponding CSI volume deletion. Default false |
 | priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |
 | selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
