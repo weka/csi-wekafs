@@ -138,9 +138,9 @@ func (m *nfsMounter) LogActiveMounts() {
 		for refIndex := range m.mountMap {
 			if mapEntry, ok := m.mountMap[refIndex]; ok {
 				parts := strings.Split(refIndex, "^")
-				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int("refcount", mapEntry).Logger()
+				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int32("refcount", mapEntry.Load()).Logger()
 
-				if mapEntry > 0 {
+				if mapEntry.Load() > 0 {
 					logger.Trace().Msg("Mount is active")
 					count++
 				} else {
@@ -159,7 +159,7 @@ func (m *nfsMounter) gcInactiveMounts() {
 	if len(m.mountMap) > 0 {
 		for refIndex := range m.mountMap {
 			if mapEntry, ok := m.mountMap[refIndex]; ok {
-				if mapEntry == 0 {
+				if mapEntry.Load() == 0 {
 					parts := strings.Split(refIndex, "^")
 					logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Logger()
 					logger.Trace().Msg("Removing inactive mount from map")
