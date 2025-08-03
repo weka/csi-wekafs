@@ -265,6 +265,9 @@
                         }
                     }
                 },
+                "apiTimeoutSeconds": {
+                    "type": "integer"
+                },
                 "encryption": {
                     "type": "object",
                     "properties": {
