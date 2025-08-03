@@ -54,8 +54,7 @@ jobs:
           for GOARCH in amd64 arm64; do
             mkdir -p build/$GOOS-$GOARCH
             echo "Building for GOOS=$GOOS GOARCH=$GOARCH"
-            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -o build/$GOOS-$GOARCH/wekafsplugin ./cmd/wekafsplugin
-            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -o build/$GOOS-$GOARCH/metricsserver ./cmd/metricsserver
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -o build/$GOOS-$GOARCH/ ./cmd/**
           done
 
 
