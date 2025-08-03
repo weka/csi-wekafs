@@ -1,12 +1,20 @@
 apiVersion: v2
 name: csi-metricsserver
+description: Helm chart for Deployment of CSI WekaFS Metrics Server
 maintainers:
   - name: WekaIO, Inc.
     email: csi@weka.io
     url: https://weka.io
-description: CSI WekaFS Metrics Server Helm Chart
+sources:
+  - https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
-version: 0.1.0
-appVersion: "1.0.0"
+version: 2.8.0-SNAPSHOT.114.sha.d96674b
+appVersion: v2.8.0-SNAPSHOT.114.sha.d96674b
+keywords: [storage, filesystem, HPC]
+annotations:
+  artifacthub.io/category: "storage"
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/license: Apache-2.0
