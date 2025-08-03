@@ -203,8 +203,6 @@ jobs:
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
 
-
-
   release:
     needs:
       - publish-docker-image
@@ -263,6 +261,26 @@ jobs:
           cat values.yaml
           echo --------------------chart ------------------
           cat Chart.yaml
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.10.0
+
+      - name: update Helm schema
+        run: |
+          helm plugin install https://github.com/karuppiah7890/helm-schema-gen.git
+          helm schema-gen charts/csi-wekafsplugin/values.yaml >| charts/csi-wekafsplugin/values.schema.json 
+
+      - name: helm-docs
+        uses: addnab/docker-run-action@v3
+        with:
+          image: jnorwood/helm-docs:latest
+          options: -v ${{ github.workspace }}:/data
+          run: |
+            cd /data
+            helm-docs -s file -c charts/csi-wekafsplugin -o ../../README.md -t ../README.md.gotmpl
+            helm-docs -s file -c charts/csi-wekafsplugin
 
       - name: Update RELEASE.md
         env:
