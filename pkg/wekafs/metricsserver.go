@@ -78,13 +78,11 @@ func (ms *MetricsServer) getBackgroundTasksWg() *sync.WaitGroup {
 }
 
 func (ms *MetricsServer) getMounter(ctx context.Context) AnyMounter {
-	//TODO implement me
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (ms *MetricsServer) getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter {
-	//TODO implement me
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (ms *MetricsServer) getApiStore() *ApiStore {
