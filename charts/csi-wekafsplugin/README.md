@@ -113,6 +113,39 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | controller.replicas | int | `2` | Controller number of replicas |
 | controller.resources | object | `{"csiAttacher":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiProvisioner":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}},"csiResizer":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiSnapshotter":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for controller containers |
 | controller.terminationGracePeriodSeconds | int | `10` | termination grace period for controller pods |
+| controller.resources | object | `{"csiAttacher":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiProvisioner":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}},"csiResizer":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiSnapshotter":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"48Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for controller containers |
+| node.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
+| node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
+| node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
+| node.nodeSelector | object | `{}` | optional nodeSelector for node components only |
+| node.affinity | object | `{}` | optional affinity for node components only |
+| node.labels | object | `{}` | optional labels to add to node daemonset |
+| node.podLabels | object | `{}` | optional labels to add to node pods |
+| node.terminationGracePeriodSeconds | int | `10` | termination grace period for node pods |
+| node.resources | object | `{"csiRegistrar":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"8m","memory":"52Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"44Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for node containers |
+| metricsServer | object | `{"affinity":{},"apiClientTimeoutSeconds":180,"enableBatchModeForQuotaUpdates":false,"enableLeaderElection":true,"enabled":true,"labels":{},"maxConcurrentRequests":50,"metricsFetchIntervalSeconds":10,"nodeSelector":{},"podLabels":{},"quotaCacheValiditySeconds":240,"quotaUpdateConcurrentRequests":25,"replicas":2,"resources":{"requests":{"cpu":2,"memory":"4Gi"}},"terminationGracePeriodSeconds":10,"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}` | Metrics server parameters, used for exposing WEKA metrics in Prometheus format |
+| metricsServer.enabled | bool | `true` | Allow CSI plugin to report WEKA metrics in Prometheus format.    NOTE: this implies that the CSI plugin will get access to all Kubernetes PVs, and fetch their credentials, then query WEKA cluster for those metrics |
+| metricsServer.replicas | int | `2` | Number of replicas for metrics server |
+| metricsServer.nodeSelector | object | `{}` | optional nodeSelector for metrics server only |
+| metricsServer.affinity | object | `{}` | optional affinity for metrics server only |
+| metricsServer.labels | object | `{}` | optional labels to add to metrics server deployment |
+| metricsServer.podLabels | object | `{}` | optional labels to add to metrics server pods |
+| metricsServer.tolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | tolerations for metrics server only |
+| metricsServer.maxConcurrentRequests | int | `50` | concurrent requests for WEKA API (excluding quota) |
+| metricsServer.metricsFetchIntervalSeconds | int | `10` | metrics fetch interval in seconds, default is 60 seconds.    Only expired metrics will be updated, set by quotaCacheValiditySeconds |
+| metricsServer.terminationGracePeriodSeconds | int | `10` | termination grace period for metrics server pods |
+| metricsServer.enableLeaderElection | bool | `true` | enable leader election for metrics server |
+| metricsServer.quotaUpdateConcurrentRequests | int | `25` | number of concurrent requests for metrics server to update quotas |
+| metricsServer.quotaCacheValiditySeconds | int | `240` | the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded |
+| metricsServer.apiClientTimeoutSeconds | int | `180` | Timeout for API client requests, in seconds. Default is 120 seconds. Increased to 180 seconds to allow for larger operations like quotamap fetching |
+| metricsServer.enableBatchModeForQuotaUpdates | bool | `false` | Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.    This is disabled by default.    The drawback is that in such case, metrics will be reported less frequently, using cached values.    Report timestamp will be recorded for each metric, so you can see when the last update was.    This requires Prometheus server to honor timestamps.    When false, all quota values will be fetched instantaneously, during metrics collection.    Not recommended when having thousands of PVCs |
+| metricsServer.resources | object | `{"requests":{"cpu":2,"memory":"4Gi"}}` | Resources for metrics server pods |
+| logLevel | int | `5` | Log level of CSI plugin |
+| useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
+| priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |
+| selinuxSupport | string | `"off"` | Support SELinux labeling for Persistent Volumes, may be either `off`, `mixed`, `enforced` (default off)    In `enforced` mode, CSI node components will only start on nodes having a label `selinuxNodeLabel` below    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!    NOTE: SELinux support is enabled automatically on clusters recognized as RedHat OpenShift Container Platform |
+| selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
+| selinuxOcpRetainMachineConfig | bool | `false` | If true, the SELinux policy machine configuration will not be removed when uninstalling the plugin.    This is useful for OpenShift Container Platform clusters, to not cause machine config pool update on plugin reinstall |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
 | csiDriverVersion | string | `"2.8.2"` | CSI driver version |
@@ -156,6 +189,11 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | metrics.provisionerPort | int | `9091` | Provisioner metrics port |
 | metrics.resizerPort | int | `9092` | Resizer metrics port |
 | metrics.snapshotterPort | int | `9093` | Snapshotter metrics port |
+| metrics.nodePort | int | `9094` | Metrics port for Node Serer |
+| metrics.attacherPort | int | `9095` | Attacher metrics port |
+| metrics.metricsServerPort | int | `9096` | Metrics server metrics port |
+| hostNetwork | bool | `false` | Set to true to use host networking. Will be always set to true when using NFS mount protocol |
+| pluginConfig.fsGroupPolicy | string | `"File"` | WARNING: Changing this value might require uninstall and re-install of the plugin |
 | node.affinity | object | `{}` | optional affinity for node components only |
 | node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
 | node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
