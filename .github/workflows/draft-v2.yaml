@@ -184,6 +184,7 @@ jobs:
           fs.writeFileSync('SKIPPED_PRS.md', skippedLines.join('\n'));
           fs.writeFileSync('artifacthub_changes.json', JSON.stringify(artifactHubNotes, null, 2));
           EOF
+
           node generate-notes.mjs
 
       - name: Upload release notes artifact
