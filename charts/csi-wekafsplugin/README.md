@@ -3,7 +3,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-![Version: 2.8.0-SNAPSHOT.114.sha.d96674b](https://img.shields.io/badge/Version-2.8.0--SNAPSHOT.114.sha.d96674b-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.0-SNAPSHOT.114.sha.d96674b](https://img.shields.io/badge/AppVersion-v2.8.0--SNAPSHOT.114.sha.d96674b-informational?style=flat-square)
+![Version: 2.8.0-SNAPSHOT.129.sha.81793d8](https://img.shields.io/badge/Version-2.8.0--SNAPSHOT.129.sha.81793d8-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.0-SNAPSHOT.129.sha.81793d8](https://img.shields.io/badge/AppVersion-v2.8.0--SNAPSHOT.129.sha.81793d8-informational?style=flat-square)
 
 ## Homepage
 https://github.com/weka/csi-wekafs
@@ -41,7 +41,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.8.0-SNAPSHOT.114.sha.d96674b"` | CSI driver version |
+| csiDriverVersion | string | `"2.8.0-SNAPSHOT.129.sha.81793d8"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.16.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.9.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.3.0"` | CSI provisioner sidecar image URL |
@@ -49,7 +49,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.14.0"` | CSI resizer sidecar image URL |
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.3.0"` | CSI snapshotter sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.8.0-SNAPSHOT.114.sha.d96674b"` | CSI driver tag |
+| images.csidriverTag | string | `"2.8.0-SNAPSHOT.129.sha.81793d8"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -78,6 +78,23 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | node.labels | object | `{}` | optional labels to add to node daemonset |
 | node.podLabels | object | `{}` | optional labels to add to node pods |
 | node.terminationGracePeriodSeconds | int | `10` | termination grace period for node pods |
+| metricsServer | object | `{"affinity":{},"apiClientTimeoutSeconds":180,"enableBatchModeForQuotaUpdates":false,"enableLeaderElection":true,"enabled":true,"labels":{},"maxConcurrentRequests":50,"metricsFetchIntervalSeconds":10,"nodeSelector":{},"podLabels":{},"quotaCacheValiditySeconds":240,"quotaUpdateConcurrentRequests":25,"replicas":2,"resources":{"requests":{"cpu":2,"memory":"4Gi"}},"terminationGracePeriodSeconds":10,"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}` | Metrics server parameters, used for exposing WEKA metrics in Prometheus format |
+| metricsServer.enabled | bool | `true` | Allow CSI plugin to report WEKA metrics in Prometheus format.    NOTE: this implies that the CSI plugin will get access to all Kubernetes PVs, and fetch their credentials, then query WEKA cluster for those metrics |
+| metricsServer.replicas | int | `2` | Number of replicas for metrics server |
+| metricsServer.nodeSelector | object | `{}` | optional nodeSelector for metrics server only |
+| metricsServer.affinity | object | `{}` | optional affinity for metrics server only |
+| metricsServer.labels | object | `{}` | optional labels to add to metrics server deployment |
+| metricsServer.podLabels | object | `{}` | optional labels to add to metrics server pods |
+| metricsServer.tolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | tolerations for metrics server only |
+| metricsServer.maxConcurrentRequests | int | `50` | concurrent requests for WEKA API (excluding quota) |
+| metricsServer.metricsFetchIntervalSeconds | int | `10` | metrics fetch interval in seconds, default is 60 seconds.    Only expired metrics will be updated, set by quotaCacheValiditySeconds |
+| metricsServer.terminationGracePeriodSeconds | int | `10` | termination grace period for metrics server pods |
+| metricsServer.enableLeaderElection | bool | `true` | enable leader election for metrics server |
+| metricsServer.quotaUpdateConcurrentRequests | int | `25` | number of concurrent requests for metrics server to update quotas |
+| metricsServer.quotaCacheValiditySeconds | int | `240` | the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded |
+| metricsServer.apiClientTimeoutSeconds | int | `180` | Timeout for API client requests, in seconds. Default is 120 seconds. Increased to 180 seconds to allow for larger operations like quotamap fetching |
+| metricsServer.enableBatchModeForQuotaUpdates | bool | `false` | Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.    This is disabled by default.    The drawback is that in such case, metrics will be reported less frequently, using cached values.    Report timestamp will be recorded for each metric, so you can see when the last update was.    This requires Prometheus server to honor timestamps.    When false, all quota values will be fetched instantaneously, during metrics collection.    Not recommended when having thousands of PVCs |
+| metricsServer.resources | object | `{"requests":{"cpu":2,"memory":"4Gi"}}` | Resources for metrics server pods |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
 | priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |
@@ -92,6 +109,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | metrics.snapshotterPort | int | `9093` | Snapshotter metrics port |
 | metrics.nodePort | int | `9094` | Metrics port for Node Serer |
 | metrics.attacherPort | int | `9095` | Attacher metrics port |
+| metrics.metricsServerPort | int | `9096` | Metrics server metrics port |
 | hostNetwork | bool | `false` | Set to true to use host networking. Will be always set to true when using NFS mount protocol |
 | pluginConfig.fsGroupPolicy | string | `"File"` | WARNING: Changing this value might require uninstall and re-install of the plugin |
 | pluginConfig.allowInsecureHttps | bool | `false` | Allow insecure HTTPS (skip TLS certificate verification) |
