@@ -35,6 +35,7 @@ jobs:
             exit 1
           INPUT_VERSION="${{ inputs.release_version }}"
           if [[ $INPUT_VERSION ]]; then
+            version="v$(echo "$INPUT_VERSION" | sed 's/^v//') # remove 'v' prefix if present)"
             echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
           else
             echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
@@ -170,7 +171,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           gh release create "$TAG" \
             --target ${{ steps.target_branch.outputs.target_branch }} \
-            --title "v${{ steps.version.outputs.version }}" \
+            --title "${{ steps.version.outputs.version }}" \
             --notes-file RELEASE_NOTES.md \
             --draft && \
           release_url=$(gh release view "$TAG" --json url | jq -r .url) && \
