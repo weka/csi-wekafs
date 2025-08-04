@@ -1,6 +1,10 @@
 name: draft-v2
 
 on:
+  push:
+    branches:
+      - dev
+      - main
   workflow_dispatch:
     inputs:
       target_branch:
@@ -23,15 +27,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get version
+      - name: Set package version
         id: version
         run: |
           if [[ -z "${{ inputs.release_version }}" ]]; then
             echo "Release version is required."
             exit 1
+          INPUT_VERSION="${{ inputs.release_version }}"
+          if [[ $INPUT_VERSION ]]; then
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
           fi
           version=$(echo '${{ inputs.release_version }}' | sed 's/^v//')
           echo "version=${version}" >> $GITHUB_OUTPUT
+
+      - name: Set Target Branch
+        id: target_branch
+        run: |
+          TARGET_BRANCH="${{ inputs.target_branch }}"
+          if [[ -z "$TARGET_BRANCH" ]]; then
+            TARGET_BRANCH="dev"
+          fi
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -40,7 +58,7 @@ jobs:
 
       - name: Fetch merged PRs into target branch
         run: |
-          gh pr list --state merged --base ${{ inputs.target_branch }} \
+          gh pr list --state merged --base ${{ steps.target_branch.outputs.target_branch }} \
             --json number,title,body,labels,author,url \
             > prs.json
         env:
@@ -151,7 +169,7 @@ jobs:
           TAG="v$(date +%Y%m%d%H%M)"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           gh release create "$TAG" \
-            --target ${{ inputs.target_branch }} \
+            --target ${{ steps.target_branch.outputs.target_branch }} \
             --title "v${{ steps.version.outputs.version }}" \
             --notes-file RELEASE_NOTES.md \
             --draft && \
