@@ -168,6 +168,9 @@
                 "enabled": {
                     "type": "boolean"
                 },
+                "metricsServerPort": {
+                    "type": "integer"
+                },
                 "nodePort": {
                     "type": "integer"
                 },
@@ -179,6 +182,86 @@
                 },
                 "snapshotterPort": {
                     "type": "integer"
+                }
+            }
+        },
+        "metricsServer": {
+            "type": "object",
+            "properties": {
+                "affinity": {
+                    "type": "object"
+                },
+                "apiClientTimeoutSeconds": {
+                    "type": "integer"
+                },
+                "enableBatchModeForQuotaUpdates": {
+                    "type": "boolean"
+                },
+                "enableLeaderElection": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "labels": {
+                    "type": "object"
+                },
+                "maxConcurrentRequests": {
+                    "type": "integer"
+                },
+                "metricsFetchIntervalSeconds": {
+                    "type": "integer"
+                },
+                "nodeSelector": {
+                    "type": "object"
+                },
+                "podLabels": {
+                    "type": "object"
+                },
+                "quotaCacheValiditySeconds": {
+                    "type": "integer"
+                },
+                "quotaUpdateConcurrentRequests": {
+                    "type": "integer"
+                },
+                "replicas": {
+                    "type": "integer"
+                },
+                "resources": {
+                    "type": "object",
+                    "properties": {
+                        "requests": {
+                            "type": "object",
+                            "properties": {
+                                "cpu": {
+                                    "type": "integer"
+                                },
+                                "memory": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "terminationGracePeriodSeconds": {
+                    "type": "integer"
+                },
+                "tolerations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "effect": {
+                                "type": "string"
+                            },
+                            "key": {
+                                "type": "string"
+                            },
+                            "operator": {
+                                "type": "string"
+                            }
+                        }
+                    }
                 }
             }
         },
