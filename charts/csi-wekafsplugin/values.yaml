@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.8.0-SNAPSHOT.129.sha.81793d8
+csiDriverVersion: &csiDriverVersion 2.8.0-SNAPSHOT.132.sha.2f4e018
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.16.0
