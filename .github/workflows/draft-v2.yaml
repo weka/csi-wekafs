@@ -1,0 +1,189 @@
+name: draft-v2
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to create release from'
+        required: true
+        type: string
+        default: dev
+      release_version:
+        description: 'Version for the release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  generate-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ -z "${{ inputs.release_version }}" ]]; then
+            echo "Release version is required."
+            exit 1
+          fi
+          version=$(echo '${{ inputs.release_version }}' | sed 's/^v//')
+          echo "version=${version}" >> $GITHUB_OUTPUT
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch merged PRs into target branch
+        run: |
+          gh pr list --state merged --base ${{ inputs.target_branch }} \
+            --json number,title,body,labels,author,url \
+            > prs.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate release notes and skipped PRs
+        run: |
+          cat <<'EOF' > generate-notes.mjs
+          import fs from 'fs';
+
+          const prs = JSON.parse(fs.readFileSync('prs.json'));
+
+          const sections = {
+            '### New Features': [],
+            '### Improvements': [],
+            '### Bug Fixes': [],
+            '### Documentation': [],
+            '### Miscellaneous': []
+          };
+
+          const details = [];
+          const skipped = [];
+
+          function getSection(pr) {
+            const labels = pr.labels.map(l => l.name.toLowerCase());
+            const title = pr.title.toLowerCase();
+
+            if (labels.includes('feature')) return '### New Features';
+            if (labels.includes('enhancement')) return '### Improvements';
+            if (labels.includes('fix') || labels.includes('bug')) return '### Bug Fixes';
+            if (labels.includes('documentation')) return '### Documentation';
+            if (labels.includes('tests') || labels.includes('dependencies') || labels.includes('ci')) return '### Miscellaneous';
+            return '';
+          }
+
+          function isSkippable(pr) {
+            return !pr.title || pr.title.trim() === '' || pr.title.startsWith('Merge') || pr.title.startsWith('Draft') || getSection(pr) === '' || pr.author?.is_bot;
+          }
+
+          const rnLines = [];
+          rnLines.push('<!-- Release notes generated using configuration in .github/release.yaml at main -->\n');
+          rnLines.push('## What\'s Changed\n');
+
+          for (const pr of prs) {
+            if (isSkippable(pr)) {
+              skipped.push(pr);
+              continue;
+            }
+
+            const section = getSection(pr);
+            const author = pr.author?.login || 'unknown';
+            const entry = `* ${pr.title} by @${author} in ${pr.url} [(more details)](#pr-${pr.number})`;
+            sections[section].push(entry);
+
+            const bodyLines = (pr.body || '_No description provided._')
+              .trim()
+              .split('\n')
+              .map(line => '> ' + line.trim());
+
+            const detailBlock = [
+              `### <a name="pr-${pr.number}"></a>PR #${pr.number} - ${pr.title}`,
+              `by @${author} in ${pr.url}`,
+              '',
+              ...bodyLines,
+              ''
+            ].join('\n');
+
+            details.push(detailBlock);
+          }
+
+          for (const [section, items] of Object.entries(sections)) {
+            if (items.length > 0) {
+              rnLines.push(section);
+              rnLines.push(...items);
+              rnLines.push('');
+            }
+          }
+
+          rnLines.push('---\n## PR Details\n');
+          rnLines.push(...details);
+          fs.writeFileSync('RELEASE_NOTES.md', rnLines.join('\n'));
+
+          // Write skipped PRs
+          const skippedLines = ['# Skipped PRs', ''];
+          for (const pr of skipped) {
+            skippedLines.push(`- PR #${pr.number}: ${pr.title || '_No title_'} by @${pr.author?.login || 'unknown'} in ${pr.url}`);
+          }
+          fs.writeFileSync('SKIPPED_PRS.md', skippedLines.join('\n'));
+          EOF
+
+          node generate-notes.mjs
+
+      - name: Upload release notes artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+      - name: Upload skipped PRs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skipped-prs
+          path: SKIPPED_PRS.md
+
+      - name: Create draft GitHub Release
+        id: create_draft
+        run: |
+          TAG="v$(date +%Y%m%d%H%M)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          gh release create "$TAG" \
+            --target ${{ inputs.target_branch }} \
+            --title "v${{ steps.version.outputs.version }}" \
+            --notes-file RELEASE_NOTES.md \
+            --draft && \
+          release_url=$(gh release view "$TAG" --json url | jq -r .url) && \
+          echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read Markdown file
+        id: read_md
+        run: |
+          content="$(head -10 RELEASE_NOTES.md)"
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$content" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "**[View Full Release Notes](${{ steps.create_draft.outputs.release_url }})**" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: List workspace contents
+        run: ls -lah /home/runner/work/csi-wekafs/csi-wekafs
+
+      - uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_COLOR: "yellow"
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_USERNAME: csiBot
+          SLACK_ICON_EMOJI: ":scroll:"
+          SLACK_TITLE: "Draft Release Notes for ${{ steps.version.outputs.version }}"
+          SLACKIFY_MARKDOWN: "true"
+          SLACK_MESSAGE: "${{ steps.read_md.outputs.content }}'"
+          SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL: C056KDJHMRP
+          SLACK_FOOTER: ""
+          MSG_MINIMAL: true
