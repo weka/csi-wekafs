@@ -147,6 +147,8 @@ metricsServer:
     requests:
       cpu: 2
       memory: 4Gi
+  # -- separate log level for metrics server, default is 4 (info)
+  logLevel: 4
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
