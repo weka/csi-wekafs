@@ -123,7 +123,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | node.podLabels | object | `{}` | optional labels to add to node pods |
 | node.terminationGracePeriodSeconds | int | `10` | termination grace period for node pods |
 | node.resources | object | `{"csiRegistrar":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"8m","memory":"52Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"44Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for node containers |
-| metricsServer | object | `{"affinity":{},"apiClientTimeoutSeconds":180,"enableBatchModeForQuotaUpdates":false,"enableLeaderElection":true,"enabled":true,"labels":{},"maxConcurrentRequests":50,"metricsFetchIntervalSeconds":10,"nodeSelector":{},"podLabels":{},"quotaCacheValiditySeconds":240,"quotaUpdateConcurrentRequests":25,"replicas":2,"resources":{"requests":{"cpu":2,"memory":"4Gi"}},"terminationGracePeriodSeconds":10,"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}` | Metrics server parameters, used for exposing WEKA metrics in Prometheus format |
+| metricsServer | object | `{"affinity":{},"apiClientTimeoutSeconds":180,"enableBatchModeForQuotaUpdates":false,"enableLeaderElection":true,"enabled":true,"labels":{},"logLevel":4,"maxConcurrentRequests":50,"metricsFetchIntervalSeconds":30,"nodeSelector":{},"podLabels":{},"quotaCacheValiditySeconds":240,"quotaUpdateConcurrentRequests":25,"replicas":2,"resources":{"requests":{"cpu":2,"memory":"4Gi"}},"terminationGracePeriodSeconds":10,"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}` | Metrics server parameters, used for exposing WEKA metrics in Prometheus format |
 | metricsServer.enabled | bool | `true` | Allow CSI plugin to report WEKA metrics in Prometheus format.    NOTE: this implies that the CSI plugin will get access to all Kubernetes PVs, and fetch their credentials, then query WEKA cluster for those metrics |
 | metricsServer.replicas | int | `2` | Number of replicas for metrics server |
 | metricsServer.nodeSelector | object | `{}` | optional nodeSelector for metrics server only |
@@ -132,7 +132,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | metricsServer.podLabels | object | `{}` | optional labels to add to metrics server pods |
 | metricsServer.tolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | tolerations for metrics server only |
 | metricsServer.maxConcurrentRequests | int | `50` | concurrent requests for WEKA API (excluding quota) |
-| metricsServer.metricsFetchIntervalSeconds | int | `10` | metrics fetch interval in seconds, default is 60 seconds.    Only expired metrics will be updated, set by quotaCacheValiditySeconds |
+| metricsServer.metricsFetchIntervalSeconds | int | `30` | metrics fetch interval in seconds, default is 60 seconds.    Only expired metrics will be updated, set by quotaCacheValiditySeconds |
 | metricsServer.terminationGracePeriodSeconds | int | `10` | termination grace period for metrics server pods |
 | metricsServer.enableLeaderElection | bool | `true` | enable leader election for metrics server |
 | metricsServer.quotaUpdateConcurrentRequests | int | `25` | number of concurrent requests for metrics server to update quotas |
@@ -140,6 +140,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | metricsServer.apiClientTimeoutSeconds | int | `180` | Timeout for API client requests, in seconds. Default is 120 seconds. Increased to 180 seconds to allow for larger operations like quotamap fetching |
 | metricsServer.enableBatchModeForQuotaUpdates | bool | `false` | Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.    This is disabled by default.    The drawback is that in such case, metrics will be reported less frequently, using cached values.    Report timestamp will be recorded for each metric, so you can see when the last update was.    This requires Prometheus server to honor timestamps.    When false, all quota values will be fetched instantaneously, during metrics collection.    Not recommended when having thousands of PVCs |
 | metricsServer.resources | object | `{"requests":{"cpu":2,"memory":"4Gi"}}` | Resources for metrics server pods |
+| metricsServer.logLevel | int | `4` | separate log level for metrics server, default is 4 (info) |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
 | priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |
