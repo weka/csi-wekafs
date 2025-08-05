@@ -206,6 +206,9 @@
                 "labels": {
                     "type": "object"
                 },
+                "logLevel": {
+                    "type": "integer"
+                },
                 "maxConcurrentRequests": {
                     "type": "integer"
                 },
