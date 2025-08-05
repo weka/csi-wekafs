@@ -1,0 +1,367 @@
+name: release-v2
+
+on:
+  workflow_dispatch:
+    inputs:
+      releaseTag:
+        description: releaseTag to set v1.2.3, v1.2.3-beta, etc. or auto version will be set
+        required: false
+      draftTag:
+        description: draftTag with the release notes. Can be found at the release page. E.g. untagged-777fe0c3b1edc8bd78f6
+        required: true
+      makeLatestRelease:
+        type: boolean
+        description: github:latestRelease
+        required: true
+      preRelease:
+        type: boolean
+        description: artifacthub:preRelease
+        required: true
+      containsSecurityUpdates:
+        type: boolean
+        description: artifacthub:containsSecurityUpdates
+        required: true
+      includeArtifactHubChanges:
+        type: boolean
+        description: Include changes from artifacthub_changes.json in the release notes
+        required: false
+        default: true
+      performDryRun:
+        type: boolean
+        description: Perform a dry run
+        required: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: log inputs
+        run: |
+          echo releaseTag=${{inputs.releaseTag}}
+          echo draftTag=${{inputs.draftTag}}
+          echo makeLatestRelease=${{inputs.makeLatestRelease}}
+          echo preRelease=${{inputs.preRelease}}
+          echo containsSecurityUpdates=${{inputs.containsSecurityUpdates}}
+          echo performDryRun=${{inputs.performDryRun}}
+
+      - name: validate inputs
+        run: |
+          if [[ -z "${{inputs.draftTag}}" ]]; then
+            echo "draftTag is required"
+            exit 1
+          fi
+          string=${{inputs.draftTag}}
+          if [[ $string != untagged-* ]]; then
+            echo "draftTag does not start with 'untagged-'"
+            echo "Make sure to copy the id from a draft at https://github.com/weka/csi-wekafs/releases"
+            echo "It should have a form of 'untagged-286bdd99389b598e48c4'"
+            exit 2
+          fi
+          string=${{inputs.releaseTag}}
+          if [[ ${string:0:1} != "v" ]]; then
+              echo "The first character is not 'v'"
+              echo "Make sure that releaseTag has a form of 'v1.2.3'"
+              exit 2
+          fi
+
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0                # fetch the whole repo history
+
+      - run: gh release view ${{inputs.draftTag}}
+        env:
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+
+  build-binaries:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.8.2
+        with:
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Set package version
+        id: version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          INPUT_VERSION: ${{ inputs.releaseTag }}
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            VERSION=$INPUT_VERSION
+          fi
+
+          VERSION=`echo $VERSION | sed "s|SNAPSHOT|$GITHUB_REF_NAME|"`
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # GO APP BUILD
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build Go binaries
+        run: |
+          echo "Building Go binaries for version: ${{ steps.version.outputs.version }}"
+          go mod download
+          GOOS=linux
+          for GOARCH in amd64 arm64; do
+            mkdir -p build/$GOOS-$GOARCH
+            echo "Building for GOOS=$GOOS GOARCH=$GOARCH"
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -o build/$GOOS-$GOARCH ./cmd/**
+          done
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: wekafsplugin-binaries-${{ github.sha }}
+          path: build
+          retention-days: 1
+
+  publish-docker-image:
+    needs: build-binaries
+    name: build-docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.8.2
+        with:
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Set package version
+        id: version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          INPUT_VERSION: ${{ inputs.releaseTag }}
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            VERSION=$INPUT_VERSION
+          fi
+
+          VERSION=`echo $VERSION | sed "s|SNAPSHOT|$GITHUB_REF_NAME|"`
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: ./build
+          name: wekafsplugin-binaries-${{ github.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: quay.io
+
+      - name: Build and push Docker images
+        id: build_and_push
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: Dockerfile-gha
+          push: true
+          pull: true
+          tags: '${{ secrets.DOCKER_REGISTRY_NAME }}/csi-wekafs:${{ steps.version.outputs.version }}'
+          cache-from: |
+            type=gha,key=wekacsiplugin-amd64
+            type=gha,key=wekacsiplugin-arm64
+          cache-to: |
+            type=gha,mode=max,key=wekacsiplugin-amd64
+            type=gha,mode=max,key=wekacsiplugin-arm64
+          labels: |
+            revision=${{ steps.version.outputs.version }}
+            quay.expires-after=14d
+            version=${{ steps.version.outputs.version }}
+            release=${{ steps.version.outputs.version }}
+          provenance: false
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+
+  release:
+    needs:
+      - build-binaries
+
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          token: ${{ secrets.PAT }} # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Get version
+        id: version
+        uses: codacy/git-version@2.8.2
+        with:
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
+
+      - name: Download artifactHub changes from draft release
+        if: ${{ inputs.includeArtifactHubChanges }}
+        env:
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+        run: |
+          gh release download ${{inputs.draftTag}} --pattern "artifacthub_changes.json" || true
+          if [[ ! -f artifacthub_changes.json ]]; then
+              echo "ATTENTION: artifacthub_changes.json not found in the draft release"
+              exit 0
+          fi
+          cat artifacthub_changes.json
+
+      - name: Set package version
+        id: set_version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          INPUT_VERSION: ${{ inputs.releaseTag }}
+        run: |
+          if [[ $INPUT_VERSION ]]; then
+            VERSION=$INPUT_VERSION
+          fi
+
+          VERSION=`echo $VERSION | sed "s|SNAPSHOT|$GITHUB_REF_NAME|"`
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          VERSION_WITHOUT=`echo $VERSION | sed 's/^v//1'`
+          out="$(echo "${{ steps.auto_version.outputs.version }}" | sed 's/^v//1')"
+
+          cd charts/csi-wekafsplugin
+          
+          yq -i '.version = "'$VERSION_WITHOUT'"' Chart.yaml
+          yq -i '.appVersion = "'$VERSION'"' Chart.yaml
+          yq -i '.csiDriverVersion = "'$VERSION_WITHOUT'"' values.yaml
+          yq -i '.sources[0] = "'https://github.com/weka/csi-wekafs/tree/$VERSION'"' Chart.yaml
+          yq -i '.annotations."artifacthub.io/prerelease" = "'${{ inputs.preRelease }}'"' Chart.yaml
+          yq -i '.annotations."artifacthub.io/containsSecurityUpdates" = "'${{ inputs.containsSecurityUpdates }}'"' Chart.yaml
+          if [[ -f ../../artifacthub_changes.json ]]; then
+            echo "Updating artifacthub.io/changes annotation in Chart.yaml"
+            yq -i 'with(.; .annotations."artifacthub.io/changes" = load("../../artifacthub_changes.json") )' Chart.yaml
+          else
+            echo "artifacthub_changes.json not found, skipping update of artifacthub.io/changes annotation"
+          fi
+
+          echo ------------------ values ------------------
+          cat values.yaml
+          echo --------------------chart ------------------
+          cat Chart.yaml
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.10.0
+
+      - name: update Helm schema
+        run: |
+          helm plugin install https://github.com/karuppiah7890/helm-schema-gen.git
+          helm schema-gen charts/csi-wekafsplugin/values.yaml >| charts/csi-wekafsplugin/values.schema.json 
+
+      - name: helm-docs
+        uses: addnab/docker-run-action@v3
+        with:
+          image: jnorwood/helm-docs:latest
+          options: -v ${{ github.workspace }}:/data
+          run: |
+            cd /data
+            helm-docs -s file -c charts/csi-wekafsplugin -o ../../README.md -t ../README.md.gotmpl
+            helm-docs -s file -c charts/csi-wekafsplugin
+
+      - name: Update RELEASE.md
+        env:
+          VERSION: ${{ steps.set_version.outputs.version }}
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+        run: |
+          gh release view ${{inputs.draftTag}} --json body | jq -r .body | sed '$d' > changelog
+
+          # insert release note at the beginning
+          # sed doesn't work well here
+          echo "# Release $VERSION" >> CHANGELOG.md
+          cat changelog >> CHANGELOG.md
+          cat RELEASE.md >> CHANGELOG.md
+
+          # release note will taken from here by helm/chart-releaser-action
+          cat changelog > charts/csi-wekafsplugin/CHANGELOG.md
+          mv CHANGELOG.md RELEASE.md
+
+      - name: Remove the original draft release
+        if: ${{ !inputs.performDryRun }}
+        env:
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+        run: gh release delete ${{inputs.draftTag}} --yes
+
+      # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
+      - name: Create commit with updated version in Chart.yaml and values.yaml
+        if: ${{ !inputs.performDryRun }}
+        uses: stefanzweifel/git-auto-commit-action@v6
+        with:
+          commit_message: Release ${{ steps.set_version.outputs.version }}
+
+      # https://colinwilson.uk/2022/01/27/how-to-sign-helm-charts-using-chart-releaser-action/
+      - name: Prepare GPG key
+        run: |
+          gpg_dir=.cr-gpg
+          mkdir "$gpg_dir"
+          keyring="$gpg_dir/secring.gpg"
+          base64 -d <<< "$GPG_KEYRING_BASE64" > "$keyring"
+          passphrase_file="$gpg_dir/passphrase"
+          echo "$GPG_PASSPHRASE" > "$passphrase_file"
+          echo "CR_PASSPHRASE_FILE=$passphrase_file" >> "$GITHUB_ENV"
+          echo "CR_KEYRING=$keyring" >> "$GITHUB_ENV"
+        env:
+          GPG_KEYRING_BASE64: "${{ secrets.GPG_KEYRING_BASE64 }}"
+          GPG_PASSPHRASE: "${{ secrets.GPG_PASSPHRASE }}"
+
+      - uses: helm/chart-releaser-action@v1.7.0
+        if: ${{ !inputs.performDryRun }}
+        env:
+          CR_TOKEN: "${{ secrets.BOTTY_GH_TOKEN }}"
+          CR_RELEASE_NAME_TEMPLATE: "v{{ .Version }}"
+          CR_GENERATE_RELEASE_NOTES: false
+          CR_MAKE_RELEASE_LATEST: ${{ inputs.makeLatestRelease }}
+          CR_RELEASE_NOTES_FILE: CHANGELOG.md
+          CR_SIGN: true
+          CR_KEY: "WEKA CSI"
+          CR_SKIP_EXISTING: true
+          CR_SKIP_REPO_UPDATE: ${{ inputs.performDryRun }}
+
+      - name: For Dry run, upload the Chart.yaml to the artifact
+        if: ${{ inputs.performDryRun }}
+        run: |
+          gh release upload ${{ inputs.draftTag }} charts/csi-wekafsplugin/Chart.yaml charts/csi-wekafsplugin/values.yaml
+        env:
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
