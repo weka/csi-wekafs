@@ -319,15 +319,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return NodePublishVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
 
-	// set volume mountOptions
-	params := req.GetVolumeContext()
-	if params != nil {
-		if mountOptions, ok := params["mountOptions"]; ok {
-			logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
-			volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
-			volume.pruneUnsupportedMountOptions(ctx)
-		}
-	}
+	mountOptions := ns.fetchMountOptionsForRequest(ctx, req)
+	logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
+	volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
+	volume.pruneUnsupportedMountOptions(ctx)
 
 	// Check volume capabitily arguments
 	if req.GetVolumeCapability() == nil {
@@ -361,9 +356,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	readOnly := req.GetReadonly()
 	// create a readonly mount
 	if readOnly {
-		roMountOptions := NewMountOptions([]string{"ro"})
-		roMountOptions.excludeOptions = []string{"rw"}
-		volume.mountOptions.Merge(roMountOptions, ns.getConfig().mutuallyExclusiveOptions)
+		volume.setMountOptions(ctx, NewMountOptionsFromString("ro"))
 		innerMountOpts = append(innerMountOpts, "ro")
 	}
 
@@ -429,6 +422,29 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	result = "SUCCESS"
 	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
 	return &csi.NodePublishVolumeResponse{}, nil
+}
+
+func (ns *NodeServer) fetchMountOptionsForRequest(ctx context.Context, req *csi.NodePublishVolumeRequest) string {
+	logger := log.Ctx(ctx)
+	volumeId := req.GetVolumeId()
+
+	// set volume mountOptions, try first from configmap:
+	var mountOptions string
+	var err error
+	successInFetchingOptionsFromCM := false
+	mountOptions, err = ns.getConfig().GetDriver().GetVolumeMountOptionsFromMap(ctx, volumeId)
+	if err == nil {
+		logger.Trace().Str("mount_options", mountOptions).Msg("Mount options fetched from config map")
+		successInFetchingOptionsFromCM = true
+	}
+	// if could not fetch from config map, use volumeContext for backward compatibility
+	if !successInFetchingOptionsFromCM {
+		logger.Trace().Msg("Mount options not in config map, trying volumeContext")
+		params := req.GetVolumeContext()
+		mountOptions = params["mountOptions"]
+	}
+	return mountOptions
+
 }
 
 func NodeUnpublishVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.NodeUnpublishVolumeResponse, error) {

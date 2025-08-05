@@ -650,3 +650,31 @@ func getOwnNamespace() (string, error) {
 	return "", errors.New("namespace not found or not set in environment variable LEADER_ELECTION_NAMESPACE")
 	// Get the namespace from the environment variable
 }
+
+func getMountOptionsConfigMapName(driverName string) string {
+	driverSanitizedName := strings.ReplaceAll(driverName, ".", "-")
+	return fmt.Sprintf(MountOptionsConfigMapNameTemplate, driverSanitizedName)
+}
+
+// SimpleXOR encrypts/decrypts a string using XOR with a key. Not used for encryption per se, just to obfuscate the string
+func SimpleXOR(input []byte) []byte {
+	key := []byte("weka")
+	keyLen := len(key)
+	output := make([]byte, len(input))
+
+	for i := range input {
+		output[i] = input[i] ^ key[i%keyLen] // XOR each byte with key
+	}
+
+	return output
+}
+
+func HashToValidConfigMapKey(input string) string {
+	// Generate SHA1 hash
+	hash := sha1.Sum([]byte(input))
+	encoded := strings.ToLower("v" + base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:]))
+	if len(encoded) > 32 {
+		encoded = encoded[:32]
+	}
+	return encoded
+}
