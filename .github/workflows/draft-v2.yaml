@@ -242,8 +242,8 @@ jobs:
           SLACK_COLOR: "yellow"
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_USERNAME: csiBot
-          SLACK_ICON_EMOJI: ":scroll:"
-          SLACK_TITLE: "Draft Release Notes for ${{ steps.version.outputs.version }}"
+          SLACK_ICON_EMOJI: ":robot_face:"
+          SLACK_TITLE: ":scroll: DRAFT RN: ${{ steps.version.outputs.version }}"
           SLACKIFY_MARKDOWN: "true"
           SLACK_MESSAGE: "${{ steps.read_md.outputs.content }}'"
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
