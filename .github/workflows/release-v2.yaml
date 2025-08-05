@@ -1,4 +1,4 @@
-name: release
+name: release-v2
 
 on:
   workflow_dispatch:
@@ -59,10 +59,10 @@ jobs:
               exit 2
           fi
 
-      - name: Install GitHub CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install gh jq -y
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0                # fetch the whole repo history
 
       - run: gh release view ${{inputs.draftTag}}
         env:
@@ -204,16 +204,13 @@ jobs:
 
   release:
     needs:
-      - publish-docker-image
+      - build-binaries
 
     runs-on: ubuntu-latest
     steps:
-      - name: Install GitHub CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install gh jq -y
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           token: ${{ secrets.PAT }} # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
           fetch-depth: 0
@@ -230,6 +227,17 @@ jobs:
           prefix: v
           minor-identifier: /feat(ure)*:/
           major-identifier: /breaking:/
+
+      - name: Download artifactHub changes from draft release
+        env:
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+        run: |
+          gh release download ${{inputs.draftTag}} --pattern "artifacthub_changes.json" || true
+          if [[ ! -f artifacthub_changes.json ]]; then
+              echo "ATTENTION: artifacthub_changes.json not found in the draft release"
+              exit 0
+          fi
+          cat artifacthub_changes.json
 
       - name: Set package version
         id: set_version
@@ -255,6 +263,12 @@ jobs:
           yq -i '.sources[0] = "'https://github.com/weka/csi-wekafs/tree/$VERSION'"' Chart.yaml
           yq -i '.annotations."artifacthub.io/prerelease" = "'${{ inputs.preRelease }}'"' Chart.yaml
           yq -i '.annotations."artifacthub.io/containsSecurityUpdates" = "'${{ inputs.containsSecurityUpdates }}'"' Chart.yaml
+          if [[ -f ../../artifacthub_changes.json ]]; then
+            echo "Updating artifacthub.io/changes annotation in Chart.yaml"
+            yq -i 'with(.; .annotations."artifacthub.io/changes" = load("../../artifacthub_changes.json") )' Chart.yaml
+          else
+            echo "artifacthub_changes.json not found, skipping update of artifacthub.io/changes annotation"
+          fi
 
           echo ------------------ values ------------------
           cat values.yaml
@@ -298,20 +312,21 @@ jobs:
           cat changelog > charts/csi-wekafsplugin/CHANGELOG.md
           mv CHANGELOG.md RELEASE.md
 
-      - run: gh release delete ${{inputs.draftTag}} --yes
+      - name: Remove the original draft release
         if: ${{ !inputs.performDryRun }}
         env:
           GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
+        run: gh release delete ${{inputs.draftTag}} --yes
 
       # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
-      - uses: stefanzweifel/git-auto-commit-action@v6
+      - name: Create commit with updated version in Chart.yaml and values.yaml
         if: ${{ !inputs.performDryRun }}
+        uses: stefanzweifel/git-auto-commit-action@v6
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
 
       # https://colinwilson.uk/2022/01/27/how-to-sign-helm-charts-using-chart-releaser-action/
       - name: Prepare GPG key
-        if: ${{ !inputs.performDryRun }}
         run: |
           gpg_dir=.cr-gpg
           mkdir "$gpg_dir"
@@ -335,4 +350,4 @@ jobs:
           CR_RELEASE_NOTES_FILE: CHANGELOG.md
           CR_SIGN: true
           CR_KEY: "WEKA CSI"
-
+          CR_SKIP_EXISTING: true
