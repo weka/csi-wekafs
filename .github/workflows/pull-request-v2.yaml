@@ -3,6 +3,7 @@ on:
   pull_request:
     paths-ignore:
       - '.github/**'
+      - '!.github/workflows/**'
 
 concurrency:
   group: ${{ github.ref }}
