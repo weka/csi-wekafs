@@ -214,7 +214,7 @@ jobs:
 
   release:
     needs:
-      - publish-docker-image
+      - build-binaries
 
     runs-on: ubuntu-latest
     steps:

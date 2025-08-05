@@ -86,6 +86,7 @@ jobs:
 
           const details = [];
           const skipped = [];
+          const artifactHubNotes = [];
 
           function getSection(pr) {
             const labels = pr.labels.map(l => l.name.toLowerCase());
@@ -98,25 +99,54 @@ jobs:
             if (labels.includes('tests') || labels.includes('dependencies') || labels.includes('ci')) return '### Miscellaneous';
             return '';
           }
+          
+          function getArtifactHubKind(pr){
+            const labels = pr.labels.map(l => l.name.toLowerCase());
+            const title = pr.title.toLowerCase();
+            if (!title.includes('(csi-')) {
+              return '';
+            };
+            if (labels.includes('feature')) {
+              return 'added';
+            };
+            if (labels.includes('enhancement')) {
+              return 'changed';
+            }; 
+            if (labels.includes('fix') || labels.includes('bug')) {
+              return 'fixed';
+            };
+            return '';
+          }
 
           function isSkippable(pr) {
             return !pr.title || pr.title.trim() === '' || pr.title.startsWith('Merge') || pr.title.startsWith('Draft') || getSection(pr) === '' || pr.author?.is_bot;
           }
 
           const rnLines = [];
-          rnLines.push('<!-- Release notes generated using configuration in .github/release.yaml at main -->\n');
           rnLines.push('## What\'s Changed\n');
-
+        
           for (const pr of prs) {
             if (isSkippable(pr)) {
               skipped.push(pr);
               continue;
             }
-
+            
             const section = getSection(pr);
             const author = pr.author?.login || 'unknown';
             const entry = `* ${pr.title} by @${author} in ${pr.url} [(more details)](#pr-${pr.number})`;
             sections[section].push(entry);
+          
+            const artifactHubKind = getArtifactHubKind(pr);
+            if (artifactHubKind) {
+              const change = {
+                kind: artifactHubKind,
+                description: pr.title,
+                links: [
+                  { name: `PR #${pr.number}`, url: pr.url }
+                ]
+              };
+              artifactHubNotes.push(change);
+            }
 
             const bodyLines = (pr.body || '_No description provided._')
               .trim()
@@ -152,8 +182,8 @@ jobs:
             skippedLines.push(`- PR #${pr.number}: ${pr.title || '_No title_'} by @${pr.author?.login || 'unknown'} in ${pr.url}`);
           }
           fs.writeFileSync('SKIPPED_PRS.md', skippedLines.join('\n'));
+          fs.writeFileSync('artifacthub_changes.json', JSON.stringify(artifactHubNotes, null, 2));
           EOF
-
           node generate-notes.mjs
 
       - name: Upload release notes artifact
@@ -180,8 +210,18 @@ jobs:
             --draft && \
           release_url=$(gh release view "$TAG" --json url | jq -r .url) && \
           echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
+          echo "draft_tag=$TAG" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload ArtifactHub changes to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=${{ steps.create_draft.outputs.draft_tag }}
+          FILE_PATH="artifacthub_changes.json"
+          # Upload the asset to the release
+          gh release upload "$TAG_NAME" "$FILE_PATH" --repo="${{ github.repository }}" --clobber
 
       - name: Read Markdown file
         id: read_md
