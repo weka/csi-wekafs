@@ -55,7 +55,7 @@ spec:
           args:
             - "--drivername=$(CSI_DRIVER_NAME)"
             - "--nodeid=$(KUBE_NODE_NAME)"
-            - "--v={{ .Values.logLevel | default 5 }}"
+            - "--v={{ .Values.metricsServer.logLevel | default .Values.logLevel }}"
             - "--csimode=$(X_CSI_MODE)"
           {{- if .Values.tracingUrl }}
             - "--tracingurl={{ .Values.tracingUrl }}"
