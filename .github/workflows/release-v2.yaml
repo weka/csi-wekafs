@@ -21,6 +21,11 @@ on:
         type: boolean
         description: artifacthub:containsSecurityUpdates
         required: true
+      includeArtifactHubChanges:
+        type: boolean
+        description: Include changes from artifacthub_changes.json in the release notes
+        required: false
+        default: true
       performDryRun:
         type: boolean
         description: Perform a dry run
@@ -229,6 +234,7 @@ jobs:
           major-identifier: /breaking:/
 
       - name: Download artifactHub changes from draft release
+        if: ${{ inputs.includeArtifactHubChanges }}
         env:
           GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
         run: |
@@ -351,3 +357,11 @@ jobs:
           CR_SIGN: true
           CR_KEY: "WEKA CSI"
           CR_SKIP_EXISTING: true
+          CR_SKIP_REPO_UPDATE: ${{ inputs.performDryRun }}
+
+      - name: For Dry run, upload the Chart.yaml to the artifact
+        if: ${{ inputs.performDryRun }}
+        run: |
+          gh release upload ${{ inputs.draftTag }} charts/csi-wekafsplugin/Chart.yaml charts/csi-wekafsplugin/values.yaml
+        env:
+          GH_TOKEN: ${{ secrets.BOTTY_GH_TOKEN }}
