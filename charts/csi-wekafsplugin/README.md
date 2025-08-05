@@ -15,9 +15,9 @@ https://github.com/weka/csi-wekafs
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
 ## Pre-requisite
-- Kubernetes cluster of version 1.18 and up, 1.19 and up recommended
-- Helm v3 must be installed and configured properly
-- Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
+- **Kubernetes cluster**: Version 1.18 or later (version 1.19 or later is recommended).  
+- **Helm**: Helm v3 must be installed and properly configured.  
+- **WEKA system**: The WEKA system must be pre-configured, with the WEKA client installed and registered on each Kubernetes node within the cluster.
 
 ## Deployment
 ```shell
@@ -31,9 +31,6 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 ## Usage
 - [Deploy an Example application](https://github.com/weka/csi-wekafs/blob/master/docs/usage.md)
 - [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md)
-
-## Additional Documentation
-- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
 ## Values
 
