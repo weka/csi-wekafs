@@ -8,6 +8,7 @@
 ## Homepage
 {{ template "chart.homepage" . }}
 
+## Maintainers
 {{ template "chart.maintainersSection" . }}
 
 ## Pre-requisite
@@ -15,9 +16,6 @@
 - Access to terminal with `kubectl` installed
 - WEKA system pre-configured and WEKA client installed and registered in cluster for each Kubernetes node
 - Both AMD64 and ARM64 platforms are supported
-  > **NOTE**: For more information on WEKA client software support state of ARM64, please refer to the [WEKA documentation revision history](https://docs.weka.io/readme/documentation-revision-history).
-  >
-  > On platforms not currently supported by WEKA software, NFS failback mode can be used. For additional information on NFS transport configuration, please refer to the [NFS documentation](docs/NFS.md)
 
 ## Deployment
 - [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)

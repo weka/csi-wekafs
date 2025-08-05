@@ -22,7 +22,7 @@ https://github.com/weka/csi-wekafs
 ## Deployment
 ```shell
 helm repo add csi-wekafs https://weka.github.io/csi-wekafs
-helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
+helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
 ```
 
 > **NOTE:** Since version 3.0.0, WEKA CSI Plugin removes support for legacy volumes without API binding.
@@ -31,6 +31,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 ## Usage
 - [Deploy an Example application](https://github.com/weka/csi-wekafs/blob/master/docs/usage.md)
 - [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md)
+- [WEKA CSI Plugin with NFS transport](docs/NFS.md)
 
 ## Values
 
