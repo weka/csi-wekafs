@@ -15,6 +15,8 @@ https://github.com/weka/csi-wekafs
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
 ## Source Code
+* <https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin>
+
 ## Pre-requisite
 - Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
 - Access to terminal with `kubectl` installed
