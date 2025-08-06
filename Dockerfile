@@ -1,4 +1,4 @@
-ARG UBI_HASH=9.6-1754000177
+ARG UBI_HASH=9.6-1754456323
 FROM golang:1.24-alpine AS go-builder
 # https://stackoverflow.com/questions/36279253/go-compiled-binary-wont-run-in-an-alpine-docker-container-on-ubuntu-host
 RUN apk add --no-cache libc6-compat gcc musl-dev
