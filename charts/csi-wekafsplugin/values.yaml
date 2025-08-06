@@ -188,6 +188,10 @@ metrics:
   attacherPort: 9095
   # -- Metrics server metrics port
   metricsServerPort: 9096
+# -- Liveness probe parameters
+readinessProbe:
+  # -- Liveness probe port for Metrics Server
+  metricsServerPort: 9196
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""
