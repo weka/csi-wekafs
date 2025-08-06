@@ -4,27 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/atomic"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"math"
 	"net/http"
 	"os"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	clog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"slices"
 	"strconv"
@@ -57,7 +47,6 @@ type MetricsServer struct {
 	prometheusMetrics *PrometheusMetrics
 	running           bool
 
-	manager               ctrl.Manager
 	persistentVolumesChan chan *v1.PersistentVolume // channel for streaming PersistentVolume objects for further processing
 	volumeMetricsChan     chan *VolumeMetric        // channel for incoming requests
 
@@ -126,80 +115,14 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 
 }
 
-// GetK8sApi returns the Kubernetes API client from the driver or KUBECONFIG environment variable.
-func (ms *MetricsServer) GetK8sApi() *kubernetes.Clientset {
-	return ms.driver.GetK8sApiClient()
-}
-
 func (ms *MetricsServer) initManager(ctx context.Context) {
-	logger := log.Ctx(ctx)
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		if errors.Is(err, rest.ErrNotInCluster) {
-			log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
-			// Fallback to using kubeconfig from the local environment
-			kubeconfig := os.Getenv("KUBECONFIG")
-			if kubeconfig == "" {
-				log.Error().Msg("KUBECONFIG environment variable is not set")
-				Die("KUBECONFIG environment variable is not set, cannot run MetricsServer without it and not in cluster")
-			}
-			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
-				Die("Failed to create config from kubeconfig file, cannot run MetricsServer without it")
-			}
-		} else {
-			log.Error().Err(err).Msg("Failed to create in-cluster config")
-			Die("Failed to create in-cluster config, cannot run MetricsServer without it")
-		}
-	}
-
-	scheme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
-	pprofBindAddress := os.Getenv("PPROF_BIND_ADDRESS")
-	if pprofBindAddress != "" {
-		logger.Info().Str("pprof_bind_address", pprofBindAddress).Msg("Using PPROF_BIND_ADDRESS environment variable for pprof binding address")
-	}
-
-	namespace, err := getOwnNamespace()
-	if err != nil {
-		logger.Error().Msg("Namespace not detected and not set, not using Leader Election mechanism")
-	}
-	zerologr.NameFieldName = "logger"
-	zerologr.NameSeparator = "/"
-	var logrLog = zerologr.New(logger)
-
-	readinessPort := os.Getenv("READINESS_PORT")
-	if readinessPort == "" {
-		readinessPort = "8081" // Default port for readiness probe
-		logger.Info().Str("readiness_port", readinessPort).Msg("Using default readiness port")
-	}
-
-	ms.manager, err = ctrl.NewManager(config, ctrl.Options{
-		Scheme:                        scheme,
-		LeaderElection:                ms.getConfig().enableMetricsServerLeaderElection,
-		LeaderElectionNamespace:       namespace,
-		LeaderElectionID:              "csimetricsad0b5146.weka.io",
-		LeaderElectionConfig:          nil,
-		LeaderElectionReleaseOnCancel: true,
-		HealthProbeBindAddress:        ":" + readinessPort,
-		PprofBindAddress:              pprofBindAddress,
-	})
-	clog.SetLogger(logrLog)
-
-	if err != nil {
-		logger.Error().Err(err).Msg("unable to start manager")
-		Die("unable to start manager, cannot run MetricsServer without it")
-	}
-
-	//
-	if err := ms.manager.AddReadyzCheck("leader", func(req *http.Request) error {
+	logger := log.Ctx(ctx).With().Str("component", "MetricsServer").Logger()
+	if err := ms.driver.manager.AddReadyzCheck("leader", func(req *http.Request) error {
 		if !ms.getConfig().enableMetricsServerLeaderElection {
 			return nil // if leader election is not enabled, we are always ready
 		}
 		select {
-		case <-ms.manager.Elected():
+		case <-ms.driver.manager.Elected():
 			return nil // we are the leader
 		default:
 			return fmt.Errorf("not the leader yet")
@@ -208,7 +131,7 @@ func (ms *MetricsServer) initManager(ctx context.Context) {
 		logger.Error().Err(err).Msg("Failed to add readiness check for leader election")
 		Die("Failed to add readiness check for leader election, cannot run MetricsServer without it")
 	}
-	_ = ms.manager.AddHealthzCheck("alwaysReady", healthz.Ping)
+	_ = ms.driver.manager.AddHealthzCheck("alwaysReady", healthz.Ping)
 
 }
 
@@ -238,7 +161,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 			}
 		}
 
-		err := ms.manager.GetClient().List(ctx, pvList)
+		err := ms.driver.manager.GetClient().List(ctx, pvList)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
 			ms.prometheusMetrics.server.FetchPvBatchOperationFailureCount.Inc()
@@ -573,10 +496,12 @@ func (ms *MetricsServer) fetchSecret(ctx context.Context, secretName, secretName
 	}
 	ms.secrets.Unlock()
 	logger.Debug().Str("namespace", secretNamespace).Str("name", secretName).Msg("Fetching Secret")
-	if ms.GetK8sApi() == nil {
-		return nil, errors.New("no k8s API client available")
+	secret := &v1.Secret{}
+	key := types.NamespacedName{
+		Name:      secretName,
+		Namespace: secretNamespace,
 	}
-	secret, err := ms.GetK8sApi().CoreV1().Secrets(secretNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	err := ms.driver.manager.GetClient().Get(ctx, key, secret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch secret %s/%s: %w", secretNamespace, secretName, err)
 	}
@@ -1192,7 +1117,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	}()
 
 	// Add a Runnable that only runs when this pod is elected leader
-	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+	err := ms.driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		logger.Info().Msg("Leader elected, starting MetricsServer processors")
 
 		go ms.PersistentVolumeStreamer(ctx)
@@ -1217,145 +1142,12 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	}
 
 	go func() {
-		if err := ms.manager.Start(ctx); err != nil {
+		if err := ms.driver.manager.Start(ctx); err != nil {
 			logger.Error().Err(err).Msg("Cannot continue running MetricsServer")
 			os.Exit(1)
 		}
 	}()
 
-}
-
-// StartDebug starts the MetricsServer in debug mode, only fetching metrics from WEKA
-func (ms *MetricsServer) StartDebugSingleQuotas(ctx context.Context) {
-	component := "StartDebugSingleQuotas"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
-
-	logger := log.Ctx(ctx)
-	logger.Info().Msg("Starting MetricsServer in debug mode, only fetching single quotas from WEKA")
-	ms.Lock()
-	if ms.running {
-		return // Already running
-	}
-	ms.running = true
-	ms.Unlock()
-
-	ms.initManager(ctx) // Initialize the controller-runtime manager
-
-	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
-	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
-
-	// Initialize the incoming requests channel and report all incoming prometheusMetrics
-	ms.wg.Add(1)
-	go func() {
-
-		ms.volumeMetricsChan = make(chan *VolumeMetric, VolumeMetricsBufferSize)
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Info().Msg("Metrics server context cancelled, stopping...")
-				ms.wg.Done()
-				return
-			default:
-				time.Sleep(100 * time.Millisecond) // Prevent busy loop
-			}
-		}
-	}()
-
-	// Add a Runnable that only runs when this pod is elected leader
-	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting MetricsServer processors")
-
-		go ms.PersistentVolumeStreamer(ctx)
-		go ms.PersistentVolumeStreamProcessor(ctx)
-
-		<-ctx.Done()
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add processors to manager, cannot run MetricsServer without it")
-	}
-
-	go func() {
-		if err := ms.manager.Start(ctx); err != nil {
-			logger.Error().Err(err).Msg("Cannot continue running MetricsServer")
-			os.Exit(1)
-		}
-	}()
-}
-
-func (ms *MetricsServer) StartDebugQuotaMaps(ctx context.Context) {
-	component := "StartDebugQuotaMaps"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("component", component).Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
-	logger.Info().Msg("Starting MetricsServer in debug mode, fetching whole filesystem QUOTA MAPS from WEKA")
-	ms.Lock()
-	if ms.running {
-		return // Already running
-	}
-	ms.running = true
-	ms.Unlock()
-
-	ms.initManager(ctx) // Initialize the controller-runtime manager
-
-	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
-	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
-
-	// Initialize the incoming requests channel and report all incoming prometheusMetrics
-	ms.wg.Add(1)
-	go func() {
-
-		ms.volumeMetricsChan = make(chan *VolumeMetric, VolumeMetricsBufferSize)
-		for {
-			select {
-			case <-ctx.Done():
-				logger.Info().Msg("Metrics server context cancelled, stopping...")
-				ms.wg.Done()
-				return
-			default:
-				time.Sleep(100 * time.Millisecond) // Prevent busy loop
-			}
-		}
-	}()
-
-	// Add a Runnable that only runs when this pod is elected leader
-	err := ms.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		logger.Info().Msg("Leader elected, starting MetricsServer processors")
-
-		go ms.PersistentVolumeStreamer(ctx)
-		go ms.PersistentVolumeStreamProcessor(ctx)
-
-		<-ctx.Done()
-		return nil
-	}))
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		Die("Failed to add processors to manager, cannot run MetricsServer without it")
-	}
-
-	go func() {
-		if err := ms.manager.Start(ctx); err != nil {
-			logger.Error().Err(err).Msg("Cannot continue running MetricsServer")
-			os.Exit(1)
-		}
-	}()
-
-	time.Sleep(10 * time.Second)
-	logger.Info().Msg("started manager, starting to fetch PersistentVolumes, no quota maps yet")
-
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info().Msg("RollingMetricsFetcherForDebug context cancelled, stopping...")
-			return
-		default:
-			ms.batchRefreshQuotaMaps(ctx, true) // Force update quota maps in debug mode
-		}
-	}
 }
 
 func (ms *MetricsServer) Wait() {
