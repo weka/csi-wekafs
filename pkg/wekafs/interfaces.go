@@ -7,6 +7,7 @@ import (
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.uber.org/atomic"
+	"k8s.io/mount-utils"
 )
 
 type AnyServer interface {
@@ -29,17 +30,24 @@ type AnyMounter interface {
 	schedulePeriodicMountGc(ctx context.Context)
 	getGarbageCollector() *innerPathVolGc
 	getTransport() DataTransport
+	getMountMap() *mountMap
 	isEnabled() bool
 	Enable()
 	Disable()
+	getSelinuxSupport() *bool
+	setSelinuxSupport(bool)
 }
 
 type nfsMountsMap map[string]*atomic.Int32 // we only follow the mountPath and number of references
 type wekafsMountsMap map[string]*atomic.Int32
 type DataTransport string
 
-func (d DataTransport) Unknown() bool {
-	return d == ""
+func (dt DataTransport) Unknown() bool {
+	return dt == ""
+}
+
+func (dt DataTransport) String() string {
+	return string(dt)
 }
 
 type UnmountFunc func() error
@@ -56,15 +64,18 @@ func deferUmount(fn UnmountFunc, retErr *error) {
 }
 
 type AnyMount interface {
+	getMounter() AnyMounter
+	getKMounter() mount.Interface
 	isMounted(ctx context.Context) bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error
-	getRefCount() int
 	doUnmount(ctx context.Context) error
 	doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error
 	getMountPoint() string
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
+	getRefCountIndex() string
+	getFsName() string
 }
 
 type VolumeBackingType string

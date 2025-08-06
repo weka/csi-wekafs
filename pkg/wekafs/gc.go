@@ -61,7 +61,7 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
 	fullPath := filepath.Join(path, volume.GetFullPath(ctx))
-	if !fileExists(fullPath) {
+	if !PathExists(fullPath) {
 		logger.Debug().Str("full_path", fullPath).Msg("Volume contents not found, maybe already moved to trash, skipping")
 		return nil
 	}
