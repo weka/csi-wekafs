@@ -82,6 +82,12 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
 | nodeSelector | object | `{}` | Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only    This nodeselector will be applied to all CSI plugin components |
 | affinity | object | `{}` | Optional affinity for CSI plugin deployment    This affinity will be applied to all CSI plugin components |
+| machineConfigLabels | list | `["worker","master"]` | Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on    NOTE: by default, the policy will be installed both on workers and control plane nodes |
+| controller.replicas | int | `2` | Controller number of replicas |
+| controller.maxConcurrentRequests | int | `25` | Maximum concurrent requests from sidecars (global) |
+| controller.concurrency | object | `{"createSnapshot":10,"createVolume":25,"deleteSnapshot":10,"deleteVolume":25,"expandVolume":25}` | maximum concurrent operations per operation type |
+| controller.healthPort | int | `8081` | Health probe port for controller pods |
+| controller.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
 | controller.affinity | object | `{}` | optional affinity for controller components only |
 | controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
 | controller.configureAttacherLeaderElection | bool | `true` | Configure attacher sidecar for leader election |
