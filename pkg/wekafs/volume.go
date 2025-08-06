@@ -631,7 +631,7 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 		return err
 	}
 
-	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
+	logger.Trace().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
 	if v.apiClient == nil {
 		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as it is not bound to API client", v.GetId())
 	}
@@ -643,7 +643,7 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 	}
 	err := v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit)
 	if err == nil {
-		logger.Info().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
+		logger.Debug().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
 	}
 	return err
 }
@@ -1213,6 +1213,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	// validate minimum capacity before create new volume
 	maxStorageCapacity, err := v.getMaxCapacity(ctx)
+	startTime := time.Now()
 	logger.Trace().Int64("max_capacity", maxStorageCapacity).Msg("Validating enough capacity on storage for creating the volume")
 	if err != nil {
 		return status.Errorf(codes.Internal, "CreateVolume: Cannot obtain free capacity for volume %s", v.GetId())
@@ -1344,7 +1345,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 			Err(err).Msg("Failed to update volume parameters on freshly created volume. Volume remains intact for troubleshooting. Contact support.")
 		return err
 	}
-	logger.Info().Str("filesystem", v.FilesystemName).Msg("Created volume successfully")
+	logger.Info().Str("filesystem", v.FilesystemName).Dur("duration", time.Since(startTime)).Msg("Created volume successfully")
 	return nil
 }
 
