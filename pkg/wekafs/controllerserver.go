@@ -73,6 +73,9 @@ type ControllerServer struct {
 }
 
 func (cs *ControllerServer) getBackgroundTasksWg() *sync.WaitGroup {
+	if cs == nil {
+		return &sync.WaitGroup{}
+	}
 	return cs.backgroundTasks
 }
 

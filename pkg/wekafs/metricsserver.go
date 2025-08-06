@@ -19,10 +19,9 @@ import (
 	"go.uber.org/atomic"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	ctrl "sigs.k8s.io/controller-runtime"
-
 )
 
 const (
@@ -66,6 +65,9 @@ type MetricsServer struct {
 }
 
 func (ms *MetricsServer) getBackgroundTasksWg() *sync.WaitGroup {
+	if ms == nil {
+		return &sync.WaitGroup{}
+	}
 	return ms.backgroundTasks
 }
 
@@ -1098,6 +1100,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	logger := log.Ctx(ctx)
 	logger.Info().Msg("Starting MetricsServer")
 	ms.Lock()
+
 	if ms.running {
 		return // Already running
 	}
