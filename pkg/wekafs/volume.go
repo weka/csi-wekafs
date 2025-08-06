@@ -1867,6 +1867,6 @@ func (v *Volume) CanBeOperated() error {
 	return nil
 }
 
-func (v *Volume) isMounted(ctx context.Context) bool {
-	return v.mountPath != "" && PathIsWekaMount(ctx, v.mountPath)
+func (v *Volume) isMounted() bool {
+	return v.mountPath != "" && PathIsWekaMount(v.mountPath)
 }

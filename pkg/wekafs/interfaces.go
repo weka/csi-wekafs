@@ -3,7 +3,7 @@ package wekafs
 import (
 	"context"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"go.uber.org/atomic"
+	"k8s.io/mount-utils"
 	"sync"
 	"time"
 )
@@ -28,21 +28,27 @@ type AnyMounter interface {
 	schedulePeriodicMountGc()
 	getGarbageCollector() *innerPathVolGc
 	getTransport() DataTransport
+	getMountMap() *mountMap
 	isEnabled() bool
 	Enable()
 	Disable()
+	getSelinuxSupport() *bool
+	setSelinuxSupport(bool)
 }
 
 type AnyMount interface {
+	getMounter() AnyMounter
+	getKMounter() mount.Interface
 	isMounted() bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error
-	getRefCount() int
 	doUnmount(ctx context.Context) error
 	doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error
 	getMountPoint() string
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
+	getRefCountIndex() string
+	getFsName() string
 }
 
 type VolumeBackingType string
@@ -50,8 +56,9 @@ type VolumeType string
 type CsiPluginMode string
 
 type DataTransport string
+
+func (transport DataTransport) String() string {
+	return string(transport)
+}
+
 type UnmountFunc func()
-
-type wekafsMountsMap map[string]*atomic.Int32
-
-type nfsMountsMap map[string]*atomic.Int32
