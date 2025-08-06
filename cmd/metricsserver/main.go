@@ -95,8 +95,9 @@ func main() {
 			http.Handle("/metrics", promhttp.Handler())
 			if err := http.ListenAndServe(fmt.Sprintf(":%s", *metricsPort), nil); err != nil {
 				log.Error().Str("metrics_port", *metricsPort).Err(err).Msg("Failed to start metrics service")
+			} else {
+				log.Debug().Str("metrics_port", *metricsPort).Msg("Started metrics service")
 			}
-			log.Debug().Str("metrics_port", *metricsPort).Msg("Started metrics service")
 		}()
 	}
 
