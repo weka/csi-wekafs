@@ -101,11 +101,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: READINESS_PORT
+              value: "{{ .Values.readinessProbe.metricsServerPort | default 9196 }}"
             {{- if .Values.tracingDeploymentIdentifier }}
             - name: OTEL_DEPLOYMENT_IDENTIFIER
               value: {{ .Values.tracingDeploymentIdentifier }}
-            - name: READINESS_PORT
-              value: "{{ .Values.readinessProbe.metricsServerPort | default 9196 }}"
             {{- end }}
       {{- with .Values.metricsServer.tolerations }}
       tolerations:
