@@ -48,7 +48,7 @@ type NodeServer struct {
 	semaphores        map[string]*SemaphoreWrapper
 	backgroundTasksWg *sync.WaitGroup // used to wait for background tasks to finish before shutting down the server
 
-	metrics           *NodeServerMetrics
+	metrics *NodeServerMetrics
 	sync.Mutex
 }
 
@@ -102,7 +102,7 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 		}
 	}
 
-	if !PathIsWekaMount(ctx, volumePath) {
+	if !PathIsWekaMount(volumePath) {
 		return nil, status.Error(codes.NotFound, "Volume path not found")
 	}
 
@@ -416,7 +416,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
-			if PathIsWekaMount(ctx, targetPath) {
+			if PathIsWekaMount(targetPath) {
 				log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
 				return &csi.NodePublishVolumeResponse{}, nil
 			} else {
@@ -496,7 +496,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 	}
 	// check if this path is a wekafs mount
-	if PathIsWekaMount(ctx, targetPath) {
+	if PathIsWekaMount(targetPath) {
 		logger.Debug().Msg("Directory exists and is weka mount")
 	} else {
 		msg := fmt.Sprintf("Directory %s exists, but not a weka mount, assuming already unpublished", targetPath)
@@ -565,7 +565,7 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	if ns.config.manageNodeTopologyLabels {
 		// this will either overwrite or add the keys based on the driver name
 		segments[fmt.Sprintf(TopologyLabelNodePattern, driverName)] = ns.nodeID
-		segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = string(ns.getMounter(ctx).getTransport()) // for backward compatibility, return the preferred transport
+		segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = ns.getMounter(ctx).getTransport().String() // for backward compatibility, return the preferred transport
 		segments[fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)] = "true"
 	} else {
 		logger.Warn().Msg("Node topology labels management is disabled, using global label only")

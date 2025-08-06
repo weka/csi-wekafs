@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -14,7 +12,7 @@ import (
 )
 
 type nfsMounter struct {
-	mountMap              nfsMountsMap
+	mountMap              *mountMap
 	lock                  sync.Mutex
 	kMounter              mount.Interface
 	selinuxSupport        *bool
@@ -26,26 +24,58 @@ type nfsMounter struct {
 	enabled               bool
 }
 
+func (m *nfsMounter) setSelinuxSupport(b bool) {
+	m.selinuxSupport = &b
+}
+
+func (m *nfsMounter) getSelinuxSupport() *bool {
+	return m.selinuxSupport
+}
+
+func (m *nfsMounter) getMountMap() *mountMap {
+	return m.mountMap
+}
+
+func (m *nfsMounter) isEnabled() bool {
+	return m.enabled
+}
+
+func (m *nfsMounter) Enable() {
+	if !m.enabled {
+		log.Ctx(context.Background()).Info().Msg("Enabling NFS mounter")
+	}
+	m.enabled = true
+}
+
+func (m *nfsMounter) Disable() {
+	if m.enabled {
+		log.Ctx(context.Background()).Info().Msg("Disabling NFS mounter")
+	}
+	m.enabled = false
+}
+
 func (m *nfsMounter) getGarbageCollector() *innerPathVolGc {
 	return m.gc
 }
 
-func (n *nfsMounter) isEnabled() bool {
-	return n.enabled
+func (m *nfsMounter) getSelinuxStatus(ctx context.Context) bool {
+	return anyMounterGetSelinuxStatus(ctx, m)
 }
 
-func (n *nfsMounter) Enable() {
-	if !n.enabled {
-		log.Ctx(context.Background()).Info().Msg("Enabling NFS mounter")
-	}
-	n.enabled = true
+func (m *nfsMounter) LogActiveMounts(ctx context.Context) {
+	anyMounterLogActiveMounts(ctx, m)
 }
 
-func (n *nfsMounter) Disable() {
-	if n.enabled {
-		log.Ctx(context.Background()).Info().Msg("Disabling NFS mounter")
-	}
-	n.enabled = false
+func (m *nfsMounter) gcInactiveMounts(ctx context.Context) {
+	anyMounterGcInactiveMounts(ctx, m)
+}
+
+func (m *nfsMounter) schedulePeriodicMountGc(ctx context.Context) {
+	anyMounterSchedulePeriodicMountGc(ctx, m)
+}
+
+func (m *nfsMounter) getTransport() DataTransport {
+	return dataTransportNfs
 }
 
 func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
@@ -55,7 +85,7 @@ func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 		selinuxSupport = &[]bool{true}[0]
 	}
 	mounter := &nfsMounter{
-		mountMap:              make(nfsMountsMap),
+		mountMap:              newMountMap(),
 		selinuxSupport:        selinuxSupport,
 		exclusiveMountOptions: driver.config.mutuallyExclusiveOptions,
 		mountBaseDir:          mountBaseDirForRole(driver.csiMode),
@@ -79,21 +109,12 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		mounter:         m,
 		kMounter:        m.kMounter,
 		fsName:          fsName,
-		mountPoint:      path.Join(m.mountBaseDir, string(m.getTransport()), getAsciiPart(fsName, 64)+"-"+uniqueId),
+		mountPoint:      path.Join(m.mountBaseDir, m.getTransport().String(), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:    options,
 		clientGroupName: m.clientGroupName,
 		protocolVersion: apiclient.NfsVersionString(fmt.Sprintf("V%s", m.nfsProtocolVersion)),
 	}
 	return wMount
-}
-
-func (m *nfsMounter) getSelinuxStatus(ctx context.Context) bool {
-	if m.selinuxSupport != nil && *m.selinuxSupport {
-		return true
-	}
-	selinuxSupport := getSelinuxStatus(ctx)
-	m.selinuxSupport = &selinuxSupport
-	return *m.selinuxSupport
 }
 
 func (m *nfsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
@@ -138,64 +159,4 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 	}
 
 	return mnt.decRef(ctx)
-}
-
-func (m *nfsMounter) LogActiveMounts(ctx context.Context) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	if len(m.mountMap) > 0 {
-		count := 0
-		for refIndex := range m.mountMap {
-			if mapEntry, ok := m.mountMap[refIndex]; ok {
-				parts := strings.Split(refIndex, "^")
-				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int32("refcount", mapEntry.Load()).Logger()
-
-				if mapEntry.Load() > 0 {
-					logger.Trace().Msg("Mount is active")
-					count++
-				} else {
-					logger.Trace().Msg("Mount is not active")
-				}
-
-			}
-		}
-		log.Debug().Int("total", len(m.mountMap)).Int("active", count).Msg("Periodic checkup on mount map")
-	}
-}
-
-func (m *nfsMounter) gcInactiveMounts(ctx context.Context) {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	if len(m.mountMap) > 0 {
-		for refIndex := range m.mountMap {
-			if mapEntry, ok := m.mountMap[refIndex]; ok {
-				if mapEntry.Load() == 0 {
-					parts := strings.Split(refIndex, "^")
-					logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Logger()
-					logger.Trace().Msg("Removing inactive mount from map")
-					delete(m.mountMap, refIndex)
-				}
-			}
-		}
-	}
-}
-
-func (m *nfsMounter) schedulePeriodicMountGc(ctx context.Context) {
-	go func() {
-		log.Debug().Msg("Initializing periodic mount GC for nfs transport")
-		for {
-			m.LogActiveMounts(ctx)
-			m.gcInactiveMounts(ctx)
-			select {
-			case <-ctx.Done():
-				log.Debug().Msg("Stopping periodic mount GC for nfs transport")
-				return
-			case <-time.After(inactiveMountGcPeriod):
-			}
-		}
-	}()
-}
-
-func (m *nfsMounter) getTransport() DataTransport {
-	return dataTransportNfs
 }
