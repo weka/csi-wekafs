@@ -32,9 +32,10 @@ import (
 )
 
 //goland:noinspection GoExportedFuncWithUnexportedType
-func NewNonBlockingGRPCServer(mode CsiPluginMode) *nonBlockingGRPCServer {
+func NewNonBlockingGRPCServer(mode CsiPluginMode, config *DriverConfig) *nonBlockingGRPCServer {
 	return &nonBlockingGRPCServer{
 		csiMode: mode,
+		config:  config,
 	}
 }
 
@@ -43,6 +44,7 @@ type nonBlockingGRPCServer struct {
 	wg      sync.WaitGroup
 	server  *grpc.Server
 	csiMode CsiPluginMode
+	config  *DriverConfig
 }
 
 func (s *nonBlockingGRPCServer) Start(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
@@ -92,9 +94,21 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, c
 			Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
 		}
 	}
+	var maxConcurrentStreams int64
+	for _, val := range s.config.maxConcurrencyPerOp {
+		maxConcurrentStreams += val
+	}
+
+	maxConcurrentStreams *= 2 // add some extra for the liveness etc.
+	if maxConcurrentStreams < 256 {
+		maxConcurrentStreams = 256
+	}
+
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(logGRPC),
+		grpc.MaxConcurrentStreams(uint32(maxConcurrentStreams)),
 	}
+
 	server := grpc.NewServer(opts...)
 	s.server = server
 

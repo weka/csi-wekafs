@@ -125,7 +125,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		driver.ms.Start(ctx)
 	}
 
-	s := NewNonBlockingGRPCServer(driver.csiMode)
+	s := NewNonBlockingGRPCServer(driver.csiMode, driver.config)
 
 	termContext, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -283,9 +283,10 @@ func (d *WekaFsDriver) initManager(ctx context.Context) {
 				log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
 				return
 			}
+		} else {
+			logger.Error().Err(err).Msg("Failed to create K8s API config")
+			return
 		}
-		logger.Error().Err(err).Msg("Failed to create K8s API config")
-		return
 	}
 
 	scheme := runtime.NewScheme()

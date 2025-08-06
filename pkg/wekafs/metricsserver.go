@@ -1092,6 +1092,7 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	logger := log.Ctx(ctx)
 	logger.Info().Msg("Starting MetricsServer")
 	ms.Lock()
+
 	if ms.running {
 		return // Already running
 	}
