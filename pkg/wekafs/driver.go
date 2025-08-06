@@ -4,13 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog/log"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"os/signal"
+	ctrl "sigs.k8s.io/controller-runtime"
+	clog "sigs.k8s.io/controller-runtime/pkg/log"
 	"syscall"
 )
 
@@ -23,16 +29,18 @@ type WekaFsDriver struct {
 	mountMode         string
 	mockMount         bool
 
-	ids            *identityServer
-	ns             *NodeServer
-	cs             *ControllerServer
-	ms             *MetricsServer
-	api            *ApiStore
+	ids *identityServer
+	ns  *NodeServer
+	cs  *ControllerServer
+	ms  *MetricsServer
+	api *ApiStore
+
+	manager ctrl.Manager
+
 	mounters       *MounterGroup
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig
-	k8sApiClient   *kubernetes.Clientset
 }
 
 func NewWekaFsDriver(
@@ -73,6 +81,8 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
+
+	driver.initManager(ctx)
 
 	if driver.csiMode != CsiModeMetricsServer {
 		driver.mounters = NewMounterGroup(driver)
@@ -148,49 +158,26 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 }
 
-func (d *WekaFsDriver) GetK8sApiClient() *kubernetes.Clientset {
-	if d.k8sApiClient == nil {
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			if errors.Is(err, rest.ErrNotInCluster) {
-				log.Trace().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
-				// Fallback to using kubeconfig from the local environment
-				kubeconfig := os.Getenv("KUBECONFIG")
-				if kubeconfig == "" {
-					log.Error().Msg("KUBECONFIG environment variable is not set")
-					return nil
-				}
-				config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
-					return nil
-				}
-			} else {
-				log.Error().Err(err).Msg("Failed to create in-cluster config")
-				return nil
-			}
-		}
-
-		clientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to create Kubernetes client")
-			return nil
-		}
-		d.k8sApiClient = clientset
-	}
-	return d.k8sApiClient
-}
-
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
-	client := d.GetK8sApiClient()
+	if d.manager == nil {
+		log.Error().Msg("Manager is not initialized, cannot cleanup node labels")
+		return
+	}
+	client := d.manager.GetClient()
 	if client == nil {
 		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
-	node, err := client.CoreV1().Nodes().Get(ctx, d.nodeID, v1.GetOptions{})
+	node := &v1.Node{}
+
+	key := types.NamespacedName{
+		Name: d.nodeID,
+	}
+
+	err := client.Get(ctx, key, node)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node object from Kubernetes")
 		return
@@ -226,8 +213,7 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if !updateNeeded {
 		return
 	}
-
-	_, err = d.GetK8sApiClient().CoreV1().Nodes().Update(ctx, node, v1.UpdateOptions{})
+	err = client.Update(ctx, node)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return
@@ -235,7 +221,18 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 
 	log.Info().Msg("Successfully updated labels on node")
 }
+
 func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
+	if d.manager == nil {
+		log.Error().Msg("Manager is not initialized, cannot cleanup node labels")
+		return
+	}
+	client := d.manager.GetClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
+		return
+	}
+
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
@@ -247,13 +244,9 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 	}
 	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
 
-	client := d.GetK8sApiClient()
-	if client == nil {
-		log.Error().Msg("Failed to get Kubernetes client")
-		return
-	}
-
-	node, err := client.CoreV1().Nodes().Get(ctx, d.nodeID, v1.GetOptions{})
+	node := &v1.Node{}
+	key := types.NamespacedName{Name: d.nodeID}
+	err := client.Get(ctx, key, node)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node")
 		return
@@ -264,11 +257,84 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 		log.Info().Str("label", label).Str("node", node.Name).Msg("Removing label from node")
 	}
 
-	_, err = client.CoreV1().Nodes().Update(ctx, node, v1.UpdateOptions{})
+	err = client.Update(ctx, node)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update node labels")
 		return
 	}
 
 	log.Info().Msg("Successfully removed labels from node")
+}
+
+func (d *WekaFsDriver) initManager(ctx context.Context) {
+	logger := log.Ctx(ctx)
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		if errors.Is(err, rest.ErrNotInCluster) {
+			log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
+			// Fallback to using kubeconfig from the local environment
+			kubeconfig := os.Getenv("KUBECONFIG")
+			if kubeconfig == "" {
+				log.Error().Msg("KUBECONFIG environment variable is not set, failed to create K8s API config")
+				return
+			}
+			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
+				return
+			}
+		}
+		logger.Error().Err(err).Msg("Failed to create K8s API config")
+		return
+	}
+
+	scheme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+
+	pprofBindAddress := os.Getenv("PPROF_BIND_ADDRESS")
+	if pprofBindAddress != "" {
+		logger.Info().Str("pprof_bind_address", pprofBindAddress).Msg("Using PPROF_BIND_ADDRESS environment variable for pprof binding address")
+	}
+
+	namespace, err := getOwnNamespace()
+	if err != nil {
+		logger.Error().Msg("Namespace not detected and not set, not using Leader Election mechanism")
+	}
+	zerologr.NameFieldName = "logger"
+	zerologr.NameSeparator = "/"
+	var logrLog = zerologr.New(logger)
+
+	readinessPort := os.Getenv("READINESS_PORT")
+	if readinessPort == "" {
+		readinessPort = "8081" // Default port for readiness probe
+		logger.Info().Str("readiness_port", readinessPort).Msg("Using default readiness port")
+	}
+
+	leaderElectionId := ""
+	enableLeaderElection := false
+
+	if d.csiMode == CsiModeMetricsServer || d.csiMode == CsiModeAll {
+		leaderElectionId = "csiwekametricsad0b5146.weka.io"
+		if d.config.enableMetricsServerLeaderElection {
+			enableLeaderElection = true
+		}
+	}
+
+	m, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme:                        scheme,
+		LeaderElection:                enableLeaderElection,
+		LeaderElectionNamespace:       namespace,
+		LeaderElectionID:              leaderElectionId,
+		LeaderElectionConfig:          nil,
+		LeaderElectionReleaseOnCancel: true,
+		HealthProbeBindAddress:        ":" + readinessPort,
+		PprofBindAddress:              pprofBindAddress,
+	})
+	clog.SetLogger(logrLog)
+
+	if err != nil {
+		logger.Error().Err(err).Msg("unable to start manager")
+		return
+	}
+	d.manager = m
 }
