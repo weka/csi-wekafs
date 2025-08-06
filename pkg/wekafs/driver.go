@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sync"
+	"os"
+	"os/signal"
 	"sync/atomic"
+	"syscall"
 	"time"
+
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	v1 "k8s.io/api/core/v1"
@@ -20,14 +24,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	crlog "sigs.k8s.io/controller-runtime/pkg/log"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
+	clog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 type WekaFsDriver struct {
@@ -43,14 +43,15 @@ type WekaFsDriver struct {
 	ns  *NodeServer
 	cs  *ControllerServer
 	ms  *MetricsServer
-	api *ApiStore
 
+	manager  ctrl.Manager // controller-runtime manager for K8s client access
+	isLeader atomic.Bool  // tracks current leadership state for health checks
+
+	api            *ApiStore
 	mounters       *MounterGroup
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig
-	manager        ctrl.Manager // controller-runtime manager for K8s client access
-	isLeader       atomic.Bool  // tracks current leadership state for health checks
 }
 
 func NewWekaFsDriver(
@@ -91,8 +92,10 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
-
-	driver.initManager(ctx)
+	err := driver.initManager(ctx)
+	if err != nil {
+		log.Fatal().Msg("Failed to initialize controller-runtime manager")
+	}
 
 	if driver.csiMode != CsiModeMetricsServer {
 		driver.mounters = NewMounterGroup(ctx, driver)
@@ -243,6 +246,8 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 		if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 			log.Info().Msg("Waiting for background tasks to complete")
 			driver.cs.getBackgroundTasksWg().Wait()
+			driver.ns.getBackgroundTasksWg().Wait()
+			driver.ms.getBackgroundTasksWg().Wait()
 			log.Info().Msg("Background tasks completed")
 		}
 
@@ -260,19 +265,26 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 
 }
 
-func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
-	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
+func (driver *WekaFsDriver) SetNodeLabels(ctx context.Context) {
+	if driver.csiMode != CsiModeNode && driver.csiMode != CsiModeAll {
 		return
 	}
-	client := d.manager.GetClient()
+
+	if driver.manager == nil {
+		log.Error().Msg("Manager is not initialized, cannot cleanup node labels")
+		return
+	}
+
+	client := driver.manager.GetClient()
 	if client == nil {
 		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
+
 	node := &v1.Node{}
 
 	key := types.NamespacedName{
-		Name: d.nodeID,
+		Name: driver.nodeID,
 	}
 
 	err := client.Get(ctx, key, node)
@@ -282,21 +294,21 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	}
 
 	transport := func() string {
-		if d.config.useNfs {
+		if driver.config.useNfs {
 			return "nfs"
 		}
 		wekaRunning := isWekaRunning(ctx)
-		if d.config.allowNfsFailback && !wekaRunning {
+		if driver.config.allowNfsFailback && !wekaRunning {
 			return "nfs"
 		}
 		return "wekafs"
 	}()
 
 	labelsToSet := make(map[string]string)
-	labelsToSet[TopologyKeyNode] = d.nodeID
-	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, d.name)] = d.nodeID
-	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, d.name)] = "true"
-	labelsToSet[fmt.Sprintf(TopologyLabelTransportPattern, d.name)] = transport
+	labelsToSet[TopologyKeyNode] = driver.nodeID
+	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, driver.name)] = driver.nodeID
+	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, driver.name)] = "true"
+	labelsToSet[fmt.Sprintf(TopologyLabelTransportPattern, driver.name)] = transport
 	updateNeeded := false
 
 	for label, value := range labelsToSet {
@@ -320,26 +332,31 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	log.Info().Msg("Successfully updated labels on node")
 }
 
-func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
-	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
+func (driver *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
+	if driver.csiMode != CsiModeNode && driver.csiMode != CsiModeAll {
 		return
 	}
-	nodeLabelPatternsToRemove := []string{TopologyLabelNodePattern, TopologyLabelTransportPattern, TopologyLabelWekaLocalPattern}
-	nodeLabelsToRemove := []string{TopologyLabelTransportGlobal, TopologyLabelNodeGlobal, TopologyKeyNode}
 
-	for i, labelPattern := range nodeLabelPatternsToRemove {
-		nodeLabelPatternsToRemove[i] = fmt.Sprintf(labelPattern, d.name)
+	if driver.manager == nil {
+		log.Error().Msg("Manager is not initialized, cannot cleanup node labels")
+		return
 	}
-	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
-
-	client := d.manager.GetClient()
+	client := driver.manager.GetClient()
 	if client == nil {
 		log.Error().Msg("Failed to get Kubernetes client")
 		return
 	}
 
+	nodeLabelPatternsToRemove := []string{TopologyLabelNodePattern, TopologyLabelTransportPattern, TopologyLabelWekaLocalPattern}
+	nodeLabelsToRemove := []string{TopologyLabelTransportGlobal, TopologyLabelNodeGlobal, TopologyKeyNode}
+
+	for i, labelPattern := range nodeLabelPatternsToRemove {
+		nodeLabelPatternsToRemove[i] = fmt.Sprintf(labelPattern, driver.name)
+	}
+	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
+
 	node := &v1.Node{}
-	key := types.NamespacedName{Name: d.nodeID}
+	key := types.NamespacedName{Name: driver.nodeID}
 	err := client.Get(ctx, key, node)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node")
@@ -361,14 +378,14 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 }
 
 // initManager initializes the controller-runtime manager with leader election for controller mode
-func (d *WekaFsDriver) initManager(ctx context.Context) error {
+func (driver *WekaFsDriver) initManager(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("component", "manager-init").Logger()
 
-	leaderElectionID := fmt.Sprintf("%s-controller-leader", d.name)
+	leaderElectionID := fmt.Sprintf("%s-controller-leader", driver.name)
 
 	// Get health port from environment variable
 	healthPort := ""
-	switch d.csiMode {
+	switch driver.csiMode {
 	case CsiModeMetricsServer:
 		healthPort = os.Getenv("READINESS_PORT")
 		if healthPort == "" {
@@ -395,18 +412,17 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 			// Fallback to using kubeconfig from the local environment
 			kubeconfig := os.Getenv("KUBECONFIG")
 			if kubeconfig == "" {
-				log.Error().Msg("KUBECONFIG environment variable is not set")
-				Die("KUBECONFIG environment variable is not set, cannot run MetricsServer without it and not in cluster")
+				log.Error().Msg("KUBECONFIG environment variable is not set, failed to create K8s API config")
+				return err
 			}
 			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
-				Die("Failed to create config from kubeconfig file, cannot run MetricsServer without it")
+				return err
 			}
-		} else {
-			log.Error().Err(err).Msg("Failed to create in-cluster config")
-			Die("Failed to create in-cluster config, cannot run MetricsServer without it")
 		}
+		logger.Error().Err(err).Msg("Failed to create K8s API config")
+		return err
 	}
 
 	// Get namespace for leader election
@@ -426,14 +442,13 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 
 	// Setup logger for controller-runtime
 	zapLogger := zap.New(zap.UseDevMode(false))
-	crlog.SetLogger(zapLogger)
-
+	clog.SetLogger(zapLogger)
 
 	// Configure cache options (only if enforceDirVolTotalCapacity is enabled)
 	cacheOpts := cache.Options{}
-	if d.config.enforceDirVolTotalCapacity {
+	if driver.config.enforceDirVolTotalCapacity {
 		cacheOpts = cache.Options{
-			ByObject: map[client.Object]cache.ByObject{
+			ByObject: map[crclient.Object]cache.ByObject{
 				&v1.PersistentVolume{}: {
 					Transform: stripUnnecessaryPVFields,
 				},
@@ -441,9 +456,11 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 		}
 	}
 
+	enableLeaderElection := driver.config.enableMetricsServerLeaderElection || driver.csiMode == CsiModeAll || driver.csiMode == CsiModeController
+
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                        scheme,
-		LeaderElection:                true,
+		LeaderElection:                enableLeaderElection,
 		LeaderElectionNamespace:       namespace,
 		LeaderElectionID:              leaderElectionID,
 		LeaderElectionReleaseOnCancel: true,
@@ -457,9 +474,9 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 
 	// only for CSI, add actual healthcheck on CSI Unix Domain Socket
 	socketHealtcheck := false
-	if d.csiMode != CsiModeMetricsServer {
+	if driver.csiMode != CsiModeMetricsServer {
 		// Parse socket path from endpoint (format: "unix:///path/to/socket")
-		socketProto, socketPath, err := parseEndpoint(d.endpoint)
+		socketProto, socketPath, err := parseEndpoint(driver.endpoint)
 		if err != nil {
 			return fmt.Errorf("failed to parse endpoint for health check: %w", err)
 		}
@@ -470,7 +487,7 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 		// - Standby: OK (process is alive)
 		// - Leader: verify gRPC server accepts connections + Weka client running (if needed)
 		if err := mgr.AddHealthzCheck("healthz", func(_ *http.Request) error {
-			if d.isLeader.Load() {
+			if driver.isLeader.Load() {
 				// Leader: verify gRPC server accepts connections
 				conn, err := net.DialTimeout(socketProto, socketPath, time.Second)
 				if err != nil {
@@ -478,7 +495,7 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 				}
 				_ = conn.Close()
 
-				if !d.config.useNfs && !d.config.allowNfsFailback {
+				if !driver.config.useNfs && !driver.config.allowNfsFailback {
 					if !isWekaRunning(ctx) {
 						return fmt.Errorf("weka client not running on leader node")
 					}
@@ -493,12 +510,12 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 		socketHealtcheck = true
 	}
 
-	d.manager = mgr
+	driver.manager = mgr
 	logger.Info().
 		Str("leader_election_id", leaderElectionID).
 		Str("namespace", namespace).
 		Str("health_probe_port", healthPort).
-		Bool("enforce_capacity", d.config.enforceDirVolTotalCapacity).
+		Bool("enforce_capacity", driver.config.enforceDirVolTotalCapacity).
 		Bool("healthcheck_csi_socket", socketHealtcheck).
 		Msg("Kubernetes manager initialized with leader election")
 	return nil
