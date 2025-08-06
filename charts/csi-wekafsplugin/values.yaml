@@ -50,7 +50,7 @@ machineConfigLabels:
 controller:
   # -- Controller number of replicas
   replicas: 2
-  # -- Maximum concurrent requests from sidecars (global)
+  # -- Maximum concurrent requests from sidecars (for each sidecar)
   maxConcurrentRequests: 25
   # -- maximum concurrent operations per operation type
   concurrency:
