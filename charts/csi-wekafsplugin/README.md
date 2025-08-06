@@ -199,6 +199,11 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | metrics.nodePort | int | `9094` | Metrics port for Node Serer |
 | metrics.attacherPort | int | `9095` | Attacher metrics port |
 | metrics.metricsServerPort | int | `9096` | Metrics server metrics port |
+| readinessProbe | object | `{"controllerServerPort":9190,"metricsServerPort":9196,"nodeServerPort":9191,"registrarPort":9195}` | Liveness probe parameters |
+| readinessProbe.controllerServerPort | int | `9190` | Liveness probe port for Controller Server |
+| readinessProbe.nodeServerPort | int | `9191` | Liveness probe port for Node Server |
+| readinessProbe.metricsServerPort | int | `9196` | Liveness probe port for Metrics Server |
+| readinessProbe.registrarPort | int | `9195` | Liveness probe port for Node Registrar |
 | hostNetwork | bool | `false` | Set to true to use host networking. Will be always set to true when using NFS mount protocol |
 | pluginConfig.fsGroupPolicy | string | `"File"` | WARNING: Changing this value might require uninstall and re-install of the plugin |
 | node.affinity | object | `{}` | optional affinity for node components only |
