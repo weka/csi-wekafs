@@ -217,7 +217,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
-              value: {{ .Values.readinessProbe.nodeServerPort | default 9191 }}
+              value: "{{ .Values.readinessProbe.nodeServerPort | default 9191 }}"
           {{- if .Values.node.resources.livenessProbe }}
           resources:
             {{- toYaml .Values.node.resources.livenessProbe | nindent 12 }}
@@ -230,13 +230,13 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
             - "--timeout=60s"
-            - "--health-port=9809"
+            - "--health-port={{ .Values.readinessProbe.registrarPort }}"
           ports:
-            - containerPort: 9809
-              name: healthz
+            - containerPort: {{ .Values.readinessProbe.registrarPort }}
+              name: reg-healthz
           livenessProbe:
             httpGet:
-              port: healthz
+              port: reg-healthz
               path: /healthz
             initialDelaySeconds: 5
             timeoutSeconds: 5
