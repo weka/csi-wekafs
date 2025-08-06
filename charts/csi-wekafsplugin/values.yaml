@@ -196,6 +196,10 @@ readinessProbe:
   nodeServerPort: 9191
   # -- Liveness probe port for Metrics Server
   metricsServerPort: 9196
+  # -- Liveness probe port for Node Registrar
+  registrarPort: 9195
+
+
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""

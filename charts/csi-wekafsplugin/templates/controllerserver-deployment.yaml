@@ -343,7 +343,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
-              value: {{ .Values.readinessProbe.controllerServerPort | default 9190 }}
+              value: "{{ .Values.readinessProbe.controllerServerPort | default 9190 }}"
       {{- with .Values.controllerPluginTolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
