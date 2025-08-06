@@ -253,6 +253,7 @@ func sliceInnerPathFromSnapshotId(snapshotId string) string {
 	return "/" + strings.Join(slices[3:], "/")
 }
 
+// PathExists checks if the given path exists and is a directory. If the path is a file, it will panic with an error message.
 func PathExists(p string) bool {
 	file, err := os.Open(p)
 	if err != nil {
@@ -271,6 +272,8 @@ func PathExists(p string) bool {
 	return true
 }
 
+// fileExists checks if the given path exists and is a file. If the path is a directory, it will panic with an error message.
+// other special types of files (like symlinks, pipes etc.) are considered as a file
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	if err == nil {
@@ -279,11 +282,18 @@ func fileExists(filename string) bool {
 	if os.IsNotExist(err) {
 		return false
 	}
+	fi, err := os.Stat(filename)
+	if err != nil {
+		return false
+	}
+	if fi.IsDir() {
+		Die("A directory was found instead of file in mount point. Please contact support")
+	}
 	return false
 }
 
-//goland:noinspection GoUnusedParameter
-func PathIsWekaMount(ctx context.Context, path string) bool {
+// PathIsWekaMount returns true if path is a mountpoint for either wekafs or nfs
+func PathIsWekaMount(path string) bool {
 	file, err := os.Open("/proc/mounts")
 	if err != nil {
 		return false
@@ -296,7 +306,6 @@ func PathIsWekaMount(ctx context.Context, path string) bool {
 		if len(fields) >= 3 && fields[2] == "wekafs" && fields[1] == path {
 			return true
 		}
-		// TODO: better protect against false positives
 		if len(fields) >= 3 && strings.HasPrefix(fields[2], "nfs") && fields[1] == path {
 			return true
 		}
