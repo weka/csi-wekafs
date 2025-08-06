@@ -1,6 +1,6 @@
 # csi-wekafsplugin
 
-![Version: 2.8.0-SNAPSHOT.179.sha.ddff4ed](https://img.shields.io/badge/Version-2.8.0--SNAPSHOT.179.sha.ddff4ed-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.0-SNAPSHOT.179.sha.ddff4ed](https://img.shields.io/badge/AppVersion-v2.8.0--SNAPSHOT.179.sha.ddff4ed-informational?style=flat-square)
+![Version: 2.8.0-SNAPSHOT.186.sha.40d7d14](https://img.shields.io/badge/Version-2.8.0--SNAPSHOT.186.sha.40d7d14-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.0-SNAPSHOT.186.sha.40d7d14](https://img.shields.io/badge/AppVersion-v2.8.0--SNAPSHOT.186.sha.40d7d14-informational?style=flat-square)
 
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
@@ -22,7 +22,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.8.0-SNAPSHOT.179.sha.ddff4ed"` | CSI driver version |
+| csiDriverVersion | string | `"2.8.0-SNAPSHOT.186.sha.40d7d14"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.16.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.9.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.3.0"` | CSI provisioner sidecar image URL |
@@ -30,7 +30,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.14.0"` | CSI resizer sidecar image URL |
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.3.0"` | CSI snapshotter sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.8.0-SNAPSHOT.179.sha.ddff4ed"` | CSI driver tag |
+| images.csidriverTag | string | `"2.8.0-SNAPSHOT.186.sha.40d7d14"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -39,7 +39,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 | affinity | object | `{}` | Optional affinity for CSI plugin deployment    This affinity will be applied to all CSI plugin components |
 | machineConfigLabels | list | `["worker","master"]` | Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on    NOTE: by default, the policy will be installed both on workers and control plane nodes |
 | controller.replicas | int | `2` | Controller number of replicas |
-| controller.maxConcurrentRequests | int | `25` | Maximum concurrent requests from sidecars (global) |
+| controller.maxConcurrentRequests | int | `25` | Maximum concurrent requests from sidecars (for each sidecar) |
 | controller.concurrency | object | `{"createSnapshot":10,"createVolume":25,"deleteSnapshot":10,"deleteVolume":25,"expandVolume":25}` | maximum concurrent operations per operation type |
 | controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | controller.configureProvisionerLeaderElection | bool | `true` | Configure provisioner sidecar for leader election |
