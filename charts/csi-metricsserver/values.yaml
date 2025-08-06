@@ -64,6 +64,11 @@ metrics:
   enabled: true
   # -- Metrics server metrics port
   metricsServerPort: 9096
+
+readinessProbe:
+  # -- Metrics server healthz port
+  metricsServerPort: 9196
+
 # @ignore
 tracingUrl: ""
 # @ignore
