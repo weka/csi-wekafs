@@ -71,8 +71,8 @@ make build
 | machineConfigLabels | list | `["worker","master"]` | Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on    NOTE: by default, the policy will be installed both on workers and control plane nodes |
 | controller.replicas | int | `2` | Controller number of replicas |
 | controller.healthPort | int | `8081` | Health probe port for controller pods |
-| controller.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
-| controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
+| controller.maxConcurrentRequests | int | `25` | Maximum concurrent requests from sidecars (global) |
+| controller.concurrency | object | `{"createSnapshot":10,"createVolume":25,"deleteSnapshot":10,"deleteVolume":25,"expandVolume":25}` | maximum concurrent operations per operation type |
 | controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | controller.configureProvisionerLeaderElection | bool | `true` | Configure provisioner sidecar for leader election |
 | controller.configureResizerLeaderElection | bool | `true` | Configure resizer sidecar for leader election |
