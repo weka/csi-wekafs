@@ -96,7 +96,7 @@ jobs:
           fi
 
       - name: Download binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: ./build
           name: wekafsplugin-binaries-${{ github.sha }}
@@ -167,7 +167,7 @@ jobs:
           fi
 
       - name: Download binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: ./build
           name: wekafsplugin-binaries-${{ github.sha }}
@@ -220,7 +220,7 @@ jobs:
 
       # DOWNLOAD BINARY ARTIFACTS
       - name: Download binary for
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: ./build
           name: wekafsplugin-binaries-${{ github.sha }}
@@ -282,7 +282,7 @@ jobs:
         uses: docker/setup-compose-action@v1
 
       - name: Download Docker image tar
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: sanity-${{ github.sha }}.tar
           path: ./${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }}
