@@ -51,14 +51,14 @@ controller:
   # -- Controller number of replicas
   replicas: 2
   # -- Maximum concurrent requests from sidecars (global)
-  maxConcurrentRequests: 5
+  maxConcurrentRequests: 25
   # -- maximum concurrent operations per operation type
   concurrency:
-    createVolume: 5
-    deleteVolume: 5
-    expandVolume: 5
-    createSnapshot: 5
-    deleteSnapshot: 5
+    createVolume: 25
+    deleteVolume: 25
+    expandVolume: 25
+    createSnapshot: 10
+    deleteSnapshot: 10
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
   grpcRequestTimeoutSeconds: 30
   # -- Configure provisioner sidecar for leader election
