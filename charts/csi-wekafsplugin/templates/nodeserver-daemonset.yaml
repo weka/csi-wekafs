@@ -186,6 +186,17 @@ spec:
             {{- toYaml .Values.node.resources.wekafs | nindent 12 }}
           {{- end }}
         - name: liveness-probe
+          ports:
+            - containerPort: {{ .Values.readinessProbe.nodeServerPort | default 9191 }}
+              name: ns-healthz
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              port: ns-healthz
+              path: /healthz
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
@@ -199,7 +210,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
-              value: "9899"
+              value: {{ .Values.readinessProbe.nodeServerPort | default 9191 }}
           {{- if .Values.node.resources.livenessProbe }}
           resources:
             {{- toYaml .Values.node.resources.livenessProbe | nindent 12 }}
