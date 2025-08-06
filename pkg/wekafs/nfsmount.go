@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"go.uber.org/atomic"
 	"k8s.io/mount-utils"
 	"os"
 	"strings"
@@ -25,12 +24,20 @@ type nfsMount struct {
 	protocolVersion apiclient.NfsVersionString
 }
 
-func (m *nfsMount) getMountPoint() string {
-	return fmt.Sprintf("%s-%s", m.mountPoint, m.mountIpAddress)
+func (m *nfsMount) getKMounter() mount.Interface {
+	return m.kMounter
 }
 
-func (m *nfsMount) getRefCount() int {
-	return 0
+func (m *nfsMount) getFsName() string {
+	return m.fsName
+}
+
+func (m *nfsMount) getMounter() AnyMounter {
+	return m.mounter
+}
+
+func (m *nfsMount) getMountPoint() string {
+	return fmt.Sprintf("%s-%s", m.mountPoint, m.mountIpAddress)
 }
 
 func (m *nfsMount) getMountOptions() MountOptions {
@@ -42,79 +49,23 @@ func (m *nfsMount) getLastUsed() time.Time {
 }
 
 func (m *nfsMount) isMounted() bool {
-	return PathExists(m.getMountPoint()) && PathIsWekaMount(context.Background(), m.getMountPoint())
+	return anyMountIsMounted(m)
 }
 
-func (m *nfsMount) getRefcountIdx() string {
-	return m.getMountPoint() + "^" + m.getMountOptions().AsNfs().String()
+func (m *nfsMount) getRefCountIndex() string {
+	return anyMountGetRefCountIndex(m)
 }
 
 func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
-	logger := log.Ctx(ctx)
-	if m.mounter == nil {
-		logger.Error().Msg("Mounter is nil")
-		return errors.New("mounter is nil")
-	}
-
-	m.mounter.lock.Lock()
-	defer m.mounter.lock.Unlock()
-	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
-
-	if !ok || refCount == nil {
-		refCount = atomic.NewInt32(0)
-		m.mounter.mountMap[m.getRefcountIdx()] = refCount
-	}
-
-	if refCount.Load() > 0 && !m.isMounted() {
-		logger.Warn().Str("mount_point", m.getMountPoint()).Int32("refcount", refCount.Load()).Msg("Mount not exists although should!")
-	}
-
-	if refCount.Load() == 0 {
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
-	}
-	refCount.Inc()
-	logger.Trace().
-		Int32("refcount", refCount.Load()).
-		Strs("mount_options", m.getMountOptions().Strings()).
-		Str("filesystem_name", m.fsName).
-		Str("mount_point", m.getMountPoint()).
-		Msg("RefCount increased")
-	return nil
+	return anyMountIncref(ctx, apiClient, m)
 }
 
 func (m *nfsMount) decRef(ctx context.Context) error {
-	logger := log.Ctx(ctx)
-	if m.mounter == nil {
-		logger.Error().Msg("Mounter is nil")
-		return errors.New("mounter is nil")
-	}
-	m.mounter.lock.Lock()
-	defer m.mounter.lock.Unlock()
-	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
-	if !ok {
-		logger.Error().Str("mount_options", m.getMountOptions().String()).Str("mount_point", m.getMountPoint()).Msg("During decRef refcount not found")
-		refCount = atomic.NewInt32(0)
-		m.mounter.mountMap[m.getRefcountIdx()] = refCount
-	}
+	return anyMountDecRef(ctx, m)
+}
 
-	if refCount.Load() < 0 {
-		logger.Error().Int32("refcount", refCount.Load()).Msg("During decRef negative refcount encountered, probably due to failed unmount")
-	}
-	if refCount.Load() > 0 {
-		refCount.Dec()
-		logger.Trace().Int32("refcount", refCount.Load()).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
-	}
-	if refCount.Load() <= 0 {
-		if m.isMounted() {
-			if err := m.doUnmount(ctx); err != nil {
-				return err
-			}
-			refCount.Store(0) // Reset refCount to 0 after unmount
-		}
-	}
-	return nil
+func (m *nfsMount) doUnmount(ctx context.Context) error {
+	return anyMountDoUnmount(ctx, m)
 }
 
 func (m *nfsMount) locateMountIP() error {
@@ -126,24 +77,6 @@ func (m *nfsMount) locateMountIP() error {
 		m.mountIpAddress = ipAddr
 	}
 	return nil
-}
-
-func (m *nfsMount) doUnmount(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
-	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing umount via k8s native mounter")
-	err := m.kMounter.Unmount(m.getMountPoint())
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to unmount")
-	} else {
-		logger.Trace().Msg("Unmounted successfully")
-		if err := os.Remove(m.getMountPoint()); err != nil {
-			logger.Error().Err(err).Msg("Failed to remove mount point")
-			return err
-		} else {
-			logger.Trace().Msg("Removed mount point successfully")
-		}
-	}
-	return err
 }
 
 func (m *nfsMount) ensureMountIpAddress(ctx context.Context, apiClient *apiclient.ApiClient) error {
@@ -171,6 +104,7 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 		return err
 	}
 
+	// ensure the NFS permissions are set correctly before mounting
 	err := apiClient.EnsureNfsPermissions(ctx, m.fsName, apiclient.NfsVersionV4, m.clientGroupName)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to ensure NFS permissions")
