@@ -116,6 +116,10 @@ func NewMetricsServer(driver *WekaFsDriver) *MetricsServer {
 }
 
 func (ms *MetricsServer) initManager(ctx context.Context) {
+	if ms.driver.manager == nil {
+		Die("Failed to initialize manager and K8s API. Exiting")
+	}
+
 	logger := log.Ctx(ctx).With().Str("component", "MetricsServer").Logger()
 	if err := ms.driver.manager.AddReadyzCheck("leader", func(req *http.Request) error {
 		if !ms.getConfig().enableMetricsServerLeaderElection {

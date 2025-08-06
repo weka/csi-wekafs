@@ -162,6 +162,10 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
+	if d.manager == nil {
+		log.Error().Msg("Manager is not initialized, cannot cleanup node labels")
+		return
+	}
 	client := d.manager.GetClient()
 	if client == nil {
 		log.Error().Msg("Failed to get Kubernetes client")
@@ -219,6 +223,16 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 }
 
 func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
+	if d.manager == nil {
+		log.Error().Msg("Manager is not initialized, cannot cleanup node labels")
+		return
+	}
+	client := d.manager.GetClient()
+	if client == nil {
+		log.Error().Msg("Failed to get Kubernetes client")
+		return
+	}
+
 	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
 		return
 	}
@@ -229,12 +243,6 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 		nodeLabelPatternsToRemove[i] = fmt.Sprintf(labelPattern, d.name)
 	}
 	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
-
-	client := d.manager.GetClient()
-	if client == nil {
-		log.Error().Msg("Failed to get Kubernetes client")
-		return
-	}
 
 	node := &v1.Node{}
 	key := types.NamespacedName{Name: d.nodeID}
@@ -267,18 +275,17 @@ func (d *WekaFsDriver) initManager(ctx context.Context) {
 			// Fallback to using kubeconfig from the local environment
 			kubeconfig := os.Getenv("KUBECONFIG")
 			if kubeconfig == "" {
-				log.Error().Msg("KUBECONFIG environment variable is not set")
-				Die("KUBECONFIG environment variable is not set, cannot run MetricsServer without it and not in cluster")
+				log.Error().Msg("KUBECONFIG environment variable is not set, failed to create K8s API config")
+				return
 			}
 			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to create config from kubeconfig file")
-				Die("Failed to create config from kubeconfig file, cannot run MetricsServer without it")
+				return
 			}
-		} else {
-			log.Error().Err(err).Msg("Failed to create in-cluster config")
-			Die("Failed to create in-cluster config, cannot run MetricsServer without it")
 		}
+		logger.Error().Err(err).Msg("Failed to create K8s API config")
+		return
 	}
 
 	scheme := runtime.NewScheme()
@@ -303,11 +310,21 @@ func (d *WekaFsDriver) initManager(ctx context.Context) {
 		logger.Info().Str("readiness_port", readinessPort).Msg("Using default readiness port")
 	}
 
-	d.manager, err = ctrl.NewManager(config, ctrl.Options{
+	leaderElectionId := ""
+	enableLeaderElection := false
+
+	if d.csiMode == CsiModeMetricsServer || d.csiMode == CsiModeAll {
+		leaderElectionId = "csiwekametricsad0b5146.weka.io"
+		if d.config.enableMetricsServerLeaderElection {
+			enableLeaderElection = true
+		}
+	}
+
+	m, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:                        scheme,
-		LeaderElection:                d.config.enableMetricsServerLeaderElection,
+		LeaderElection:                enableLeaderElection,
 		LeaderElectionNamespace:       namespace,
-		LeaderElectionID:              "csimetricsad0b5146.weka.io",
+		LeaderElectionID:              leaderElectionId,
 		LeaderElectionConfig:          nil,
 		LeaderElectionReleaseOnCancel: true,
 		HealthProbeBindAddress:        ":" + readinessPort,
@@ -317,6 +334,7 @@ func (d *WekaFsDriver) initManager(ctx context.Context) {
 
 	if err != nil {
 		logger.Error().Err(err).Msg("unable to start manager")
-		Die("unable to start manager, cannot run MetricsServer without it")
+		return
 	}
+	d.manager = m
 }
