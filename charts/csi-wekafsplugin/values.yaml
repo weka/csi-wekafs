@@ -52,7 +52,7 @@ controller:
   replicas: 2
   # -- Health probe port for controller pods
   healthPort: 8081
-  # -- Maximum concurrent requests from sidecars (global)
+  # -- Maximum concurrent requests from sidecars (for each sidecar)
   maxConcurrentRequests: 25
   # -- maximum concurrent operations per operation type
   concurrency:

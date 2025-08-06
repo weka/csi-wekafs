@@ -20,6 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
@@ -29,12 +36,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
 )
 
 type NodeServer struct {
@@ -53,6 +54,9 @@ type NodeServer struct {
 }
 
 func (ns *NodeServer) getBackgroundTasksWg() *sync.WaitGroup {
+	if ns == nil {
+		return &sync.WaitGroup{}
+	}
 	return ns.backgroundTasksWg
 }
 
