@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["hatchling==1.25.0"]
+requires = ["hatchling==1.27.0"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
