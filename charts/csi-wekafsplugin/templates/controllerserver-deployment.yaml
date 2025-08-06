@@ -381,6 +381,33 @@ spec:
           resources:
             {{- toYaml .Values.controller.resources.csiSnapshotter | nindent 12 }}
           {{- end }}
+
+        - name: liveness-probe
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+          image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: cs-healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 2
+          ports:
+            - containerPort: {{ .Values.readinessProbe.controllerServerPort | default 9190 }}
+              name: cs-healthz
+              protocol: TCP
+          args:
+            - "--v={{ .Values.logLevel | default 5 }}"
+            - "--csi-address=$(ADDRESS)"
+            - "--health-port=$(HEALTH_PORT)"
+          env:
+            - name: ADDRESS
+              value: unix:///csi/csi.sock
+            - name: HEALTH_PORT
+              value: {{ .Values.readinessProbe.controllerServerPort | default 9190 }}
       {{- with .Values.controllerPluginTolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
@@ -417,8 +444,3 @@ spec:
           emptyDir: {}
         - name: shared-bin
           emptyDir: {}
-{{- if .Values.legacyVolumeSecretName }}
-        - name: legacy-volume-access
-          secret:
-            secretName: {{ .Values.legacyVolumeSecretName }}
-{{- end }}
