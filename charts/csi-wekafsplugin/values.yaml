@@ -5,7 +5,7 @@ dynamicProvisionPath: "csi-volumes"
 # -- Name of the driver (and provisioner)
 csiDriverName: "csi.weka.io"
 # -- CSI driver version
-csiDriverVersion: &csiDriverVersion 2.8.0-SNAPSHOT.170.sha.9f92dfa
+csiDriverVersion: &csiDriverVersion 2.8.0-SNAPSHOT.179.sha.ddff4ed
 images:
   # -- CSI liveness probe sidecar image URL
   livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.16.0
@@ -198,8 +198,6 @@ readinessProbe:
   metricsServerPort: 9196
   # -- Liveness probe port for Node Registrar
   registrarPort: 9195
-
-
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional
 # @ignore
 tracingUrl: ""

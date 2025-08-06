@@ -416,6 +416,23 @@
         "priorityClassName": {
             "type": "string"
         },
+        "readinessProbe": {
+            "type": "object",
+            "properties": {
+                "controllerServerPort": {
+                    "type": "integer"
+                },
+                "metricsServerPort": {
+                    "type": "integer"
+                },
+                "nodeServerPort": {
+                    "type": "integer"
+                },
+                "registrarPort": {
+                    "type": "integer"
+                }
+            }
+        },
         "selinuxNodeLabel": {
             "type": "string"
         },
