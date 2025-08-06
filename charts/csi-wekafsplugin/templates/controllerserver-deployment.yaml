@@ -133,22 +133,11 @@ spec:
             - "--wekaapitimeoutseconds={{ .Values.pluginConfig.apiTimeoutSeconds }}"
           {{- end }}
           ports:
-            - containerPort: 9898
-              name: healthz
-              protocol: TCP
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.controllerPort | default 9090 }}
               name: cs-metrics
               protocol: TCP
           {{- end }}
-          livenessProbe:
-            failureThreshold: 5
-            httpGet:
-              path: /healthz
-              port: healthz
-            initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 2
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
@@ -334,6 +323,18 @@ spec:
             - mountPath: /csi
               name: socket-dir
           image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: cs-healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 2
+          ports:
+            - containerPort: {{ .Values.readinessProbe.controllerServerPort | default 9190 }}
+              name: cs-healthz
+              protocol: TCP
           args:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
@@ -342,7 +343,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
-              value: "9898"
+              value: {{ .Values.readinessProbe.controllerServerPort | default 9190 }}
       {{- with .Values.controllerPluginTolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
