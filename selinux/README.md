@@ -54,19 +54,7 @@ The policy comes both as a Type Enforcement file (`csi-wekafs.te`), and as a Com
     $ semodule -l | grep wekafs
     csi-wekafs
     ```
-4.  The policy provides a boolean setting that allows on-demand enablement of relevant permissions. To enable WekaFS CSI volumes access from pods, run the command:
-
-    ```
-    $ setsebool container_use_wekafs=on
-    ```
-
-    To disable access, perform the command:
-
-    ```
-    $ setsebool container_use_wekafs=off
-    ```
-
-    The configuration changes are applied immediately.
+4.  If the policy is installed correctly, you can remove the `csi-wekafs.cil`, `csi-wekafs.mod`, and `csi-wekafs.pp` files from the nodes, as they are no longer needed.
 
 ### Install and configure the WEKA CSI Plugin
 
@@ -89,17 +77,17 @@ Follow these considerations:
 To ensure that the plugin starts in compatibility mode, set the following label on each SELinux-enabled Kubernetes node:
 * If a node label is modified after installing the WEKA CSI Plugin node component on that node, terminate the csi-wekafs-node-XXXX component on the affected node. As a result, a replacement pod is automatically scheduled on the node but with the correct SELinux configuration.
 
-```
-csi.weka.io/selinux_enabled="true"
-```
+    ```
+    csi.weka.io/selinux_enabled="true"
+    ```
 
 *   If another label stating SELinux support is already maintained on nodes, you can modify the expected label name in the `selinuxNodeLabel` parameter by editing the file `values.yaml` or by setting it directly during the WEKA CSI Plugin installation.
 
     Example:
 
-```
-$ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxSupport=mixed --set selinuxNodeLabel="selinux_enabled"
-```
+    ```
+    $ helm install --upgrade csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace --set selinuxSupport=mixed --set selinuxNodeLabel="selinux_enabled"
+    ```
 
 ### Test the WEKA CSI plugin operation
 1. Make sure you have configured a valid CSI API [`secret`](../examples/common/csi-wekafs-api-secret.yaml). Create a valid WEKA CSI Plugin [`storageClass`](../examples/dynamic/directory/storageclass-wekafs-dir-api.yaml).
