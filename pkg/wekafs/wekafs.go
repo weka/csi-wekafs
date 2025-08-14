@@ -337,7 +337,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	defer stop()
 	go func() {
 		<-termContext.Done()
-		if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll && driver.config.manageNodeTopologyLabels {
+		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) && driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
 			driver.CleanupNodeLabels(ctx)
 			log.Info().Msg("Cleanup completed, stopping server")
