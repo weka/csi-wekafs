@@ -22,11 +22,11 @@ require (
 	golang.org/x/sync v0.16.0
 	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.6
-	k8s.io/api v0.33.2
-	k8s.io/apimachinery v0.33.2
-	k8s.io/client-go v0.33.2
+	k8s.io/api v0.33.4
+	k8s.io/apimachinery v0.33.4
+	k8s.io/client-go v0.33.4
 	k8s.io/helm v2.17.0+incompatible
-	k8s.io/mount-utils v0.33.2
+	k8s.io/mount-utils v0.33.4
 	sigs.k8s.io/controller-runtime v0.21.0
 )
 
