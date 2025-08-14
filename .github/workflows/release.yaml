@@ -28,8 +28,7 @@ on:
 
 jobs:
   release:
-    runs-on:
-      group: large-runners-public
+    runs-on: ubuntu-latest
     steps:
 
       - name: log inputs
