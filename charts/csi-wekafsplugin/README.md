@@ -91,7 +91,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.14.0"` | CSI resizer sidecar image URL |
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.3.0"` | CSI snapshotter sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.7.6-SNAPSHOT.29.sha.c082af9"` | CSI driver tag |
+| images.csidriverTag | string | `"2.8.0-SNAPSHOT.193.sha.4cf91be"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -107,6 +107,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | controller.affinity | object | `{}` | optional affinity for controller components only |
 | controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
 | controller.configureAttacherLeaderElection | bool | `true` | Configure attacher sidecar for leader election |
+| controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | controller.configureProvisionerLeaderElection | bool | `true` | Configure provisioner sidecar for leader election |
 | controller.configureResizerLeaderElection | bool | `true` | Configure resizer sidecar for leader election |
 | controller.configureSnapshotterLeaderElection | bool | `true` | Configure snapshotter sidecar for leader election |
