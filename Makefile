@@ -18,11 +18,11 @@ all: build
 .PHONY: build-% build clean
 
 # understand what is the version tag
-VERSION?=$(shell cat charts/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
+VERSION ?= $(shell cat charts/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
 DOCKER_IMAGE_NAME?=csi-wekafs
 
 $(CMDS:%=build-%): build-%:
-	docker buildx build --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE_NAME):$(VERSION) -f Dockerfile --label revision=$(VERSION) .
+	docker buildx build --platform linux/amd64 --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE_NAME):$(VERSION) -f Dockerfile --label revision=$(VERSION) .
 
 build: $(CMDS:%=build-%)
 

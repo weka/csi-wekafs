@@ -1,10 +1,12 @@
-# csi-wekafsplugin
-
-![Version: 2.8.0-SNAPSHOT.206.sha.f9132c1](https://img.shields.io/badge/Version-2.8.0--SNAPSHOT.206.sha.f9132c1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.0-SNAPSHOT.206.sha.f9132c1](https://img.shields.io/badge/AppVersion-v2.8.0--SNAPSHOT.206.sha.f9132c1-informational?style=flat-square)
-
+# CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-**Homepage:** <https://github.com/weka/csi-wekafs>
+![Version: 2.7.7](https://img.shields.io/badge/Version-2.7.7-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.7.7](https://img.shields.io/badge/AppVersion-v2.7.7-informational?style=flat-square)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
+
+## Homepage
+https://github.com/weka/csi-wekafs
 
 ## Maintainers
 
@@ -12,9 +14,37 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 | ---- | ------ | --- |
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
+## Pre-requisite
+- Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
+- Access to terminal with `kubectl` installed
+- Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
+- Starting with version 2.6.0 of WEKA CSI Plugin, both AMD64 and ARM64 platforms are supported.
+  > **NOTE**: For more information on WEKA client software support state of ARM64, please refer to the [WEKA documentation revision history](https://docs.weka.io/readme/documentation-revision-history).
+  >
+  > On platforms not currently supported by WEKA software, NFS failback mode can be used. For additional information on NFS transport configuration, please refer to the [NFS documentation](docs/NFS.md)
+
+## Deployment
+- [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
+- [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
+
+## Usage
+- [Deploy an Example application](docs/usage.md)
+- [SELinux Support & Installation Notes](selinux/README.md)
+- [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
+
+## Additional Documentation
+- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
+
 ## Source Code
 
 * <https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin>
+
+## Building the binaries
+If you want to build the driver yourself, you can do so with the following command from the root directory:
+
+```console
+make build
+```
 
 ## Values
 

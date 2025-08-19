@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - name: Checkout Code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
@@ -32,6 +34,7 @@ jobs:
         id: auto_version
         uses: codacy/git-version@2.8.2
         with:
+          fetch-depth: 0
           prefix: v
           minor-identifier: /feat(ure)*:/
           major-identifier: /breaking:/
@@ -117,20 +120,19 @@ jobs:
             };
             return '';
           }
-
           function isSkippable(pr) {
             return !pr.title || pr.title.trim() === '' || pr.title.startsWith('Merge') || pr.title.startsWith('Draft') || getSection(pr) === '' || pr.author?.is_bot;
           }
 
           const rnLines = [];
           rnLines.push('## What\'s Changed\n');
-        
+
           for (const pr of prs) {
             if (isSkippable(pr)) {
               skipped.push(pr);
               continue;
             }
-            
+
             const section = getSection(pr);
             const author = pr.author?.login || 'unknown';
             const entry = `* ${pr.title} by @${author} in ${pr.url} [(more details)](#pr-${pr.number})`;
@@ -147,7 +149,7 @@ jobs:
               };
               artifactHubNotes.push(change);
             }
-
+          
             const bodyLines = (pr.body || '_No description provided._')
               .trim()
               .split('\n')

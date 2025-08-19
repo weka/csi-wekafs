@@ -1,3 +1,23 @@
+# Release v2.7.7
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Bug Fixes
+* fix: add namespace to controller Role by @aplulu in https://github.com/weka/csi-wekafs/pull/603
+
+## New Contributors
+* @aplulu made their first contribution in https://github.com/weka/csi-wekafs/pull/603
+
+# Release v2.7.6
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Bug Fixes
+* fix: server stop labels cleanup condition by @assafgi in https://github.com/weka/csi-wekafs/pull/602
+
+## New Contributors
+* @assafgi made their first contribution in https://github.com/weka/csi-wekafs/pull/602
+
 # Release v2.7.5
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
 
