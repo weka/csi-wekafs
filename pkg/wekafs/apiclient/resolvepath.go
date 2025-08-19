@@ -18,6 +18,14 @@ type FilesystemResolvePath struct {
 	Path    string    `json:"-" url:"path,omitempty"`
 }
 
+func (fsr *FilesystemResolvePath) SupportsPagination() bool {
+	return false
+}
+
+func (fsr *FilesystemResolvePath) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
 func (fsr *FilesystemResolvePath) GetType() string {
 	return "resolvePath"
 }

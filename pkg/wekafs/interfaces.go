@@ -3,21 +3,19 @@ package wekafs
 import (
 	"context"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"k8s.io/mount-utils"
+	"sync"
 	"time"
 )
 
-const (
-	dataTransportNfs    DataTransport = "nfs"
-	dataTransportWekafs DataTransport = "wekafs"
-)
-
 type AnyServer interface {
-	getMounter() AnyMounter
+	getMounter(ctx context.Context) AnyMounter
+	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
-	isInDevMode() bool
 	getDefaultMountOptions() MountOptions
 	getNodeId() string
+	getBackgroundTasksWg() *sync.WaitGroup
 }
 
 type AnyMounter interface {
@@ -30,22 +28,37 @@ type AnyMounter interface {
 	schedulePeriodicMountGc()
 	getGarbageCollector() *innerPathVolGc
 	getTransport() DataTransport
+	getMountMap() *mountMap
+	isEnabled() bool
+	Enable()
+	Disable()
+	getSelinuxSupport() *bool
+	setSelinuxSupport(bool)
 }
 
-type nfsMountsMap map[string]int // we only follow the mountPath and number of references
-type wekafsMountsMap map[string]int
-type DataTransport string
-type UnmountFunc func()
-
 type AnyMount interface {
-	isInDevMode() bool
+	getMounter() AnyMounter
+	getKMounter() mount.Interface
 	isMounted() bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error
-	getRefCount() int
 	doUnmount(ctx context.Context) error
 	doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error
 	getMountPoint() string
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
+	getRefCountIndex() string
+	getFsName() string
 }
+
+type VolumeBackingType string
+type VolumeType string
+type CsiPluginMode string
+
+type DataTransport string
+
+func (transport DataTransport) String() string {
+	return string(transport)
+}
+
+type UnmountFunc func()

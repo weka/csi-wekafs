@@ -21,10 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
@@ -36,30 +36,23 @@ import (
 	"time"
 )
 
-const (
-	TopologyKeyNode              = "topology.wekafs.csi/node"
-	TopologyLabelNodeGlobal      = "topology.csi.weka.io/node"
-	TopologyLabelWekaGlobal      = "topology.csi.weka.io/global"
-	TopologyLabelTransportGlobal = "topology.csi.weka.io/transport"
-
-	TopologyLabelWekaLocalPattern = "topology.%s/accessible"
-	TopologyLabelNodePattern      = "topology.%s/node"
-	TopologyLabelTransportPattern = "topology.%s/transport"
-
-	WekaKernelModuleName             = "wekafsgw"
-	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
-)
-
 type NodeServer struct {
 	csi.UnimplementedNodeServer
 	caps              []*csi.NodeServiceCapability
 	nodeID            string
 	maxVolumesPerNode int64
-	mounter           AnyMounter
+	mounters          *MounterGroup
 	api               *ApiStore
 	config            *DriverConfig
-	semaphores        map[string]*semaphore.Weighted
+	semaphores        map[string]*SemaphoreWrapper
+	backgroundTasksWg *sync.WaitGroup // used to wait for background tasks to finish before shutting down the server
+
+	metrics *NodeServerMetrics
 	sync.Mutex
+}
+
+func (ns *NodeServer) getBackgroundTasksWg() *sync.WaitGroup {
+	return ns.backgroundTasksWg
 }
 
 func (ns *NodeServer) getNodeId() string {
@@ -70,10 +63,6 @@ func (ns *NodeServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ns.getConfig().mutuallyExclusiveOptions)
 }
 
-func (ns *NodeServer) isInDevMode() bool {
-	return ns.getConfig().isInDevMode()
-}
-
 func (ns *NodeServer) getConfig() *DriverConfig {
 	return ns.config
 }
@@ -82,8 +71,12 @@ func (ns *NodeServer) getApiStore() *ApiStore {
 	return ns.api
 }
 
-func (ns *NodeServer) getMounter() AnyMounter {
-	return ns.mounter
+func (ns *NodeServer) getMounter(ctx context.Context) AnyMounter {
+	return ns.mounters.GetPreferredMounter(ctx)
+}
+
+func (ns *NodeServer) getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter {
+	return ns.mounters.GetMounterByTransport(ctx, transport)
 }
 
 //goland:noinspection GoUnusedParameter
@@ -94,7 +87,7 @@ func (ns *NodeServer) NodeExpandVolume(ctx context.Context, request *csi.NodeExp
 func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
 	volumeID := req.GetVolumeId()
 	volumePath := req.GetVolumePath()
-
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 	// Validate request fields
 	if volumeID == "" {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID must be provided")
@@ -108,18 +101,8 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 		}
 	}
 
-	// Check if the volume path exists
-	if ns.getConfig().isInDevMode() {
-		// In dev mode, we don't have the actual Weka mount, so we just check if the path exists
-		if _, err := os.Stat(volumePath); err != nil {
-			return nil, status.Error(codes.NotFound, "Volume path not found")
-		}
-
-	} else {
-		// In production mode, we check if the path is indeed a Weka mount (Either NFS or WekaFS)
-		if !PathIsWekaMount(ctx, volumePath) {
-			return nil, status.Error(codes.NotFound, "Volume path not found")
-		}
+	if !PathIsWekaMount(volumePath) {
+		return nil, status.Error(codes.NotFound, "Volume path not found")
 	}
 
 	// Validate Weka volume ID
@@ -127,8 +110,15 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 		return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID %s: %v", volumeID, err)
 	}
 
+	st := "FAILURE"
+	defer func() {
+		ns.metrics.Operations.GetVolumeStats.WithLabelValues(ns.getConfig().GetDriver().name, st).Inc()
+		ns.metrics.Operations.GetVolumeStatsDuration.WithLabelValues(ns.getConfig().GetDriver().name, st).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+	}()
+
 	stats, err := getVolumeStats(volumePath)
 	if err != nil || stats == nil {
+		st = "SUCCESS"
 		return &csi.NodeGetVolumeStatsResponse{
 			Usage: nil,
 			VolumeCondition: &csi.VolumeCondition{
@@ -189,7 +179,10 @@ func getVolumeStats(volumePath string) (volumeStats *VolumeStats, err error) {
 	return &VolumeStats{capacityBytes, usedBytes, availableBytes, inodes, inodesUsed, inodesFree}, nil
 }
 
-func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter AnyMounter, config *DriverConfig) *NodeServer {
+func NewNodeServer(driver *WekaFsDriver) *NodeServer {
+	if driver == nil {
+		panic("Driver is nil")
+	}
 	//goland:noinspection GoBoolExpressions
 	return &NodeServer{
 		caps: getNodeServiceCapabilities(
@@ -199,16 +192,18 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 				csi.NodeServiceCapability_RPC_VOLUME_CONDITION,
 			},
 		),
-		nodeID:            nodeId,
-		maxVolumesPerNode: maxVolumesPerNode,
-		mounter:           mounter,
-		api:               api,
-		config:            config,
-		semaphores:        make(map[string]*semaphore.Weighted),
+		nodeID:            driver.nodeID,
+		maxVolumesPerNode: driver.maxVolumesPerNode,
+		mounters:          driver.mounters,
+		api:               driver.api,
+		config:            driver.config,
+		semaphores:        make(map[string]*SemaphoreWrapper),
+		backgroundTasksWg: new(sync.WaitGroup),
+		metrics:           NewNodeServerMetrics(),
 	}
 }
 
-func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSemaphore) {
 	logger := log.Ctx(ctx)
 	ns.initializeSemaphore(ctx, op)
 	sem := ns.semaphores[op]
@@ -217,9 +212,35 @@ func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, r
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
+
+	// select metrics histogram based on the operation type
+	var histogram *prometheus.HistogramVec
+	var gauge *prometheus.GaugeVec
+	switch op {
+	case "PublishVolume":
+		histogram = ns.metrics.Concurrency.PublishVolumeWaitDuration
+		gauge = ns.metrics.Concurrency.PublishVolume
+	case "UnpublishVolume":
+		histogram = ns.metrics.Concurrency.UnpublishVolumeWaitDuration
+		gauge = ns.metrics.Concurrency.UnpublishVolume
+	}
+	driverName := ns.getConfig().GetDriver().name
+
+	// update concurrent operations
+	currentOps := func() {
+		if gauge != nil {
+			gauge.WithLabelValues(driverName, "acquired").Set(float64(sem.CurrentCount()))
+		}
+	}
+	currentOps()
+
 	if err == nil {
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
+		if histogram != nil {
+			histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
+		}
 		return nil, func() {
+			defer currentOps()
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
@@ -240,10 +261,14 @@ func (ns *NodeServer) initializeSemaphore(ctx context.Context, op string) {
 		return
 	}
 
-	max := ns.getConfig().maxConcurrencyPerOp[op]
+	m, ok := ns.getConfig().maxConcurrencyPerOp[op]
+	if !ok { // if not set, default to 1
+		m = 1
+	}
 	logger := log.Ctx(ctx)
-	logger.Info().Str("op", op).Int64("max_concurrency", max).Msg("Initializing semaphore")
-	sem := semaphore.NewWeighted(max)
+	logger.Info().Str("op", op).Int64("max_concurrency", m).Msg("Initializing semaphore")
+	sem := NewSemaphoreWrapper(m)
+
 	ns.semaphores[op] = sem
 }
 
@@ -259,6 +284,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -269,6 +295,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+
+		ns.metrics.Operations.UnpublishVolumeDuration.WithLabelValues(ns.getConfig().GetDriver().name, result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+		ns.metrics.Operations.UnpublishVolume.WithLabelValues(ns.getConfig().GetDriver().name, result).Inc()
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -374,18 +404,12 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
-			if !ns.isInDevMode() {
-				if PathIsWekaMount(ctx, targetPath) {
-					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
-					unmount()
-					return &csi.NodePublishVolumeResponse{}, nil
-				} else {
-					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
-				}
-			} else {
-				log.Ctx(ctx).Trace().Msg("Assuming debug execution and not validating WekaFS mount")
+			if PathIsWekaMount(targetPath) {
+				log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
 				unmount()
 				return &csi.NodePublishVolumeResponse{}, nil
+			} else {
+				log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
 			}
 
 		} else {
@@ -463,19 +487,17 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 	}
 	// check if this path is a wekafs mount
-	if !ns.isInDevMode() {
-		if PathIsWekaMount(ctx, targetPath) {
-			logger.Debug().Msg("Directory exists and is weka mount")
-		} else {
-			msg := fmt.Sprintf("Directory %s exists, but not a weka mount, assuming already unpublished", targetPath)
-			logger.Warn().Msg(msg)
-			if err := os.Remove(targetPath); err != nil {
-				result = "FAILURE"
-				return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
-			}
-			result = "SUCCESS_WITH_WARNING"
-			return &csi.NodeUnpublishVolumeResponse{}, nil
+	if PathIsWekaMount(targetPath) {
+		logger.Debug().Msg("Directory exists and is weka mount")
+	} else {
+		msg := fmt.Sprintf("Directory %s exists, but not a weka mount, assuming already unpublished", targetPath)
+		logger.Warn().Msg(msg)
+		if err := os.Remove(targetPath); err != nil {
+			result = "FAILURE"
+			return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 		}
+		result = "SUCCESS_WITH_WARNING"
+		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
 FORCEUMOUNT:
@@ -531,7 +553,7 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 	if ns.config.manageNodeTopologyLabels {
 		// this will either overwrite or add the keys based on the driver name
 		segments[fmt.Sprintf(TopologyLabelNodePattern, driverName)] = ns.nodeID
-		segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = string(ns.getMounter().getTransport())
+		segments[fmt.Sprintf(TopologyLabelTransportPattern, driverName)] = ns.getMounter(ctx).getTransport().String() // for backward compatibility, return the preferred transport
 		segments[fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)] = "true"
 	} else {
 		logger.Warn().Msg("Node topology labels management is disabled, using global label only")
@@ -570,4 +592,19 @@ func getNodeServiceCapabilities(nl []csi.NodeServiceCapability_RPC_Type) []*csi.
 	}
 
 	return nsc
+}
+
+func (ns *NodeServer) GetAcquiredSemaphoreCount(op string) (int64, error) {
+	ns.Lock()
+	defer ns.Unlock()
+
+	sem, ok := ns.semaphores[op]
+	if !ok {
+		return 0, fmt.Errorf("semaphore for operation %s not found", op)
+	}
+
+	sem.mu.Lock()
+	defer sem.mu.Unlock()
+
+	return sem.CurrentCount(), nil
 }

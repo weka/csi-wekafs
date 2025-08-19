@@ -57,13 +57,10 @@ var (
 	csiMode                              = wekafs.CsiPluginMode("all")
 	endpoint                             = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
 	driverName                           = flag.String("drivername", "csi.weka.io", "name of the driver")
-	debugPath                            = flag.String("debugpath", "",
-		"Debug path to use instead of actually mounting weka, can be local fs or wekafs,"+
-			" virtual FS will be created in this path instead of actual mounting")
-	nodeID            = flag.String("nodeid", "", "node id")
-	maxVolumesPerNode = flag.Int64("maxvolumespernode", 0, "limit of volumes per node")
-	showVersion       = flag.Bool("version", false, "Show version.")
-	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
+	nodeID                               = flag.String("nodeid", "", "node id")
+	maxVolumesPerNode                    = flag.Int64("maxvolumespernode", 0, "limit of volumes per node")
+	showVersion                          = flag.Bool("version", false, "Show version.")
+	dynamicSubPath                       = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
 	csimodetext                          = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
 	selinuxSupport                       = flag.Bool("selinux-support", false, "Enable support for SELinux")
@@ -72,7 +69,7 @@ var (
 	seedSnapshotPrefix                   = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
 	allowAutoFsExpansion                 = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
 	allowAutoFsCreation                  = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
-	allowSnapshotsOfLegacyVolumes        = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
+	allowSnapshotsOfDirectoryVolumes     = flag.Bool("allowsnapshotsofdirectoryvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
 	suppressSnapshotsCapability          = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
 	suppressVolumeCloneCapability        = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
 	enableMetrics                        = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
@@ -97,9 +94,16 @@ var (
 	clientGroupName                      = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
 	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
 	skipGarbageCollection                = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
-	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
+	allowAsyncObjectDeletion             = flag.Bool("allowasyncobjectdeletion", false, "Allow deletion of volumes in asynchronous manner. Improves speed of multiple volume deletions but might leave some objects in Weka cluster. Use with caution.")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
+	wekaApiTimeoutSeconds                = flag.Int("wekaapitimeoutseconds", 60, "Timeout for Weka API requests in seconds")
+	wekametricsfetchintervalseconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
+	wekametricsfetchconcurrentrequests       = flag.Int64("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
+	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
+	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
+	wekaMetricsQuotaMapValidity              = flag.Int("wekametricsquotacachevalidityseconds", 60, "Duration for which the quota map is considered valid")
+	useBatchMode                             = flag.Bool("fetchquotasinbatchmode", false, "Use batch mode for metrics server, fetch all filesystem quotas in one go")
 	// Set by the build process
 	version = ""
 )
@@ -138,7 +142,7 @@ func main() {
 		fmt.Println(baseName, version)
 		return
 	}
-	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode {
+	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode && csiMode != wekafs.CsiModeMetricsServer {
 		log.Panic().Str("requestedCsiMode", string(csiMode)).Msg("Invalid mode specified for CSI driver")
 	}
 	log.Info().Str("csi_mode", string(csiMode)).Bool("selinux_mode", *selinuxSupport).Msg("Started CSI driver")
@@ -163,12 +167,14 @@ func main() {
 	} else {
 		url = ""
 	}
-	tp, err = wekafs.TracerProvider(version, url, csiMode)
+	deploymentIdentifier := os.Getenv("OTEL_DEPLOYMENT_IDENTIFIER")
+
+	tp, err = wekafs.TracerProvider(version, url, csiMode, deploymentIdentifier)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
 	} else {
 		otel.SetTracerProvider(tp)
-		log.Info().Str("tracing_url", url).Msg("OpenTelemetry tracing initialized")
+		log.Info().Str("tracing_url", url).Str("deployment_identifier", deploymentIdentifier).Msg("OpenTelemetry tracing initialized")
 		ctx, cancel := context.WithCancel(ctx)
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
@@ -209,10 +215,9 @@ func handle(ctx context.Context) {
 		*newVolumePrefix,
 		*newSnapshotPrefix,
 		*seedSnapshotPrefix,
-		*debugPath,
 		*allowAutoFsCreation,
 		*allowAutoFsExpansion,
-		*allowSnapshotsOfLegacyVolumes,
+		*allowSnapshotsOfDirectoryVolumes,
 		*suppressSnapshotsCapability,
 		*suppressVolumeCloneCapability,
 		*allowInsecureHttps,
@@ -234,12 +239,19 @@ func handle(ctx context.Context) {
 		*nfsProtocolVersion,
 		version,
 		*skipGarbageCollection,
-		*waitForObjectDeletion,
+		*allowAsyncObjectDeletion,
 		*allowEncryptionWithoutKms,
 		*tracingUrl,
 		*manageNodeTopologyLabels,
+		time.Duration(*wekaApiTimeoutSeconds)*time.Second,
+		time.Duration(*wekametricsfetchintervalseconds)*time.Second,
+		*wekametricsfetchconcurrentrequests,
+		*enableMetricsServerLeaderElection,
+		*wekaMetricsQuotaUpdateConcurrentRequests,
+		time.Duration(*wekaMetricsQuotaMapValidity)*time.Second,
+		*useBatchMode,
 	)
-	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, csiMode, *selinuxSupport, config)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

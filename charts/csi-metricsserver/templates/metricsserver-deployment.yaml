@@ -1,0 +1,116 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ .Release.Name }}-metrics-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-metrics-server
+    component: {{ .Release.Name }}-metrics-server
+    release: {{ .Release.Name }}
+    {{- if .Values.metricsServer.labels }}
+    {{- toYaml .Values.metricsServer.labels | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-metrics-server
+      component: {{ .Release.Name }}-metrics-server
+      release: {{ .Release.Name }}
+  replicas: {{ .Values.metricsServer.replicas | default 1 }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-metrics-server
+        component: {{ .Release.Name }}-metrics-server
+        release: {{ .Release.Name }}
+        {{- if .Values.metricsServer.podLabels }}
+        {{- toYaml .Values.metricsServer.podLabels | nindent 8 }}
+        {{- end }}
+    {{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/metrics'
+        prometheus.io/port: '{{.Values.metrics.metricsServerPort | default 9096}}'
+    {{- end }}
+    spec:
+      {{- if .Values.metricsServer.affinity }}
+      affinity:
+        {{- toYaml .Values.metricsServer.affinity | nindent 8 }}
+      {{- end }}
+      {{- if .Values.metricsServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.metricsServer.nodeSelector | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ .Release.Name }}-metrics-server
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      containers:
+        - name: wekafs
+          image: "{{ .Values.image.repository }}:{{if not (empty .Values.image.tag)}}{{ .Values.image.tag }}{{else}}{{ .Chart.Version }}{{end}}"
+          imagePullPolicy: Always
+          command:
+            - /metricsserver
+          args:
+            - "--drivername=$(CSI_DRIVER_NAME)"
+            - "--nodeid=$(KUBE_NODE_NAME)"
+            - "--v={{ .Values.logLevel | default 5 }}"
+          {{- if .Values.tracingUrl }}
+            - "--tracingurl={{ .Values.tracingUrl }}"
+          {{- end }}
+            - "--enablemetrics"
+            - "--metricsport={{ .Values.metrics.metricsServerPort | default 9096 }}"
+          {{- if .Values.pluginConfig.allowInsecureHttps }}
+            - "--allowinsecurehttps"
+          {{- end }}
+          {{- if .Values.useJsonLogging }}
+            - "--usejsonlogging"
+          {{- end }}
+          {{- if .Values.metricsServer.maxConcurrentRequests | default 10 }}
+            - "--wekametricsfetchconcurrentrequests={{ .Values.metricsServer.maxConcurrentRequests }}"
+          {{- end }}
+          {{- if .Values.metricsServer.metricsFetchIntervalSeconds | default 60 }}
+            - "--wekametricsfetchintervalseconds={{ .Values.metricsServer.metricsFetchIntervalSeconds }}"
+          {{- end }}
+          {{- if .Values.metricsServer.enableLeaderElection | default false }}
+            - "--enablemetricsserverleaderelection"
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
+              name: ms-metrics
+              protocol: TCP
+            - containerPort: {{ .Values.readinessProbe.metricsServerPort | default 9196 }}
+              name: ms-healthz
+              protocol: TCP
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: ms-healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 2
+          env:
+            - name: CSI_DRIVER_NAME
+              value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBE_NODE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: READINESS_PORT
+              value: "{{ .Values.readinessProbe.metricsServerPort | default 9196 }}"
+            {{- if .Values.tracingDeploymentIdentifier }}
+            - name: OTEL_DEPLOYMENT_IDENTIFIER
+              value: {{ .Values.tracingDeploymentIdentifier }}
+            {{- end }}
+      {{- with .Values.metricsServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      resources:
+        {{- toYaml .Values.metricsServer.resources | nindent 8}}
+      terminationGracePeriodSeconds: {{ .Values.metricsServer.terminationGracePeriodSeconds | default 30 }}

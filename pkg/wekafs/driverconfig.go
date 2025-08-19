@@ -26,7 +26,6 @@ type DriverConfig struct {
 	allowSnapshotsOfDirectoryVolumes bool
 	advertiseSnapshotSupport         bool
 	advertiseVolumeCloneSupport      bool
-	debugPath                        string
 	allowInsecureHttps               bool
 	alwaysAllowSnapshotVolumes       bool
 	mutuallyExclusiveOptions         []mutuallyExclusiveMountOptionSet
@@ -40,11 +39,18 @@ type DriverConfig struct {
 	nfsProtocolVersion               string
 	csiVersion                       string
 	skipGarbageCollection            bool
-	waitForObjectDeletion            bool
+	allowAsyncObjectDeletion         bool
 	allowEncryptionWithoutKms        bool
 	driverRef                        *WekaFsDriver
 	tracingUrl                       string
 	manageNodeTopologyLabels         bool
+	wekaApiTimeout                    time.Duration // Timeout for Weka API requests
+	metricsFetchInterval              time.Duration
+	quotaCacheValidityDuration        time.Duration // Duration for which the quota map is considered valid
+	metricsFetchConcurrentRequests    int64
+	enableMetricsServerLeaderElection bool
+	quotaFetchConcurrentRequests      int
+	useQuotaMapsForMetrics            bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -68,13 +74,21 @@ func (dc *DriverConfig) Log() {
 		Str("interface_group_name", dc.interfaceGroupName).
 		Str("client_group_name", dc.clientGroupName).
 		Bool("skip_garbage_collection", dc.skipGarbageCollection).
-		Bool("wait_for_object_deletion", dc.waitForObjectDeletion).
+		Bool("allow_async_object_deletion", dc.allowAsyncObjectDeletion).
 		Str("tracing_url", dc.tracingUrl).
 		Bool("manage_node_topology_labels", dc.manageNodeTopologyLabels).
+		Dur("weka_api_timeout", dc.wekaApiTimeout).
+		Str("nfs_protocol_version", dc.nfsProtocolVersion).
+		Str("weka_metrics_fetch_interval", dc.metricsFetchInterval.String()).
+		Int64("weka_metrics_fetch_concurrent_requests", dc.metricsFetchConcurrentRequests).
+		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
+		Int("weka_metrics_quota_map_concurrent_requests", dc.quotaFetchConcurrentRequests).
+		Int("weka_metrics_quota_cache_validity_duration_seconds", int(dc.quotaCacheValidityDuration.Seconds())).
+		Bool("use_quota_maps_for_metrics", dc.useQuotaMapsForMetrics).
 		Msg("Starting driver with the following configuration")
 
 }
-func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
+func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix string,
 	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfDirectoryVolumes bool,
 	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
@@ -88,6 +102,13 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowEncryptionWithoutKms bool,
 	tracingUrl string,
 	manageNodeTopologyLabels bool,
+	wekaApiTimeout time.Duration,
+	wekaMetricsFetchInterval time.Duration,
+	wekaMetricsFetchConcurrentRequests int64,
+	enableMetricsServerLeaderElection bool,
+	wekaMetricsQuotaUpdateConcurrentRequests int,
+	wekaMetricsQuotaMapValidityDuration time.Duration,
+	useQuotaMapsForMetrics bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -120,7 +141,6 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowSnapshotsOfDirectoryVolumes: allowSnapshotsOfDirectoryVolumes,
 		advertiseSnapshotSupport:         !suppressnapshotSupport,
 		advertiseVolumeCloneSupport:      !suppressVolumeCloneSupport,
-		debugPath:                        debugPath,
 		allowInsecureHttps:               allowInsecureHttps,
 		alwaysAllowSnapshotVolumes:       alwaysAllowSnapshotVolumes,
 		mutuallyExclusiveOptions:         MutuallyExclusiveMountOptions,
@@ -134,15 +154,18 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		nfsProtocolVersion:               nfsProtocolVersion,
 		csiVersion:                       version,
 		skipGarbageCollection:            skipGarbageCollection,
-		waitForObjectDeletion:            waitForObjectDeletion,
+		allowAsyncObjectDeletion:         waitForObjectDeletion,
 		allowEncryptionWithoutKms:        allowEncryptionWithoutKms,
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
+		wekaApiTimeout:                    wekaApiTimeout,
+		metricsFetchInterval:              wekaMetricsFetchInterval,
+		metricsFetchConcurrentRequests:    wekaMetricsFetchConcurrentRequests,
+		enableMetricsServerLeaderElection: enableMetricsServerLeaderElection,
+		useQuotaMapsForMetrics:            useQuotaMapsForMetrics,
+		quotaFetchConcurrentRequests:      wekaMetricsQuotaUpdateConcurrentRequests,
+		quotaCacheValidityDuration:        wekaMetricsQuotaMapValidityDuration,
 	}
-}
-
-func (dc *DriverConfig) isInDevMode() bool {
-	return dc.debugPath != ""
 }
 
 func (dc *DriverConfig) GetVersion() string {

@@ -31,27 +31,26 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
-const (
-	xattrCapacity   = "user.weka_capacity"
-	xattrVolumeName = "user.weka_k8s_volname"
-)
-
 //goland:noinspection GoExportedFuncWithUnexportedType
-func NewNonBlockingGRPCServer(mode CsiPluginMode) *nonBlockingGRPCServer {
+func NewNonBlockingGRPCServer(mode CsiPluginMode, config *DriverConfig) *nonBlockingGRPCServer {
 	return &nonBlockingGRPCServer{
-		csiMmode: mode,
+		csiMode: mode,
+		config:  config,
 	}
 }
 
 // NonBlocking server
 type nonBlockingGRPCServer struct {
-	wg       sync.WaitGroup
-	server   *grpc.Server
-	csiMmode CsiPluginMode
+	wg      sync.WaitGroup
+	server  *grpc.Server
+	csiMode CsiPluginMode
+	config  *DriverConfig
 }
 
 func (s *nonBlockingGRPCServer) Start(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
-
+	if s == nil {
+		return
+	}
 	s.wg.Add(1)
 
 	go s.serve(endpoint, ids, cs, ns)
@@ -64,6 +63,9 @@ func (s *nonBlockingGRPCServer) Wait() {
 }
 
 func (s *nonBlockingGRPCServer) Stop() {
+	if s == nil || s.server == nil {
+		return
+	}
 	s.server.GracefulStop()
 }
 
@@ -73,47 +75,63 @@ func (s *nonBlockingGRPCServer) ForceStop() {
 
 func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
 
-	proto, addr, err := parseEndpoint(endpoint)
-	if err != nil {
-		log.Fatal().Err(err)
-	}
+	var listener net.Listener
+	if s.csiMode != CsiModeMetricsServer {
+		proto, addr, err := parseEndpoint(endpoint)
+		if err != nil {
+			log.Fatal().Err(err)
+		}
 
-	if proto == "unix" {
-		addr = "/" + addr
-		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
-			Die(fmt.Sprintf("Failed to remove %s, error: %s", addr, err.Error()))
+		if proto == "unix" {
+			addr = "/" + addr
+			if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
+				Die(fmt.Sprintf("Failed to remove %s, error: %s", addr, err.Error()))
+			}
+		}
+
+		listener, err = net.Listen(proto, addr)
+		if err != nil {
+			Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
 		}
 	}
+	var maxConcurrentStreams int64
+	for _, val := range s.config.maxConcurrencyPerOp {
+		maxConcurrentStreams += val
+	}
 
-	listener, err := net.Listen(proto, addr)
-	if err != nil {
-		Die(fmt.Sprintf("Failed to listen: %v", err.Error()))
+	maxConcurrentStreams *= 2 // add some extra for the liveness etc.
+	if maxConcurrentStreams < 256 {
+		maxConcurrentStreams = 256
 	}
 
 	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(logGRPC),
+		grpc.MaxConcurrentStreams(uint32(maxConcurrentStreams)),
 	}
+
 	server := grpc.NewServer(opts...)
 	s.server = server
 
-	if ids != nil {
+	if s.csiMode != CsiModeMetricsServer {
 		log.Info().Msg("Registering GRPC IdentityServer")
 		csi.RegisterIdentityServer(server, ids)
 	}
-	if s.csiMmode == CsiModeController || s.csiMmode == CsiModeAll {
+	if s.csiMode == CsiModeController || s.csiMode == CsiModeAll {
 		if cs != nil {
 			log.Info().Msg("Registering GRPC ControllerServer")
 			csi.RegisterControllerServer(server, cs)
 		}
 	}
-	if s.csiMmode == CsiModeNode || s.csiMmode == CsiModeAll {
+	if s.csiMode == CsiModeNode || s.csiMode == CsiModeAll {
 		if ns != nil {
 			log.Info().Msg("Registering GRPC NodeServer")
 			csi.RegisterNodeServer(server, ns)
 		}
 	}
 
-	log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
+	if s.csiMode != CsiModeMetricsServer {
+		log.Info().Str("address", listener.Addr().String()).Msg("Listening for connections on UNIX socket")
+	}
 
 	if err := server.Serve(listener); err != nil {
 		Die(err.Error())

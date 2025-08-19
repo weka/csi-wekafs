@@ -18,20 +18,17 @@ func TestGenerateHash(t *testing.T) {
 		Password:  "testpassword",
 		Endpoints: []string{"127.0.0.1:14000"},
 	}
-	apiClient := &ApiClient{
-		Credentials: credentials,
-	}
 
-	hash := apiClient.generateHash()
+	hash := credentials.Hash()
 	assert.NotZero(t, hash, "Expected non-zero hash value")
 
 	// Test that the hash is consistent for the same credentials
-	hash2 := apiClient.generateHash()
+	hash2 := credentials.Hash()
 	assert.Equal(t, hash, hash2, "Expected hash values to be equal for the same credentials")
 
 	// Test that the hash changes for different credentials
-	apiClient.Credentials.Username = "differentuser"
-	hash3 := apiClient.generateHash()
+	credentials.Username = "differentuser"
+	hash3 := credentials.Hash()
 	assert.NotEqual(t, hash, hash3, "Expected hash values to be different for different credentials")
 }
 
@@ -174,7 +171,12 @@ func GetApiClientForTest(t *testing.T) *ApiClient {
 	endpoints := strings.Split(endpoint, ",")
 	creds.Endpoints = endpoints
 	if client == nil {
-		apiClient, err := NewApiClient(context.Background(), creds, true, endpoint)
+		apiClient, err := NewApiClient(context.Background(), creds, ApiClientOptions{
+			AllowInsecureHttps: true,
+			Hostname:           endpoint,
+			DriverName:         "csi.weka.io",
+			ApiTimeout:         ApiHttpTimeOutSeconds * time.Second,
+		})
 		if err != nil {
 			t.Fatalf("Failed to create API client: %v", err)
 		}

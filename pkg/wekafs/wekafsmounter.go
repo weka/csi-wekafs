@@ -5,27 +5,70 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
-	"strings"
-	"sync"
-	"time"
-)
-
-const (
-	inactiveMountGcPeriod = time.Minute * 10
+	"path"
 )
 
 type wekafsMounter struct {
-	mountMap                wekafsMountsMap
-	lock                    sync.Mutex
+	mountMap                *mountMap
 	kMounter                mount.Interface
-	debugPath               string
 	selinuxSupport          *bool
 	gc                      *innerPathVolGc
 	allowProtocolContainers bool
+	enabled                 bool
+}
+
+func (m *wekafsMounter) setSelinuxSupport(b bool) {
+	m.selinuxSupport = &b
+}
+
+func (m *wekafsMounter) getSelinuxSupport() *bool {
+	return m.selinuxSupport
+}
+
+func (m *wekafsMounter) getMountMap() *mountMap {
+	return m.mountMap
+}
+
+func (m *wekafsMounter) isEnabled() bool {
+	return m.enabled
+}
+
+func (m *wekafsMounter) Enable() {
+	if !m.enabled {
+		log.Ctx(context.Background()).Info().Msg("Enabling WekaFS mounter")
+	}
+	m.enabled = true
+}
+
+func (m *wekafsMounter) Disable() {
+	if m.enabled {
+		log.Ctx(context.Background()).Info().Msg("Disabling WekaFS mounter")
+	}
+	m.enabled = false
 }
 
 func (m *wekafsMounter) getGarbageCollector() *innerPathVolGc {
 	return m.gc
+}
+
+func (m *wekafsMounter) getSelinuxStatus(ctx context.Context) bool {
+	return anyMounterGetSelinuxStatus(ctx, m)
+}
+
+func (m *wekafsMounter) LogActiveMounts() {
+	anyMounterLogActiveMounts(m)
+}
+
+func (m *wekafsMounter) gcInactiveMounts() {
+	anyMounterGcInactiveMounts(m)
+}
+
+func (m *wekafsMounter) schedulePeriodicMountGc() {
+	anyMounterSchedulePeriodicMountGc(m)
+}
+
+func (m *wekafsMounter) getTransport() DataTransport {
+	return dataTransportWekafs
 }
 
 func newWekafsMounter(driver *WekaFsDriver) *wekafsMounter {
@@ -34,7 +77,7 @@ func newWekafsMounter(driver *WekaFsDriver) *wekafsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
+	mounter := &wekafsMounter{mountMap: newMountMap(), selinuxSupport: selinuxSupport, enabled: true}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc()
@@ -51,21 +94,11 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		mounter:                 m,
 		kMounter:                m.kMounter,
 		fsName:                  fsName,
-		debugPath:               m.debugPath,
-		mountPoint:              "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+		mountPoint:              path.Join(MountBasePath, m.getTransport().String(), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:            options,
 		allowProtocolContainers: m.allowProtocolContainers,
 	}
 	return wMount
-}
-
-func (m *wekafsMounter) getSelinuxStatus(ctx context.Context) bool {
-	if m.selinuxSupport != nil && *m.selinuxSupport {
-		return true
-	}
-	selinuxSupport := getSelinuxStatus(ctx)
-	m.selinuxSupport = &selinuxSupport
-	return *m.selinuxSupport
 }
 
 func (m *wekafsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
@@ -105,59 +138,4 @@ func (m *wekafsMounter) unmountWithOptions(ctx context.Context, fsName string, o
 	}
 
 	return mnt.decRef(ctx)
-}
-
-func (m *wekafsMounter) LogActiveMounts() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	if len(m.mountMap) > 0 {
-		count := 0
-		for refIndex := range m.mountMap {
-			if mapEntry, ok := m.mountMap[refIndex]; ok {
-				parts := strings.Split(refIndex, "^")
-				logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Int("refcount", mapEntry).Logger()
-
-				if mapEntry > 0 {
-					logger.Trace().Msg("Mount is active")
-					count++
-				} else {
-					logger.Trace().Msg("Mount is not active")
-				}
-
-			}
-		}
-		log.Debug().Int("total", len(m.mountMap)).Int("active", count).Msg("Periodic checkup on mount map")
-	}
-}
-
-func (m *wekafsMounter) gcInactiveMounts() {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-	if len(m.mountMap) > 0 {
-		for refIndex := range m.mountMap {
-			if mapEntry, ok := m.mountMap[refIndex]; ok {
-				if mapEntry == 0 {
-					parts := strings.Split(refIndex, "^")
-					logger := log.With().Str("mount_point", parts[0]).Str("mount_options", parts[1]).Str("ref_index", refIndex).Logger()
-					logger.Trace().Msg("Removing inactive mount from map")
-					delete(m.mountMap, refIndex)
-				}
-			}
-		}
-	}
-}
-
-func (m *wekafsMounter) schedulePeriodicMountGc() {
-	go func() {
-		log.Debug().Msg("Initializing periodic mount GC for wekafs transport")
-		for true {
-			m.LogActiveMounts()
-			m.gcInactiveMounts()
-			time.Sleep(10 * time.Minute)
-		}
-	}()
-}
-
-func (m *wekafsMounter) getTransport() DataTransport {
-	return dataTransportWekafs
 }

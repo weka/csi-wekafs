@@ -71,3 +71,28 @@ default /run/weka-fs-mounts/default-DTQLAJ6KO6IUCZE23RBIM26YYUQNWKAA-mystrangecl
 	assert.Equal(t, "", containerName)
 
 }
+
+func TestPathExistsAndFileExists(t *testing.T) {
+	// Create a temporary directory
+	tmpDir, err := os.MkdirTemp("", "testdir")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "testfile")
+	assert.NoError(t, err)
+	tmpFileName := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpFileName)
+
+	// PathExists should return true for directory, false for file
+	assert.True(t, PathExists(tmpDir))
+
+	// fileExists should return true for file, false for directory
+	assert.True(t, fileExists(tmpFileName))
+	assert.False(t, fileExists(tmpDir))
+
+	// Non-existent path
+	assert.False(t, PathExists("/nonexistent/path"))
+	assert.False(t, fileExists("/nonexistent/file"))
+}

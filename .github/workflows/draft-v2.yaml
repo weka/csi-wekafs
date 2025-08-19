@@ -1,6 +1,10 @@
 name: draft-v2
 
 on:
+  push:
+    branches:
+      - dev
+      - main
   workflow_dispatch:
     inputs:
       target_branch:
@@ -20,27 +24,49 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+          fetch-depth: 0                # fetch the whole repo history
+
+      - name: Git Version
+        id: auto_version
+        uses: codacy/git-version@2.8.2
         with:
           fetch-depth: 0
+          prefix: v
+          minor-identifier: /feat(ure)*:/
+          major-identifier: /breaking:/
 
-      - name: Get version
+      - name: Set package version
         id: version
         run: |
-          if [[ -z "${{ inputs.release_version }}" ]]; then
-            echo "Release version is required."
-            exit 1
+          INPUT_VERSION="${{ inputs.release_version }}"
+          if [[ $INPUT_VERSION ]]; then
+            version="v$(echo "$INPUT_VERSION" | sed 's/^v//') # remove 'v' prefix if present)"
+            echo "version=$INPUT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.auto_version.outputs.version }}" >> $GITHUB_OUTPUT
           fi
-          version=$(echo '${{ inputs.release_version }}' | sed 's/^v//')
-          echo "version=${version}" >> $GITHUB_OUTPUT
+
+      - name: Set Target Branch
+        id: target_branch
+        run: |
+          TARGET_BRANCH="${{ inputs.target_branch }}"
+          if [[ -z "$TARGET_BRANCH" ]]; then
+            TARGET_BRANCH="dev"
+          fi
+          echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Fetch merged PRs into target branch
         run: |
-          gh pr list --state merged --base ${{ inputs.target_branch }} \
+          gh pr list --state merged --base ${{ steps.target_branch.outputs.target_branch }} \
             --json number,title,body,labels,author,url \
             > prs.json
         env:
@@ -63,6 +89,7 @@ jobs:
 
           const details = [];
           const skipped = [];
+          const artifactHubNotes = [];
 
           function getSection(pr) {
             const labels = pr.labels.map(l => l.name.toLowerCase());
@@ -75,13 +102,29 @@ jobs:
             if (labels.includes('tests') || labels.includes('dependencies') || labels.includes('ci')) return '### Miscellaneous';
             return '';
           }
-
+          
+          function getArtifactHubKind(pr){
+            const labels = pr.labels.map(l => l.name.toLowerCase());
+            const title = pr.title.toLowerCase();
+            if (!title.includes('(csi-')) {
+              return '';
+            };
+            if (labels.includes('feature')) {
+              return 'added';
+            };
+            if (labels.includes('enhancement')) {
+              return 'changed';
+            }; 
+            if (labels.includes('fix') || labels.includes('bug')) {
+              return 'fixed';
+            };
+            return '';
+          }
           function isSkippable(pr) {
             return !pr.title || pr.title.trim() === '' || pr.title.startsWith('Merge') || pr.title.startsWith('Draft') || getSection(pr) === '' || pr.author?.is_bot;
           }
 
           const rnLines = [];
-          rnLines.push('<!-- Release notes generated using configuration in .github/release.yaml at main -->\n');
           rnLines.push('## What\'s Changed\n');
 
           for (const pr of prs) {
@@ -94,7 +137,19 @@ jobs:
             const author = pr.author?.login || 'unknown';
             const entry = `* ${pr.title} by @${author} in ${pr.url} [(more details)](#pr-${pr.number})`;
             sections[section].push(entry);
-
+          
+            const artifactHubKind = getArtifactHubKind(pr);
+            if (artifactHubKind) {
+              const change = {
+                kind: artifactHubKind,
+                description: pr.title,
+                links: [
+                  { name: `PR #${pr.number}`, url: pr.url }
+                ]
+              };
+              artifactHubNotes.push(change);
+            }
+          
             const bodyLines = (pr.body || '_No description provided._')
               .trim()
               .split('\n')
@@ -129,6 +184,7 @@ jobs:
             skippedLines.push(`- PR #${pr.number}: ${pr.title || '_No title_'} by @${pr.author?.login || 'unknown'} in ${pr.url}`);
           }
           fs.writeFileSync('SKIPPED_PRS.md', skippedLines.join('\n'));
+          fs.writeFileSync('artifacthub_changes.json', JSON.stringify(artifactHubNotes, null, 2));
           EOF
 
           node generate-notes.mjs
@@ -151,14 +207,24 @@ jobs:
           TAG="v$(date +%Y%m%d%H%M)"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           gh release create "$TAG" \
-            --target ${{ inputs.target_branch }} \
-            --title "v${{ steps.version.outputs.version }}" \
+            --target ${{ steps.target_branch.outputs.target_branch }} \
+            --title "${{ steps.version.outputs.version }}" \
             --notes-file RELEASE_NOTES.md \
             --draft && \
           release_url=$(gh release view "$TAG" --json url | jq -r .url) && \
           echo "release_url=$release_url" >> "$GITHUB_OUTPUT"
+          echo "draft_tag=$TAG" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload ArtifactHub changes to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME=${{ steps.create_draft.outputs.draft_tag }}
+          FILE_PATH="artifacthub_changes.json"
+          # Upload the asset to the release
+          gh release upload "$TAG_NAME" "$FILE_PATH" --repo="${{ github.repository }}" --clobber
 
       - name: Read Markdown file
         id: read_md
@@ -179,8 +245,8 @@ jobs:
           SLACK_COLOR: "yellow"
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_USERNAME: csiBot
-          SLACK_ICON_EMOJI: ":scroll:"
-          SLACK_TITLE: "Draft Release Notes for ${{ steps.version.outputs.version }}"
+          SLACK_ICON_EMOJI: ":robot_face:"
+          SLACK_TITLE: ":scroll: DRAFT RN: ${{ steps.version.outputs.version }}"
           SLACKIFY_MARKDOWN: "true"
           SLACK_MESSAGE: "${{ steps.read_md.outputs.content }}'"
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
