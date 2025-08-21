@@ -85,7 +85,7 @@ jobs:
 
       - name: Git Version
         id: auto_version
-        uses: codacy/git-version@2.8.2
+        uses: codacy/git-version@2.8.6
         with:
           prefix: v
           minor-identifier: /feat(ure)*:/
@@ -147,7 +147,7 @@ jobs:
 
       - name: Git Version
         id: auto_version
-        uses: codacy/git-version@2.8.2
+        uses: codacy/git-version@2.8.6
         with:
           prefix: v
           minor-identifier: /feat(ure)*:/
@@ -227,7 +227,7 @@ jobs:
 
       - name: Get version
         id: version
-        uses: codacy/git-version@2.8.2
+        uses: codacy/git-version@2.8.6
         with:
           prefix: v
           minor-identifier: /feat(ure)*:/
