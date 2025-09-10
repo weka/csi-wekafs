@@ -17,6 +17,7 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/constraints"
 	"google.golang.org/grpc/codes"
@@ -24,8 +25,6 @@ import (
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 var ProcMountsPath = "/proc/mounts"
@@ -692,6 +691,11 @@ func getOwnNamespace() (string, error) {
 
 	return "", errors.New("namespace not found or not set in environment variable LEADER_ELECTION_NAMESPACE")
 	// Get the namespace from the environment variable
+}
+
+// trimValue trims whitespace and trailing newlines from secret values
+func trimValue(value string) string {
+	return strings.TrimSpace(strings.TrimSuffix(value, "\n"))
 }
 
 // stripUnnecessaryPVFields creates a minimal PV with only fields needed for capacity validation
