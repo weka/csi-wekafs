@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"maps"
 	"math/rand"
 	"reflect"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type ApiEndPoint struct {
@@ -24,8 +25,8 @@ func (e *ApiEndPoint) String() string {
 	return fmt.Sprintf("%s:%d", e.IpAddress, e.MgmtPort)
 }
 
-func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
-	a.apiEndpoints.UpdateEndpointsFromAddresses(ctx, a.Credentials.Endpoints)
+func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) error {
+	return a.apiEndpoints.UpdateEndpointsFromAddresses(ctx, a.Credentials.Endpoints)
 }
 
 // fetchMountEndpoints used to obtain actual data plane IP addresses
@@ -70,7 +71,10 @@ func (a *ApiClient) UpdateApiEndpointsFromCluster(ctx context.Context) error {
 			}
 		}
 	}
-	a.apiEndpoints.UpdateEndpointsFromAddresses(ctx, addresses)
+	err = a.apiEndpoints.UpdateEndpointsFromAddresses(ctx, addresses)
+	if err != nil {
+		return err
+	}
 	// always rotate endpoint to make sure we distribute load between different Weka Nodes
 	a.rotateEndpoint(ctx)
 	return nil
@@ -125,7 +129,7 @@ func (eps *ApiEndPoints) AddOrUpdateEndpoint(ctx context.Context, endpoint *ApiE
 	}
 }
 
-func (eps *ApiEndPoints) UpdateEndpointsFromAddresses(ctx context.Context, addresses []string) {
+func (eps *ApiEndPoints) UpdateEndpointsFromAddresses(ctx context.Context, addresses []string) error {
 	// populate default endpoints from credentials
 	endpointAddresses := make(map[string]struct{})
 	for _, e := range addresses {
@@ -134,8 +138,12 @@ func (eps *ApiEndPoints) UpdateEndpointsFromAddresses(ctx context.Context, addre
 
 	//
 	for e := range endpointAddresses {
-		endPoint := constructEndpointFromAddress(ctx, e)
-		eps.AddOrUpdateEndpoint(ctx, endPoint)
+		endPoint, err := constructEndpointFromAddress(ctx, e)
+		if err != nil {
+			log.Ctx(ctx).Warn().Str("endpoint", e).Err(err).Msg("not valid")
+		} else {
+			eps.AddOrUpdateEndpoint(ctx, endPoint)
+		}
 	}
 
 	// remove endpoints that are not in the current list of endpoints
@@ -146,6 +154,10 @@ func (eps *ApiEndPoints) UpdateEndpointsFromAddresses(ctx context.Context, addre
 			eps.RemoveEndpoint(key)
 		}
 	}
+	if len(eps.endpoints) == 0 {
+		return fmt.Errorf("failed to initialize API client, no REST API endpoints found")
+	}
+	return nil
 }
 
 func (eps *ApiEndPoints) GetEndpoint() *ApiEndPoint {
@@ -195,7 +207,10 @@ func (eps *ApiEndPoints) RemoveEndpoint(endpoint string) {
 	}
 }
 
-func constructEndpointFromAddress(ctx context.Context, e string) *ApiEndPoint {
+func constructEndpointFromAddress(ctx context.Context, e string) (*ApiEndPoint, error) {
+	if strings.Contains(e, "://") {
+		return nil, fmt.Errorf("endpoint %s should not include URL scheme", e)
+	}
 	split := strings.Split(e, ":")
 	ip := ""
 	port := "14000" // default port
@@ -211,7 +226,7 @@ func constructEndpointFromAddress(ctx context.Context, e string) *ApiEndPoint {
 	if !isValidIPv4Address(ip) && !isValidIPv6Address(ip) && !isValidHostname(ip) {
 		log.Ctx(ctx).Error().Str("ip", ip).Str("port", port).Str("raw_endpoint", e).
 			Msg("Cannot determine a valid hostname, IPv4 or IPv6 address, skipping endpoint")
-		return nil
+		return nil, fmt.Errorf("cannot determine a valid endpoint %s", e)
 	}
 
 	portNum, err := strconv.Atoi(port)
@@ -224,5 +239,5 @@ func constructEndpointFromAddress(ctx context.Context, e string) *ApiEndPoint {
 		MgmtPort:   portNum,
 		lastActive: time.Now(),
 	}
-	return endPoint
+	return endPoint, nil
 }

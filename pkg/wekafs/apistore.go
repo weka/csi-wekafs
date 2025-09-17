@@ -65,9 +65,9 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 	if endpointsRaw == "" {
 		return nil, status.Errorf(codes.NotFound, "no valid endpoints defined in secret, cannot create API client")
 	}
-	endpoints, err := getEndpointsFromRaw(endpointsRaw)
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "invalid endpoints defined in secret: %v", err)
+	var endpoints []string
+	for _, s := range strings.Split(endpointsRaw, ",") {
+		endpoints = append(endpoints, trimValue(s))
 	}
 
 	var nfsTargetIps []string
