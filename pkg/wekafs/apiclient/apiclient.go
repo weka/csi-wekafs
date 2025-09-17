@@ -104,8 +104,8 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 		apiEndpoints:       NewApiEndPoints(),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
-	a.resetDefaultEndpoints(ctx)
-	if len(a.Credentials.Endpoints) < 1 {
+	err := a.resetDefaultEndpoints(ctx)
+	if err != nil || len(a.Credentials.Endpoints) < 1 {
 		return nil, &ApiNoEndpointsError{
 			Err: errors.New("no endpoints could be found for API client"),
 		}
