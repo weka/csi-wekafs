@@ -21,7 +21,7 @@ type ApiError struct {
 }
 
 func (e ApiError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %s, json: %s",
 		e.getType(), e.Text, e.StatusCode, e.Err, func() string {
 			if e.RawData != nil {
 				return string(*e.RawData)
@@ -68,7 +68,7 @@ func (e ApiAuthorizationError) getType() string {
 	return "ApiAuthorizationError"
 }
 func (e ApiAuthorizationError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
 		e.StatusCode,
@@ -88,7 +88,7 @@ func (e ApiBadRequestError) getType() string {
 	return "ApiBadRequestError"
 }
 func (e ApiBadRequestError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
 		e.StatusCode,
@@ -120,7 +120,7 @@ func (e ApiConflictError) Error() string {
 type ApiInternalError ApiError
 
 func (e ApiInternalError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
 		e.StatusCode,
@@ -146,7 +146,7 @@ func (e ApiInternalError) getType() string {
 type ApiNotAvailableError ApiError
 
 func (e ApiNotAvailableError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
 		e.StatusCode,
@@ -173,7 +173,7 @@ func (e ApiNotAvailableError) getType() string {
 type ApiNotFoundError ApiError
 
 func (e ApiNotFoundError) Error() string {
-	return fmt.Sprintf("%s: %s, status code: %d, original error: %e, raw response: %s, json: %s",
+	return fmt.Sprintf("%s: %s, status code: %d, original error: %v, raw response: %s, json: %s",
 		e.getType(),
 		e.Text,
 		e.StatusCode,
@@ -228,4 +228,16 @@ func (e transportError) Error() string {
 
 func (e transportError) getType() string {
 	return "transportError"
+}
+
+type ApiResponseNextPage struct {
+	NextPageToken string
+}
+
+func (a ApiResponseNextPage) Error() string {
+	return ""
+}
+
+func (a ApiResponseNextPage) getType() string {
+	return a.NextPageToken
 }

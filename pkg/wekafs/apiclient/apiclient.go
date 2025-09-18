@@ -6,10 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"hash/fnv"
-	"k8s.io/helm/pkg/urlutil"
 	"math/rand"
 	"net"
 	"net/http"
@@ -17,6 +13,12 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"k8s.io/helm/pkg/urlutil"
 )
 
 type ApiUserRole string
@@ -31,38 +33,50 @@ type ApiUserRole string
 // Timeout sets max request timeout duration
 type ApiClient struct {
 	sync.Mutex
-	client                     *http.Client
-	Credentials                Credentials
-	ClusterGuid                uuid.UUID
-	ClusterName                string
-	MountEndpoints             []string
-	actualApiEndpoints         map[string]*ApiEndPoint
-	currentEndpoint            string
-	apiToken                   string
-	apiTokenExpiryDate         time.Time
-	refreshToken               string
-	apiTokenExpiryInterval     int64
-	refreshTokenExpiryInterval int64
-	refreshTokenExpiryDate     time.Time
-	CompatibilityMap           *WekaCompatibilityMap
-	clientHash                 uint32
-	hostname                   string
-	NfsInterfaceGroups         map[string]*InterfaceGroup
-	ApiUserRole                ApiUserRole
-	ApiOrgId                   int
-	containerName              string
-	NfsInterfaceGroupName      string
-	NfsClientGroupName         string
+	client                      *http.Client
+	Credentials                 Credentials
+	ClusterGuid                 uuid.UUID
+	ClusterName                 string
+	MountEndpoints              []string
+	apiEndpoints                *ApiEndPoints
+	apiToken                    string
+	apiTokenExpiryDate          time.Time
+	refreshToken                string
+	apiTokenExpiryInterval      int64
+	refreshTokenExpiryInterval  int64
+	refreshTokenExpiryDate      time.Time
+	CompatibilityMap            *WekaCompatibilityMap
+	clientHash                  uint32
+	hostname                    string
+	NfsInterfaceGroups          map[string]*InterfaceGroup
+	ApiUserRole                 ApiUserRole
+	ApiOrgId                    int
+	containerName               string
+	NfsInterfaceGroupName       string
+	NfsClientGroupName          string
+	metrics                     *ApiMetrics
+	driverName                  string
+	RotateEndpointOnEachRequest bool // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
 
 	containers           *ContainersResponse
 	containersUpdateTime time.Time
 	containersLock       sync.RWMutex
+
+	fsCache   map[string]*fsCacheEntry
+	fsCacheMu sync.RWMutex
 }
 
-func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
+type ApiClientOptions struct {
+	AllowInsecureHttps bool
+	Hostname           string
+	DriverName         string
+	ApiTimeout         time.Duration
+}
+
+func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOptions) (*ApiClient, error) {
 	logger := log.Ctx(ctx)
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: opts.AllowInsecureHttps},
 	}
 	useCustomCACert := credentials.CaCertificate != ""
 	if useCustomCACert {
@@ -82,24 +96,23 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
-			Timeout:       ApiHttpTimeOutSeconds * time.Second,
+			Timeout:       opts.ApiTimeout,
 		},
 		ClusterGuid:        uuid.UUID{},
 		Credentials:        credentials,
 		CompatibilityMap:   &WekaCompatibilityMap{},
-		hostname:           hostname,
-		actualApiEndpoints: make(map[string]*ApiEndPoint),
+		hostname:           opts.Hostname,
+		apiEndpoints:       NewApiEndPoints(),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
-	a.resetDefaultEndpoints(ctx)
-	if len(a.Credentials.Endpoints) < 1 {
+	err := a.resetDefaultEndpoints(ctx)
+	if err != nil || len(a.Credentials.Endpoints) < 1 {
 		return nil, &ApiNoEndpointsError{
-			Err: errors.New("no endpoints could be found for API client"),
+			Err: status.Errorf(codes.Unavailable, "No endpoints available %v", err),
 		}
 	}
 
-	logger.Trace().Bool("insecure_skip_verify", allowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
-	a.clientHash = a.generateHash()
+	logger.Trace().Bool("insecure_skip_verify", opts.AllowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
 	return a, nil
 }
 
@@ -160,32 +173,13 @@ func (a *ApiClient) getUrl(ctx context.Context, path string) string {
 	return u
 }
 
-// generateHash used for storing multiple clients in hash table. Hash() is created once as connection params might change
-func (a *ApiClient) generateHash() uint32 {
-	h := fnv.New32a()
-	s := fmt.Sprintln(
-		a.Credentials.Username,
-		a.Credentials.Password,
-		a.Credentials.Organization,
-		a.Credentials.Endpoints,
-		a.Credentials.NfsTargetIPs,
-		a.Credentials.LocalContainerName,
-		a.Credentials.CaCertificate,
-	)
-	_, _ = h.Write([]byte(s))
-	return h.Sum32()
-}
-
-// Hash returns the client hash as it was generated once client was initialized
-func (a *ApiClient) Hash() uint32 {
-	return a.clientHash
-}
-
 // retryBackoff performs operation and retries on transient failures. Does not retry on ApiNonTransientError
 func (a *ApiClient) retryBackoff(ctx context.Context, attempts int, sleep time.Duration, f func() apiError) error {
 	maxAttempts := attempts
 	if err := f(); err != nil {
 		switch s := err.(type) {
+		case ApiResponseNextPage:
+			return s // This is not an error, just a signal to continue with the next page
 		case ApiNonTransientError:
 			log.Ctx(ctx).Trace().Msg("Non-transient error returned from API, stopping further attempts")
 			// Return the original error for later checking

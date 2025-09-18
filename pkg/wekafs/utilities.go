@@ -8,25 +8,21 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"golang.org/x/exp/constraints"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
-	"time"
-)
-
-const (
-	SnapshotTypeUnifiedSnap = "wekasnap/v2"
-	ProcModulesPath         = "/proc/modules"
-	ProcWekafsInterface     = "/proc/wekafs/interface"
 )
 
 var ProcMountsPath = "/proc/mounts"
@@ -258,6 +254,7 @@ func sliceInnerPathFromSnapshotId(snapshotId string) string {
 	return "/" + strings.Join(slices[3:], "/")
 }
 
+// PathExists checks if the given path exists and is a directory. If the path is a file, it will panic with an error message.
 func PathExists(p string) bool {
 	file, err := os.Open(p)
 	if err != nil {
@@ -276,6 +273,8 @@ func PathExists(p string) bool {
 	return true
 }
 
+// fileExists checks if the given path exists and is a file. If the path is a directory, it will panic with an error message.
+// other special types of files (like symlinks, pipes etc.) are considered as a file
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	if err == nil {
@@ -284,11 +283,18 @@ func fileExists(filename string) bool {
 	if os.IsNotExist(err) {
 		return false
 	}
+	fi, err := os.Stat(filename)
+	if err != nil {
+		return false
+	}
+	if fi.IsDir() {
+		Die("A directory was found instead of file in mount point. Please contact support")
+	}
 	return false
 }
 
-//goland:noinspection GoUnusedParameter
-func PathIsWekaMount(ctx context.Context, path string) bool {
+// PathIsWekaMount returns true if path is a mountpoint for either wekafs or nfs
+func PathIsWekaMount(path string) bool {
 	file, err := os.Open("/proc/mounts")
 	if err != nil {
 		return false
@@ -301,7 +307,6 @@ func PathIsWekaMount(ctx context.Context, path string) bool {
 		if len(fields) >= 3 && fields[2] == "wekafs" && fields[1] == path {
 			return true
 		}
-		// TODO: better protect against false positives
 		if len(fields) >= 3 && strings.HasPrefix(fields[2], "nfs") && fields[1] == path {
 			return true
 		}
@@ -322,7 +327,7 @@ func GetMountIpFromActualMountPoint(mountPointBase string) (string, error) {
 		fields := strings.Fields(scanner.Text())
 		if len(fields) >= 3 && strings.HasPrefix(fields[1], fmt.Sprintf("%s-", mountPointBase)) {
 			actualMountPoint = fields[1]
-			return strings.TrimLeft(actualMountPoint, mountPointBase+"-"), nil
+			return strings.TrimLeft(actualMountPoint, string(mountPointBase+"-")), nil
 		}
 	}
 	return "", errors.New("mount point not found")
@@ -405,10 +410,10 @@ func validateVolumeId(volumeId string) error {
 		if re.MatchString(volumeId) {
 			return nil
 		} else {
-			return errors.New(fmt.Sprintln("Volume ID does not match regex:", r, volumeId))
+			return status.Errorf(codes.InvalidArgument, "volume ID %s does not match regex: %s", r, volumeId)
 		}
 	}
-	return status.Errorf(codes.InvalidArgument, fmt.Sprintf("unsupported volumeId %s for type %s", volumeId, volumeType))
+	return status.Errorf(codes.InvalidArgument, "unsupported volumeId %s for type %s", volumeId, volumeType)
 }
 
 func validateSnapshotId(snapshotId string) error {
@@ -452,27 +457,6 @@ func validateSnapshotId(snapshotId string) error {
 	} else {
 		return errors.New(fmt.Sprintln("Snapshot ID does not match regex:", r, snapshotId))
 	}
-}
-
-func updateXattrs(volPath string, attrs map[string][]byte) error {
-	for key, val := range attrs {
-		if err := xattr.Set(volPath, key, val); err != nil {
-			return status.Errorf(codes.Internal, "failed to update volume attribute %s: %s, %s", key, val, err.Error())
-		}
-	}
-	return nil
-}
-
-func setVolumeProperties(volPath string, capacity int64, volName string) error {
-	// assumes that volPath is already mounted and accessible
-	xattrs := make(map[string][]byte)
-	if volName != "" {
-		xattrs[xattrVolumeName] = []byte(volName)
-	}
-	if capacity > 0 {
-		xattrs[xattrCapacity] = []byte(fmt.Sprint(capacity))
-	}
-	return updateXattrs(volPath, xattrs)
 }
 
 func pathIsDirectory(filename string) error {
@@ -582,26 +566,102 @@ func isWekaRunning() bool {
 
 func getSelinuxStatus(ctx context.Context) bool {
 	logger := log.Ctx(ctx)
-	// check if we have /etc/selinux/config
-	// if it exists, we can check if selinux is enforced or not
-	selinuxConf := "/etc/selinux/config"
-	file, err := os.Open(selinuxConf)
+	data, err := os.ReadFile("/sys/fs/selinux/enforce")
 	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		logger.Error().Err(err).Msg("Error reading SELinux status")
 		return false
 	}
-	defer func() { _ = file.Close() }()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "SELINUX=enforcing") {
-			// no need to repeat each time, just set the selinuxSupport to true
-			return true
+	mode := strings.TrimSpace(string(data))
+	switch mode {
+	case "1":
+		return true
+	case "0":
+		return true
+	default:
+		return false
+	}
+}
+
+func getDataTransportFromMountPath(mountPoint string) DataTransport {
+	if strings.HasPrefix(mountPoint, path.Join(MountBasePath, string(dataTransportNfs))) {
+		return dataTransportWekafs
+	}
+	if strings.HasPrefix(mountPoint, path.Join(MountBasePath, string(dataTransportWekafs))) {
+		return dataTransportWekafs
+	}
+	// just default
+	return dataTransportWekafs
+}
+
+// Die used to intentionally panic and exit, while updating termination log
+func Die(exitMsg string) {
+	_ = os.WriteFile("/dev/termination-log", []byte(exitMsg), 0644)
+	panic(exitMsg)
+}
+
+func GetCsiPluginMode(mode *string) CsiPluginMode {
+	ret := CsiPluginMode(*mode)
+	switch ret {
+	case CsiModeNode,
+		CsiModeController,
+		CsiModeAll,
+		CsiModeMetricsServer:
+		return ret
+	default:
+		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
+		return ""
+	}
+}
+
+// hashString is a simple hash function that takes a string and returns a hash value in the range [0, n)
+func hashString(s string, n int) int {
+	if n == 0 {
+		return 0
+	}
+
+	// Create a new FNV-1a hash
+	h := fnv.New32a()
+
+	// Write the string to the hash
+	_, _ = h.Write([]byte(s))
+
+	// Get the hash sum as a uint32
+	hashValue := h.Sum32()
+
+	// Return the hash value in the range of [0, n)
+	return int(hashValue % uint32(n))
+}
+
+func getOwnNamespace() (string, error) {
+	file := "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	// Check if the file exists
+	if _, err := os.Stat(file); err != nil {
+		if os.IsNotExist(err) {
+			// If the file does not exist, return a default namespace
+			if os.Getenv("LEADER_ELECTION_NAMESPACE") != "" {
+				return os.Getenv("LEADER_ELECTION_NAMESPACE"), nil
+			}
 		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
+	// read namespace from file
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to read namespace from %s: %w", file, err)
 	}
-	return false
+	namespace := strings.TrimSpace(string(data))
+	if namespace != "" {
+		return namespace, nil
+	}
+
+	return "", errors.New("namespace not found or not set in environment variable LEADER_ELECTION_NAMESPACE")
+	// Get the namespace from the environment variable
+}
+
+// trimValue trims whitespace and trailing newlines from secret values
+func trimValue(value string) string {
+	return strings.TrimSpace(strings.TrimSuffix(value, "\n"))
 }

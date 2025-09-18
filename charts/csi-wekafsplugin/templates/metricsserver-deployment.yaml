@@ -1,0 +1,135 @@
+{{- if .Values.metricsServer.enabled }}
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ .Release.Name }}-metrics-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-metrics-server
+    component: {{ .Release.Name }}-metrics-server
+    release: {{ .Release.Name }}
+    {{- if .Values.metricsServer.labels }}
+    {{- toYaml .Values.metricsServer.labels | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-metrics-server
+      component: {{ .Release.Name }}-metrics-server
+      release: {{ .Release.Name }}
+  replicas: {{ .Values.metricsServer.replicas | default 1 }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-metrics-server
+        component: {{ .Release.Name }}-metrics-server
+        release: {{ .Release.Name }}
+        {{- if .Values.metricsServer.podLabels }}
+        {{- toYaml .Values.metricsServer.podLabels | nindent 8 }}
+        {{- end }}
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/metrics'
+        prometheus.io/port: '{{.Values.metrics.metricsServerPort | default 9096}}'
+    spec:
+      {{- if or .Values.metricsServer.affinity .Values.affinity }}
+      {{- $metricsServerAffinity := dict  -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $metricsServerAffinity .Values.metricsServer.affinity .Values.affinity) }}
+      affinity:
+        {{- toYaml $metricsServerAffinity | nindent 8}}
+      {{- end }}
+      {{- if or .Values.nodeSelector .Values.metricsServer.nodeSelector}}
+      {{- $nodeSelector := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeSelector .Values.metricsServer.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml $nodeSelector | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ .Release.Name }}-metrics-server
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      containers:
+        - name: metrics-server
+          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
+          imagePullPolicy: Always
+          args:
+            - "--drivername=$(CSI_DRIVER_NAME)"
+            - "--nodeid=$(KUBE_NODE_NAME)"
+            - "--v={{ .Values.metricsServer.logLevel | default .Values.logLevel }}"
+            - "--csimode=$(X_CSI_MODE)"
+          {{- if .Values.tracingUrl }}
+            - "--tracingurl={{ .Values.tracingUrl }}"
+          {{- end }}
+          {{- if .Values.metricsServer.enabled }}
+            - "--enablemetrics"
+            - "--metricsport={{ .Values.metrics.metricsServerPort | default 9096 }}"
+          {{- end }}
+          {{- if .Values.pluginConfig.allowInsecureHttps }}
+            - "--allowinsecurehttps"
+          {{- end }}
+          {{- if .Values.useJsonLogging }}
+            - "--usejsonlogging"
+          {{- end }}
+          {{- if .Values.metricsServer.maxConcurrentRequests | default 10 }}
+            - "--wekametricsfetchconcurrentrequests={{ .Values.metricsServer.maxConcurrentRequests }}"
+          {{- end }}
+          {{- if .Values.metricsServer.metricsFetchIntervalSeconds | default 60 }}
+            - "--wekametricsfetchintervalseconds={{ .Values.metricsServer.metricsFetchIntervalSeconds }}"
+          {{- end }}
+          {{- if .Values.metricsServer.enableLeaderElection | default false }}
+            - "--enablemetricsserverleaderelection"
+          {{- end }}
+          {{- if .Values.metricsServer.quotaUpdateConcurrentRequests }}
+            - "--wekametricsquotaupdateconcurrentrequests={{ .Values.metricsServer.quotaUpdateConcurrentRequests }}"
+          {{- end }}
+          {{- if .Values.metricsServer.quotaCacheValiditySeconds }}
+            - "--wekametricsquotacachevalidityseconds={{ .Values.metricsServer.quotaCacheValiditySeconds }}"
+          {{- end }}
+          {{- if .Values.metricsServer.apiClientTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.metricsServer.apiClientTimeoutSeconds }}"
+          {{- end }}
+          {{- if .Values.metricsServer.enableBatchModeForQuotaUpdates | default false }}
+            - "--fetchquotasinbatchmode"
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
+              name: ms-metrics
+              protocol: TCP
+            - containerPort: {{ .Values.readinessProbe.metricsServerPort | default 9196 }}
+              name: ms-healthz
+              protocol: TCP
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: ms-healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 2
+          env:
+            - name: CSI_DRIVER_NAME
+              value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
+            - name: X_CSI_MODE
+              value: metricsserver
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBE_NODE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: READINESS_PORT
+              value: "{{ .Values.readinessProbe.metricsServerPort | default 9196 }}"
+            {{- if .Values.tracingDeploymentIdentifier }}
+            - name: OTEL_DEPLOYMENT_IDENTIFIER
+              value: {{ .Values.tracingDeploymentIdentifier }}
+            {{- end }}
+      {{- with .Values.metricsServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      resources:
+        {{- toYaml .Values.metricsServer.resources | nindent 8}}
+      terminationGracePeriodSeconds: {{ .Values.metricsServer.terminationGracePeriodSeconds | default 30 }}
+{{- end }}

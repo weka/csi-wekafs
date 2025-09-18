@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"k8s.io/helm/pkg/urlutil"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -50,9 +51,60 @@ type FileSystem struct {
 	ForceFresh *bool `json:"-" url:"force_fresh,omitempty"`
 }
 
+type fsCacheEntry struct {
+	fs        *FileSystem
+	timestamp time.Time
+	cacheHits int
+}
+
+func (fs *FileSystem) SupportsPagination() bool {
+	return false
+}
+
+func (fs *FileSystem) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
+}
+
+func (fs *FileSystem) GetFsIdAsInt() int {
+	// takes the Id in string format "FSId<0>" and extracts the number from it
+	if fs.Id == "" {
+		return -1
+	}
+	idStr := strings.TrimPrefix(fs.Id, "FSId<")
+	idStr = strings.TrimSuffix(idStr, ">")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Error().Err(err).Str("id", fs.Id).Msg("Failed to convert filesystem Id to int")
+		return -1
+	}
+	return id
+}
+
+type FileSystems []FileSystem
+
+func (f *FileSystems) SupportsPagination() bool {
+	return true
+}
+
+func (f *FileSystems) CombinePartialResponse(next ApiObjectResponse) error {
+	if nextFs, ok := next.(*FileSystems); ok {
+		*f = append(*f, *nextFs...)
+		return nil
+	}
+	return fmt.Errorf("invalid partial response type: %T", next)
+}
+
 type FileSystemMountToken struct {
 	Token          string `json:"mount_token,omitempty"`
 	FilesystemName string `json:"filesystem_name,omitempty"`
+}
+
+func (f *FileSystemMountToken) SupportsPagination() bool {
+	return false
+}
+
+func (f *FileSystemMountToken) CombinePartialResponse(next ApiObjectResponse) error {
+	panic("not implemented")
 }
 
 var AsyncOperationTimedOut = errors.New("Asynchronous operation timed out")
@@ -88,14 +140,13 @@ func (a *ApiClient) GetFileSystemByUid(ctx context.Context, uid uuid.UUID, fs *F
 }
 
 // FindFileSystemsByFilter returns result set of 0-many objects matching filter
-func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSystem, resultSet *[]FileSystem) error {
+func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSystem, resultSet *FileSystems) error {
 	op := "FindFileSystemsByFilter"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	ret := &[]FileSystem{}
-	q, _ := qs.Values(query)
-	err := a.Get(ctx, query.GetBasePath(a), q, ret)
+	ret := &FileSystems{}
+	err := a.Get(ctx, query.GetBasePath(a), nil, ret)
 	if err != nil {
 		return err
 	}
@@ -109,7 +160,7 @@ func (a *ApiClient) FindFileSystemsByFilter(ctx context.Context, query *FileSyst
 
 // GetFileSystemByFilter expected to return exactly one result of FindFileSystemsByFilter (error)
 func (a *ApiClient) GetFileSystemByFilter(ctx context.Context, query *FileSystem) (*FileSystem, error) {
-	rs := &[]FileSystem{}
+	rs := &FileSystems{}
 	err := a.FindFileSystemsByFilter(ctx, query, rs)
 	if err != nil {
 		return &FileSystem{}, err
@@ -127,6 +178,49 @@ func (a *ApiClient) GetFileSystemByFilter(ctx context.Context, query *FileSystem
 func (a *ApiClient) GetFileSystemByName(ctx context.Context, name string) (*FileSystem, error) {
 	query := &FileSystem{Name: name}
 	return a.GetFileSystemByFilter(ctx, query)
+}
+
+// CachedGetFileSystemByName returns a cached filesystem object by name. if the object is not found in the cache or the cache is stale, it fetches the filesystem list and updates the cache.
+func (a *ApiClient) CachedGetFileSystemByName(ctx context.Context, name string, acceptedTtl time.Duration) (*FileSystem, error) {
+	if a.fsCache == nil {
+		a.fsCacheMu.Lock()
+		a.fsCache = make(map[string]*fsCacheEntry)
+		a.fsCacheMu.Unlock()
+	}
+	a.fsCacheMu.RLock()
+	entry, found := a.fsCache[name]
+	a.fsCacheMu.RUnlock()
+	if found && time.Since(entry.timestamp) < acceptedTtl {
+		entry.cacheHits++
+		return entry.fs, nil
+	}
+	a.fsCacheMu.Lock()
+	defer a.fsCacheMu.Unlock()
+
+	fsList := &FileSystems{}
+	err := a.FindFileSystemsByFilter(ctx, &FileSystem{}, fsList)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, fs := range *fsList {
+		a.fsCache[fs.Name] = &fsCacheEntry{fs: &fs, timestamp: time.Now(), cacheHits: 0}
+	}
+
+	entry, found = a.fsCache[name]
+	if found {
+		entry.cacheHits++ // increment cache hit count
+		return entry.fs, nil
+	}
+
+	fs, err := a.GetFileSystemByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	// Update the cache with the new filesystem object
+	a.fsCache[name] = &fsCacheEntry{fs: fs, timestamp: time.Now()}
+
+	return fs, nil
 }
 
 func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateRequest, fs *FileSystem) error {
@@ -157,7 +251,7 @@ func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateReq
 }
 
 func (a *ApiClient) WaitFilesystemReady(ctx context.Context, fsName string, waitPeriodMax time.Duration) (*FileSystem, error) {
-	logger := log.Ctx(ctx).With().Str("filesysem", fsName).Logger()
+	logger := log.Ctx(ctx).With().Str("filesystem", fsName).Logger()
 	for start := time.Now(); time.Since(start) < waitPeriodMax; {
 		fs, err := a.GetFileSystemByName(ctx, fsName)
 		if err != nil || fs == nil {
@@ -227,7 +321,7 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsName string) error {
 	logger := log.Ctx(ctx)
 	logger.Trace().Str("filesystem", fsName).Msg("Ensuring no NFS permissions for filesystem")
-	permissions := &[]NfsPermission{}
+	permissions := &NfsPermissions{}
 	err := a.FindNfsPermissionsByFilesystem(ctx, fsName, permissions)
 	if err != nil {
 		logger.Error().Err(err).Str("filesystem", fsName).Msg("Failed to list NFS permissions")
@@ -236,9 +330,15 @@ func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsN
 		logger.Debug().Int("permissions", len(*permissions)).Str("filesystem", fsName).Msg("Found stale NFS permissions, deleting")
 	}
 	for _, p := range *permissions {
-		err = a.DeleteNfsPermission(ctx, &NfsPermissionDeleteRequest{Uid: p.Uid})
+		for i := 0; i < 5; i++ {
+			err = a.DeleteNfsPermission(ctx, &NfsPermissionDeleteRequest{Uid: p.Uid})
+			if err == nil {
+				break
+			}
+			time.Sleep(time.Second)
+		}
 		if err != nil {
-			logger.Error().Err(err).Str("permission", p.Uid.String()).Str("filesystem", p.Filesystem).Str("client_group", p.Group).Msg("Failed to delete NFS permission")
+			logger.Error().Err(err).Str("permission", p.Uid.String()).Str("filesystem", p.Filesystem).Str("client_group", p.Group).Msg("Failed to delete NFS permission after 5 attempts")
 			return err
 		}
 	}

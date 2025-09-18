@@ -7,28 +7,6 @@ import (
 	"strings"
 )
 
-const (
-	selinuxContextWekaFs     = "wekafs_csi_volume_t"
-	selinuxContextNfs        = "nfs_t"
-	MountOptionSyncOnClose   = "sync_on_close"
-	MountOptionReadOnly      = "ro"
-	MountOptionWriteCache    = "writecache"
-	MountOptionCoherent      = "coherent"
-	MountOptionForceDirect   = "forcedirect"
-	MountOptionContainerName = "container_name"
-	MountOptionAcl           = "acl"
-	MountOptionNfsAsync      = "async"
-	MountOptionNfsSync       = "async"
-	MountOptionNfsHard       = "hard"
-	MountOptionNfsNoac       = "noac"
-	MountOptionNfsAc         = "ac"
-	MountOptionNfsRdirPlus   = "rdirplus"
-	MountOptionReadCache     = "readcache"
-	MountProtocolWekafs      = "wekafs"
-	MountProtocolNfs         = "nfs"
-	DefaultNfsMountOptions   = MountOptionNfsHard + "," + MountOptionNfsAsync + "," + MountOptionNfsRdirPlus
-)
-
 type mountOption struct {
 	option string
 	value  string

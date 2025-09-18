@@ -113,23 +113,15 @@ spec:
           {{- if .Values.pluginConfig.manageNodeTopologyLabels }}
             - "--managenodetopologylabels"
           {{- end }}
+          {{- if .Values.pluginConfig.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.pluginConfig.apiTimeoutSeconds }}"
+          {{- end }}
           ports:
-            - containerPort: 9899
-              name: healthz
-              protocol: TCP
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.nodePort }}
-              name: metrics
+              name: ns-metrics
               protocol: TCP
           {{- end }}
-          livenessProbe:
-            failureThreshold: 5
-            httpGet:
-              path: /healthz
-              port: healthz
-            initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 2
           env:
             - name: CSI_DRIVER_NAME
               value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
@@ -164,16 +156,24 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
-{{- if .Values.legacyVolumeSecretName }}
-            - mountPath: /legacy-volume-access
-              name: legacy-volume-access
-              readOnly: true
-{{- end }}
             {{- if or (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") (eq .Values.selinuxSupport "enforced") }}
             - mountPath: /etc/selinux/config
               name: selinux-config
+            - mountPath: /sys/fs/selinux
+              name: selinux-fs
             {{- end }}
         - name: liveness-probe
+          ports:
+            - containerPort: {{ .Values.readinessProbe.nodeServerPort | default 9191 }}
+              name: ns-healthz
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              port: ns-healthz
+              path: /healthz
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
@@ -186,7 +186,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
-              value: "9899"
+              value: "{{ .Values.readinessProbe.nodeServerPort | default 9191 }}"
 
         - name: csi-registrar
           image: {{ required "Provide the csi node registrar sidecar container image." .Values.images.registrarsidecar }}
@@ -195,13 +195,13 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
             - "--timeout=60s"
-            - "--health-port=9809"
+            - "--health-port={{ .Values.readinessProbe.registrarPort }}"
           ports:
-            - containerPort: 9809
-              name: healthz
+            - containerPort: {{ .Values.readinessProbe.registrarPort }}
+              name: reg-healthz
           livenessProbe:
             httpGet:
-              port: healthz
+              port: reg-healthz
               path: /healthz
             initialDelaySeconds: 5
             timeoutSeconds: 5
@@ -258,9 +258,8 @@ spec:
             path: /etc/selinux/config
             type: File
           name: selinux-config
+        - hostPath:
+            path: /sys/fs/selinux
+            type: Directory
+          name: selinux-fs
       {{- end }}
-{{- if .Values.legacyVolumeSecretName }}
-        - name: legacy-volume-access
-          secret:
-            secretName: {{ .Values.legacyVolumeSecretName }}
-{{- end }}

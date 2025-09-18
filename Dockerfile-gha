@@ -1,0 +1,32 @@
+#syntax=docker/dockerfile:1.17
+ARG UBI_HASH=9.6-1754584681
+FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS base
+
+LABEL maintainers="WekaIO, LTD"
+LABEL description="Weka CSI Driver"
+LABEL maintainer="csi@weka.io"
+LABEL name="WEKA CSI Plugin"
+LABEL vendor="weka.io"
+LABEL summary="This image is used by WEKA CSI Plugin and incorporates both Controller and Node modules"
+LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data platform for AI"
+LABEL url="https://www.weka.io"
+
+EXPOSE 2049 111/tcp 111/udp
+ENTRYPOINT ["/wekafsplugin"]
+
+RUN microdnf install -y util-linux libselinux-utils pciutils binutils jq procps less container-selinux
+RUN microdnf clean all && rm -rf /var/cache/dnf
+
+FROM base
+
+ARG TARGETARCH
+ARG TARGETOS
+ARG LOCAR_VERSION=0.4.3
+
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
+RUN curl -sSL -o /locar https://github.com/weka/locar/releases/download/${LOCAR_VERSION}/locar-${LOCAR_VERSION}-${TARGETOS}-${TARGETARCH} && \
+    chmod 655 /locar
+COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/wekafsplugin /wekafsplugin
+COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/metricsserver /metricsserver
+

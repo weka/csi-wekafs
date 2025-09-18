@@ -20,6 +20,7 @@ import (
 	"context"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	"sync"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -35,13 +36,47 @@ type identityServer struct {
 	config  *DriverConfig
 }
 
+func (ids *identityServer) getMounter() AnyMounter {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getApiStore() *ApiStore {
+	panic("not implemented")
+}
+
+func (ids *identityServer) isInDevMode() bool {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getDefaultMountOptions() MountOptions {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getNodeId() string {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getBackgroundTasksWg() *sync.WaitGroup {
+	panic("not implemented")
+}
+
 //goland:noinspection GoExportedFuncWithUnexportedType
-func NewIdentityServer(name, version string, config *DriverConfig) *identityServer {
-	return &identityServer{
-		name:    name,
-		version: version,
-		config:  config,
+func NewIdentityServer(driver *WekaFsDriver) *identityServer {
+	if driver == nil {
+		panic("Driver is nil")
 	}
+	return &identityServer{
+		name:    driver.name,
+		version: driver.version,
+		config:  driver.config,
+	}
+}
+
+func (ids *identityServer) GetConfig() *DriverConfig {
+	if ids.config == nil {
+		panic("DriverConfig is nil")
+	}
+	return ids.config
 }
 
 //goland:noinspection GoUnusedParameter
@@ -82,26 +117,43 @@ func (ids *identityServer) getConfig() *DriverConfig {
 //goland:noinspection GoUnusedParameter
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	logger := log.Ctx(ctx)
-	isReady := ids.getConfig().isInDevMode() || isWekaRunning()
-	if !isReady {
-		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
-			isReady = true
-		}
+	config := ids.getConfig()
+	driver := config.GetDriver()
+	mounters := driver.mounters
+
+	nfsReady := config.useNfs || config.allowNfsFailback
+	// weka is ready if we are in dev mode or weka is running AND NFS is not forced
+	wekafsReady := isWekaRunning() && !config.useNfs
+
+	if nfsReady {
+		mounters.nfs.Enable()
+	} else {
+		mounters.nfs.Disable()
 	}
+
+	if wekafsReady {
+		mounters.wekafs.Enable()
+	} else {
+		mounters.wekafs.Disable()
+	}
+
+	serverReady := nfsReady || wekafsReady
+
 	// manage node topology labels only if set by configuration
 	if ids.config.manageNodeTopologyLabels {
-		if !isReady {
+		if !serverReady {
 			logger.Error().Msg("Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
 			if ids.config.driverRef.csiMode == CsiModeNode || ids.config.driverRef.csiMode == CsiModeAll {
 				ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
 			}
-		} else if !ids.getConfig().isInDevMode() {
+		} else {
 			ids.getConfig().GetDriver().SetNodeLabels(ctx)
 		}
 	}
+
 	return &csi.ProbeResponse{
 		Ready: &wrapperspb.BoolValue{
-			Value: isReady,
+			Value: serverReady,
 		},
 	}, nil
 }

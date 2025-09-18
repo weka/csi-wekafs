@@ -147,9 +147,6 @@
         "kubeletPath": {
             "type": "string"
         },
-        "legacyVolumeSecretName": {
-            "type": "string"
-        },
         "logLevel": {
             "type": "integer"
         },
@@ -171,6 +168,9 @@
                 "enabled": {
                     "type": "boolean"
                 },
+                "metricsServerPort": {
+                    "type": "integer"
+                },
                 "nodePort": {
                     "type": "integer"
                 },
@@ -182,6 +182,89 @@
                 },
                 "snapshotterPort": {
                     "type": "integer"
+                }
+            }
+        },
+        "metricsServer": {
+            "type": "object",
+            "properties": {
+                "affinity": {
+                    "type": "object"
+                },
+                "apiClientTimeoutSeconds": {
+                    "type": "integer"
+                },
+                "enableBatchModeForQuotaUpdates": {
+                    "type": "boolean"
+                },
+                "enableLeaderElection": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "labels": {
+                    "type": "object"
+                },
+                "logLevel": {
+                    "type": "integer"
+                },
+                "maxConcurrentRequests": {
+                    "type": "integer"
+                },
+                "metricsFetchIntervalSeconds": {
+                    "type": "integer"
+                },
+                "nodeSelector": {
+                    "type": "object"
+                },
+                "podLabels": {
+                    "type": "object"
+                },
+                "quotaCacheValiditySeconds": {
+                    "type": "integer"
+                },
+                "quotaUpdateConcurrentRequests": {
+                    "type": "integer"
+                },
+                "replicas": {
+                    "type": "integer"
+                },
+                "resources": {
+                    "type": "object",
+                    "properties": {
+                        "requests": {
+                            "type": "object",
+                            "properties": {
+                                "cpu": {
+                                    "type": "integer"
+                                },
+                                "memory": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                },
+                "terminationGracePeriodSeconds": {
+                    "type": "integer"
+                },
+                "tolerations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "effect": {
+                                "type": "string"
+                            },
+                            "key": {
+                                "type": "string"
+                            },
+                            "operator": {
+                                "type": "string"
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -251,6 +334,9 @@
                 "allowedOperations": {
                     "type": "object",
                     "properties": {
+                        "allowAsyncObjectDeletion": {
+                            "type": "boolean"
+                        },
                         "autoCreateFilesystems": {
                             "type": "boolean"
                         },
@@ -264,6 +350,9 @@
                             "type": "boolean"
                         }
                     }
+                },
+                "apiTimeoutSeconds": {
+                    "type": "integer"
                 },
                 "encryption": {
                     "type": "object",
@@ -321,14 +410,28 @@
                 },
                 "skipGarbageCollection": {
                     "type": "boolean"
-                },
-                "waitForObjectDeletion": {
-                    "type": "boolean"
                 }
             }
         },
         "priorityClassName": {
             "type": "string"
+        },
+        "readinessProbe": {
+            "type": "object",
+            "properties": {
+                "controllerServerPort": {
+                    "type": "integer"
+                },
+                "metricsServerPort": {
+                    "type": "integer"
+                },
+                "nodeServerPort": {
+                    "type": "integer"
+                },
+                "registrarPort": {
+                    "type": "integer"
+                }
+            }
         },
         "selinuxNodeLabel": {
             "type": "string"

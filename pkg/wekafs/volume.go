@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -15,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 	"io"
 	"io/fs"
+	v1 "k8s.io/api/core/v1"
 	"math"
 	"os"
 	"path/filepath"
@@ -22,18 +22,6 @@ import (
 	"syscall"
 	"time"
 )
-
-const (
-	MaxHashLengthForObjectNames = 12
-	SnapshotsSubDirectory       = ".snapshots"
-)
-
-var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
-var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
-var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
-var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
-
-var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
 
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)
 type Volume struct {
@@ -52,9 +40,14 @@ type Volume struct {
 	enforceCapacity       bool
 	initialFilesystemSize int64
 	mountOptions          MountOptions
-	encrypted             bool
+	encrypted             *bool // to support also encryption state fetched from actual filesystem when not set
 	manageEncryptionKeys  bool
 	encryptWithoutKms     bool
+
+	kmsVaultNamespace     string
+	kmsVaultKeyIdentifier string
+	kmsVaultRoleId        string
+	KmsVaultSecretId      string
 
 	srcVolume   *Volume
 	srcSnapshot *Snapshot
@@ -63,6 +56,15 @@ type Volume struct {
 
 	fileSystemObject *apiclient.FileSystem
 	snapshotObject   *apiclient.Snapshot
+
+	inodeId uint64 // cached for better performance, used in metricsserver flow
+
+	persistentVol  *v1.PersistentVolume // persistentVolName is the persistent volume object, used in metricsserver flow
+	lastUsageStats *UsageStats
+}
+
+func (v *Volume) hasCustomEncryptionSettings() bool {
+	return v.kmsVaultNamespace != "" || v.kmsVaultKeyIdentifier != "" || v.kmsVaultRoleId != "" || v.KmsVaultSecretId != ""
 }
 
 //goland:noinspection GoUnusedParameter
@@ -161,7 +163,7 @@ func (v *Volume) isOnSnapshot() bool {
 	return false
 }
 
-// hasInnerPath returns true for volumes having innerPath (basically either legacy directory OR directory on snapshot)
+// hasInnerPath returns true for volumes having innerPath (basically either directory OR directory on snapshot)
 func (v *Volume) hasInnerPath() bool {
 	return v.getInnerPath() != ""
 }
@@ -171,9 +173,55 @@ func (v *Volume) isFilesystem() bool {
 	return !v.isOnSnapshot() && !v.hasInnerPath()
 }
 
-// isEncrypted returns true if the volume is encrypted
-func (v *Volume) isEncrypted() bool {
-	return v.encrypted
+// isEncrypted returns true if the volume is encrypted or false if it is not. If fetching the encryption status fails, an error is returned
+func (v *Volume) isEncrypted(ctx context.Context) (bool, error) {
+	if v.encrypted != nil {
+		return *v.encrypted, nil
+	}
+	if !v.isFilesystem() {
+		return false, nil
+	}
+
+	if v.encrypted == nil {
+		// TODO: maybe we should move it into a separate method that is explicitly invoked when Volume is constructed from VolumeID rather than doing it here
+		if exists, err := v.Exists(ctx); err == nil {
+			if v.apiClient != nil {
+				fsObj, err := v.getFilesystemObj(ctx, true)
+				if err != nil {
+					return false, err
+				}
+				if exists {
+					v.encrypted = &fsObj.IsEncrypted
+					if fsObj.IsEncrypted {
+						if v.kmsVaultRoleId == "" && &fsObj.KmsRole != nil {
+							v.kmsVaultRoleId = fsObj.KmsRole
+						}
+						if v.kmsVaultNamespace == "" && &fsObj.KmsNamespace != nil {
+							v.kmsVaultNamespace = fsObj.KmsNamespace
+						}
+						if v.kmsVaultKeyIdentifier == "" && &fsObj.KmsKeyIdentifier != nil {
+							v.kmsVaultKeyIdentifier = fsObj.KmsKeyIdentifier
+						}
+						if v.kmsVaultRoleId == "" && &fsObj.KmsRole != nil {
+							v.kmsVaultRoleId = fsObj.KmsRole
+						}
+					}
+				} else {
+					v.encrypted = &[]bool{false}[0]
+				}
+			}
+		}
+	}
+	return *v.encrypted, nil
+}
+
+// isEncryptedSafe returns true if the volume is encrypted or false if it is not. If fetching the encryption status fails, false is returned
+func (v *Volume) isEncryptedSafe(ctx context.Context) bool {
+	enc, err := v.isEncrypted(ctx)
+	if err != nil {
+		return false
+	}
+	return enc
 }
 
 // hasUnderlyingSnapshots returns True if volume is a FS (not its snapshot) and has any weka snapshots beneath it
@@ -236,19 +284,19 @@ func (v *Volume) isAllowedForDeletion(ctx context.Context) bool {
 }
 
 // getUnderlyingSnapshots intended to return list of Weka snapshots that exist for filesystem
-func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snapshot, error) {
+func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*apiclient.Snapshots, error) {
 	op := "getUnderlyingSnapshots"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Str("filesystem", v.FilesystemName).Logger()
 
-	snapshots := &[]apiclient.Snapshot{}
+	snapshots := &apiclient.Snapshots{}
 	if v.apiClient == nil {
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}
 
-	fsObj, err := v.getFilesystemObj(ctx, true)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -258,10 +306,10 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 		return snapshots, nil
 	}
 
-	if fsObj.IsRemoving {
-		// assume snapshots are not relevant in such case
-		return snapshots, nil
-	}
+	//if fsObj.IsRemoving {
+	//	// assume snapshots are not relevant in such case
+	//	return snapshots, nil
+	//}
 
 	err = v.apiClient.FindSnapshotsByFilesystem(ctx, fsObj, snapshots)
 	if err != nil {
@@ -421,8 +469,7 @@ func (v *Volume) getFilesystemTotalCapacity(ctx context.Context) (int64, error) 
 func (v *Volume) getMaxCapacity(ctx context.Context) (int64, error) {
 
 	if v.apiClient == nil {
-		// this is a legacy, API-unbound volume
-		return v.getFilesystemFreeSpace(ctx)
+		return 0, errors.New("no API client exists for volume")
 	}
 
 	// max size of the volume is the current size of the filesystem (or 0 if not exists) + free space on storage
@@ -447,6 +494,19 @@ func (v *Volume) GetType() VolumeType {
 	return VolumeTypeUnified
 }
 
+func (v *Volume) GetBackingType() VolumeBackingType {
+	if v.isOnSnapshot() {
+		if v.hasInnerPath() {
+			return VolumeBackingTypeHybrid
+		}
+		return VolumeBackingTypeSnapshot
+	}
+	if v.hasInnerPath() {
+		return VolumeBackingTypeDirectory
+	}
+	return VolumeBackingTypeFilesystem
+}
+
 func (v *Volume) getCapacityFromQuota(ctx context.Context) (int64, error) {
 	op := "getCapacityFromQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
@@ -461,19 +521,12 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 
-	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && !v.server.isInDevMode() {
-		size, err := v.getSizeFromQuota(ctx)
-		if err == nil {
-			logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
-			return int64(size), nil
-		}
-	}
-	logger.Trace().Msg("Volume appears to be a legacy volume, failing back to Xattr")
-	size, err := v.getSizeFromXattr(ctx)
+	size, err := v.getSizeFromQuota(ctx)
 	if err != nil {
 		return 0, err
 	}
-	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "xattr").Msg("Resolved current capacity")
+
+	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
 	return int64(size), nil
 }
 
@@ -578,35 +631,19 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 		return err
 	}
 
-	// update capacity of the volume by updating quota object on its root directory (or XATTR)
-	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
-	primaryFunc := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
-	fallbackFunc := func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
-	capacityEntity := "quota"
-	if v.server.isInDevMode() {
-		logger.Trace().Msg("Updating quota via API is not possible since running in DEV mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if v.apiClient == nil {
-		logger.Trace().Msg("Volume has no API client bound, updating capacity in legacy mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		logger.Warn().Msg("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
-		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode. Upgrade to latest version of Weka software to enable quota enforcement")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
-		logger.Warn().Msg("Quota enforcement is not supported for snapshot-backed volumes on current version of Weka software. Upgrade to latest version of Weka software to enable quota enforcement")
+	logger.Trace().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
+	if v.apiClient == nil {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as it is not bound to API client", v.GetId())
 	}
-	err := primaryFunc()
+	if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as its underlying filesystem is located in non-default organization and authenticated mounts are not supported by current version of Weka software. Upgrade to latest version of Weka software to enable this feature", v.GetId())
+	}
+	if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
+		return status.Errorf(codes.FailedPrecondition, "Cannot update capacity for volume %s as quotas on snapshots are not supported by current version of Weka software. Upgrade to latest version of Weka software to enable this feature", v.GetId())
+	}
+	err := v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit)
 	if err == nil {
-		logger.Info().Int64("new_capacity", capacityLimit).Str("capacity_entity", capacityEntity).Msg("Successfully updated capacity for volume")
-	} else {
-		logger.Error().Err(err).Str("capacity_entity", capacityEntity).Msg("Failed to set volume capacity")
+		logger.Debug().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
 	}
 	return err
 }
@@ -654,37 +691,9 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 
 }
 
-func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool, capacityLimit int64) error {
-	op := "updateCapacityXattr"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-
-	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-
-	if !v.isMounted(ctx) {
-		err, unmountFunc := v.MountUnderlyingFS(ctx)
-		if err != nil {
-			return err
-		} else {
-			defer unmountFunc()
-		}
-	}
-
-	logger.Trace().Int64("desired_capacity", capacityLimit).Msg("Updating xattrs on volume")
-	if enforceCapacity != nil && *enforceCapacity {
-		logger.Warn().Msg("Legacy volume does not support enforce capacity")
-	}
-	err := setVolumeProperties(v.GetFullPath(ctx), capacityLimit, v.innerPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to update xattrs on volume, capacity is not set")
-	}
-	return err
-}
-
 func (v *Volume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
-		return v.server.getMounter().getGarbageCollector().triggerGcVolume(ctx, v)
+		return v.server.getMounter(ctx).getGarbageCollector().triggerGcVolume(ctx, v)
 	}
 	return v.Delete(ctx)
 }
@@ -729,8 +738,18 @@ func (v *Volume) getInodeId(ctx context.Context) (uint64, error) {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
+	if v.inodeId != 0 {
+		logger.Trace().Uint64("inode_id", v.inodeId).Msg("Using cached inode ID")
+		return v.inodeId, nil
+	}
+
 	if v.apiClient.SupportsResolvePathToInode() {
-		return v.getInodeIdFromApi(ctx)
+		inodeId, err := v.getInodeIdFromApi(ctx)
+		if err != nil {
+			return inodeId, err
+		}
+		v.inodeId = inodeId
+		return v.inodeId, nil
 	}
 	err, unmount := v.MountUnderlyingFS(ctx)
 	defer unmount()
@@ -751,7 +770,9 @@ func (v *Volume) getInodeId(ctx context.Context) (uint64, error) {
 		return 0, errors.New(fmt.Sprintf("failed to obtain inodeId from %s", v.mountPath))
 	}
 	logger.Debug().Uint64("inode_id", stat.Ino).Msg("Succesfully fetched root inode ID")
-	return stat.Ino, nil
+	v.inodeId = stat.Ino
+
+	return v.inodeId, nil
 }
 
 func (v *Volume) getInodeIdFromApi(ctx context.Context) (uint64, error) {
@@ -851,24 +872,6 @@ func (v *Volume) getSizeFromQuota(ctx context.Context) (uint64, error) {
 	return 0, errors.New("could not fetch quota from API")
 }
 
-// getSizeFromXattr returns volume size from extended attributes, mostly fallback for very old pre-API Weka clusters
-func (v *Volume) getSizeFromXattr(ctx context.Context) (uint64, error) {
-
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
-	if err != nil {
-		return 0, err
-	}
-
-	if capacityString, err := xattr.Get(v.GetFullPath(ctx), xattrCapacity); err == nil {
-		if capacity, err := strconv.ParseInt(string(capacityString), 10, 64); err == nil {
-			return uint64(capacity), nil
-		}
-		return 0, ErrBadXattrOnVolume
-	}
-	return 0, ErrNoXattrOnVolume
-}
-
 // getFilesystemObj returns the Weka filesystem object
 func (v *Volume) getFilesystemObj(ctx context.Context, fromCache bool) (*apiclient.FileSystem, error) {
 	if v.fileSystemObject != nil && fromCache && !v.fileSystemObject.IsRemoving {
@@ -905,8 +908,8 @@ func (v *Volume) getSnapshotObj(ctx context.Context, fromCache bool) (*apiclient
 	return snapObj, nil // no snapshot found
 }
 
-// MountUnderlyingFS creates a mount using the volume mount options (plus specifically xattr true/false) and increases refcount to its path
-// returns UmnountFunc that can be executed to decrese refCount / unmount
+// MountUnderlyingFS creates a mount using the volume mount options and increases refcount to its path
+// returns UmnountFunc that can be executed to decrease refCount / unmount
 // NOTE: it always mounts only the filesystem directly. Any navigation inside should be done on the mount
 func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	op := "MountUnderlyingFS"
@@ -914,13 +917,12 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	if v.server.getMounter() == nil {
+	if v.server.getMounter(ctx) == nil {
 		return errors.New("could not mount volume, mounter not in context"), func() {}
 	}
 
 	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
-
-	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	mount, err, unmountFunc := v.server.getMounter(ctx).mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := func() {}
 	if err == nil {
 		v.mountPath = mount
@@ -942,12 +944,20 @@ func (v *Volume) UnmountUnderlyingFS(ctx context.Context) error {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	if v.server.getMounter() == nil {
-		Die("Volume unmount could not be done since mounter not defined on it")
+	mountTransport := getDataTransportFromMountPath(v.mountPath)
+
+	mounter := v.server.getMounter(ctx)
+	if mountTransport == "" {
+		logger.Debug().Msg("Could not identify transport from mount path, assuming default")
+	} else {
+		mounter = v.server.getMounterByTransport(ctx, mountTransport)
+	}
+	if mounter == nil {
+		return errors.New(string("could not find mounter for transport " + mountTransport))
 	}
 
 	mountOpts := v.getMountOptions(ctx)
-	err := v.server.getMounter().unmountWithOptions(ctx, v.FilesystemName, mountOpts)
+	err := mounter.unmountWithOptions(ctx, v.FilesystemName, mountOpts)
 
 	if err == nil {
 		v.mountPath = ""
@@ -983,16 +993,6 @@ func (v *Volume) Exists(ctx context.Context) (bool, error) {
 			logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist on storage")
 			return false, nil
 		}
-		if v.server.isInDevMode() {
-			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-			// no actual data is copied, only directory structure is created as if it was a real snapshot.
-			// happens only if the real snapshot indeed exists
-			err := v.mimicDirectoryStructureForDebugMode(ctx)
-			if err != nil {
-				return false, err
-			}
-		}
-
 	}
 	if v.hasInnerPath() {
 		err, unmount := v.MountUnderlyingFS(ctx)
@@ -1190,7 +1190,7 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 			logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
 			return nil, err
 		}
-		if !empty && !v.server.isInDevMode() {
+		if !empty {
 			logger.Error().Err(err).Msg("Cannot create a seed snapshot, filesystem is not empty")
 			return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
 		}
@@ -1200,25 +1200,6 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 		}
 	}
 
-	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-	// no actual data is copied, only directory structure is created as if it was a real snapshot.
-	// happens only if the real snapshot indeed exists
-	if v.server.isInDevMode() {
-		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
-
-		err, unmount := v.MountUnderlyingFS(ctx)
-		defer unmount()
-		if err != nil {
-			return snap, err
-		}
-		seedPath := filepath.Join(v.getMountPath(), SnapshotsSubDirectory, v.getSeedSnapshotAccessPoint())
-
-		if err := os.MkdirAll(seedPath, DefaultVolumePermissions); err != nil {
-			logger.Error().Err(err).Str("seed_path", seedPath).Msg("Failed to create seed snapshot debug directory")
-			return snap, err
-		}
-		logger.Debug().Str("full_path", v.GetFullPath(ctx)).Msg("Successully created seed snapshot debug directory")
-	}
 	return snap, nil
 }
 
@@ -1232,12 +1213,13 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	// validate minimum capacity before create new volume
 	maxStorageCapacity, err := v.getMaxCapacity(ctx)
+	startTime := time.Now()
 	logger.Trace().Int64("max_capacity", maxStorageCapacity).Msg("Validating enough capacity on storage for creating the volume")
 	if err != nil {
-		return status.Errorf(codes.Internal, fmt.Sprintf("CreateVolume: Cannot obtain free capacity for volume %s", v.GetId()))
+		return status.Errorf(codes.Internal, "CreateVolume: Cannot obtain free capacity for volume %s", v.GetId())
 	}
 	if capacity > maxStorageCapacity {
-		return status.Errorf(codes.OutOfRange, fmt.Sprintf("Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity))
+		return status.Errorf(codes.OutOfRange, "Requested capacity %d exceeds maximum allowed %d", capacity, maxStorageCapacity)
 	}
 
 	encryptionParams, err := v.ensureEncryptionParams(ctx)
@@ -1249,7 +1231,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		// filesystem size might be larger than free space, check it
 		fsSize := Max(capacity, v.initialFilesystemSize)
 		if fsSize > maxStorageCapacity {
-			return status.Errorf(codes.OutOfRange, fmt.Sprintf("Minimum filesystem size %d is set in storageClass, which exceeds total free capacity %d", fsSize, maxStorageCapacity))
+			return status.Errorf(codes.OutOfRange, "Minimum filesystem size %d is set in storageClass, which exceeds total free capacity %d", fsSize, maxStorageCapacity)
 		}
 		if fsSize > capacity {
 			logger.Trace().Int64("filesystem_size", fsSize).Msg("Overriding filesystem size to initial capacity set in storageClass")
@@ -1276,8 +1258,12 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err != nil {
 			return err
 		}
+		isEncrypted, err := v.isEncrypted(ctx)
+		if err != nil {
+			return status.Errorf(codes.Internal, "Failed to check if volume is encrypted: %s", err.Error())
+		}
 
-		if v.isEncrypted() && fsObj != nil && !fsObj.IsEncrypted {
+		if isEncrypted && fsObj != nil && !fsObj.IsEncrypted {
 			return status.Errorf(codes.InvalidArgument, "Cannot create encrypted snapshot-backed volume on unencrypted filesystem")
 		}
 
@@ -1290,24 +1276,16 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		if err := v.apiClient.CreateSnapshot(ctx, sr, snapObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-		if v.server.isInDevMode() {
-			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-			// no actual data is copied, only directory structure is created as if it was a real snapshot.
-			// happens only if the real snapshot indeed exists
-			err := v.mimicDirectoryStructureForDebugMode(ctx)
-			if err != nil {
-				logger.Error().Err(err).Msg("Error happened during snapshot mimicking. Cleaning snapshot up")
-				_ = v.deleteSnapshot(ctx)
-				return err
-			}
-		}
-
 	} else if v.hasInnerPath() { // the last condition is needed for being able to run CSI sanity in docker
 
 		// if it was a snapshot and had inner path, it anyway should already exist.
 		// So creating inner path only in such case
+		isEncrypted, err := v.isEncrypted(ctx)
+		if err != nil {
+			return status.Errorf(codes.Internal, "Failed to check if volume is encrypted: %s", err.Error())
+		}
 
-		if v.isEncrypted() {
+		if isEncrypted {
 			if v.apiClient == nil {
 				return errors.New("cannot create encrypted volume without API binding")
 			}
@@ -1367,18 +1345,21 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 			Err(err).Msg("Failed to update volume parameters on freshly created volume. Volume remains intact for troubleshooting. Contact support.")
 		return err
 	}
-	logger.Info().Str("filesystem", v.FilesystemName).Msg("Created volume successfully")
+	logger.Info().Str("filesystem", v.FilesystemName).Dur("duration", time.Since(startTime)).Msg("Created volume successfully")
 	return nil
 }
 
 func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.EncryptionParams, error) {
 	encryptionParams := apiclient.EncryptionParams{
-		Encrypted:  v.isEncrypted(),
-		AllowNoKms: v.encryptWithoutKms,
-		//TODO: add KMS keys on Phase 2
+		Encrypted:             v.isEncryptedSafe(ctx),
+		AllowNoKms:            v.encryptWithoutKms,
+		KmsVaultRoleId:        v.kmsVaultRoleId,
+		KmsVaultSecretId:      v.KmsVaultSecretId,
+		KmsVaultNamespace:     v.kmsVaultNamespace,
+		KmsVaultKeyIdentifier: v.kmsVaultKeyIdentifier,
 	}
 
-	if v.isEncrypted() {
+	if v.isEncryptedSafe(ctx) {
 		if !v.isFilesystem() {
 			// encryption is only set for filesystems, snapshot- and directory-backed volumes are not setting those params
 			return encryptionParams, nil
@@ -1391,15 +1372,17 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 		}
 
 		if v.manageEncryptionKeys {
-			// TODO: remove this line when encryption keys per filesystem is supported
-			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported yet")
+			// TODO: remove this line when CSI automatically supports provisioning of new keys on vault.
+			return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Automatic management of encryption keys is not supported by current version of WEKA CSI Plugin")
+		}
 
-			// flow for encryption keys per filesystem
+		if v.hasCustomEncryptionSettings() {
+			// flow for custom encryption settings, e.g. key per filesystem
 			if !v.apiClient.SupportsCustomEncryptionSettings() {
-				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with key per filesystem is not supported on the cluster")
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "Encryption with custom settings per filesystem is not supported by current version of WEKA cluster")
 			}
 			if !v.apiClient.AllowsCustomEncryptionSettings(ctx) {
-				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support encryption keys per filesystem")
+				return apiclient.EncryptionParams{}, status.Errorf(codes.FailedPrecondition, "WEKA cluster KMS server configuration does not support custom encryption settings per filesystem")
 			}
 		} else {
 			if !v.apiClient.IsEncryptionEnabled(ctx) {
@@ -1410,6 +1393,55 @@ func (v *Volume) ensureEncryptionParams(ctx context.Context) (apiclient.Encrypti
 		}
 	}
 	return encryptionParams, nil
+}
+
+func (v *Volume) enrichWithEncryptionParams(ctx context.Context) {
+	op := "enrichWithEncryptionParams"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	changed := false
+	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
+	if v.isEncryptedSafe(ctx) && v.apiClient != nil {
+		c := v.apiClient
+		if c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.RoleId != "" {
+			v.kmsVaultRoleId = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.RoleId
+			changed = true
+		}
+		if c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.SecretId != "" {
+			v.KmsVaultSecretId = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.SecretId
+			changed = true
+		}
+		// this param can be overridden by storage class
+		if v.kmsVaultNamespace == "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace != "" {
+			v.kmsVaultNamespace = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.Namespace
+			changed = true
+		}
+		// this param can be overridden by storage class
+		if v.kmsVaultKeyIdentifier == "" && c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier != "" {
+			v.kmsVaultKeyIdentifier = c.Credentials.KmsPreexistingCredentialsForVolumeEncryption.KeyIdentifier
+			changed = true
+		}
+	}
+	if changed {
+		logger.Debug().Str("kms_namespace", v.kmsVaultNamespace).
+			Str("kms_key_identifier", v.kmsVaultKeyIdentifier).
+			Str("kms_role_id", func() string {
+				if v.kmsVaultRoleId != "" {
+					return "***masked***"
+				} else {
+					return ""
+				}
+			}()).
+			Str("kms_secret_id", func() string {
+				if v.KmsVaultSecretId != "" {
+					return "***masked***"
+				} else {
+					return ""
+				}
+			}()).
+			Msg("Enriched volume with encryption parameters")
+	}
 }
 
 func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
@@ -1493,6 +1525,11 @@ func (v *Volume) Delete(ctx context.Context) error {
 		logger.Error().Err(err).Msg("Failed to delete volume")
 		return err
 	}
+	// invalidate caches:
+	v.inodeId = 0
+	v.fileSystemObject = nil
+	v.snapshotObject = nil
+
 	logger.Debug().Msg("Deletion of volume completed successfully")
 	return nil
 }
@@ -1521,7 +1558,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 	logger.Debug().Str("filesystem", v.FilesystemName).Msg("Deleting filesystem")
-	fsObj, err := v.getFilesystemObj(ctx, true)
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to fetch filesystem for deletion")
 		return status.Errorf(codes.Internal, "Failed to fetch filesystem for deletion: %s, %e", v.FilesystemName, err)
@@ -1531,8 +1568,9 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		// FS doesn't exist already, return OK for idempotence
 		return nil
 	}
-	if !fsObj.IsRemoving { // if filesystem is already removing, just wait
-		if v.server.getMounter().getTransport() == dataTransportNfs {
+
+	deleteFunc := func(fsObj *apiclient.FileSystem) error {
+		if v.server.getMounter(ctx).getTransport() == dataTransportNfs {
 			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
 			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
 			if err != nil {
@@ -1542,7 +1580,6 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		}
 		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")
 		fsd := &apiclient.FileSystemDeleteRequest{Uid: fsObj.Uid}
-		v.fileSystemObject = nil
 		err = v.apiClient.DeleteFileSystem(ctx, fsd)
 		if err != nil {
 			if err == apiclient.ObjectNotFoundError {
@@ -1561,13 +1598,19 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 			return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 
 		}
+		return v.waitForFilesystemDeletion(ctx, logger, fsObj.Uid)
 	}
-	fsUid := fsObj.Uid
-	if v.server.getConfig().waitForObjectDeletion {
-		return v.waitForFilesystemDeletion(ctx, logger, fsUid)
+	v.fileSystemObject = nil
+
+	if !v.server.getConfig().allowAsyncObjectDeletion {
+		return deleteFunc(fsObj)
 	}
 
-	go func() { _ = v.waitForFilesystemDeletion(ctx, logger, fsUid) }()
+	go func() {
+		v.server.getBackgroundTasksWg().Add(1)
+		_ = deleteFunc(fsObj)
+		v.server.getBackgroundTasksWg().Done()
+	}()
 	return nil
 }
 
@@ -1617,8 +1660,8 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 	snapUid := snapObj.Uid
 	logger.Trace().Str("snapshot_uid", snapUid.String()).Msg("Attempting deletion of snapshot")
 	v.snapshotObject = nil
-	fsd := &apiclient.SnapshotDeleteRequest{Uid: snapObj.Uid}
-	err = v.apiClient.DeleteSnapshot(ctx, fsd)
+	snd := &apiclient.SnapshotDeleteRequest{Uid: snapObj.Uid}
+	err = v.apiClient.DeleteSnapshot(ctx, snd)
 	if err != nil {
 		if err == apiclient.ObjectNotFoundError {
 			logger.Debug().Str("snapshot", v.SnapshotName).Msg("Snapshot not found, assuming repeating request")
@@ -1634,12 +1677,16 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 		}
 		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Str("snapshot_uid", snapUid.String()).
 			Msg("Failed to delete snapshot")
-		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
+		return status.Errorf(codes.Internal, "Failed to delete snapshot %s: %s", v.SnapshotName, err)
 	}
-	if v.server.getConfig().waitForObjectDeletion {
+	if !v.server.getConfig().allowAsyncObjectDeletion {
 		return v.waitForSnapshotDeletion(ctx, logger, snapUid)
 	}
-	go func() { _ = v.waitForSnapshotDeletion(ctx, logger, snapUid) }()
+	go func() {
+		v.server.getBackgroundTasksWg().Add(1)
+		_ = v.waitForSnapshotDeletion(ctx, logger, snapUid)
+	}()
+	v.server.getBackgroundTasksWg().Done()
 	return nil
 }
 
@@ -1737,10 +1784,10 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		if err != nil {
 			return errors.Join(err, errors.New("failed to parse 'encrypted' parameter"))
 		}
-		v.encrypted = encrypted
+		v.encrypted = &encrypted
 	}
 	if val, ok := params["manageEncryptionKeys"]; ok {
-		if !v.encrypted {
+		if !v.isEncryptedSafe(ctx) {
 			return errors.New("manageEncryptionKeys is only supported for encrypted volumes")
 		}
 		manageKeys, err := strconv.ParseBool(val)
@@ -1750,8 +1797,8 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		v.manageEncryptionKeys = manageKeys
 	}
 	if val, ok := params["encryptWithoutKms"]; ok {
-		if !v.encrypted {
-			return errors.New("encryptWithoutKms is only supported for encrypted volumes")
+		if !v.isEncryptedSafe(ctx) {
+			return errors.New("manageEncryptionKeys is only supported for encrypted volumes")
 		}
 
 		encryptWithoutKms, err := strconv.ParseBool(val)
@@ -1760,6 +1807,21 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		}
 		v.encryptWithoutKms = encryptWithoutKms
 	}
+
+	// obtain advanced KMS parameters
+	if val, ok := params["kmsVaultNamespace"]; ok {
+		if !v.isEncryptedSafe(ctx) {
+			return errors.New("kmsVaultNamespace is only supported for encrypted volumes")
+		}
+		v.kmsVaultNamespace = val
+	}
+	if val, ok := params["kmsVaultKeyIdentifier"]; ok {
+		if !v.isEncryptedSafe(ctx) {
+			return errors.New("kmsVaultKeyIdentifier is only supported for encrypted volumes")
+		}
+		v.kmsVaultKeyIdentifier = val
+	}
+
 	return nil
 }
 
@@ -1794,21 +1856,18 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, er
 	return s, nil
 }
 
-// CanBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
+// CanBeOperated returns true if the object can be CRUDed (only volumes with API client backing)
 func (v *Volume) CanBeOperated() error {
-	if v.isOnSnapshot() || v.isFilesystem() {
-		if v.apiClient == nil && !v.server.isInDevMode() {
-			return errors.New("Could not obtain a valid API secret configuration for operation")
-		}
-
-		if !v.apiClient.SupportsFilesystemAsVolume() {
-			return errors.New(fmt.Sprintf("volume of type Filesystem is not supported on current version of Weka cluster. A version %s and up is required ",
-				apiclient.MinimumSupportedWekaVersions.FilesystemAsVolume))
-		}
+	if v.apiClient == nil {
+		return errors.New("Could not obtain a valid API secret configuration for operation")
+	}
+	if !v.apiClient.SupportsFilesystemAsVolume() {
+		return errors.New(fmt.Sprintf("volume of type Filesystem is not supported on current version of Weka cluster. A version %s and up is required ",
+			apiclient.MinimumSupportedWekaVersions.FilesystemAsVolume))
 	}
 	return nil
 }
 
-func (v *Volume) isMounted(ctx context.Context) bool {
-	return v.mountPath != "" && PathIsWekaMount(ctx, v.mountPath)
+func (v *Volume) isMounted() bool {
+	return v.mountPath != "" && PathIsWekaMount(v.mountPath)
 }

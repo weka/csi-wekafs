@@ -222,6 +222,8 @@ func maskPayload(payload string) string {
 	masker.RegisterMaskField("access_token", "filled4")
 	masker.RegisterMaskField("mount_token", "filled4")
 	masker.RegisterMaskField("refresh_token", "filled4")
+	masker.RegisterMaskField("kms_vault_role_id", "filled4")
+	masker.RegisterMaskField("kms_vault_secret_id", "filled4")
 	var target any
 	err := json.Unmarshal([]byte(payload), &target)
 	if err != nil {
@@ -230,4 +232,17 @@ func maskPayload(payload string) string {
 	masked, _ := masker.Mask(target)
 	ret, _ := json.Marshal(masked)
 	return string(ret)
+}
+
+func generalizeUrlPathForMetrics(urlPath string) string {
+	// Replace any numeric IDs in the URL path with a placeholder
+	re := regexp.MustCompile(`[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}`)
+	// Replace GUIDs with a placeholder
+	path := re.ReplaceAllString(urlPath, "{guid}")
+	re = regexp.MustCompile(`\b\d+\b`)
+	path = re.ReplaceAllString(path, "{id}")
+	if strings.HasSuffix(path, "/") {
+		return path[:len(path)-1]
+	}
+	return path
 }

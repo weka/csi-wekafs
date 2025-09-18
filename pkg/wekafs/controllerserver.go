@@ -18,12 +18,13 @@ package wekafs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"os"
@@ -32,22 +33,21 @@ import (
 	"time"
 )
 
-const (
-	deviceID                            = "deviceID"
-	maxVolumeIdLength                   = 1920
-	TracerName                          = "weka-csi"
-	ControlServerAdditionalMountOptions = MountOptionAcl + "," + MountOptionWriteCache
-)
-
 type ControllerServer struct {
 	csi.UnimplementedControllerServer
-	caps       []*csi.ControllerServiceCapability
-	nodeID     string
-	mounter    AnyMounter
-	api        *ApiStore
-	config     *DriverConfig
-	semaphores map[string]*semaphore.Weighted
+	caps            []*csi.ControllerServiceCapability
+	nodeID          string
+	mounters        *MounterGroup
+	api             *ApiStore
+	config          *DriverConfig
+	semaphores      map[string]*SemaphoreWrapper
+	backgroundTasks *sync.WaitGroup
+	metrics         *ControllerServerMetrics
 	sync.Mutex
+}
+
+func (cs *ControllerServer) getBackgroundTasksWg() *sync.WaitGroup {
+	return cs.backgroundTasks
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
@@ -58,16 +58,16 @@ func (cs *ControllerServer) getNodeId() string {
 	return cs.nodeID
 }
 
-func (cs *ControllerServer) isInDevMode() bool {
-	return cs.getConfig().isInDevMode()
-}
-
 func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }
 
-func (cs *ControllerServer) getMounter() AnyMounter {
-	return cs.mounter
+func (cs *ControllerServer) getMounter(ctx context.Context) AnyMounter {
+	return cs.mounters.GetPreferredMounter(ctx)
+}
+
+func (cs *ControllerServer) getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter {
+	return cs.mounters.GetMounterByTransport(ctx, transport)
 }
 
 func (cs *ControllerServer) getApiStore() *ApiStore {
@@ -104,28 +104,34 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig) *ControllerServer {
+func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
+	if driver == nil {
+		panic("driver is nil")
+	}
+
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod supoort
+		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod support
 	}
-	if config.advertiseSnapshotSupport {
+	if driver.config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
 	}
-	if config.advertiseVolumeCloneSupport {
+	if driver.config.advertiseVolumeCloneSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CLONE_VOLUME)
 	}
 
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
 	return &ControllerServer{
-		caps:       capabilities,
-		nodeID:     nodeID,
-		mounter:    mounter,
-		api:        api,
-		config:     config,
-		semaphores: make(map[string]*semaphore.Weighted),
+		caps:            capabilities,
+		nodeID:          driver.nodeID,
+		mounters:        driver.mounters,
+		api:             driver.api,
+		config:          driver.config,
+		semaphores:      make(map[string]*SemaphoreWrapper),
+		backgroundTasks: new(sync.WaitGroup),
+		metrics:    NewControllerServerMetrics(),
 	}
 }
 
@@ -167,9 +173,9 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 	return nil
 }
 
-type releaseSempahore func()
+type releaseSemaphore func()
 
-func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSemaphore) {
 	logger := log.Ctx(ctx)
 	cs.initializeSemaphore(ctx, op)
 	sem := cs.semaphores[op]
@@ -178,15 +184,54 @@ func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (er
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
+
+	// select metrics histogram based on the operation type
+	var histogram *prometheus.HistogramVec
+	var gauge *prometheus.GaugeVec
+	driverName := cs.getConfig().GetDriver().name
+
+	switch op {
+	case "CreateVolume":
+		histogram = cs.metrics.Concurrency.CreateVolumeWaitDuration
+		gauge = cs.metrics.Concurrency.CreateVolume
+	case "DeleteVolume":
+		histogram = cs.metrics.Concurrency.DeleteVolumeWaitDuration
+		gauge = cs.metrics.Concurrency.DeleteVolume
+	case "ExpandVolume":
+		histogram = cs.metrics.Concurrency.ExpandVolumeWaitDuration
+		gauge = cs.metrics.Concurrency.ExpandVolume
+	case "CreateSnapshot":
+		histogram = cs.metrics.Concurrency.CreateSnapshotWaitDuration
+		gauge = cs.metrics.Concurrency.CreateSnapshot
+	case "DeleteSnapshot":
+		histogram = cs.metrics.Concurrency.DeleteSnapshotWaitDuration
+		gauge = cs.metrics.Concurrency.DeleteSnapshot
+	}
+
+	// update concurrent operations
+	currentOps := func() {
+		if gauge != nil {
+			gauge.WithLabelValues(driverName, "acquired").Set(float64(sem.CurrentCount()))
+		}
+	}
+	currentOps()
+
 	if err == nil {
+		if histogram != nil {
+			histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
+		}
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
 		return nil, func() {
+			defer currentOps()
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
 		}
 	}
 	logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Failed to acquire semaphore")
+	if histogram != nil {
+		histogram.WithLabelValues(driverName, "failure").Observe(elapsed.Seconds())
+	}
 	return err, func() {}
 }
 
@@ -200,10 +245,13 @@ func (cs *ControllerServer) initializeSemaphore(ctx context.Context, op string) 
 	if _, ok := cs.semaphores[op]; ok {
 		return
 	}
-	max := cs.getConfig().maxConcurrencyPerOp[op]
+	m, ok := cs.getConfig().maxConcurrencyPerOp[op]
+	if !ok { // if not set, default to 1
+		m = 1
+	}
 	logger := log.Ctx(ctx)
-	logger.Info().Str("op", op).Int64("max_concurrency", max).Msg("Initializing semaphore")
-	sem := semaphore.NewWeighted(max)
+	logger.Info().Str("op", op).Int64("max_concurrency", m).Msg("Initializing semaphore")
+	sem := NewSemaphoreWrapper(m)
 	cs.semaphores[op] = sem
 }
 
@@ -212,17 +260,26 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	params := req.GetParameters()
 	result := "FAILURE"
 	logger := log.Ctx(ctx)
 	logger.Info().Str("name", req.GetName()).Fields(params).Msg(">>>> Received request")
-
+	var backingType VolumeBackingType
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		driverName := cs.getConfig().GetDriver().name
+		bt := string(backingType)
+		if bt != "" {
+			cs.metrics.Operations.CreateVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(float64(req.GetCapacityRange().GetRequiredBytes()))
+			cs.metrics.Operations.CreateVolumeCounter.WithLabelValues(driverName, result, bt).Inc()
+			cs.metrics.Operations.CreateVolumeDuration.WithLabelValues(driverName, result, bt).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+		}
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -248,9 +305,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	if volume == nil {
 		return CreateVolumeError(ctx, codes.Internal, "Could not initialize volume representation object from request")
 	}
+	backingType = volume.GetBackingType()
 
 	// check if with current API client state we can modify this volume or not
-	// (basically only legacy dirVolume with xAttr fallback can be operated without API client)
 	if err := volume.CanBeOperated(); err != nil {
 		return CreateVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
@@ -290,7 +347,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	} else if volExists && err == nil {
 		// current capacity explicitly differs from requested, this is another volume request
 		return CreateVolumeError(ctx, codes.AlreadyExists, "Volume with same name and different capacity already exists")
-	} else if volExists && err != nil {
+	} else if volExists {
 		// can happen if volume is half-made (object was created but capacity was not set on it on previous run)
 		if err := volume.UpdateCapacity(ctx, &volume.enforceCapacity, capacity); err == nil {
 			result = "SUCCESS"
@@ -351,26 +408,26 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	volumeID := req.GetVolumeId()
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	var backingType VolumeBackingType
+	driverName := cs.getConfig().GetDriver().name
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		bt := string(backingType)
+		if bt != "" {
+			cs.metrics.Operations.DeleteVolumeCounter.WithLabelValues(driverName, result, bt).Inc()
+			cs.metrics.Operations.DeleteVolumeDuration.WithLabelValues(driverName, result, bt).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
-
-	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx, op)
-	defer dec()
-	defer cancel()
-	if err != nil {
-		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
-	}
 
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
@@ -393,6 +450,17 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
 
+	// obtain capacity and backing for metrics
+	backingType = volume.GetBackingType()
+
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
 		logger.Debug().Str("volume_id", volume.GetId()).Msg("Volume not found, but returning success for idempotence")
@@ -401,7 +469,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 	// cleanup
 	if err != nil {
-		if err == ErrFilesystemHasUnderlyingSnapshots {
+		if errors.Is(err, ErrFilesystemHasUnderlyingSnapshots) {
 			return &csi.DeleteVolumeResponse{}, err
 		}
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
@@ -424,6 +492,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).
 		Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).
 		Str("volume_id", volumeID).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -433,10 +502,21 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		capacity = capRange.GetRequiredBytes()
 	}
 	logger.Info().Int64("capacity", capacity).Msg(">>>> Received request")
+	var backingType VolumeBackingType
+	driverName := cs.getConfig().GetDriver().name
 	defer func() {
+
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
+		}
+		bt := string(backingType)
+		if bt != "" {
+			if capacity > 0 {
+				cs.metrics.Operations.ExpandVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(float64(capacity))
+			}
+			cs.metrics.Operations.ExpandVolumeCounter.WithLabelValues(driverName, result, bt).Inc()
+			cs.metrics.Operations.ExpandVolumeDuration.WithLabelValues(driverName, result, bt).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
@@ -467,6 +547,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if err != nil {
 		return ExpandVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
 	}
+	backingType = volume.GetBackingType()
 
 	maxStorageCapacity, err := volume.getMaxCapacity(ctx)
 	if err != nil {
@@ -513,6 +594,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	srcVolumeId := req.GetSourceVolumeId()
 	secrets := req.GetSecrets()
@@ -525,6 +607,10 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		dn := cs.getConfig().GetDriver().name
+		cs.metrics.Operations.CreateSnapshotCounter.WithLabelValues(dn, result).Inc()
+		cs.metrics.Operations.CreateSnapshotDuration.WithLabelValues(dn, result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -588,6 +674,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -597,6 +684,9 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		dn := cs.getConfig().GetDriver().name
+		cs.metrics.Operations.DeleteSnapshotCounter.WithLabelValues(dn, result).Inc()
+		cs.metrics.Operations.DeleteSnapshotDuration.WithLabelValues(dn, result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
