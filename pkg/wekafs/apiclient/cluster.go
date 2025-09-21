@@ -5,15 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"golang.org/x/exp/slices"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"golang.org/x/exp/slices"
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 const ApiPathLogin = "login"
@@ -353,7 +354,7 @@ func (a *ApiClient) getLocalContainersFromDriver(ctx context.Context) ([]ProcFsC
 		if len(line) == 0 {
 			continue
 		}
-		if !strings.Contains(line, "Container=") {
+		if !strings.Contains(line, "Container=") || strings.Contains(line, "not connected") {
 			continue
 		}
 		logger.Trace().Str("line", line).Msg("Found line in proc fs")
