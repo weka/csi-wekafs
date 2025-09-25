@@ -32,7 +32,7 @@ jobs:
 
       - name: Git Version
         id: auto_version
-        uses: codacy/git-version@2.8.2
+        uses: codacy/git-version@2.8.6
         with:
           fetch-depth: 0
           prefix: v
