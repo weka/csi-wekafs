@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/go-logr/zerologr"
 	"github.com/rs/zerolog/log"
 	v1 "k8s.io/api/core/v1"
@@ -13,11 +17,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"os"
-	"os/signal"
 	ctrl "sigs.k8s.io/controller-runtime"
 	clog "sigs.k8s.io/controller-runtime/pkg/log"
-	"syscall"
 )
 
 type WekaFsDriver struct {
@@ -66,7 +67,7 @@ func NewWekaFsDriver(
 
 	log.Info().Msg(fmt.Sprintf("csiMode: %s", csiMode))
 	config.Log()
-
+	
 	return &WekaFsDriver{
 		name:              driverName,
 		nodeID:            nodeID,
