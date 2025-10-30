@@ -222,6 +222,8 @@ func maskPayload(payload string) string {
 	masker.RegisterMaskField("access_token", "filled4")
 	masker.RegisterMaskField("mount_token", "filled4")
 	masker.RegisterMaskField("refresh_token", "filled4")
+	masker.RegisterMaskField("kms_vault_role_id", "filled4")
+	masker.RegisterMaskField("kms_vault_secret_id", "filled4")
 	var target any
 	err := json.Unmarshal([]byte(payload), &target)
 	if err != nil {
