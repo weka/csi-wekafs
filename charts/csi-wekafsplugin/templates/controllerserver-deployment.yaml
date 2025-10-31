@@ -46,6 +46,9 @@ spec:
         {{- toYaml $nodeSelector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-controller
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}
       hostNetwork: true
       {{- end }}
@@ -190,6 +193,10 @@ spec:
               name: legacy-volume-access
               readOnly: true
             {{- end }}
+          {{- if .Values.controller.resources.wekafs }}
+          resources:
+            {{- toYaml .Values.controller.resources.wekafs | nindent 12 }}
+          {{- end }}
         - name: csi-attacher
           image: {{ required "csi attacher sidercar image." .Values.images.attachersidecar }}
           securityContext:
@@ -221,6 +228,10 @@ spec:
             - containerPort: {{ .Values.metrics.attacherPort | default 9095 }}
               name: pr-metrics
               protocol: TCP
+          {{- end }}
+          {{- if .Values.controller.resources.csiAttacher }}
+          resources:
+            {{- toYaml .Values.controller.resources.csiAttacher | nindent 12 }}
           {{- end }}
         - name: csi-provisioner
           {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
@@ -259,6 +270,10 @@ spec:
             - containerPort: {{ .Values.metrics.provisionerPort }}
               name: pr-metrics
               protocol: TCP
+          {{- if .Values.controller.resources.csiProvisioner }}
+          resources:
+            {{- toYaml .Values.controller.resources.csiProvisioner | nindent 12 }}
+          {{- end }}
         - name: csi-resizer
           {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
           securityContext:
@@ -294,6 +309,10 @@ spec:
             - containerPort: {{ .Values.metrics.resizerPort }}
               name: rs-metrics
               protocol: TCP
+          {{- if .Values.controller.resources.csiResizer }}
+          resources:
+            {{- toYaml .Values.controller.resources.csiResizer | nindent 12 }}
+          {{- end }}
         - name: csi-snapshotter
           {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
           securityContext:
@@ -330,7 +349,10 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
-
+          {{- if .Values.controller.resources.csiSnapshotter }}
+          resources:
+            {{- toYaml .Values.controller.resources.csiSnapshotter | nindent 12 }}
+          {{- end }}
         - name: liveness-probe
           volumeMounts:
             - mountPath: /csi
@@ -345,6 +367,10 @@ spec:
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
               value: "9898"
+          {{- if .Values.controller.resources.livenessProbe }}
+          resources:
+            {{- toYaml .Values.controller.resources.livenessProbe | nindent 12 }}
+          {{- end }}
       {{- with .Values.controllerPluginTolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

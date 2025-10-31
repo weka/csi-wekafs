@@ -79,6 +79,50 @@ controller:
   podLabels: {}
   # -- termination grace period for controller pods
   terminationGracePeriodSeconds: 10
+  # -- resource requests and limits for controller containers
+  resources:
+    wekafs:
+      limits:
+        cpu: 8m
+        memory: 64Mi
+      requests:
+        cpu: 2m
+        memory: 16Mi
+    csiAttacher:
+      limits:
+        cpu: 4m
+        memory: 48Mi
+      requests:
+        cpu: 1m
+        memory: 12Mi
+    csiProvisioner:
+      limits:
+        cpu: 8m
+        memory: 48Mi
+      requests:
+        cpu: 2m
+        memory: 12Mi
+    csiResizer:
+      limits:
+        cpu: 4m
+        memory: 48Mi
+      requests:
+        cpu: 1m
+        memory: 12Mi
+    csiSnapshotter:
+      limits:
+        cpu: 4m
+        memory: 48Mi
+      requests:
+        cpu: 1m
+        memory: 12Mi
+    livenessProbe:
+      limits:
+        cpu: 12m
+        memory: 48Mi
+      requests:
+        cpu: 3m
+        memory: 12Mi
 # Node-specific parameters, please do not change unless explicitly guided
 node:
   # -- Maximum concurrent requests from sidecars (global)
@@ -99,6 +143,29 @@ node:
   podLabels: {}
   # -- termination grace period for node pods
   terminationGracePeriodSeconds: 10
+  # -- resource requests and limits for node containers
+  resources:
+    wekafs:
+      limits:
+        cpu: 8m
+        memory: 160Mi
+      requests:
+        cpu: 2m
+        memory: 40Mi
+    livenessProbe:
+      limits:
+        cpu: 12m
+        memory: 44Mi
+      requests:
+        cpu: 3m
+        memory: 11Mi
+    csiRegistrar:
+      limits:
+        cpu: 8m
+        memory: 52Mi
+      requests:
+        cpu: 2m
+        memory: 13Mi
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
