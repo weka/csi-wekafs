@@ -173,6 +173,10 @@ spec:
             - mountPath: /etc/selinux/config
               name: selinux-config
             {{- end }}
+          {{- if .Values.node.resources.wekafs }}
+          resources:
+            {{- toYaml .Values.node.resources.wekafs | nindent 12 }}
+          {{- end }}
         - name: liveness-probe
           volumeMounts:
             - mountPath: /csi
@@ -187,7 +191,10 @@ spec:
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
               value: "9899"
-
+          {{- if .Values.node.resources.livenessProbe }}
+          resources:
+            {{- toYaml .Values.node.resources.livenessProbe | nindent 12 }}
+          {{- end }}
         - name: csi-registrar
           image: {{ required "Provide the csi node registrar sidecar container image." .Values.images.registrarsidecar }}
           args:
@@ -220,6 +227,10 @@ spec:
               name: registration-dir
             - mountPath: /var/lib/csi-wekafs-data
               name: csi-data-dir
+          {{- if .Values.node.resources.csiRegistrar }}
+          resources:
+            {{- toYaml .Values.node.resources.csiRegistrar | nindent 12 }}
+          {{- end }}
       {{- with .Values.nodePluginTolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
