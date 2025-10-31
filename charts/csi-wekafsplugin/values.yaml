@@ -83,46 +83,46 @@ controller:
   resources:
     wekafs:
       limits:
-        cpu: 8m
-        memory: 64Mi
+        cpu: 1
+        memory: 2Gi
       requests:
-        cpu: 2m
-        memory: 16Mi
+        cpu: 128m
+        memory: 128Mi
     csiAttacher:
       limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
         cpu: 4m
         memory: 48Mi
-      requests:
-        cpu: 1m
-        memory: 12Mi
     csiProvisioner:
       limits:
-        cpu: 8m
-        memory: 48Mi
+        cpu: 1
+        memory: 2Gi
       requests:
-        cpu: 2m
-        memory: 12Mi
+        cpu: 128m
+        memory: 128Mi
     csiResizer:
       limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
         cpu: 4m
         memory: 48Mi
-      requests:
-        cpu: 1m
-        memory: 12Mi
     csiSnapshotter:
       limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
         cpu: 4m
         memory: 48Mi
-      requests:
-        cpu: 1m
-        memory: 12Mi
     livenessProbe:
       limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
         cpu: 12m
         memory: 48Mi
-      requests:
-        cpu: 3m
-        memory: 12Mi
 # Node-specific parameters, please do not change unless explicitly guided
 node:
   # -- Maximum concurrent requests from sidecars (global)
@@ -147,25 +147,25 @@ node:
   resources:
     wekafs:
       limits:
-        cpu: 8m
-        memory: 160Mi
+        cpu: 1
+        memory: 2Gi
       requests:
-        cpu: 2m
-        memory: 40Mi
+        cpu: 128m
+        memory: 128Mi
     livenessProbe:
       limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
         cpu: 12m
         memory: 44Mi
-      requests:
-        cpu: 3m
-        memory: 11Mi
     csiRegistrar:
       limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
         cpu: 8m
         memory: 52Mi
-      requests:
-        cpu: 2m
-        memory: 13Mi
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
