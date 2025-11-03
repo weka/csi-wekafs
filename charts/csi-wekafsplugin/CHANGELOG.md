@@ -2,8 +2,6 @@
 
 ## What's Changed
 ### Bug Fixes
-* fix: add namespace to controller Role by @aplulu in https://github.com/weka/csi-wekafs/pull/603
+* fix: add controller missing priority class set and controller and node requests and limits config by @assafgi in https://github.com/weka/csi-wekafs/pull/621
 
-## New Contributors
-* @aplulu made their first contribution in https://github.com/weka/csi-wekafs/pull/603
 

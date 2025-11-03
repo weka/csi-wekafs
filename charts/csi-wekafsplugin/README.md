@@ -3,7 +3,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-![Version: 2.7.7](https://img.shields.io/badge/Version-2.7.7-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.7.7](https://img.shields.io/badge/AppVersion-v2.7.7-informational?style=flat-square)
+![Version: 2.7.8](https://img.shields.io/badge/Version-2.7.8-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.7.8](https://img.shields.io/badge/AppVersion-v2.7.8-informational?style=flat-square)
 
 ## Homepage
 https://github.com/weka/csi-wekafs
@@ -52,7 +52,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.7.7"` | CSI driver version |
+| csiDriverVersion | string | `"2.7.8"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.16.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.9.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.3.0"` | CSI provisioner sidecar image URL |
@@ -60,7 +60,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.14.0"` | CSI resizer sidecar image URL |
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.3.0"` | CSI snapshotter sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.7.7"` | CSI driver tag |
+| images.csidriverTag | string | `"2.7.8"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -81,6 +81,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | controller.labels | object | `{}` | optional labels to add to controller deployment |
 | controller.podLabels | object | `{}` | optional labels to add to controller pods |
 | controller.terminationGracePeriodSeconds | int | `10` | termination grace period for controller pods |
+| controller.resources | object | `{"csiAttacher":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiProvisioner":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"128m","memory":"128Mi"}},"csiResizer":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiSnapshotter":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"48Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for controller containers |
 | node.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
 | node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
 | node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
@@ -89,6 +90,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | node.labels | object | `{}` | optional labels to add to node daemonset |
 | node.podLabels | object | `{}` | optional labels to add to node pods |
 | node.terminationGracePeriodSeconds | int | `10` | termination grace period for node pods |
+| node.resources | object | `{"csiRegistrar":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"8m","memory":"52Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"44Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for node containers |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
 | legacyVolumeSecretName | string | `""` | for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin |
