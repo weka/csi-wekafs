@@ -260,6 +260,9 @@ pluginConfig:
     clientGroupName: ""
     # -- Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions
     nfsProtocolVersion: "4.1"
+    # -- Specify name of Weka container to use for mounting filesystems. If not set, container name will be auto-detected.
+    # -- NOTE: for multiple clusters setup, set specific container name rather than attempt to identify it automatically
+    wekafsContainerName: ""
   # -- Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false
   skipGarbageCollection: false
   # -- Wait for WEKA filesystem / snapshot deletion before acknowledging the corresponding CSI volume deletion. Default false

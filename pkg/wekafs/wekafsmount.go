@@ -171,7 +171,11 @@ func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *a
 		return nil
 	}
 	var err error
-	if m.containerName, err = apiClient.EnsureLocalContainer(ctx, m.allowProtocolContainers); err != nil {
+	configuredContainerName := ""
+	if m.mounter.config != nil {
+		configuredContainerName = m.mounter.config.wekafsContainerName
+	}
+	if m.containerName, err = apiClient.EnsureLocalContainer(ctx, m.allowProtocolContainers, configuredContainerName); err != nil {
 		logger.Error().Err(err).Msg("Failed to ensure local container")
 	}
 	return nil

@@ -123,6 +123,9 @@ spec:
           {{- if .Values.pluginConfig.mountProtocol.nfsProtocolVersion }}
             - "--nfsprotocolversion={{ .Values.pluginConfig.mountProtocol.nfsProtocolVersion | toString}}"
           {{- end }}
+          {{- if .Values.pluginConfig.mountProtocol.wekafsContainerName }}
+            - "--wekafscontainername=$(WEKAFS_CONTAINER_NAME)"
+          {{- end }}
           {{- if (.Values.pluginConfig.skipGarbageCollection | default false) }}
             - "--skipgarbagecollection"
           {{- end }}
@@ -173,6 +176,10 @@ spec:
             {{- if .Values.tracingDeploymentIdentifier }}
             - name: OTEL_DEPLOYMENT_IDENTIFIER
               value: {{ .Values.tracingDeploymentIdentifier }}
+            {{- end }}
+            {{- if .Values.pluginConfig.mountProtocol.wekafsContainerName }}
+            - name: WEKAFS_CONTAINER_NAME
+              value: {{ .Values.pluginConfig.mountProtocol.wekafsContainerName }}
             {{- end }}
 
           volumeMounts:

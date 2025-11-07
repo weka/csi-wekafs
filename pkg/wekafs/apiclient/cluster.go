@@ -366,13 +366,18 @@ func GetLocalIpAddresses(ctx context.Context) ([]string, error) {
 	return ips, nil
 }
 
-func (a *ApiClient) EnsureLocalContainer(ctx context.Context, allowProtocolContainers bool) (string, error) {
+func (a *ApiClient) EnsureLocalContainer(ctx context.Context, allowProtocolContainers bool, configuredContainerName string) (string, error) {
 
-	// already have the container name set either via secret or via API call
+	// already have the container name set from previous call
 	if a.containerName != "" {
 		return a.containerName, nil
 	}
-	// if having a local container name set in secrets
+	// Priority 1: container name configured via driver flag (highest priority)
+	if configuredContainerName != "" {
+		a.containerName = configuredContainerName
+		return a.containerName, nil
+	}
+	// Priority 2: container name set in CSI secret (for backward compatibility)
 	if a.Credentials.LocalContainerName != "" {
 		a.containerName = a.Credentials.LocalContainerName
 		return a.containerName, nil
