@@ -96,6 +96,7 @@ var (
 	interfaceGroupName                   = flag.String("interfacegroupname", "", "Name of the NFS interface group to use for mounting volumes")
 	clientGroupName                      = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
 	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
+	wekafsContainerName                  = flag.String("wekafscontainername", "", "Name of the Weka container to use for mounting filesystems")
 	skipGarbageCollection                = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
 	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
@@ -238,6 +239,7 @@ func handle(ctx context.Context) {
 		*allowEncryptionWithoutKms,
 		*tracingUrl,
 		*manageNodeTopologyLabels,
+		*wekafsContainerName,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

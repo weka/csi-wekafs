@@ -22,6 +22,7 @@ type wekafsMounter struct {
 	selinuxSupport          *bool
 	gc                      *innerPathVolGc
 	allowProtocolContainers bool
+	config                  *DriverConfig
 }
 
 func (m *wekafsMounter) getGarbageCollector() *innerPathVolGc {
@@ -34,7 +35,7 @@ func newWekafsMounter(driver *WekaFsDriver) *wekafsMounter {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport}
+	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport, config: driver.config}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc()
