@@ -926,6 +926,9 @@ func (v *Volume) getSizeFromXattr(ctx context.Context) (uint64, error) {
 
 // getFilesystemObj returns the Weka filesystem object
 func (v *Volume) getFilesystemObj(ctx context.Context, fromCache bool) (*apiclient.FileSystem, error) {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "GetFilesystemObject")
+	defer span.End()
+
 	if v.fileSystemObject != nil && fromCache && !v.fileSystemObject.IsRemoving {
 		return v.fileSystemObject, nil
 	}
