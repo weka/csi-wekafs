@@ -108,6 +108,9 @@ spec:
             - "--concurrency.createSnapshot={{ .Values.controller.concurrency.createSnapshot | default "1" }}"
             - "--concurrency.deleteSnapshot={{ .Values.controller.concurrency.deleteSnapshot | default "1" }}"
           {{- end }}
+          {{- if .Values.controller.enableCapacityValidation }}
+            - "--enablecapacityvalidation"
+          {{- end }}
           {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
             - "--usenfs"
           {{- end }}

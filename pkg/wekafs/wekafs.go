@@ -20,18 +20,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	clog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var DefaultVolumePermissions fs.FileMode = 0750
@@ -53,6 +65,7 @@ type WekaFsDriver struct {
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig
+	manager        ctrl.Manager // controller-runtime manager for K8s client access
 }
 
 type VolumeType string
@@ -323,6 +336,22 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
+	// Initialize controller-runtime manager for capacity validation (if enabled)
+	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll) && driver.config.enableCapacityValidation {
+		log.Info().Msg("Initializing Kubernetes manager for capacity validation")
+		if err := driver.initManager(ctx); err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize Kubernetes manager, capacity validation will be disabled")
+		} else {
+			// Start manager in background
+			go func() {
+				log.Info().Msg("Starting Kubernetes manager")
+				if err := driver.manager.Start(ctx); err != nil {
+					log.Error().Err(err).Msg("Kubernetes manager failed")
+				}
+			}()
+		}
+	}
+
 	mounter := driver.NewMounter()
 
 	// Create GRPC servers
@@ -334,7 +363,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
 		// bring up controller part
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config, driver.manager)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -373,8 +402,106 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	}()
 
+	// Wait for manager cache to sync before starting GRPC server
+	if driver.manager != nil {
+		log.Info().Msg("Waiting for Kubernetes manager cache to sync...")
+		cacheCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		synced := driver.manager.GetCache().WaitForCacheSync(cacheCtx)
+		if !synced {
+			log.Warn().Msg("Manager cache sync timeout - capacity validation may fail initially")
+		} else {
+			log.Info().Msg("Manager cache synced successfully")
+		}
+
+	}
+
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
+}
+
+// initManager initializes the controller-runtime manager for accessing Kubernetes API
+func (d *WekaFsDriver) initManager(ctx context.Context) error {
+	logger := log.Ctx(ctx).With().Str("component", "manager-init").Logger()
+
+	// Get Kubernetes config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		if errors.Is(err, rest.ErrNotInCluster) {
+			logger.Warn().Msg("Not running in cluster, trying KUBECONFIG")
+			kubeconfig := os.Getenv("KUBECONFIG")
+			if kubeconfig == "" {
+				return fmt.Errorf("not in cluster and KUBECONFIG not set")
+			}
+			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+			if err != nil {
+				return fmt.Errorf("failed to build config from kubeconfig: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to get in-cluster config: %w", err)
+		}
+	}
+
+	// Create scheme and register core v1 types
+	scheme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+
+	// Setup logger for controller-runtime
+	zapLogger := zap.New(zap.UseDevMode(false))
+	clog.SetLogger(zapLogger)
+
+	// Create manager with PV cache optimization
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme: scheme,
+		Cache: cache.Options{
+			ByObject: map[runtimeclient.Object]cache.ByObject{
+				&v1.PersistentVolume{}: {
+					Transform: stripUnnecessaryPVFields,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create manager: %w", err)
+	}
+
+	d.manager = mgr
+	logger.Info().Msg("Kubernetes manager initialized successfully")
+	return nil
+}
+
+// stripUnnecessaryPVFields creates a minimal PV with only fields needed for capacity validation
+func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
+	pv, ok := obj.(*v1.PersistentVolume)
+	if !ok {
+		return obj, nil
+	}
+
+	// Build minimal PV object
+	minimal := &v1.PersistentVolume{
+		TypeMeta: pv.TypeMeta,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            pv.ObjectMeta.Name,
+			UID:             pv.ObjectMeta.UID,
+			ResourceVersion: pv.ObjectMeta.ResourceVersion,
+		},
+		Spec: v1.PersistentVolumeSpec{
+			Capacity: pv.Spec.Capacity, // Need for capacity validation
+		},
+		Status: v1.PersistentVolumeStatus{
+			Phase: pv.Status.Phase, // Need to check if Bound or Released
+		},
+	}
+
+	if pv.Spec.CSI != nil {
+		minimal.Spec.PersistentVolumeSource.CSI = &v1.CSIPersistentVolumeSource{
+			Driver:       pv.Spec.CSI.Driver,       // Need to filter by driver
+			VolumeHandle: pv.Spec.CSI.VolumeHandle, // Need to extract filesystem path
+		}
+	}
+
+	return minimal, nil
 }
 
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {

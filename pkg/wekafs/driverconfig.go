@@ -1,9 +1,10 @@
 package wekafs
 
 import (
-	"github.com/rs/zerolog/log"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 type MutuallyExclusiveMountOptsStrings []string
@@ -45,6 +46,7 @@ type DriverConfig struct {
 	driverRef                        *WekaFsDriver
 	tracingUrl                       string
 	manageNodeTopologyLabels         bool
+	enableCapacityValidation         bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -88,6 +90,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	allowEncryptionWithoutKms bool,
 	tracingUrl string,
 	manageNodeTopologyLabels bool,
+	enableCapacityValidation bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -138,6 +141,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowEncryptionWithoutKms:        allowEncryptionWithoutKms,
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
+		enableCapacityValidation:         enableCapacityValidation,
 	}
 }
 

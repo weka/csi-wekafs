@@ -19,6 +19,11 @@ package wekafs
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -26,10 +31,8 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"os"
-	"strings"
-	"sync"
-	"time"
+	v1 "k8s.io/api/core/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -37,16 +40,37 @@ const (
 	maxVolumeIdLength                   = 1920
 	TracerName                          = "weka-csi"
 	ControlServerAdditionalMountOptions = MountOptionAcl + "," + MountOptionWriteCache
+	capacityRefreshInterval             = 5 * time.Second // How often to refresh from K8s
+	pendingReservationTTL               = 5 * time.Minute // Max age for pending reservations
 )
+
+// CapacityReservation tracks a volume create request that passed validation
+// but hasn't been confirmed in Kubernetes yet
+type CapacityReservation struct {
+	Filesystem string
+	Size       int64
+	Timestamp  time.Time
+}
+
+// CapacityTracker maintains capacity totals and pending reservations for validation
+type CapacityTracker struct {
+	mu                  sync.Mutex
+	confirmedCapacity   map[string]int64               // filesystem → total capacity from last K8s List()
+	pendingReservations map[string]CapacityReservation // volumeID → pending create
+	lastRefreshTime     time.Time
+	manager             ctrl.Manager
+}
 
 type ControllerServer struct {
 	csi.UnimplementedControllerServer
-	caps       []*csi.ControllerServiceCapability
-	nodeID     string
-	mounter    AnyMounter
-	api        *ApiStore
-	config     *DriverConfig
-	semaphores map[string]*semaphore.Weighted
+	caps            []*csi.ControllerServiceCapability
+	nodeID          string
+	mounter         AnyMounter
+	api             *ApiStore
+	config          *DriverConfig
+	semaphores      map[string]*semaphore.Weighted
+	manager         ctrl.Manager     // For listing PVs via K8s client
+	capacityTracker *CapacityTracker // Tracks confirmed + pending capacity
 	sync.Mutex
 }
 
@@ -104,7 +128,7 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig) *ControllerServer {
+func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig, manager ctrl.Manager) *ControllerServer {
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
@@ -119,14 +143,26 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
-	return &ControllerServer{
+	cs := &ControllerServer{
 		caps:       capabilities,
 		nodeID:     nodeID,
 		mounter:    mounter,
 		api:        api,
 		config:     config,
 		semaphores: make(map[string]*semaphore.Weighted),
+		manager:    manager,
 	}
+
+	// Initialize capacity tracker if manager available
+	if manager != nil {
+		cs.capacityTracker = &CapacityTracker{
+			confirmedCapacity:   make(map[string]int64),
+			pendingReservations: make(map[string]CapacityReservation),
+			manager:             manager,
+		}
+	}
+
+	return cs
 }
 
 func CreateVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.CreateVolumeResponse, error) {
@@ -137,6 +173,9 @@ func CreateVolumeError(ctx context.Context, errorCode codes.Code, errorMessage s
 
 // CheckCreateVolumeRequestSanity returns error if any generic validation fails
 func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, req *csi.CreateVolumeRequest) error {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "CheckCreateVolumeRequestSanity")
+	defer span.End()
+
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		log.Ctx(ctx).Err(err).Fields(req).Msg("invalid create volume request")
 		return err
@@ -310,6 +349,17 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}
 	}
 
+	if cs.config.enableCapacityValidation {
+		if cs.capacityTracker == nil {
+			logger.Warn().Msg("Capacity tracker not initialized - controller manager may be unavailable, skipping capacity validation")
+		} else {
+			err = cs.validateAndReserveCapacity(ctx, volume, capacity)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Actually try to create the volume here
 	logger.Info().Int64("capacity", capacity).Str("volume_id", volume.GetId()).Msg("Creating volume")
 	if err := volume.Create(ctx, capacity); err != nil {
@@ -325,6 +375,169 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			AccessibleTopology: cs.generateAccessibleTopology(),
 		},
 	}, nil
+}
+
+// validateAndReserveCapacity validates capacity and reserves it for this volume.
+func (cs *ControllerServer) validateAndReserveCapacity(ctx context.Context, v *Volume, requestedCapacity int64) error {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "ValidateAndReserveCapacity")
+	defer span.End()
+
+	logger := log.Ctx(ctx).With().
+		Str("volume_id", v.GetId()).
+		Str("filesystem", v.FilesystemName).
+		Int64("requested_capacity", requestedCapacity).
+		Logger()
+
+	// Only validate directory-backed volumes
+	if !v.hasInnerPath() || v.isOnSnapshot() {
+		logger.Debug().Msg("Skipping capacity validation for non-directory-backed volume")
+		return nil
+	}
+
+	// Skip if capacity tracker not available
+	if cs.capacityTracker == nil {
+		logger.Debug().Msg("Capacity tracker not available, skipping validation")
+		return nil
+	}
+
+	// Get filesystem total capacity
+	fsObj, err := v.getFilesystemObj(ctx, true)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch filesystem object")
+		return status.Errorf(codes.Internal, "failed to fetch filesystem %s: %v", v.FilesystemName, err)
+	}
+	if fsObj == nil {
+		return status.Errorf(codes.Internal, "filesystem %s not found", v.FilesystemName)
+	}
+
+	// Validate and reserve capacity (atomic operation)
+	cs.capacityTracker.mu.Lock()
+	defer cs.capacityTracker.mu.Unlock()
+
+	// Refresh capacity from K8s if needed (every 5s)
+	if time.Since(cs.capacityTracker.lastRefreshTime) > capacityRefreshInterval {
+		if err := cs.capacityTracker.refreshFromKubernetes(ctx, cs.config.GetDriver().name); err != nil {
+			logger.Warn().Err(err).Msg("Failed to refresh capacity from Kubernetes, using stale data")
+		}
+	}
+
+	// Get confirmed capacity from last refresh
+	confirmedCapacity := cs.capacityTracker.confirmedCapacity[v.FilesystemName]
+
+	// Sum pending reservations for this filesystem
+	pendingCapacity := cs.capacityTracker.getPendingCapacity(v.FilesystemName)
+
+	// Calculate total including this request
+	totalRequired := confirmedCapacity + pendingCapacity + requestedCapacity
+
+	logger.Info().
+		Int64("confirmed_capacity", confirmedCapacity).
+		Int64("pending_capacity", pendingCapacity).
+		Int64("requested_capacity", requestedCapacity).
+		Int64("total_required", totalRequired).
+		Int64("filesystem_capacity", fsObj.TotalCapacity).
+		Msg("Capacity validation check")
+
+	// Validate
+	if totalRequired > fsObj.TotalCapacity {
+		logger.Warn().
+			Int64("total_required", totalRequired).
+			Int64("filesystem_capacity", fsObj.TotalCapacity).
+			Int64("exceeded_by", totalRequired-fsObj.TotalCapacity).
+			Msg("Insufficient filesystem capacity")
+		return status.Errorf(codes.ResourceExhausted,
+			"insufficient capacity on filesystem %s: required %d bytes (confirmed %d + pending %d + requested %d) exceeds total capacity %d bytes",
+			v.FilesystemName, totalRequired, confirmedCapacity, pendingCapacity, requestedCapacity, fsObj.TotalCapacity)
+	}
+
+	// Reserve capacity for this volume
+	cs.capacityTracker.pendingReservations[v.GetId()] = CapacityReservation{
+		Filesystem: v.FilesystemName,
+		Size:       requestedCapacity,
+		Timestamp:  time.Now(),
+	}
+
+	logger.Debug().Msg("Capacity validated and reserved")
+	return nil
+}
+
+// refreshFromKubernetes fetches current PV list from K8s and updates confirmed capacity
+func (ct *CapacityTracker) refreshFromKubernetes(ctx context.Context, driverName string) error {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "RefreshCapacityFromKubernetes")
+	defer span.End()
+
+	// List all PVs
+	pvList := &v1.PersistentVolumeList{}
+	if err := ct.manager.GetClient().List(ctx, pvList); err != nil {
+		return fmt.Errorf("failed to list PVs: %w", err)
+	}
+
+	// calculate capacity AND remove confirmed reservations
+	capacityByFS := make(map[string]int64)
+	for _, pv := range pvList.Items {
+		// Filter for our driver
+		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != driverName {
+			continue
+		}
+
+		volumeID := pv.Spec.CSI.VolumeHandle
+
+		// Only count directory-backed volumes for capacity
+		fsName := sliceFilesystemNameFromVolumeId(volumeID)
+		if fsName == "" {
+			continue
+		}
+
+		// Skip snapshots
+		innerPath := sliceInnerPathFromVolumeId(volumeID)
+		if innerPath == "" || strings.Contains(volumeID, ":") {
+			continue
+		}
+
+		// Only Bound or Released (still have capacity allocated)
+		if pv.Status.Phase != v1.VolumeBound && pv.Status.Phase != v1.VolumeReleased {
+			continue
+		}
+
+		if capacity, ok := pv.Spec.Capacity[v1.ResourceStorage]; ok {
+			capacityByFS[fsName] += capacity.Value()
+		}
+
+		// Remove from pending
+		if _, exists := ct.pendingReservations[volumeID]; exists {
+			delete(ct.pendingReservations, volumeID)
+		}
+	}
+
+	// Update confirmed capacity
+	ct.confirmedCapacity = capacityByFS
+	ct.lastRefreshTime = time.Now()
+
+	// Cleanup expired reservations
+	ct.removeExpired()
+
+	return nil
+}
+
+// removeExpired removes pending reservations older than TTL
+func (ct *CapacityTracker) removeExpired() {
+	now := time.Now()
+	for volumeID, reservation := range ct.pendingReservations {
+		if now.Sub(reservation.Timestamp) > pendingReservationTTL {
+			delete(ct.pendingReservations, volumeID)
+		}
+	}
+}
+
+// getPendingCapacity sums all pending reservations for a filesystem
+func (ct *CapacityTracker) getPendingCapacity(filesystem string) int64 {
+	var total int64
+	for _, reservation := range ct.pendingReservations {
+		if reservation.Filesystem == filesystem {
+			total += reservation.Size
+		}
+	}
+	return total
 }
 
 func (cs *ControllerServer) generateAccessibleTopology() []*csi.Topology {
@@ -490,7 +703,20 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}
 	logger.Debug().Int64("current_capacity", currentSize).Int64("new_capacity", capacity).Msg("Expanding volume capacity")
 
+	// Validate capacity for expansion (only for the delta)
 	if currentSize != capacity {
+		deltaCapacity := capacity - currentSize
+		if cs.config.enableCapacityValidation && deltaCapacity > 0 {
+			if cs.capacityTracker == nil {
+				logger.Warn().Msg("Capacity tracker not initialized - skipping capacity validation")
+			} else {
+				// Validate the additional capacity needed
+				if err := cs.validateAndReserveCapacity(ctx, volume, deltaCapacity); err != nil {
+					return nil, err
+				}
+			}
+		}
+
 		if err := volume.UpdateCapacity(ctx, nil, capacity); err != nil {
 			return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not update volume: %s", err.Error()))
 		}

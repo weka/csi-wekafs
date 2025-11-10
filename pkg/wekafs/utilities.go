@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/constraints"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -527,6 +528,9 @@ func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 }
 
 func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int64) (bool, bool, error) {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "CheckVolumeExistsAndMatchesCapacity")
+	defer span.End()
+
 	exists, err := v.Exists(ctx)
 	if err != nil || !exists {
 		return exists, false, err

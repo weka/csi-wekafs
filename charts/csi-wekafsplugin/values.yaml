@@ -50,6 +50,8 @@ machineConfigLabels:
 controller:
   # -- Controller number of replicas
   replicas: 2
+  # -- Enable capacity validation for directory-backed PVCs (prevents over-provisioning)
+  enableCapacityValidation: false
   # -- Maximum concurrent requests from sidecars (global)
   maxConcurrentRequests: 5
   # -- maximum concurrent operations per operation type
@@ -84,7 +86,7 @@ controller:
     wekafs:
       limits:
         cpu: 1
-        memory: 2Gi
+        memory: 3Gi
       requests:
         cpu: 128m
         memory: 128Mi
@@ -98,14 +100,14 @@ controller:
     csiProvisioner:
       limits:
         cpu: 1
-        memory: 2Gi
+        memory: 3Gi
       requests:
         cpu: 128m
         memory: 128Mi
     csiResizer:
       limits:
         cpu: 1
-        memory: 1Gi
+        memory: 2Gi
       requests:
         cpu: 4m
         memory: 48Mi
