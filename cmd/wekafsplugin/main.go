@@ -20,12 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs"
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"math/rand"
 	"net/http"
 	"os"
@@ -33,6 +27,13 @@ import (
 	"path"
 	"strconv"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 func init() {
@@ -101,6 +102,7 @@ var (
 	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
+	enforceDirVolTotalCapacity           = flag.Bool("enforcedirvoltotalcapacity", false, "Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)")
 	// Set by the build process
 	version = ""
 )
@@ -240,6 +242,7 @@ func handle(ctx context.Context) {
 		*tracingUrl,
 		*manageNodeTopologyLabels,
 		*wekafsContainerName,
+		*enforceDirVolTotalCapacity,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

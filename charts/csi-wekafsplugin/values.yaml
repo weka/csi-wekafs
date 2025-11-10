@@ -84,7 +84,7 @@ controller:
     wekafs:
       limits:
         cpu: 1
-        memory: 2Gi
+        memory: 3Gi
       requests:
         cpu: 128m
         memory: 128Mi
@@ -98,14 +98,14 @@ controller:
     csiProvisioner:
       limits:
         cpu: 1
-        memory: 2Gi
+        memory: 3Gi
       requests:
         cpu: 128m
         memory: 128Mi
     csiResizer:
       limits:
         cpu: 1
-        memory: 1Gi
+        memory: 2Gi
       requests:
         cpu: 4m
         memory: 48Mi
@@ -241,6 +241,8 @@ pluginConfig:
     # -- Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default
     #    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced
     snapshotVolumesWithoutQuotaEnforcement: false
+    # -- Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)
+    enforceDirVolTotalCapacity: false
   mutuallyExclusiveMountOptions:
     - "readcache,writecache,coherent,forcedirect"
     - "sync,async"
