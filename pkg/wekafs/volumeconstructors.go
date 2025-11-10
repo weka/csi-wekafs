@@ -2,9 +2,11 @@ package wekafs
 
 import (
 	"context"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -45,6 +47,9 @@ func sliceSnapshotNameFromVolumeId(prefix, volumeId string) string {
 }
 
 func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVolumeRequest, cs *ControllerServer) (*Volume, error) {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "NewVolumeFromControllerCreateRequest")
+	defer span.End()
+
 	// obtain client for volume.
 	// client can be also nil if no API secrets bound for request
 	// Need to calculate volumeID first thing due to possible mapping to multiple FSes

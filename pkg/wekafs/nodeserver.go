@@ -208,7 +208,7 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 	}
 }
 
-func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSemaphore) {
 	logger := log.Ctx(ctx)
 	ns.initializeSemaphore(ctx, op)
 	sem := ns.semaphores[op]

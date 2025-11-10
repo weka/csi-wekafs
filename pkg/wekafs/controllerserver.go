@@ -19,17 +19,19 @@ package wekafs
 import (
 	"context"
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
-	"golang.org/x/sync/semaphore"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/pvcache"
+	"go.opentelemetry.io/otel"
+	"golang.org/x/sync/semaphore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -47,6 +49,7 @@ type ControllerServer struct {
 	api        *ApiStore
 	config     *DriverConfig
 	semaphores map[string]*semaphore.Weighted
+	pvCache    *pvcache.PvCache // PV cache for capacity validation
 	sync.Mutex
 }
 
@@ -104,11 +107,11 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig) *ControllerServer {
+func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig, pvCache *pvcache.PvCache) *ControllerServer {
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod supoort
+		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod support
 	}
 	if config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
@@ -126,6 +129,7 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 		api:        api,
 		config:     config,
 		semaphores: make(map[string]*semaphore.Weighted),
+		pvCache:    pvCache, // Shared cache from driver (could be nil)
 	}
 }
 
@@ -137,6 +141,9 @@ func CreateVolumeError(ctx context.Context, errorCode codes.Code, errorMessage s
 
 // CheckCreateVolumeRequestSanity returns error if any generic validation fails
 func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, req *csi.CreateVolumeRequest) error {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "CheckCreateVolumeRequestSanity")
+	defer span.End()
+
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		log.Ctx(ctx).Err(err).Fields(req).Msg("invalid create volume request")
 		return err
@@ -167,9 +174,9 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 	return nil
 }
 
-type releaseSempahore func()
+type releaseSemaphore func()
 
-func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSemaphore) {
 	logger := log.Ctx(ctx)
 	cs.initializeSemaphore(ctx, op)
 	sem := cs.semaphores[op]
@@ -310,6 +317,12 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		}
 	}
 
+	// Validate filesystem capacity before creating new volume
+	err = cs.validateFilesystemCapacity(ctx, volume, capacity)
+	if err != nil {
+		return nil, err
+	}
+
 	// Actually try to create the volume here
 	logger.Info().Int64("capacity", capacity).Str("volume_id", volume.GetId()).Msg("Creating volume")
 	if err := volume.Create(ctx, capacity); err != nil {
@@ -325,6 +338,71 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			AccessibleTopology: cs.generateAccessibleTopology(),
 		},
 	}, nil
+}
+
+// validateFilesystemCapacity checks if requested capacity plus the capacities of existing PVCs would exceed
+// the filesystem total capacity for directory-backed volumes. Returns nil if validation passes.
+func (cs *ControllerServer) validateFilesystemCapacity(ctx context.Context, v *Volume, requestedCapacity int64) error {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "ValidateFilesystemCapacity")
+	defer span.End()
+
+	logger := log.Ctx(ctx).With().
+		Str("volume_id", v.GetId()).
+		Str("filesystem", v.FilesystemName).
+		Int64("requested_capacity", requestedCapacity).
+		Logger()
+
+	// Only validate directory-backed volumes (dir/v1)
+	// Skip: filesystem-backed, snapshot-backed, and hybrid volumes
+	if !v.hasInnerPath() || v.isOnSnapshot() {
+		logger.Debug().Msg("Skipping capacity validation for non-directory-backed volume")
+		return nil
+	}
+
+	// Check if PV cache is available
+	if cs.pvCache == nil {
+		logger.Debug().Msg("PV cache not available, skipping capacity validation")
+		return nil
+	}
+
+	// Get filesystem object for total capacity
+	fsObj, err := v.getFilesystemObj(ctx, true)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch filesystem object")
+		return status.Errorf(codes.Internal, "failed to fetch filesystem %s: %v", v.FilesystemName, err)
+	}
+	if fsObj == nil {
+		logger.Error().Msg("Filesystem object is nil")
+		return status.Errorf(codes.Internal, "filesystem %s not found", v.FilesystemName)
+	}
+
+	// Get existing directory-backed PV capacity from cache
+	sumExistingCapacity := cs.pvCache.GetTotalDirectoryCapacity(ctx, v.FilesystemName)
+
+	logger.Info().
+		Int64("sum_existing_capacity", sumExistingCapacity).
+		Msg("Retrieved existing capacity from PV cache")
+
+	totalRequired := sumExistingCapacity + requestedCapacity
+	logger.Debug().
+		Int64("sum_existing_capacity", sumExistingCapacity).
+		Int64("total_required", totalRequired).
+		Int64("filesystem_capacity", fsObj.TotalCapacity).
+		Msg("Calculated capacity requirements")
+
+	if totalRequired > fsObj.TotalCapacity {
+		logger.Warn().
+			Int64("total_required", totalRequired).
+			Int64("filesystem_capacity", fsObj.TotalCapacity).
+			Int64("exceeded_by", totalRequired-fsObj.TotalCapacity).
+			Msg("Insufficient filesystem capacity")
+		return status.Errorf(codes.ResourceExhausted,
+			"insufficient capacity on filesystem %s: required %d bytes (existing %d + requested %d) exceeds total capacity %d bytes",
+			v.FilesystemName, totalRequired, sumExistingCapacity, requestedCapacity, fsObj.TotalCapacity)
+	}
+
+	logger.Debug().Msg("Capacity validation passed")
+	return nil
 }
 
 func (cs *ControllerServer) generateAccessibleTopology() []*csi.Topology {

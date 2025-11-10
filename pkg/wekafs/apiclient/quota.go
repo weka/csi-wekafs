@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/helm/pkg/urlutil"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type QuotaType string
@@ -321,6 +322,35 @@ func (a *ApiClient) GetQuotaByFileSystemAndInode(ctx context.Context, fs *FileSy
 	ret.FilesystemUid = fs.Uid
 	ret.InodeId = inodeId
 	return ret, nil
+}
+
+// GetAllQuotasForFilesystem returns all quotas for a given filesystem
+func (a *ApiClient) GetAllQuotasForFilesystem(ctx context.Context, fs *FileSystem) ([]Quota, error) {
+	op := "GetAllQuotasForFilesystem"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().
+		Str("trace_id", span.SpanContext().TraceID().String()).
+		Str("span_id", span.SpanContext().SpanID().String()).
+		Str("op", op).
+		Logger().WithContext(ctx)
+
+	logger := log.Ctx(ctx).With().Str("filesystem", fs.Name).Logger()
+
+	if fs == nil || fs.Uid == uuid.Nil {
+		return nil, RequestMissingParams
+	}
+
+	quotaBasePath := (&Quota{FilesystemUid: fs.Uid}).GetBasePath(a)
+	var quotas []Quota
+	err := a.Get(ctx, quotaBasePath, nil, &quotas)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch quotas for filesystem")
+		return nil, err
+	}
+
+	logger.Trace().Int("quota_count", len(quotas)).Msg("Fetched quotas for filesystem")
+	return quotas, nil
 }
 
 func (a *ApiClient) GetQuotaByFilter(ctx context.Context, query *Quota) (*Quota, error) {
