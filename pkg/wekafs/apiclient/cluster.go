@@ -302,6 +302,12 @@ func (a *ApiClient) getLocalContainersFromDriver(ctx context.Context) ([]ProcFsC
 		if !strings.Contains(line, "Container=") {
 			continue
 		}
+
+		if strings.Contains(line, "Frontend is not connected") {
+			logger.Warn().Msg("Frontend is not connected, skipping")
+			continue
+		}
+
 		logger.Trace().Str("line", line).Msg("Found line in proc fs")
 		//Container=a88742862af5client FE 1: Connected frontend pid 4081177
 		name := strings.Split(line, "=")[1] // a88742862af5client FE 1: Connected frontend pid 4081177
