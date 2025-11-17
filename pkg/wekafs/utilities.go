@@ -8,19 +8,21 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/pkg/xattr"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"golang.org/x/exp/constraints"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	timestamp "google.golang.org/protobuf/types/known/timestamppb"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/pkg/xattr"
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.opentelemetry.io/otel"
+	"golang.org/x/exp/constraints"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	timestamp "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -527,6 +529,9 @@ func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 }
 
 func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int64) (bool, bool, error) {
+	ctx, span := otel.Tracer(TracerName).Start(ctx, "CheckVolumeExistsAndMatchesCapacity")
+	defer span.End()
+
 	exists, err := v.Exists(ctx)
 	if err != nil || !exists {
 		return exists, false, err
@@ -604,4 +609,32 @@ func getSelinuxStatus(ctx context.Context) bool {
 		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
 	}
 	return false
+}
+
+// getOwnNamespace returns the namespace the pod is running in.
+// It tries to read from the serviceaccount namespace file, then falls back to
+// LEADER_ELECTION_NAMESPACE environment variable.
+func getOwnNamespace() (string, error) {
+	file := "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	// Check if the file exists
+	if _, err := os.Stat(file); err != nil {
+		if os.IsNotExist(err) {
+			// If the file does not exist, check environment variable
+			if os.Getenv("LEADER_ELECTION_NAMESPACE") != "" {
+				return os.Getenv("LEADER_ELECTION_NAMESPACE"), nil
+			}
+			return "", fmt.Errorf("namespace file not found and LEADER_ELECTION_NAMESPACE not set")
+		}
+		return "", fmt.Errorf("failed to stat namespace file: %w", err)
+	}
+	// read namespace from file
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("failed to read namespace from %s: %w", file, err)
+	}
+	namespace := strings.TrimSpace(string(data))
+	if namespace == "" {
+		return "", fmt.Errorf("namespace file is empty")
+	}
+	return namespace, nil
 }

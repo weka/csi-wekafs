@@ -46,6 +46,9 @@ type DriverConfig struct {
 	tracingUrl                       string
 	manageNodeTopologyLabels         bool
 	wekafsContainerName              string
+	pvCacheFetchInterval             time.Duration
+	pvCacheChannelBufferSize         int
+	enablePvCacheLeaderElection      bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -91,6 +94,9 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	tracingUrl string,
 	manageNodeTopologyLabels bool,
 	wekafsContainerName string,
+	pvCacheFetchInterval time.Duration,
+	pvCacheChannelBufferSize int,
+	enablePvCacheLeaderElection bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -142,6 +148,9 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
 		wekafsContainerName:              wekafsContainerName,
+		pvCacheFetchInterval:             pvCacheFetchInterval,
+		pvCacheChannelBufferSize:         pvCacheChannelBufferSize,
+		enablePvCacheLeaderElection:      enablePvCacheLeaderElection,
 	}
 }
 

@@ -20,18 +20,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"io/fs"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/pvcache"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	ctrl "sigs.k8s.io/controller-runtime"
+	clog "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 var DefaultVolumePermissions fs.FileMode = 0750
@@ -53,6 +63,8 @@ type WekaFsDriver struct {
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig
+	manager        ctrl.Manager     // controller-runtime manager for K8s API access
+	pvCache        *pvcache.PvCache // Shared PV cache
 }
 
 type VolumeType string
@@ -323,6 +335,38 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
+	// Initialize controller-runtime manager for PV caching if controller mode is enabled
+	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+		log.Info().Msg("Initializing Kubernetes manager for PV caching")
+		if err := driver.initManager(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to initialize Kubernetes manager, PV caching will be disabled")
+		}
+
+		// Create PV cache if manager initialized successfully
+		if driver.manager != nil {
+			log.Info().Msg("Creating PV cache for capacity validation")
+
+			pvCacheConfig := &pvcache.Config{
+				FetchInterval:     driver.config.pvCacheFetchInterval,
+				ChannelBufferSize: driver.config.pvCacheChannelBufferSize,
+			}
+
+			driver.pvCache = pvcache.New(driver.manager, driver.name, pvCacheConfig)
+
+			// Register cache with manager (will start when manager starts)
+			err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+				log.Info().Msg("Starting PV cache")
+				return driver.pvCache.Start(ctx)
+			}))
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to register PV cache with manager, cache will be disabled")
+				driver.pvCache = nil // Disable cache on registration failure
+			} else {
+				log.Info().Msg("PV cache registered with manager")
+			}
+		}
+	}
+
 	mounter := driver.NewMounter()
 
 	// Create GRPC servers
@@ -334,7 +378,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
 		// bring up controller part
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config, driver.pvCache)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -360,6 +404,16 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	defer stop()
 	go func() {
 		<-termContext.Done()
+
+		// Stop PV cache if running
+		if driver.pvCache != nil {
+			log.Info().Msg("Stopping PV cache...")
+			if err := driver.pvCache.Stop(); err != nil {
+				log.Error().Err(err).Msg("Error stopping PV cache")
+			}
+			log.Info().Msg("PV cache stopped")
+		}
+
 		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) && driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
 			driver.CleanupNodeLabels(ctx)
@@ -373,16 +427,92 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	}()
 
+	// Start the manager if initialized
+	if driver.manager != nil {
+		go func() {
+			log.Info().Msg("Starting Kubernetes manager")
+			if err := driver.manager.Start(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to start Kubernetes manager")
+			}
+		}()
+	}
+
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
 }
 
-func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
+// initManager initializes the controller-runtime manager for accessing Kubernetes API
+func (driver *WekaFsDriver) initManager(ctx context.Context) error {
+	logger := log.Ctx(ctx).With().Str("component", "manager-init").Logger()
+
+	// Get Kubernetes config (in-cluster or from kubeconfig)
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		if errors.Is(err, rest.ErrNotInCluster) {
+			logger.Warn().Msg("Not running in cluster, trying KUBECONFIG")
+			kubeconfig := os.Getenv("KUBECONFIG")
+			if kubeconfig == "" {
+				return fmt.Errorf("not in cluster and KUBECONFIG not set")
+			}
+			config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+			if err != nil {
+				return fmt.Errorf("failed to build config from kubeconfig: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to get in-cluster config: %w", err)
+		}
+	}
+
+	// Create scheme and register core v1 types
+	scheme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+
+	// Setup logger for controller-runtime
+	zapLogger := zap.New(zap.UseDevMode(false))
+	clog.SetLogger(zapLogger)
+
+	// Configure leader election if enabled
+	leaderElectionID := ""
+	enableLeaderElection := false
+	if driver.config.enablePvCacheLeaderElection {
+		leaderElectionID = "csiwekapvcacheb5146.weka.io"
+		enableLeaderElection = true
+		logger.Info().Str("leader_election_id", leaderElectionID).Msg("Leader election enabled for PV cache")
+	}
+
+	// Get namespace for leader election
+	namespace, err := getOwnNamespace()
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to detect namespace for leader election, using default")
+		namespace = "default"
+	}
+
+	// Create manager with optional leader election
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme:                        scheme,
+		LeaderElection:                enableLeaderElection,
+		LeaderElectionID:              leaderElectionID,
+		LeaderElectionNamespace:       namespace,
+		LeaderElectionReleaseOnCancel: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create manager: %w", err)
+	}
+
+	driver.manager = mgr
+	logger.Info().
+		Bool("leader_election", enableLeaderElection).
+		Str("namespace", namespace).
+		Msg("Kubernetes manager initialized successfully")
+	return nil
+}
+
+func (driver *WekaFsDriver) SetNodeLabels(ctx context.Context) {
+	if driver.config.isInDevMode() {
 		return
 	}
 
-	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
+	if driver.csiMode != CsiModeNode && driver.csiMode != CsiModeAll {
 		return
 	}
 	config, err := rest.InClusterConfig()
@@ -396,29 +526,28 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		log.Error().Err(err).Msg("Failed to create Kubernetes client")
 		return
 	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	node, err := clientset.CoreV1().Nodes().Get(ctx, driver.nodeID, metav1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node object from Kubernetes")
 		return
 	}
 
 	transport := func() string {
-		if d.config.useNfs {
+		if driver.config.useNfs {
 			return "nfs"
 		}
 		wekaRunning := isWekaRunning()
-		if d.config.allowNfsFailback && !wekaRunning {
+		if driver.config.allowNfsFailback && !wekaRunning {
 			return "nfs"
 		}
 		return "wekafs"
 	}()
 
 	labelsToSet := make(map[string]string)
-	labelsToSet[TopologyKeyNode] = d.nodeID
-	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, d.name)] = d.nodeID
-	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, d.name)] = "true"
-	labelsToSet[fmt.Sprintf(TopologyLabelTransportPattern, d.name)] = transport
+	labelsToSet[TopologyKeyNode] = driver.nodeID
+	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, driver.name)] = driver.nodeID
+	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, driver.name)] = "true"
+	labelsToSet[fmt.Sprintf(TopologyLabelTransportPattern, driver.name)] = transport
 	updateNeeded := false
 
 	for label, value := range labelsToSet {
@@ -442,15 +571,15 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 
 	log.Info().Msg("Successfully updated labels on node")
 }
-func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
+func (driver *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
+	if driver.config.isInDevMode() {
 		return
 	}
 	nodeLabelPatternsToRemove := []string{TopologyLabelNodePattern, TopologyLabelTransportPattern, TopologyLabelWekaLocalPattern}
 	nodeLabelsToRemove := []string{TopologyLabelTransportGlobal, TopologyLabelNodeGlobal, TopologyKeyNode}
 
 	for i, labelPattern := range nodeLabelPatternsToRemove {
-		nodeLabelPatternsToRemove[i] = fmt.Sprintf(labelPattern, d.name)
+		nodeLabelPatternsToRemove[i] = fmt.Sprintf(labelPattern, driver.name)
 	}
 	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
 
@@ -466,7 +595,7 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 		return
 	}
 
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
+	node, err := clientset.CoreV1().Nodes().Get(ctx, driver.nodeID, metav1.GetOptions{})
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get node")
 		return

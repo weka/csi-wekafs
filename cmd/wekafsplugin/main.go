@@ -101,6 +101,9 @@ var (
 	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
+	pvCacheFetchIntervalSeconds          = flag.Int("pvcachefetchintervalseconds", 60, "Interval in seconds to fetch PVs from Kubernetes for capacity validation cache")
+	pvCacheChannelBufferSize             = flag.Int("pvcachechannelbuffersize", 10000, "Buffer size for PV cache processing channel")
+	enablePvCacheLeaderElection          = flag.Bool("enablepvcacheleaderelection", false, "Enable leader election for PV cache (useful for HA controller deployments)")
 	// Set by the build process
 	version = ""
 )
@@ -240,6 +243,9 @@ func handle(ctx context.Context) {
 		*tracingUrl,
 		*manageNodeTopologyLabels,
 		*wekafsContainerName,
+		time.Duration(*pvCacheFetchIntervalSeconds)*time.Second,
+		*pvCacheChannelBufferSize,
+		*enablePvCacheLeaderElection,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
