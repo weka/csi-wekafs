@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"k8s.io/helm/pkg/urlutil"
+	"net/url"
 	"time"
 )
 
@@ -174,7 +174,7 @@ func (snap *Snapshot) GetBasePath(a *ApiClient) string {
 }
 
 func (snap *Snapshot) GetApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(snap.GetBasePath(a), snap.Uid.String())
+	url, err := url.JoinPath(snap.GetBasePath(a), snap.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -240,7 +240,7 @@ type SnapshotUpdateRequest struct {
 }
 
 func (snapu *SnapshotUpdateRequest) getApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(snapu.getRelatedObject().GetBasePath(a), snapu.Uid.String())
+	url, err := url.JoinPath(snapu.getRelatedObject().GetBasePath(a), snapu.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -272,7 +272,7 @@ func (snapd *SnapshotDeleteRequest) String() string {
 }
 
 func (snapd *SnapshotDeleteRequest) getApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(snapd.getRelatedObject().GetBasePath(a), snapd.Uid.String())
+	url, err := url.JoinPath(snapd.getRelatedObject().GetBasePath(a), snapd.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -301,7 +301,7 @@ func (snapr *SnapshotRestoreRequest) String() string {
 }
 
 func (snapr *SnapshotRestoreRequest) getApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(snapr.getRelatedObject().GetBasePath(a), snapr.FsUid.String(), snapr.Uid.String(), "restore")
+	url, err := url.JoinPath(snapr.getRelatedObject().GetBasePath(a), snapr.FsUid.String(), snapr.Uid.String(), "restore")
 	if err != nil {
 		return ""
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"k8s.io/helm/pkg/urlutil"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -301,7 +301,7 @@ func (fs *FileSystem) GetBasePath(a *ApiClient) string {
 }
 
 func (fs *FileSystem) GetApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(fs.GetBasePath(a), fs.Uid.String())
+	url, err := url.JoinPath(fs.GetBasePath(a), fs.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -388,7 +388,7 @@ func NewFileSystemResizeRequest(fsUid uuid.UUID, totalCapacity *int64) *FileSyst
 }
 
 func (fsu *FileSystemResizeRequest) getApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(fsu.getRelatedObject().GetBasePath(a), fsu.Uid.String())
+	url, err := url.JoinPath(fsu.getRelatedObject().GetBasePath(a), fsu.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -420,7 +420,7 @@ func (fsd *FileSystemDeleteRequest) String() string {
 }
 
 func (fsd *FileSystemDeleteRequest) getApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(fsd.getRelatedObject().GetBasePath(a), fsd.Uid.String())
+	url, err := url.JoinPath(fsd.getRelatedObject().GetBasePath(a), fsd.Uid.String())
 	if err != nil {
 		return ""
 	}
@@ -448,7 +448,7 @@ func (fsm *FileSystemMountTokenRequest) String() string {
 }
 
 func (fsm *FileSystemMountTokenRequest) getApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(fsm.getRelatedObject().GetBasePath(a), fsm.Uid.String(), "mountToken")
+	url, err := url.JoinPath(fsm.getRelatedObject().GetBasePath(a), fsm.Uid.String(), "mountToken")
 	if err != nil {
 		return ""
 	}

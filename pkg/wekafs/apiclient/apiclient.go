@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"hash/fnv"
-	"k8s.io/helm/pkg/urlutil"
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"syscall"
@@ -156,7 +156,7 @@ func (a *ApiClient) handleTransientErrors(ctx context.Context, err error) error 
 
 // getUrl returns a URL which consists of baseUrl + path
 func (a *ApiClient) getUrl(ctx context.Context, path string) string {
-	u, _ := urlutil.URLJoin(a.getBaseUrl(ctx), path)
+	u, _ := url.JoinPath(a.getBaseUrl(ctx), path)
 	return u
 }
 

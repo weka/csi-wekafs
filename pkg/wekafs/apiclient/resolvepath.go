@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"k8s.io/helm/pkg/urlutil"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -24,7 +24,7 @@ func (fsr *FilesystemResolvePath) GetType() string {
 
 func (fsr *FilesystemResolvePath) GetBasePath(a *ApiClient) string {
 	fsUrl := (&FileSystem{Uid: fsr.Uid}).GetApiUrl(a)
-	url, err := urlutil.URLJoin(fsUrl, fsr.GetType())
+	url, err := url.JoinPath(fsUrl, fsr.GetType())
 	if err != nil {
 		return ""
 	}

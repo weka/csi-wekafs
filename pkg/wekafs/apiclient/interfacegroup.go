@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"k8s.io/helm/pkg/urlutil"
+	"net/url"
 	"os"
 )
 
@@ -47,7 +47,7 @@ func (i *InterfaceGroup) GetBasePath(client *ApiClient) string {
 }
 
 func (i *InterfaceGroup) GetApiUrl(client *ApiClient) string {
-	url, err := urlutil.URLJoin(i.GetBasePath(client), i.Uid.String())
+	url, err := url.JoinPath(i.GetBasePath(client), i.Uid.String())
 	if err == nil {
 		return url
 	}

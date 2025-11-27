@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/slices"
-	"k8s.io/helm/pkg/urlutil"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -97,7 +97,7 @@ func (n *NfsPermission) GetBasePath(a *ApiClient) string {
 }
 
 func (n *NfsPermission) GetApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(n.GetBasePath(a), n.Uid.String())
+	url, err := url.JoinPath(n.GetBasePath(a), n.Uid.String())
 	if err == nil {
 		return url
 	}
@@ -354,7 +354,7 @@ func (g *NfsClientGroup) GetBasePath(a *ApiClient) string {
 }
 
 func (g *NfsClientGroup) GetApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(g.GetBasePath(a), g.Uid.String())
+	url, err := url.JoinPath(g.GetBasePath(a), g.Uid.String())
 	if err == nil {
 		return url
 	}
@@ -590,7 +590,7 @@ func (r *NfsClientGroupRule) GetType() string {
 
 func (r *NfsClientGroupRule) GetBasePath(a *ApiClient) string {
 	ncgUrl := (&NfsClientGroup{Uid: r.Uid}).GetApiUrl(a)
-	url, err := urlutil.URLJoin(ncgUrl, r.GetType())
+	url, err := url.JoinPath(ncgUrl, r.GetType())
 	if err != nil {
 		return ""
 	}
@@ -598,7 +598,7 @@ func (r *NfsClientGroupRule) GetBasePath(a *ApiClient) string {
 }
 
 func (r *NfsClientGroupRule) GetApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(r.GetBasePath(a), r.Uid.String())
+	url, err := url.JoinPath(r.GetBasePath(a), r.Uid.String())
 	if err != nil {
 		return url
 	}
@@ -729,7 +729,7 @@ func (r *NfsClientGroupRuleCreateRequest) getType() string {
 }
 
 func (r *NfsClientGroupRuleCreateRequest) getApiUrl(a *ApiClient) string {
-	ret, err := urlutil.URLJoin(r.getRelatedObject().GetApiUrl(a), r.getType())
+	ret, err := url.JoinPath(r.getRelatedObject().GetApiUrl(a), r.getType())
 	if err != nil {
 		return ""
 	}
