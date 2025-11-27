@@ -1,3 +1,8 @@
+# Release v2.8.0
+- feat: add per file system encryption support
+- feat: add support for preventing over provisioning of directory backed PVCs
+- fix: add driver level container name configuration for multi client set deployments
+- fix: panic when "Frontend is not connected" is present in /proc/wekafs/interface
 # Release v2.7.8
 <!-- Release notes generated using configuration in .github/release.yaml at main -->
 

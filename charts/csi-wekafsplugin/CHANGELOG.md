@@ -1,7 +1,4 @@
-<!-- Release notes generated using configuration in .github/release.yaml at main -->
-
-## What's Changed
-### Bug Fixes
-* fix: add controller missing priority class set and controller and node requests and limits config by @assafgi in https://github.com/weka/csi-wekafs/pull/621
-
-
+- feat: add per file system encryption support
+- feat: add support for preventing over provisioning of directory backed PVCs
+- fix: add driver level container name configuration for multi client set deployments
+- fix: panic when "Frontend is not connected" is present in /proc/wekafs/interface
