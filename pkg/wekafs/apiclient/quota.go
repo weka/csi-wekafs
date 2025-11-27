@@ -8,7 +8,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/helm/pkg/urlutil"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -48,7 +48,7 @@ func (q *Quota) GetType() string {
 
 func (q *Quota) GetBasePath(a *ApiClient) string {
 	fsUrl := (&FileSystem{Uid: q.FilesystemUid}).GetApiUrl(a)
-	url, err := urlutil.URLJoin(fsUrl, q.GetType())
+	url, err := url.JoinPath(fsUrl, q.GetType())
 	if err != nil {
 		return ""
 	}
@@ -56,7 +56,7 @@ func (q *Quota) GetBasePath(a *ApiClient) string {
 }
 
 func (q *Quota) GetApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(q.GetBasePath(a), strconv.FormatUint(q.InodeId, 10))
+	url, err := url.JoinPath(q.GetBasePath(a), strconv.FormatUint(q.InodeId, 10))
 	if err != nil {
 		return ""
 	}
@@ -204,7 +204,7 @@ func (qd *QuotaDeleteRequest) String() string {
 }
 
 func (qd *QuotaDeleteRequest) getApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin((&FileSystem{Uid: qd.filesystemUid}).GetApiUrl(a), "quotas", strconv.FormatUint(qd.InodeId, 10))
+	url, err := url.JoinPath((&FileSystem{Uid: qd.filesystemUid}).GetApiUrl(a), "quotas", strconv.FormatUint(qd.InodeId, 10))
 	if err != nil {
 		return ""
 	}

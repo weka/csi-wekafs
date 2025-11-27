@@ -24,7 +24,6 @@ require (
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
 	k8s.io/client-go v0.34.1
-	k8s.io/helm v2.17.0+incompatible
 	k8s.io/mount-utils v0.33.1
 	sigs.k8s.io/controller-runtime v0.22.4
 )

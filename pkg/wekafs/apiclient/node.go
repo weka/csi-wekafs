@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	"k8s.io/helm/pkg/urlutil"
+	"net/url"
 )
 
 const (
@@ -50,7 +50,7 @@ func (n *WekaNode) GetBasePath(a *ApiClient) string {
 }
 
 func (n *WekaNode) GetApiUrl(a *ApiClient) string {
-	url, err := urlutil.URLJoin(n.GetBasePath(a), n.Uid.String())
+	url, err := url.JoinPath(n.GetBasePath(a), n.Uid.String())
 	if err != nil {
 		return url
 	}
