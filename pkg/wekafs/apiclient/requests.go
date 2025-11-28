@@ -31,8 +31,8 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		guid := a.ClusterGuid.String()
 		ip := a.getEndpoint(ctx).IpAddress
 		dn := a.driverName
-		a.metrics.requestCounters.WithLabelValues(dn, guid, ip, Method, path, status).Inc()
-		a.metrics.requestDurations.WithLabelValues(dn, guid, ip, Method, path, status).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+		apiMetrics.requestCounters.WithLabelValues(dn, guid, ip, Method, path, status).Inc()
+		apiMetrics.requestDurations.WithLabelValues(dn, guid, ip, Method, path, status).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
 	}()
 	//construct base request and add auth if exists
 	var body *bytes.Reader

@@ -66,9 +66,6 @@ func (a *ApiClient) Login(ctx context.Context) error {
 
 // Init checks if API token refresh is required and transparently refreshes or fails back to (re)login
 func (a *ApiClient) Init(ctx context.Context) error {
-	if a.metrics == nil {
-		a.metrics = NewApiMetrics(a)
-	}
 	if a.apiTokenExpiryDate.After(time.Now()) {
 		return nil
 	} else {

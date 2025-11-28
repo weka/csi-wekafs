@@ -49,7 +49,6 @@ func init() {
 		file = short
 		return file + ":" + strconv.Itoa(line)
 	}
-
 }
 
 var (
