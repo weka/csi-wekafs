@@ -2,24 +2,25 @@ package apiclient
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog/log"
 )
 
 type ApiMetrics struct {
-	client           *ApiClient
-	Endpoints        *prometheus.GaugeVec
+	endpoints        *prometheus.GaugeVec
 	requestCounters  *prometheus.CounterVec
 	requestDurations *prometheus.HistogramVec
 }
 
-var GlobalApiMetrics *ApiMetrics
+var apiMetrics *ApiMetrics
 
-func NewApiMetrics(client *ApiClient) *ApiMetrics {
-	if GlobalApiMetrics != nil {
-		return GlobalApiMetrics
-	}
-	ret := &ApiMetrics{
-		client: client,
-		Endpoints: prometheus.NewGaugeVec(
+func init() {
+	InitApiMetrics()
+}
+
+// InitApiMetrics initializes and registers API metrics with Prometheus.
+func InitApiMetrics() {
+	apiMetrics = &ApiMetrics{
+		endpoints: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Namespace: "weka_csi",
 				Subsystem: "api",
@@ -48,13 +49,8 @@ func NewApiMetrics(client *ApiClient) *ApiMetrics {
 			[]string{"csi_driver_name", "cluster_guid", "endpoint", "method", "url", "status"},
 		),
 	}
-	ret.Init()
-	GlobalApiMetrics = ret
-	return ret
-}
 
-func (m *ApiMetrics) Init() {
-	prometheus.MustRegister(m.Endpoints)
-	prometheus.MustRegister(m.requestCounters)
-	prometheus.MustRegister(m.requestDurations)
+	prometheus.MustRegister(apiMetrics.requestCounters)
+	prometheus.MustRegister(apiMetrics.requestDurations)
+	log.Debug().Msg("API metrics registered with Prometheus")
 }
