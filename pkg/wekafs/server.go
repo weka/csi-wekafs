@@ -19,14 +19,15 @@ package wekafs
 import (
 	"context"
 	"fmt"
-	"github.com/kubernetes-csi/csi-lib-utils/protosanitizer"
-	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
-	"google.golang.org/grpc"
 	"net"
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/kubernetes-csi/csi-lib-utils/protosanitizer"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"google.golang.org/grpc"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
@@ -64,14 +65,21 @@ func (s *nonBlockingGRPCServer) Wait() {
 }
 
 func (s *nonBlockingGRPCServer) Stop() {
+	if s == nil || s.server == nil {
+		return
+	}
 	s.server.GracefulStop()
 }
 
 func (s *nonBlockingGRPCServer) ForceStop() {
+	if s == nil || s.server == nil {
+		return
+	}
 	s.server.Stop()
 }
 
 func (s *nonBlockingGRPCServer) serve(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
+	defer s.wg.Done()
 
 	proto, addr, err := parseEndpoint(endpoint)
 	if err != nil {
