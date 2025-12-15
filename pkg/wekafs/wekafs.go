@@ -21,11 +21,15 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -43,6 +47,16 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	clog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+)
+
+const (
+	// LeaderStateDir is the directory where leader state files are stored
+	LeaderStateDir = "/leader-state"
+	// LeaderReadyFile signals to sidecars that this pod is the leader
+	LeaderReadyFile = "/leader-state/leader_ready"
+	// HealthProbePort is the port for the health probe endpoint
+	HealthProbePort = "8081"
 )
 
 var DefaultVolumePermissions fs.FileMode = 0750
@@ -65,6 +79,7 @@ type WekaFsDriver struct {
 	selinuxSupport bool
 	config         *DriverConfig
 	manager        ctrl.Manager // controller-runtime manager for K8s client access
+	isLeader       atomic.Bool  // tracks current leadership state for health checks
 }
 
 type VolumeType string
@@ -335,47 +350,39 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
-	// Initialize controller-runtime manager for capacity validation (if enabled)
-	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll) && driver.config.enforceDirVolTotalCapacity {
-		log.Info().Msg("Initializing Kubernetes manager for capacity validation")
-		if err := driver.initManager(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to initialize Kubernetes manager")
-		} else {
-			// Start manager in background
-			go func() {
-				log.Info().Msg("Starting Kubernetes manager")
-				if err := driver.manager.Start(ctx); err != nil {
-					log.Error().Err(err).Msg("Kubernetes manager failed")
-				}
-			}()
+	// cleanup of stale leader file on container crash/restart
+	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+		if err := removeLeaderReadyFile(); err != nil {
+			log.Warn().Err(err).Msg("Failed to remove stale leader ready file on startup")
 		}
 	}
 
 	mounter := driver.NewMounter()
 
-	// Create GRPC servers
-
-	// identity server runs always
+	// Create servers
 	log.Info().Msg("Loading IdentityServer")
 	driver.ids = NewIdentityServer(driver.name, driver.version, driver.config)
 
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
-		// bring up controller part
+
+		// Initialize manager with leader election
+		if err := driver.initManager(ctx); err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize Kubernetes manager, running without leader election")
+		}
+
 		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config, driver.manager)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
 
 	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
-
 		// only if we manage node labels, first clean up before starting node server
 		if driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Cleaning up node stale labels")
 			driver.CleanupNodeLabels(ctx)
 		}
 
-		// bring up node part
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
 	} else {
@@ -386,28 +393,156 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 	termContext, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+
+	// Controller mode with manager: use leader election
+	// Controller mode without manager (not in K8s): run without leader election
+	// Node-only mode: run without leader election
+	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll) && driver.manager != nil {
+		driver.runWithLeaderElection(ctx, termContext, s)
+	} else {
+		driver.runWithoutLeaderElection(ctx, termContext, s)
+	}
+}
+
+// runWithLeaderElection runs the controller with leader election enabled.
+// Only the leader starts the gRPC server; standby pods wait for leadership.
+func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termContext context.Context, s *nonBlockingGRPCServer) {
+	log.Info().Msg("Running controller with leader election")
+
+	runCtx, cancelRun := context.WithCancel(ctx)
+	var shutdownOnce sync.Once
+
+	// Add runnable that starts gRPC server when we become leader
+	err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		// This only runs when we are the leader
+		log.Info().Msg("Became leader - starting gRPC server")
+
+		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
+
+		// Mark as leader for health checks
+		driver.isLeader.Store(true)
+
+		// Signal to sidecars that we are the leader
+		if err := createLeaderReadyFile(); err != nil {
+			log.Error().Err(err).Msg("Failed to create leader ready file")
+		}
+
+		// Wait for context cancellation (leadership lost or shutdown)
+		<-ctx.Done()
+
+		log.Info().Msg("Leadership lost or shutdown - stopping gRPC server")
+
+		// Mark as not leader for health checks
+		driver.isLeader.Store(false)
+
+		// Remove leader ready file before stopping gRPC
+		if err := removeLeaderReadyFile(); err != nil {
+			log.Error().Err(err).Msg("Failed to remove leader ready file")
+		}
+
+		s.Stop() // GracefulStop blocks until in-flight RPCs complete
+		// Lease is held until this function returns (LeaderElectionReleaseOnCancel: true)
+
+		return nil
+	}))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to add gRPC runnable to manager")
+	}
+
+	// Handle termination signal
 	go func() {
 		<-termContext.Done()
-		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) && driver.config.manageNodeTopologyLabels {
-			log.Info().Msg("Received SIGTERM/SIGINT, running cleanup of node labels...")
+		log.Info().Msg("Received termination signal")
+
+		shutdownOnce.Do(func() {
+			if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) &&
+				driver.config.manageNodeTopologyLabels {
+				driver.CleanupNodeLabels(ctx)
+			}
+			cancelRun()
+		})
+	}()
+
+	// Start manager (blocks until shutdown)
+	log.Info().Msg("Starting manager - waiting for leadership")
+	if err := driver.manager.Start(runCtx); err != nil {
+		log.Error().Err(err).Msg("Manager exited with error")
+	}
+
+	s.Wait()
+	log.Info().Msg("Shutdown complete")
+}
+
+// runWithoutLeaderElection runs the driver without leader election (for node-only mode)
+func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termContext context.Context, s *nonBlockingGRPCServer) {
+	log.Info().Msg("Running without leader election (node-only mode)")
+
+	go func() {
+		<-termContext.Done()
+		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) &&
+			driver.config.manageNodeTopologyLabels {
+			log.Info().Msg("Cleanup of node labels...")
 			driver.CleanupNodeLabels(ctx)
-			log.Info().Msg("Cleanup completed, stopping server")
-		} else {
-			log.Info().Msg("Received SIGTERM/SIGINT, stopping server")
 		}
 		s.Stop()
 		log.Info().Msg("Server stopped")
 		os.Exit(1)
-
 	}()
 
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
 }
 
-// initManager initializes the controller-runtime manager for accessing Kubernetes API
+// createLeaderReadyFile creates a file to signal sidecars that this pod is the leader
+func createLeaderReadyFile() error {
+	if err := os.MkdirAll(LeaderStateDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create leader state directory: %w", err)
+	}
+
+	if err := os.WriteFile(LeaderReadyFile, []byte{}, 0o644); err != nil {
+		return fmt.Errorf("failed to create leader ready file: %w", err)
+	}
+
+	log.Info().Str("file", LeaderReadyFile).Msg("Created leader ready file")
+	return nil
+}
+
+// removeLeaderReadyFile removes the leader ready file when losing leadership
+func removeLeaderReadyFile() error {
+	if err := os.Remove(LeaderReadyFile); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to remove leader ready file: %w", err)
+	}
+	log.Info().Str("file", LeaderReadyFile).Msg("Removed leader ready file (pod is not leader)")
+	return nil
+}
+
+// getOwnNamespace returns the namespace the pod is running in
+func getOwnNamespace() (string, error) {
+	// First try environment variable
+	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
+		return ns, nil
+	}
+
+	// Try to read from service account
+	nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return "", fmt.Errorf("failed to detect namespace: %w", err)
+	}
+	return string(nsBytes), nil
+}
+
+// initManager initializes the controller-runtime manager with leader election for controller mode
 func (d *WekaFsDriver) initManager(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("component", "manager-init").Logger()
+
+	// Get health port from environment variable
+	healthPort := os.Getenv("HEALTH_PORT")
+	if healthPort == "" {
+		healthPort = HealthProbePort // Default to 8081
+	}
 
 	// Get Kubernetes config
 	config, err := rest.InClusterConfig()
@@ -427,6 +562,12 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 		}
 	}
 
+	// Get namespace for leader election
+	namespace, err := getOwnNamespace()
+	if err != nil {
+		return fmt.Errorf("failed to get namespace for leader election: %w", err)
+	}
+
 	// Create scheme and register core v1 types
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -435,23 +576,73 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 	zapLogger := zap.New(zap.UseDevMode(false))
 	clog.SetLogger(zapLogger)
 
-	// Create manager with PV cache optimization
-	mgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme: scheme,
-		Cache: cache.Options{
+	leaderElectionID := fmt.Sprintf("%s-controller-leader", d.name)
+
+	// Configure cache options (only if enforceDirVolTotalCapacity is enabled)
+	cacheOpts := cache.Options{}
+	if d.config.enforceDirVolTotalCapacity {
+		cacheOpts = cache.Options{
 			ByObject: map[runtimeclient.Object]cache.ByObject{
 				&v1.PersistentVolume{}: {
 					Transform: stripUnnecessaryPVFields,
 				},
 			},
-		},
+		}
+	}
+
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme:                        scheme,
+		LeaderElection:                true,
+		LeaderElectionNamespace:       namespace,
+		LeaderElectionID:              leaderElectionID,
+		LeaderElectionReleaseOnCancel: true,
+		Cache:                         cacheOpts,
+		HealthProbeBindAddress:        ":" + healthPort,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create manager: %w", err)
 	}
 
+	// Parse socket path from endpoint (format: "unix:///path/to/socket")
+	socketProto, socketPath, err := parseEndpoint(d.endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to parse endpoint for health check: %w", err)
+	}
+	if socketProto == "unix" {
+		socketPath = "/" + socketPath // parseEndpoint strips leading slash
+	}
+
+	// - Standby: OK (process is alive)
+	// - Leader: verify gRPC server accepts connections + Weka client running (if needed)
+	if err := mgr.AddHealthzCheck("healthz", func(_ *http.Request) error {
+		if d.isLeader.Load() {
+			// Leader: verify gRPC server accepts connections
+			conn, err := net.DialTimeout(socketProto, socketPath, time.Second)
+			if err != nil {
+				return fmt.Errorf("gRPC server not accessible: %w", err)
+			}
+			_ = conn.Close()
+
+			if !d.config.useNfs && !d.config.allowNfsFailback && !d.config.isInDevMode() {
+				if !isWekaRunning() {
+					return fmt.Errorf("weka client not running on leader node")
+				}
+			}
+			return nil
+		}
+		// Standby: alive is enough
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to add health check: %w", err)
+	}
+
 	d.manager = mgr
-	logger.Info().Msg("Kubernetes manager initialized successfully")
+	logger.Info().
+		Str("leader_election_id", leaderElectionID).
+		Str("namespace", namespace).
+		Str("health_probe_port", healthPort).
+		Bool("enforce_capacity", d.config.enforceDirVolTotalCapacity).
+		Msg("Kubernetes manager initialized with leader election")
 	return nil
 }
 

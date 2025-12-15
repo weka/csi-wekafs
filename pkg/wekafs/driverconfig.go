@@ -47,7 +47,7 @@ type DriverConfig struct {
 	tracingUrl                       string
 	manageNodeTopologyLabels         bool
 	wekafsContainerName              string
-	enforceDirVolTotalCapacity         bool
+	enforceDirVolTotalCapacity       bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -145,7 +145,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		tracingUrl:                       tracingUrl,
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
 		wekafsContainerName:              wekafsContainerName,
-		enforceDirVolTotalCapacity:         enforceDirVolTotalCapacity,
+		enforceDirVolTotalCapacity:       enforceDirVolTotalCapacity,
 	}
 }
 
