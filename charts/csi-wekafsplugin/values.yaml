@@ -50,6 +50,8 @@ machineConfigLabels:
 controller:
   # -- Controller number of replicas
   replicas: 2
+  # -- Health probe port for controller pods
+  healthPort: 8081
   # -- Maximum concurrent requests from sidecars (global)
   maxConcurrentRequests: 5
   # -- maximum concurrent operations per operation type
