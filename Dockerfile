@@ -25,7 +25,10 @@ RUN true
 
 
 RUN echo Building package
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/*
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/wekafsplugin
+
+RUN echo Building wait-for-leader utility
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-extldflags '-static'" -o "/bin/wait-for-leader" /src/cmd/wait-for-leader
 
 FROM alpine:3.18
 LABEL maintainers="WekaIO, LTD"
@@ -45,6 +48,7 @@ LABEL summary="This image is used by WEKA CSI Plugin and incorporates both Contr
 LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data platform for AI"
 LABEL url="https://www.weka.io"
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
+COPY --from=go-builder /bin/wait-for-leader /wait-for-leader
 COPY --from=go-builder /src/locar /locar
 ARG binary=/bin/wekafsplugin
 EXPOSE 2049 111/tcp 111/udp

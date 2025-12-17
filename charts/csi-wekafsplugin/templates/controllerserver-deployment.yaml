@@ -52,6 +52,13 @@ spec:
       {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.useNfs .Values.pluginConfig.mountProtocol.allowNfsFailback}}
       hostNetwork: true
       {{- end }}
+      initContainers:
+        - name: copy-wait-binary
+          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
+          command: ["cp", "/wait-for-leader", "/shared/wait-for-leader"]
+          volumeMounts:
+            - name: shared-bin
+              mountPath: /shared
       containers:
         - name: wekafs
           securityContext:
@@ -139,7 +146,7 @@ spec:
             - "--allowencryptionwithoutkms"
           {{- end}}
           ports:
-            - containerPort: 9898
+            - containerPort: {{ .Values.controller.healthPort | default 8081 }}
               name: healthz
               protocol: TCP
           {{- if .Values.metrics.enabled }}
@@ -176,6 +183,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: HEALTH_PORT
+              value: "{{ .Values.controller.healthPort | default 8081 }}"
             {{- if .Values.tracingDeploymentIdentifier }}
             - name: OTEL_DEPLOYMENT_IDENTIFIER
               value: {{ .Values.tracingDeploymentIdentifier }}
@@ -198,6 +211,8 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
+            - mountPath: /leader-state
+              name: leader-state
             {{- if .Values.legacyVolumeSecretName }}
             - mountPath: /legacy-volume-access
               name: legacy-volume-access
@@ -211,16 +226,14 @@ spec:
           image: {{ required "csi attacher sidercar image." .Values.images.attachersidecar }}
           securityContext:
             privileged: true
+          command: ["/shared/wait-for-leader"]
           args:
+            - "/csi-attacher"
             - "--csi-address=$(ADDRESS)"
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--timeout=60s"
-            {{- if .Values.controller.configureAttacherLeaderElection }}
-            - "--leader-election"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
-            {{- end }}
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
-            {{- if or .Values.metrics.enabled .Values.controller.configureAttacherLeaderElection }}
+            {{- if .Values.metrics.enabled }}
             - "--http-endpoint=:{{ .Values.metrics.attacherPort | default 9095 }}"
             {{- end }}
           env:
@@ -229,11 +242,12 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
-          {{- if .Values.controller.configureAttacherLeaderElection }}
-          livenessProbe:
-            httpGet:
-              port: {{ .Values.metrics.attacherPort | default 9095 }}
-              path: /healthz/leader-election
+            - name: leader-state
+              mountPath: /leader-state
+              readOnly: true
+            - name: shared-bin
+              mountPath: /shared
+          {{- if .Values.metrics.enabled }}
           ports:
             - containerPort: {{ .Values.metrics.attacherPort | default 9095 }}
               name: pr-metrics
@@ -249,26 +263,18 @@ spec:
               privileged: true
           {{- end }}
           image: {{ required "csi provisioner sidecar container image." .Values.images.provisionersidecar }}
+          command: ["/shared/wait-for-leader"]
           args:
+            - "/csi-provisioner"
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
             - "--timeout=60s"
             - "--prevent-volume-mode-conversion"
-          {{- if .Values.controller.configureProvisionerLeaderElection | default true }}
-            - "--leader-election"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
-          {{- end }}
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
-          {{- if or .Values.metrics.enabled .Values.controller.configureProvisionerLeaderElection }}
+          {{- if .Values.metrics.enabled }}
             - "--http-endpoint=:{{ .Values.metrics.provisionerPort | default 9091 }}"
-          {{- end }}
-          {{- if .Values.controller.configureProvisionerLeaderElection }}
-          livenessProbe:
-            httpGet:
-              port: {{ .Values.metrics.provisionerPort | default 9091 }}
-              path: /healthz/leader-election
           {{- end }}
           env:
             - name: ADDRESS
@@ -276,10 +282,17 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: "/csi"
+            - name: leader-state
+              mountPath: /leader-state
+              readOnly: true
+            - name: shared-bin
+              mountPath: /shared
+          {{- if .Values.metrics.enabled }}
           ports:
             - containerPort: {{ .Values.metrics.provisionerPort }}
               name: pr-metrics
               protocol: TCP
+          {{- end }}
           {{- if .Values.controller.resources.csiProvisioner }}
           resources:
             {{- toYaml .Values.controller.resources.csiProvisioner | nindent 12 }}
@@ -290,35 +303,34 @@ spec:
             privileged: true
           {{- end }}
           image: {{ required "csi attacher sidercar image." .Values.images.resizersidecar }}
+          command: ["/shared/wait-for-leader"]
           args:
+            - "/csi-resizer"
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
-          {{- if or .Values.metrics.enabled .Values.controller.configureResizerLeaderElection }}
+          {{- if .Values.metrics.enabled }}
             - "--http-endpoint=:{{ .Values.metrics.resizerPort | default 9092 }}"
-          {{- end }}
-          {{- if .Values.controller.configureResizerLeaderElection | default true }}
-            - "--leader-election"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
           {{- end }}
             - "--workers={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
-          {{- if .Values.controller.configureResizerLeaderElection }}
-          livenessProbe:
-            httpGet:
-              port: {{ .Values.metrics.resizerPort | default 9092 }}
-              path: /healthz/leader-election
-          {{- end }}
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
+            - name: leader-state
+              mountPath: /leader-state
+              readOnly: true
+            - name: shared-bin
+              mountPath: /shared
+          {{- if .Values.metrics.enabled }}
           ports:
             - containerPort: {{ .Values.metrics.resizerPort }}
               name: rs-metrics
               protocol: TCP
+          {{- end }}
           {{- if .Values.controller.resources.csiResizer }}
           resources:
             {{- toYaml .Values.controller.resources.csiResizer | nindent 12 }}
@@ -329,29 +341,23 @@ spec:
             privileged: true
           {{- end }}
           image: {{ required "csi snapshotter sidecar image." .Values.images.snapshottersidecar }}
+          command: ["/shared/wait-for-leader"]
           args:
+            - "/csi-snapshotter"
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
-          {{- if .Values.controller.configureSnapshotterLeaderElection | default true }}
-            - "--leader-election"
-            - "--leader-election-namespace={{ .Release.Namespace }}"
-          {{- end }}
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
             - "--retry-interval-start=10s"
-          {{- if or .Values.metrics.enabled .Values.controller.configureSnapshotterLeaderElection }}
+          {{- if .Values.metrics.enabled }}
             - "--http-endpoint=:{{ .Values.metrics.snapshotterPort | default 9093 }}"
           {{- end }}
-          {{- if .Values.controller.configureSnapshotterLeaderElection }}
-          livenessProbe:
-            httpGet:
-              port: {{ .Values.metrics.snapshotterPort | default 9093 }}
-              path: /healthz/leader-election
-          {{- end }}
+          {{- if .Values.metrics.enabled }}
           ports:
             - containerPort: {{ .Values.metrics.snapshotterPort }}
               name: sn-metrics
               protocol: TCP
+          {{- end }}
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
@@ -359,27 +365,14 @@ spec:
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
+            - name: leader-state
+              mountPath: /leader-state
+              readOnly: true
+            - name: shared-bin
+              mountPath: /shared
           {{- if .Values.controller.resources.csiSnapshotter }}
           resources:
             {{- toYaml .Values.controller.resources.csiSnapshotter | nindent 12 }}
-          {{- end }}
-        - name: liveness-probe
-          volumeMounts:
-            - mountPath: /csi
-              name: socket-dir
-          image: {{ required "Provide Liveness Probe image." .Values.images.livenessprobesidecar }}
-          args:
-            - "--v={{ .Values.logLevel | default 5 }}"
-            - "--csi-address=$(ADDRESS)"
-            - "--health-port=$(HEALTH_PORT)"
-          env:
-            - name: ADDRESS
-              value: unix:///csi/csi.sock
-            - name: HEALTH_PORT
-              value: "9898"
-          {{- if .Values.controller.resources.livenessProbe }}
-          resources:
-            {{- toYaml .Values.controller.resources.livenessProbe | nindent 12 }}
           {{- end }}
       {{- with .Values.controllerPluginTolerations }}
       tolerations:
@@ -413,6 +406,10 @@ spec:
             path: /dev
             type: Directory
           name: dev-dir
+        - name: leader-state
+          emptyDir: {}
+        - name: shared-bin
+          emptyDir: {}
 {{- if .Values.legacyVolumeSecretName }}
         - name: legacy-volume-access
           secret:
