@@ -22,3 +22,12 @@ spec:
     controllerExpandSecretRef:
       name: csi-wekafs-api-secret
       namespace: csi-wekafs
+  # make PV schedulable only on nodes with WEKA CSI Plugin and healthy WEKA Client
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: topology.weka-infra.weka.io/accessible
+              operator: In
+              values:
+                - "true"
