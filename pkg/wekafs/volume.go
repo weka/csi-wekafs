@@ -1149,6 +1149,56 @@ func (v *Volume) isFilesystemEmpty(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// isSeedSnapshotEmpty returns true if the seed snapshot directory is empty (excluding SnapshotsSubDirectory)
+// This validates that a seed snapshot truly represents an empty filesystem state
+func (v *Volume) isSeedSnapshotEmpty(ctx context.Context) (bool, error) {
+	op := "isSeedSnapshotEmpty"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+
+	logger := log.Ctx(ctx)
+
+	err, umount := v.MountUnderlyingFS(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer umount()
+
+	// Construct path to seed snapshot: <mount>/.snapshots/<seed-access-point>
+	seedSnapshotPath := filepath.Join(v.mountPath, SnapshotsSubDirectory, v.getSeedSnapshotAccessPoint())
+
+	logger.Debug().Str("seed_snapshot_path", seedSnapshotPath).Msg("Checking if seed snapshot is empty")
+
+	dir, err := os.Open(seedSnapshotPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			msg := "seed snapshot directory not found in filesystem"
+			logger.Warn().Msg(msg)
+			return false, errors.New(msg)
+		}
+		return false, err
+	}
+	defer func() { _ = dir.Close() }()
+
+	fileNames, err := dir.Readdirnames(2)
+	if err == io.EOF {
+		logger.Debug().Msg("Seed snapshot is empty")
+		return true, nil
+	}
+
+	// Check if there are any files/dirs other than .snapshots
+	for _, name := range fileNames {
+		if name == SnapshotsSubDirectory {
+			continue
+		}
+		logger.Warn().Str("found_entry", name).Msg("Seed snapshot is not empty - contains data")
+		return false, nil
+	}
+	logger.Debug().Msg("Seed snapshot is empty")
+	return true, nil
+}
+
 func (v *Volume) createSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, error) {
 	op := "createSeedSnapshot"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
@@ -1255,6 +1305,22 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 
 		if snap, err = v.createSeedSnapshot(ctx); err != nil {
 			return nil, err
+		}
+	} else {
+		// Seed snapshot exists - validate it's actually empty
+		// This prevents issues where someone manually overwrites the seed snapshot with data
+		if !v.server.isInDevMode() {
+			logger.Debug().Msg("Validating existing seed snapshot is empty")
+			empty, err := v.isSeedSnapshotEmpty(ctx)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to validate seed snapshot is empty")
+				return nil, fmt.Errorf("failed to validate seed snapshot is empty: %w", err)
+			}
+			if !empty {
+				logger.Error().Msg("Seed snapshot is not empty - it has been modified and contains data")
+				return nil, errors.New("seed snapshot is not empty - cannot provision new volumes from a seed snapshot that contains data. The seed snapshot must represent an empty filesystem state")
+			}
+			logger.Debug().Msg("Seed snapshot validation passed - it is empty")
 		}
 	}
 
