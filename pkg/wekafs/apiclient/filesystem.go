@@ -57,6 +57,7 @@ type FileSystemMountToken struct {
 
 var AsyncOperationTimedOut = errors.New("Asynchronous operation timed out")
 var ObjectMarkedForDeletion = errors.New("Object is marked for deletion!")
+var MountPermissionDenied = errors.New("Permission denied for filesystem")
 
 func (fs *FileSystem) String() string {
 	return fmt.Sprintln("FileSystem(fsUid:", fs.Uid, "name:", fs.Name, "capacity:", strconv.FormatInt(fs.TotalCapacity, 10), ")")
@@ -259,8 +260,14 @@ func (a *ApiClient) GetFileSystemMountToken(ctx context.Context, r *FileSystemMo
 	}
 	err := a.Get(ctx, r.getApiUrl(a), nil, token)
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("Failed to obtain a mount token")
-		return err
+		switch err.(type) {
+		case *ApiForbiddenError:
+			log.Ctx(ctx).Warn().Err(err).Msg("Permission denied while getting filesystem mount token")
+			return MountPermissionDenied
+		default:
+			log.Ctx(ctx).Error().Err(err).Msg("Failed to obtain a mount token")
+			return err
+		}
 	}
 	return nil
 }

@@ -141,6 +141,15 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			RawData:     &responseBody,
 			ApiResponse: Response,
 		}
+	case http.StatusForbidden: //403
+		endpoint.http403ErrCount++
+		return Response, &ApiForbiddenError{
+			Err:         err,
+			Text:        "Permission denied",
+			StatusCode:  response.StatusCode,
+			RawData:     &responseBody,
+			ApiResponse: Response,
+		}
 	case http.StatusNotFound: //404
 		endpoint.http404ErrCount++
 		return Response, &ApiNotFoundError{
@@ -236,7 +245,12 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 			logger.Warn().Msg("Got Authorization failure on request, trying to re-login")
 			_ = a.Init(ctx)
 			return reqErr
-		case http.StatusNotFound, http.StatusConflict, http.StatusBadRequest, http.StatusInternalServerError:
+		case
+			http.StatusNotFound,            // 404
+			http.StatusConflict,            // 409
+			http.StatusBadRequest,          // 400
+			http.StatusInternalServerError, // 500
+			http.StatusForbidden:           // 403
 			return ApiNonTransientError{reqErr}
 		default:
 			logger.Warn().Err(reqErr).Int("http_code", s).Msg("Failed to perform a request, got an unhandled error")
