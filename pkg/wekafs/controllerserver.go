@@ -18,7 +18,9 @@ package wekafs
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"os"
 	"strings"
 	"sync"
@@ -332,22 +334,27 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return CreateVolumeError(ctx, codes.AlreadyExists, "Volume with same name and different capacity already exists")
 	} else if volExists && err != nil {
 		// can happen if volume is half-made (object was created but capacity was not set on it on previous run)
-		if err := volume.UpdateCapacity(ctx, &volume.enforceCapacity, capacity); err == nil {
-			result = "SUCCESS"
-			return &csi.CreateVolumeResponse{
-				Volume: &csi.Volume{
-					VolumeId:           volume.GetId(),
-					CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
-					VolumeContext:      params,
-					ContentSource:      volume.getCsiContentSource(ctx),
-					AccessibleTopology: cs.generateAccessibleTopology(),
-				},
-			}, nil
-
-		} else {
+		if err := volume.UpdateCapacity(ctx, &volume.enforceCapacity, capacity); err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch OR set capacity for a volume")
-			return CreateVolumeError(ctx, codes.Internal, "failed to fetch or set capacity for volume")
+			return CreateVolumeError(ctx, codes.Internal, err.Error())
 		}
+
+		if err := volume.UpdateParams(ctx); err != nil {
+			logger.Error().Err(err).Msg("Failed to set params on a volume")
+			return CreateVolumeError(ctx, codes.Internal, err.Error())
+		}
+
+		result = "SUCCESS"
+		return &csi.CreateVolumeResponse{
+			Volume: &csi.Volume{
+				VolumeId:           volume.GetId(),
+				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
+				VolumeContext:      params,
+				ContentSource:      volume.getCsiContentSource(ctx),
+				AccessibleTopology: cs.generateAccessibleTopology(),
+			},
+		}, nil
+
 	}
 
 	if cs.config.enforceDirVolTotalCapacity {
@@ -360,8 +367,12 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// Actually try to create the volume here
 	logger.Info().Int64("capacity", capacity).Str("volume_id", volume.GetId()).Msg("Creating volume")
 	if err := volume.Create(ctx, capacity); err != nil {
-		return nil, err
+		if errors.Is(err, apiclient.MountPermissionDenied) {
+			return CreateVolumeError(ctx, codes.PermissionDenied, err.Error())
+		}
+		return CreateVolumeError(ctx, codes.Internal, err.Error())
 	}
+
 	result = "SUCCESS"
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{

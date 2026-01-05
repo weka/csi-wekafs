@@ -23,6 +23,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
@@ -354,7 +355,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 
 	err, unmount := volume.MountUnderlyingFS(ctx)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to mount underlying filesystem")
+		if errors.Is(err, apiclient.MountPermissionDenied) {
+			return NodePublishVolumeError(ctx, codes.PermissionDenied, err.Error())
+		}
+
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
 	defer unmount() // unmount the parent mount since there is a bind mount anyway

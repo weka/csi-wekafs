@@ -20,6 +20,7 @@ type ApiEndPoint struct {
 	timeoutCount         int64
 	http400ErrCount      int64
 	http401ErrCount      int64
+	http403ErrCount      int64
 	http404ErrCount      int64
 	http409ErrCount      int64
 	http500ErrCount      int64
