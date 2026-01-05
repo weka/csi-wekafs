@@ -330,14 +330,15 @@ func (fs *FileSystem) EQ(q ApiObject) bool {
 }
 
 type FileSystemCreateRequest struct {
-	Name          string `json:"name"`
-	GroupName     string `json:"group_name"`
-	TotalCapacity int64  `json:"total_capacity"`
-	ObsName       string `json:"obs_name,omitempty"`
-	SsdCapacity   *int64 `json:"ssd_capacity,omitempty"`
-	Encrypted     bool   `json:"encrypted,omitempty"`
-	AuthRequired  bool   `json:"auth_required,omitempty"`
-	AllowNoKms    bool   `json:"allow_no_kms,omitempty"`
+	Name           string `json:"name"`
+	GroupName      string `json:"group_name"`
+	TotalCapacity  int64  `json:"total_capacity"`
+	ObsName        string `json:"obs_name,omitempty"`
+	SsdCapacity    *int64 `json:"ssd_capacity,omitempty"`
+	Encrypted      bool   `json:"encrypted,omitempty"`
+	AuthRequired   bool   `json:"auth_required,omitempty"`
+	AllowNoKms     bool   `json:"allow_no_kms,omitempty"`
+	HasPermissions bool   `json:"has_permissions,omitempty"`
 
 	KmsVaultKeyIdentifier string `json:"kms_vault_key_identifier,omitempty"`
 	KmsVaultNamespace     string `json:"kms_vault_namespace,omitempty"`
@@ -363,7 +364,7 @@ func (fsc *FileSystemCreateRequest) String() string {
 	return fmt.Sprintln("FileSystemCreateRequest(name:", fsc.Name, "groupName:", fsc.GroupName, "capacity:", fsc.TotalCapacity, ")")
 }
 
-func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64, encrytionParams EncryptionParams) (*FileSystemCreateRequest, error) {
+func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64, encrytionParams EncryptionParams, setSelfOwnership bool) (*FileSystemCreateRequest, error) {
 
 	ret := &FileSystemCreateRequest{
 		Name:                  name,
@@ -375,6 +376,7 @@ func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64, enc
 		KmsVaultNamespace:     encrytionParams.KmsVaultNamespace,
 		KmsVaultRoleId:        encrytionParams.KmsVaultRoleId,
 		KmsVaultSecretId:      encrytionParams.KmsVaultSecretId,
+		HasPermissions:        setSelfOwnership,
 	}
 	return ret, nil
 }

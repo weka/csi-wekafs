@@ -145,6 +145,9 @@ spec:
           {{- if .Values.pluginConfig.encryption.allowEncryptionWithoutKms}}
             - "--allowencryptionwithoutkms"
           {{- end}}
+          {{- if .Values.pluginConfig.setOwnershipOnDynamicFilesystems }}
+            - "--setownershipondynamicfilesystems"
+          {{- end }}
           ports:
             - containerPort: {{ .Values.controller.healthPort | default 8081 }}
               name: healthz
