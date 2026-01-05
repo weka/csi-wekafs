@@ -273,3 +273,6 @@ pluginConfig:
   waitForObjectDeletion: false
   # -- Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false.
   manageNodeTopologyLabels: true
+  # -- Automatically set ownership (exclusive permissions to mount a filesystem) on dynamically created filesystem-backed volumes
+  # --   NOTE: This functionality requires WEKA software of version 5.1.0 and above
+  setOwnershipOnDynamicFilesystems: false

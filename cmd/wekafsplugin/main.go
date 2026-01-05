@@ -103,6 +103,7 @@ var (
 	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
 	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
 	enforceDirVolTotalCapacity           = flag.Bool("enforcedirvoltotalcapacity", false, "Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)")
+	setOwnershipOnDynamicFilesystems     = flag.Bool("setownershipondynamicfilesystems", false, "Set ownership on Dynamic Filesystems (only OrgAdmin/CSI user that created the filesystem will be able to mount it")
 	// Set by the build process
 	version = ""
 )
@@ -243,6 +244,7 @@ func handle(ctx context.Context) {
 		*manageNodeTopologyLabels,
 		*wekafsContainerName,
 		*enforceDirVolTotalCapacity,
+		*setOwnershipOnDynamicFilesystems,
 	)
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {

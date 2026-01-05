@@ -48,6 +48,7 @@ type DriverConfig struct {
 	manageNodeTopologyLabels         bool
 	wekafsContainerName              string
 	enforceDirVolTotalCapacity       bool
+	setOwnershipOnDynamicFilesystems bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -75,6 +76,8 @@ func (dc *DriverConfig) Log() {
 		Str("tracing_url", dc.tracingUrl).
 		Bool("manage_node_topology_labels", dc.manageNodeTopologyLabels).
 		Str("wekafs_container_name", dc.wekafsContainerName).
+		Bool("enforce_dir_vol_total_capacity", dc.enforceDirVolTotalCapacity).
+		Bool("set_ownership_on_dynamic_filesystems", dc.setOwnershipOnDynamicFilesystems).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -94,6 +97,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	manageNodeTopologyLabels bool,
 	wekafsContainerName string,
 	enforceDirVolTotalCapacity bool,
+	setOwnershipOnDynamicFilesystems bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -146,6 +150,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		manageNodeTopologyLabels:         manageNodeTopologyLabels,
 		wekafsContainerName:              wekafsContainerName,
 		enforceDirVolTotalCapacity:       enforceDirVolTotalCapacity,
+		setOwnershipOnDynamicFilesystems: setOwnershipOnDynamicFilesystems,
 	}
 }
 
