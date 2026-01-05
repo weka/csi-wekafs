@@ -6,61 +6,64 @@ import (
 )
 
 type WekaCompatibilityRequiredVersions struct {
-	FilesystemAsVolume             string
-	DirectoryAsCSIVolume           string
-	QuotaDirectoryAsVolume         string
-	QuotaOnNonEmptyDirs            string
-	QuotaOnSnapshot                string
-	MountFilesystemsUsingAuthToken string
-	NewFilesystemFromSnapshot      string
-	CloneFilesystem                string
-	UrlQueryParams                 string
-	SyncOnCloseMountOption         string
-	SingleClientMultipleClusters   string
-	NewNodeApiObjectPath           string
-	EncryptionWithNoKms            string
-	EncryptionWithClusterKey       string
-	EncryptionWithCustomSettings   string
-	ResolvePathToInode             string
-	ResolvePathToInodeCsiRole      string
+	FilesystemAsVolume               string
+	DirectoryAsCSIVolume             string
+	QuotaDirectoryAsVolume           string
+	QuotaOnNonEmptyDirs              string
+	QuotaOnSnapshot                  string
+	MountFilesystemsUsingAuthToken   string
+	NewFilesystemFromSnapshot        string
+	CloneFilesystem                  string
+	UrlQueryParams                   string
+	SyncOnCloseMountOption           string
+	SingleClientMultipleClusters     string
+	NewNodeApiObjectPath             string
+	EncryptionWithNoKms              string
+	EncryptionWithClusterKey         string
+	EncryptionWithCustomSettings     string
+	ResolvePathToInode               string
+	ResolvePathToInodeCsiRole        string
+	SetSelfAsFilesystemOwnerOnCreate string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
-	DirectoryAsCSIVolume:           "v3.0",   // can create CSI volume from directory, without quota support
-	FilesystemAsVolume:             "v3.13",  // can create CSI volume from filesystem
-	QuotaDirectoryAsVolume:         "v3.13",  // can create CSI volume from directory with quota support
-	QuotaOnSnapshot:                "v4.2",   // can create a valid quota on snapshot
-	MountFilesystemsUsingAuthToken: "v3.14",  // can mount filesystems that require authentication (and non-root orgID)
-	NewFilesystemFromSnapshot:      "v9.99",  // can create new filesystem from snapshot on storage side
-	CloneFilesystem:                "v9.99",  // can clone a volume directly on storage side
-	UrlQueryParams:                 "v4.0",   // can perform URL query by fields
-	SyncOnCloseMountOption:         "v4.2",   // can perform sync_on_close mount option
-	SingleClientMultipleClusters:   "v4.2",   // single client can have multiple Weka cluster connections
-	NewNodeApiObjectPath:           "v4.2",   // new API object paths (processes, containers, etc.)
-	EncryptionWithNoKms:            "v4.0",   // can create encrypted filesystems without KMS
-	EncryptionWithClusterKey:       "v4.0",   // can create encrypted filesystems with common cluster-wide key
-	EncryptionWithCustomSettings:   "v4.4.1", // can create encrypted filesystems with custom settings (key per filesystem(s))
-	ResolvePathToInode:             "v4.3",   // can resolve a path to an inode instead of doing it via mount
-	ResolvePathToInodeCsiRole:      "v4.4.7", // can resolve a path to an inode via API with CSI role
+	DirectoryAsCSIVolume:             "v3.0",   // can create CSI volume from directory, without quota support
+	FilesystemAsVolume:               "v3.13",  // can create CSI volume from filesystem
+	QuotaDirectoryAsVolume:           "v3.13",  // can create CSI volume from directory with quota support
+	QuotaOnSnapshot:                  "v4.2",   // can create a valid quota on snapshot
+	MountFilesystemsUsingAuthToken:   "v3.14",  // can mount filesystems that require authentication (and non-root orgID)
+	NewFilesystemFromSnapshot:        "v9.99",  // can create new filesystem from snapshot on storage side
+	CloneFilesystem:                  "v9.99",  // can clone a volume directly on storage side
+	UrlQueryParams:                   "v4.0",   // can perform URL query by fields
+	SyncOnCloseMountOption:           "v4.2",   // can perform sync_on_close mount option
+	SingleClientMultipleClusters:     "v4.2",   // single client can have multiple Weka cluster connections
+	NewNodeApiObjectPath:             "v4.2",   // new API object paths (processes, containers, etc.)
+	EncryptionWithNoKms:              "v4.0",   // can create encrypted filesystems without KMS
+	EncryptionWithClusterKey:         "v4.0",   // can create encrypted filesystems with common cluster-wide key
+	EncryptionWithCustomSettings:     "v4.4.1", // can create encrypted filesystems with custom settings (key per filesystem(s))
+	ResolvePathToInode:               "v4.3",   // can resolve a path to an inode instead of doing it via mount
+	ResolvePathToInodeCsiRole:        "v4.4.7", // can resolve a path to an inode via API with CSI role
+	SetSelfAsFilesystemOwnerOnCreate: "v5.1",   // CSI can create filesystems while setting itself as explicit filesystem owner
 }
 
 type WekaCompatibilityMap struct {
-	FilesystemAsCSIVolume           bool
-	DirectoryAsCSIVolume            bool
-	QuotaOnDirectoryVolume          bool
-	QuotaOnSnapshot                 bool
-	MountFilesystemsUsingAuthToken  bool
-	CreateNewFilesystemFromSnapshot bool
-	CloneFilesystem                 bool
-	UrlQueryParams                  bool
-	SyncOnCloseMountOption          bool
-	SingleClientMultipleClusters    bool
-	NewNodeApiObjectPath            bool
-	EncryptionWithNoKms             bool
-	EncryptionWithClusterKey        bool
-	EncryptionWithCustomSettings    bool
-	ResolvePathToInode              bool
-	ResolvePathToInodeCsiRole       bool
+	FilesystemAsCSIVolume            bool
+	DirectoryAsCSIVolume             bool
+	QuotaOnDirectoryVolume           bool
+	QuotaOnSnapshot                  bool
+	MountFilesystemsUsingAuthToken   bool
+	CreateNewFilesystemFromSnapshot  bool
+	CloneFilesystem                  bool
+	UrlQueryParams                   bool
+	SyncOnCloseMountOption           bool
+	SingleClientMultipleClusters     bool
+	NewNodeApiObjectPath             bool
+	EncryptionWithNoKms              bool
+	EncryptionWithClusterKey         bool
+	EncryptionWithCustomSettings     bool
+	ResolvePathToInode               bool
+	ResolvePathToInodeCsiRole        bool
+	SetSelfAsFilesystemOwnerOnCreate bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -83,6 +86,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.EncryptionWithCustomSettings = false
 		cm.ResolvePathToInode = false
 		cm.ResolvePathToInodeCsiRole = false
+		cm.SetSelfAsFilesystemOwnerOnCreate = false
 
 		return
 	}
@@ -102,6 +106,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	ecc, _ := version.NewVersion(MinimumSupportedWekaVersions.EncryptionWithCustomSettings)
 	rp, _ := version.NewVersion(MinimumSupportedWekaVersions.ResolvePathToInode)
 	rpc, _ := version.NewVersion(MinimumSupportedWekaVersions.ResolvePathToInodeCsiRole)
+	sfo, _ := version.NewVersion(MinimumSupportedWekaVersions.SetSelfAsFilesystemOwnerOnCreate)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
@@ -119,6 +124,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.EncryptionWithCustomSettings = v.GreaterThanOrEqual(ecc)
 	cm.ResolvePathToInode = v.GreaterThanOrEqual(rp)
 	cm.ResolvePathToInodeCsiRole = v.GreaterThanOrEqual(rpc)
+	cm.SetSelfAsFilesystemOwnerOnCreate = v.GreaterThanOrEqual(sfo)
 }
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
@@ -188,4 +194,8 @@ func (a *ApiClient) SupportsResolvePathToInode() bool {
 		return a.CompatibilityMap.ResolvePathToInodeCsiRole
 	}
 	return true
+}
+
+func (a *ApiClient) SupportsSettingSelfAsFilesystemOwner() bool {
+	return a.CompatibilityMap.SetSelfAsFilesystemOwnerOnCreate
 }

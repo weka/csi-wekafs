@@ -138,6 +138,9 @@ spec:
           {{- if .Values.pluginConfig.encryption.allowEncryptionWithoutKms}}
             - "--allowencryptionwithoutkms"
           {{- end}}
+          {{- if .Values.pluginConfig.setOwnershipOnDynamicFilesystems }}
+            - "--setownershipondynamicfilesystems"
+          {{- end }}
           ports:
             - containerPort: 9898
               name: healthz
