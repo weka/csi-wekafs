@@ -1314,13 +1314,32 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		}
 
 		// this is a new blank volume by definition
-		// create the filesystem actually
 
-		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize, encryptionParams)
+		// first, check if we need to enforce ownership (both supported by WEKA and configured)
+		setSelfOwnership := false
+		if v.apiClient != nil {
+			if v.server.getConfig().setOwnershipOnDynamicFilesystems {
+				if v.apiClient.SupportsSettingSelfAsFilesystemOwner() {
+					logger.Trace().
+						Str("filesystem_name", v.FilesystemName).
+						Str("owner", v.apiClient.Credentials.Username).
+						Str("organization", v.apiClient.Credentials.Organization).
+						Msg("Setting exclusive owner of filesystem")
+					setSelfOwnership = true
+				} else {
+					logger.Warn().Msg("Setting owner of filesystem is not supported on current version of WEKA software")
+				}
+			}
+		}
+
+		// prepare the create request
+		cr, err := apiclient.NewFilesystemCreateRequest(v.FilesystemName, v.filesystemGroupName, fsSize, encryptionParams, setSelfOwnership)
 		if err != nil {
 			return status.Errorf(codes.Internal, "Failed to create filesystem %s: %s", v.FilesystemName, err.Error())
 		}
+
 		fsObj := &apiclient.FileSystem{}
+		// create the filesystem actually
 		if err := v.apiClient.CreateFileSystem(ctx, cr, fsObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
