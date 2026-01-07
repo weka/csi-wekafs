@@ -103,6 +103,8 @@ type PrometheusMetrics struct {
 		ReportedMetricsSuccessCount prometheus.Counter // number of metrics reported to Prometheus across all . Should be equal to FetchSinglePvMetricsOperationsInvokeCount
 		ReportedMetricsFailureCount prometheus.Counter // number of metrics that were not valid for reporting, e.g. appeared empty
 
+		Scrapes *prometheus.CounterVec // tracks scrape operations with result and status_code labels
+
 	}
 }
 
@@ -990,6 +992,16 @@ func (m *PrometheusMetrics) Init() {
 		},
 	)
 
+	m.server.Scrapes = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: MetricsNamespace,
+			Subsystem: MetricsServerSubsystem,
+			Name:      "scrapes",
+			Help:      "Total number of scrape operations broken down by result and status code",
+		},
+		[]string{"result", "status_code"},
+	)
+
 	prometheus.MustRegister(
 		m.volumes.CapacityBytes,
 		m.volumes.UsedBytes,
@@ -1048,6 +1060,7 @@ func (m *PrometheusMetrics) Init() {
 		m.server.QuotaCacheValiditySeconds,
 		m.server.ReportedMetricsSuccessCount,
 		m.server.ReportedMetricsFailureCount,
+		m.server.Scrapes,
 	)
 
 	log.Debug().Msg("Prometheus metrics initialized")

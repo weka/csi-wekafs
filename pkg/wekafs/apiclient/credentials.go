@@ -34,6 +34,7 @@ type Credentials struct {
 	NfsTargetIPs                                 []string
 	KmsPreexistingCredentialsForVolumeEncryption KmsVaultCredentials // those are used as is to pass to filesystem creation
 	KmsKeyManagementCredentials                  KmsVaultCredentials // those are used by the CSI plugin to connect to vault and create new credentials //TODO: not implemented
+	SecretName                                   string              // K8s secret name for metrics tracking (not included in hash)
 }
 
 func (c *Credentials) String() string {

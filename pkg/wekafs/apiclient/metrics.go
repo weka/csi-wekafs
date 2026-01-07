@@ -9,6 +9,7 @@ type ApiMetrics struct {
 	endpoints        *prometheus.GaugeVec
 	requestCounters  *prometheus.CounterVec
 	requestDurations *prometheus.HistogramVec
+	backendCalls     *prometheus.CounterVec
 }
 
 var apiMetrics *ApiMetrics
@@ -48,9 +49,19 @@ func InitApiMetrics() {
 			},
 			[]string{"csi_driver_name", "cluster_guid", "endpoint", "method", "url", "status"},
 		),
+		backendCalls: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: "weka_csi",
+				Subsystem: "metricsserver",
+				Name:      "backend_call",
+				Help:      "Total number of backend API calls broken down by path, result, status code, and secret name",
+			},
+			[]string{"path", "result", "status_code", "secret_name"},
+		),
 	}
 
 	prometheus.MustRegister(apiMetrics.requestCounters)
 	prometheus.MustRegister(apiMetrics.requestDurations)
+	prometheus.MustRegister(apiMetrics.backendCalls)
 	log.Debug().Msg("API metrics registered with Prometheus")
 }

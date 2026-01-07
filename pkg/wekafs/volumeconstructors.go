@@ -111,7 +111,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 // NewVolumeForBlankVolumeRequest can create a new volume of those types: new raw FS, snapshot of empty FS, directory on predefined filesystem
 func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, dynamicVolPath string, cs *ControllerServer) (*Volume, error) {
 	// obtain API client
-	client, err := cs.api.GetClientFromSecrets(ctx, req.GetSecrets())
+	client, err := cs.api.GetClientFromSecrets(ctx, req.GetSecrets(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 // - New volume will be always in new format, any volumeType set in StorageClass will be ignored
 func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (*Volume, error) {
 	// obtain API client
-	client, err := server.(*ControllerServer).api.GetClientFromSecrets(ctx, req.GetSecrets())
+	client, err := server.(*ControllerServer).api.GetClientFromSecrets(ctx, req.GetSecrets(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, server AnyServer) (*Volume, error) {
 	logger := log.Ctx(ctx)
 	// obtain API client
-	client, err := server.getApiStore().GetClientFromSecrets(ctx, req.GetSecrets())
+	client, err := server.getApiStore().GetClientFromSecrets(ctx, req.GetSecrets(), "")
 	if err != nil {
 		return nil, err
 	}

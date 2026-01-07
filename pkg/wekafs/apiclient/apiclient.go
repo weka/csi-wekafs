@@ -55,7 +55,8 @@ type ApiClient struct {
 	NfsInterfaceGroupName       string
 	NfsClientGroupName          string
 	driverName                  string
-	RotateEndpointOnEachRequest bool // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
+	secretName                  string // K8s secret name for metrics tracking
+	RotateEndpointOnEachRequest bool   // to be used in metrics server only (atm) to increase concurrency of requests across endpoints
 
 	containers           *ContainersResponse
 	containersUpdateTime time.Time
@@ -101,6 +102,8 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 		Credentials:        credentials,
 		CompatibilityMap:   &WekaCompatibilityMap{},
 		hostname:           opts.Hostname,
+		driverName:         opts.DriverName,
+		secretName:         credentials.SecretName,
 		apiEndpoints:       NewApiEndPoints(),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
