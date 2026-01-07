@@ -169,6 +169,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch PersistentVolumes, no statistics will be available, will retry in 10 seconds")
 			ms.prometheusMetrics.server.FetchPvBatchOperationFailureCount.Inc()
+			ms.prometheusMetrics.server.Scrapes.WithLabelValues("fail", "500").Inc()
 			time.Sleep(10 * time.Second)
 			continue
 		}
@@ -178,6 +179,7 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		ms.prometheusMetrics.server.FetchPvBatchOperationsDurationSeconds.Add(d)
 		ms.prometheusMetrics.server.FetchPvBatchOperationsDurationHistogram.Observe(d)
 		ms.prometheusMetrics.server.MonitoredPersistentVolumesGauge.Set(float64(len(ms.volumeMetrics.Metrics)))
+		ms.prometheusMetrics.server.Scrapes.WithLabelValues("success", "200").Inc()
 
 		logger.Info().Int("pv_count", len(pvList.Items)).Msg("Fetched list of PersistentVolumes, streaming them for processing")
 
@@ -398,7 +400,8 @@ func (ms *MetricsServer) processSinglePersistentVolume(ctx context.Context, pv *
 			secretData["endpoints"] = endpoints
 		}
 	}
-	apiClient, err := ms.getApiStore().fromSecrets(ctx, secretData, ms.nodeID)
+	secretName := fmt.Sprintf("%s/%s", pv.Spec.CSI.NodePublishSecretRef.Namespace, pv.Spec.CSI.NodePublishSecretRef.Name)
+	apiClient, err := ms.getApiStore().fromSecrets(ctx, secretData, ms.nodeID, secretName)
 	if err != nil {
 		logger.Error().Err(err).Str("pv_name", pv.Name).Msg("Failed to create API client from secret, skipping PersistentVolume")
 		return

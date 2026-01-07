@@ -56,7 +56,7 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 }
 
 // fromSecrets returns a pointer to API by secret contents
-func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string, hostname string) (*apiclient.ApiClient, error) {
+func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string, hostname string, secretName string) (*apiclient.ApiClient, error) {
 	endpointsRaw, ok := secrets["endpoints"]
 	if !ok {
 		return nil, fmt.Errorf("no endpointsRaw found in secret")
@@ -146,6 +146,7 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 		CaCertificate:       caCertificate,
 		NfsTargetIPs:        nfsTargetIps,
 		KmsPreexistingCredentialsForVolumeEncryption: preexistingVaultCreds,
+		SecretName:          secretName,
 	}
 	return api.fromCredentials(ctx, credentials, hostname)
 }
@@ -202,13 +203,13 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	return newClient, nil
 }
 
-func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
+func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[string]string, secretName string) (*apiclient.ApiClient, error) {
 	logger := log.Ctx(ctx)
 	if len(secrets) == 0 {
 		logger.Error().Msg("No secrets provided, cannot proceed")
 		return nil, errors.New("no secrets provided")
 	}
-	client, err := api.fromSecrets(ctx, secrets, api.Hostname)
+	client, err := api.fromSecrets(ctx, secrets, api.Hostname, secretName)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize API client from secret, cannot proceed")
 		return nil, err

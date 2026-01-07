@@ -310,7 +310,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return NodePublishVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
 	}
 
-	client, err := ns.api.GetClientFromSecrets(ctx, req.Secrets)
+	client, err := ns.api.GetClientFromSecrets(ctx, req.Secrets, "")
 	if err != nil {
 		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}

@@ -26,6 +26,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	}
 	u := a.getUrl(ctx, Path)
 	status := "ERROR"
+	statusCode := 0
 	defer func() {
 		path := generalizeUrlPathForMetrics(Path)
 		guid := a.ClusterGuid.String()
@@ -33,6 +34,17 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		dn := a.driverName
 		apiMetrics.requestCounters.WithLabelValues(dn, guid, ip, Method, path, status).Inc()
 		apiMetrics.requestDurations.WithLabelValues(dn, guid, ip, Method, path, status).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+
+		// Track backend call metric with secret name
+		result := "fail"
+		if statusCode >= 200 && statusCode < 300 {
+			result = "success"
+		}
+		secretName := a.secretName
+		if secretName == "" {
+			secretName = "unknown"
+		}
+		apiMetrics.backendCalls.WithLabelValues(path, result, fmt.Sprintf("%d", statusCode), secretName).Inc()
 	}()
 	//construct base request and add auth if exists
 	var body *bytes.Reader
@@ -86,6 +98,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	logger.Trace().Str("response", maskPayload(string(responseBody))).Str("duration", time.Since(ctx.Value("startTime").(time.Time)).String()).Msg("")
 	if err != nil {
 		status = "response_parse_error"
+		statusCode = response.StatusCode
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
@@ -104,8 +117,10 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	status = "response_parse_error"
 	Response.HttpStatusCode = response.StatusCode
+	statusCode = response.StatusCode
 	if err != nil {
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
+		statusCode = response.StatusCode
 		return nil, &ApiError{
 			Err:         err,
 			Text:        "Failed to parse HTTP response body",
@@ -115,6 +130,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 	}
 	status = fmt.Sprintf("http_%d", response.StatusCode)
+	statusCode = response.StatusCode
 	switch response.StatusCode {
 	case http.StatusOK: //200
 		return Response, nil

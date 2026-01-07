@@ -433,7 +433,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
 	}
 
-	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets)
+	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets, "")
 	if err != nil {
 		return DeleteVolumeError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
@@ -536,7 +536,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if len(req.GetVolumeId()) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "Volume ID not specified")
 	}
-	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets)
+	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets, "")
 
 	if err != nil {
 		// this case can happen only if we had client that failed to initialise, and not if we do not have a client at all
@@ -630,7 +630,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		return CreateSnapshotError(ctx, codes.InvalidArgument, "Cannot create snapshot without snapName")
 	}
 
-	client, err := cs.api.GetClientFromSecrets(ctx, secrets)
+	client, err := cs.api.GetClientFromSecrets(ctx, secrets, "")
 	if err != nil {
 		return CreateSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the req", err))
 	}
@@ -708,7 +708,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		return &csi.DeleteSnapshotResponse{}, nil
 	}
 
-	client, err := cs.api.GetClientFromSecrets(ctx, secrets)
+	client, err := cs.api.GetClientFromSecrets(ctx, secrets, "")
 	if err != nil {
 		return DeleteSnapshotError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the req", err))
 	}
@@ -783,7 +783,7 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 		return nil, status.Error(codes.InvalidArgument, req.GetVolumeId())
 	}
 
-	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets)
+	client, err := cs.api.GetClientFromSecrets(ctx, req.Secrets, "")
 	if err != nil {
 		return ValidateVolumeCapsError(ctx, codes.Internal, fmt.Sprintln("Failed to initialize Weka API client for the request", err))
 	}
