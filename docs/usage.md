@@ -61,9 +61,10 @@ Comments:
 6. Weka CSI plugin does not support automatic configuration of tiering for filesystem-backed volumes, but those can be set externally.
 
 #### Directory-backed volumes
-Directory-backed volumes, also called "legacy", are represented by single directory inside a dedicated filesystem.  
+Directory-backed volumes are represented by single directory inside a dedicated filesystem.  
 Since multiple directory-backed volumes may reside on a single filesystem, their maximal number is only limited by max number of directory quotas.
 Snapshots of those volumes, however, are less efficient capacity-wise, since each CSI volume snapshot basically means a snapshot of a whole filesystem
+
 
 #### Snapshot-backed volumes
 Snapshot-backed volumes utilize Weka writable snapshots mechanism for storage. This basically means that a filesystem must be created, on top of which  
