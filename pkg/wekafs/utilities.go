@@ -8,6 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
@@ -17,17 +23,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
-	"time"
 )
 
 const (
 	SnapshotTypeUnifiedSnap = "wekasnap/v2"
 	ProcModulesPath         = "/proc/modules"
-	ProcWekafsInterface     = "/proc/wekafs/interface"
 )
 
 var ProcMountsPath = "/proc/mounts"
@@ -563,25 +563,39 @@ func isWekaDriverLoaded() bool {
 }
 
 func isWekaRunning() bool {
-	if isWekaDriverLoaded() {
-		// check if the WEKA client software is running (on top of the kernel module)
-		driverInfo, err := os.Open(ProcWekafsInterface)
-		if err != nil {
-			log.Err(err).Msg("Failed to open driver interface and check for existence of Weka client software")
-			return false
-		}
-		defer func() { _ = driverInfo.Close() }()
-		scanner := bufio.NewScanner(driverInfo)
-		for scanner.Scan() {
-			line := scanner.Text()
-			// TODO: improve it by checking for the explicit client container name rather than just ANY container
-			if strings.Contains(line, "Connected frontend pid") {
-				return true
-			}
-		}
-		log.Error().Msg("Client software is not running on host and NFS is not enabled")
+	if !isWekaDriverLoaded() {
+		return false
 	}
-	return false
+
+	frontends, err := apiclient.GetFrontendsFromDriver(context.Background())
+	if err != nil {
+		log.Err(err).Msg("Failed to read frontend statuses from driver interface")
+		return false
+	}
+
+	if len(frontends) == 0 {
+		log.Error().Msg("No frontends found in driver interface, client software may not be running")
+		return false
+	}
+
+	var disconnected []string
+	for _, frontend := range frontends {
+		if !frontend.Connected {
+			disconnected = append(disconnected, fmt.Sprintf("%s/FE%d", frontend.ContainerName, frontend.ContainerId))
+		}
+	}
+
+	if len(disconnected) > 0 {
+		log.Error().
+			Strs("disconnected_frontends", disconnected).
+			Int("connected", len(frontends)-len(disconnected)).
+			Int("total", len(frontends)).
+			Msg("Not all frontends are connected")
+		return false
+	}
+
+	log.Trace().Int("frontends", len(frontends)).Msg("All frontends connected")
+	return true
 }
 
 func getSelinuxStatus(ctx context.Context) bool {
