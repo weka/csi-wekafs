@@ -5,15 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"golang.org/x/exp/slices"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"golang.org/x/exp/slices"
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 const ApiPathLogin = "login"
@@ -27,6 +28,9 @@ const ApiPathClusterInfo = "cluster"
 const ApiPathContainersInfo = "containers"
 
 const ApiPathWhoami = "users/whoami"
+
+// ProcFsPath is the path to the wekafs interface file (variable for testing)
+var ProcFsPath = "/proc/wekafs/interface"
 
 // updateTokensExpiryInterval fetches the refresh token expiry from API
 func (a *ApiClient) updateTokensExpiryInterval(ctx context.Context) error {
@@ -260,9 +264,10 @@ type ProcFsContainer struct {
 	ContainerName string
 	Pid           int
 	ContainerId   int
+	Connected     bool
 }
 
-func (a *ApiClient) getLocalContainersFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
+func GetFrontendsFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
 	// this is the contents of /proc/wekafs/interface
 	//IO node version 2e694b326b50d08a
 	//mount:[wc-c88742862af5client:sbid-0x31a8] fs698 -o,writecache,inode_bits=auto,readahead_kb=32768,dentry_max_age_positive=1000,dentry_max_age_negative=0,container_name=c88742862af5client
@@ -282,17 +287,16 @@ func (a *ApiClient) getLocalContainersFromDriver(ctx context.Context) ([]ProcFsC
 	//NS_num_fenced_inodes: 0
 	//NS_num_revoked_locks: 0
 	//NS_dirty_bytes_dropped: 0
-	// we need to parse all the lines with container_name=c88742862af5client and fetch container name AND pid
+	// we need to parse all the lines with Container= and fetch container name, pid, and connection status
 
-	const procFsPath = "/proc/wekafs/interface"
 	logger := log.Ctx(ctx)
-	f, err := os.Open(procFsPath)
+	f, err := os.Open(ProcFsPath)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
 
-	var containers []ProcFsContainer
+	var frontends []ProcFsContainer
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -300,11 +304,6 @@ func (a *ApiClient) getLocalContainersFromDriver(ctx context.Context) ([]ProcFsC
 			continue
 		}
 		if !strings.Contains(line, "Container=") {
-			continue
-		}
-
-		if strings.Contains(line, "Frontend is not connected") {
-			logger.Warn().Msg("Frontend is not connected, skipping")
 			continue
 		}
 
@@ -325,18 +324,52 @@ func (a *ApiClient) getLocalContainersFromDriver(ctx context.Context) ([]ProcFsC
 			continue
 		}
 
-		pid := strings.Split(line, "pid ")[1]
-		pidInt, err := strconv.Atoi(pid)
+		if strings.Contains(line, "Frontend is not connected") {
+			frontends = append(frontends, ProcFsContainer{
+				ContainerName: name,
+				ContainerId:   idInt,
+				Connected:     false,
+			})
+			continue
+		}
+
+		if !strings.Contains(line, "Connected frontend pid") {
+			continue
+		}
+
+		pidParts := strings.Split(line, "pid ")
+		if len(pidParts) < 2 {
+			logger.Error().Msg("Failed to parse pid from proc fs line")
+			continue
+		}
+		pidInt, err := strconv.Atoi(strings.TrimSpace(pidParts[1]))
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to parse pid from proc fs")
 			continue
 		}
-		cont := ProcFsContainer{
+		frontends = append(frontends, ProcFsContainer{
 			ContainerName: name,
 			Pid:           pidInt,
 			ContainerId:   idInt,
+			Connected:     true,
+		})
+	}
+	return frontends, scanner.Err()
+}
+
+func (a *ApiClient) getLocalContainersFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
+	frontends, err := GetFrontendsFromDriver(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logger := log.Ctx(ctx)
+	var containers []ProcFsContainer
+	for _, frontend := range frontends {
+		if !frontend.Connected {
+			logger.Warn().Msg("Frontend is not connected, skipping")
+			continue
 		}
-		containers = append(containers, cont)
+		containers = append(containers, frontend)
 	}
 	return containers, nil
 }
