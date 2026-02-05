@@ -1,5 +1,5 @@
 #syntax=docker/dockerfile:1.17
-ARG UBI_HASH=9.6-1754584681
+ARG UBI_HASH=9.7-1770267347
 FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS base
 
 LABEL maintainers="WekaIO, LTD"
