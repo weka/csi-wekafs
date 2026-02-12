@@ -1,6 +1,6 @@
 module github.com/wekafs/csi-wekafs
 
-go 1.24.2
+go 1.25.0
 
 require (
 	github.com/container-storage-interface/spec v1.11.0
@@ -17,9 +17,9 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.36.0
 	go.opentelemetry.io/otel/sdk v1.36.0
 	go.uber.org/atomic v1.11.0
-	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6
+	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a
 	golang.org/x/net v0.43.0
-	golang.org/x/sync v0.16.0
+	golang.org/x/sync v0.19.0
 	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.7
 	k8s.io/api v0.33.2
