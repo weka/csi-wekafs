@@ -290,10 +290,32 @@ func GetFrontendsFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
 	// we need to parse all the lines with Container= and fetch container name, pid, and connection status
 
 	logger := log.Ctx(ctx)
-	f, err := os.Open(ProcFsPath)
-	if err != nil {
-		return nil, err
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+
+	// Use a channel to handle timeout for os.Open
+	type openResult struct {
+		file *os.File
+		err  error
 	}
+	openChan := make(chan openResult, 1)
+	go func() {
+		f, err := os.Open(ProcFsPath)
+		openChan <- openResult{f, err}
+	}()
+
+	var f *os.File
+	select {
+	case result := <-openChan:
+		if result.err != nil {
+			return nil, result.err
+		}
+		f = result.file
+	case <-ctxWithTimeout.Done():
+		return nil, fmt.Errorf("timeout opening %s: %w", ProcFsPath, ctxWithTimeout.Err())
+	}
+
 	defer func() { _ = f.Close() }()
 
 	var frontends []ProcFsContainer
