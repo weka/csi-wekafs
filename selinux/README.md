@@ -12,54 +12,47 @@ on each Kubernetes worker node that is intended to service WekaFS-based persiste
 
 The provided policy allows processes with `container_t` seclabel to access objects having `wekafs_t` label (which is set for all files and directories of mounted CSI volumes).
 
-The policy comes both as a Type Enforcement file, and as a precompiled policy package.
+The policy is provided in CIL (Common Intermediate Language) format, which is more efficient and directly supported by modern SELinux tools.
 In order to use Weka CSI Plugin with SELinux enforcement, the following steps must be performed:
 
 ## Custom SELinux Policy Installation
-1. Distribute the SELinux policy package to all Kubernetes nodes, by using either one of those options:
+1. Distribute the SELinux policy to all Kubernetes nodes, by using either one of those options:
    * Clone Weka CSI Plugin Github repository, by issuing
      ```shell
      git clone https://github.com/weka/csi-wekafs.git
      ```
    * Copy the content of `selinux` directory directly to Kubernetes nodes
-2. Apply the policy package directly by issuing:
+2. Apply the policy directly by issuing:
    ```shell
-   $ semodule -i csi-wekafs.pp
+   $ semodule -i csi-wekafs.cil
    ```
    Check that the policy was applied correctly:
    ```shell
-   $ getsebool -a | grep wekafs
-   container_use_wekafs --> off
+   $ semodule -l | grep wekafs
+   csi-wekafs
    ```
-   If the output matches mentioned above, skip to step 4. Otherwise, proceed to step 3 to build the policy from sources.
-3. In certain circumstances (e.g. different Kernel version or Linux distribution), 
-   the pre-compiled policy installation could fail. In this case, the policy must be built
-   and installed from source by following the procedure below.
+   If the output matches mentioned above, proceed to step 3. If the installation fails or is not supported by your system, proceed to step 3 to compile the policy.
+
+3. In certain circumstances (e.g. older SELinux version), direct CIL installation may not be supported.
+   In this case, the policy must be compiled from CIL to a policy module by following the procedure below.
    ```shell
-   $ checkmodule -M -m -o csi-wekafs.mod csi-wekafs.te
-   $ semodule_package -o csi-wekafs.pp -m csi-wekafs.mod
-   $ make -f /usr/share/selinux/devel/Makefile csi-wekafs.pp
+   $ semodule -i csi-wekafs.cil -m
+   ```
+   Alternatively, if your system requires a compiled policy module (`.pp`), use:
+   ```shell
+   $ semodule compile -m csi-wekafs.cil -o csi-wekafs.pp
    $ semodule -i csi-wekafs.pp
    ```
-   > **NOTE:** for this purpose, `policycoreutils-devel` package 
-   > (or its alternative in case of Linux distribution different from RedHat family) is required
+   > **NOTE:** for compiling CIL policies, ensure your system has `semodule` from the `policycoreutils` package
+   > (or its alternative in case of Linux distribution different from RedHat family)
 
    Check that the policy was applied correctly:
    ```shell
-   $ getsebool -a | grep wekafs
-   container_use_wekafs --> off
+   $ semodule -l | grep wekafs
+   csi-wekafs
    ```
 
-4. The policy provides a boolean setting which allows on-demand enablement of relevant permissions.
-   To enable WekaFS CSI volumes access from pods, perform the command
-   ```shell
-   $ setsebool container_use_wekafs=on
-   ```
-   To disable access, perform the command
-   ```shell
-   $ setsebool container_use_wekafs=off
-   ```
-   The configuration changes are applied immediately.
+4. The policy is automatically applied with default settings. To enable WekaFS CSI volumes access from pods, no additional configuration is needed as permissions are already provisioned in the policy.
 
 ## CSI Plugin Installation and Configuration
 1. Weka CSI Plugin must be installed in a SELinux-compatible mode to correctly label volumes.  
@@ -111,17 +104,13 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    csi-wekafs-test-api-gldmk   1/1     Running   0          98m   10.244.15.2   don-kube-8   <none>           <none>
    ```
 
-6. Connect to the relevant node and check if Weka CSI SELinux policy is installed and enabled
+6. Connect to the relevant node and check if Weka CSI SELinux policy is installed
    ```shell
-   $ getsebool -a | grep wekafs
-   container_use_wekafs --> on
+   $ semodule -l | grep wekafs
+   csi-wekafs
    ```
-   * If the output matches example, proceed to next step. 
+   * If the output matches example, the policy is installed, proceed to next step.
    * If no output, policy is not installed, proceed to [Custom SELinux Policy Installation](#custom-selinux-policy-installation)
-   * If the policy is off, enable it and check output of the pod again by issuing
-     ```shell
-     $ setsebool container_use_wekafs=on
-     ```
 7. Check if the node is labeled with plugin is operating in SELinux-compatible mode by issuing the following command:
    ```shell
    $ kubectl describe node don-kube-8 | grep csi.weka.io/selinux_enabled
