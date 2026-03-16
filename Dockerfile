@@ -1,3 +1,4 @@
+ARG UBI_HASH=9.7-1773204619
 FROM golang:1.24-alpine AS go-builder
 ARG TARGETARCH
 ARG TARGETOS
@@ -30,15 +31,16 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X mai
 RUN echo Building wait-for-leader utility
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-extldflags '-static'" -o "/bin/wait-for-leader" /src/cmd/wait-for-leader
 
-FROM alpine:3.18
+FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH}
 LABEL maintainers="WekaIO, LTD"
 LABEL description="Weka CSI Driver"
 
-RUN apk add --no-cache util-linux libselinux libselinux-utils util-linux  \
-    pciutils usbutils coreutils binutils findutils  \
-    grep bash nfs-utils rpcbind ca-certificates jq
-# Update CA certificates
-RUN update-ca-certificates
+# NOTE: usbutils, nfs-utils, rpcbind removed — unavailable in UBI9-minimal repos.
+# nfs-utils/rpcbind were not used at runtime (app uses kernel NFS client via k8s mount-utils).
+# If USB device discovery is needed, install usbutils from EPEL.
+RUN microdnf install -y util-linux libselinux-utils pciutils \
+    procps less container-selinux && \
+    microdnf clean all && rm -rf /var/cache/dnf
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
 LABEL maintainer="csi@weka.io"
