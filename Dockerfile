@@ -26,7 +26,7 @@ RUN echo Building package
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin" /src/cmd/*
 
 FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS ubibuilder
-RUN microdnf install -y util-linux libselinux-utils pciutils binutils jq procps less container-selinux
+RUN microdnf install -y util-linux libselinux-utils pciutils procps less container-selinux
 RUN microdnf clean all && rm -rf /var/cache/dnf
 
 FROM ubibuilder
