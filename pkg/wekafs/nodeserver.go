@@ -28,6 +28,9 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/mount-utils"
 	"os"
 	"path/filepath"
@@ -60,6 +63,7 @@ type NodeServer struct {
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
+	kubeClient        kubernetes.Interface
 	sync.Mutex
 }
 
@@ -190,6 +194,35 @@ func getVolumeStats(volumePath string) (volumeStats *VolumeStats, err error) {
 	return &VolumeStats{capacityBytes, usedBytes, availableBytes, inodes, inodesUsed, inodesFree}, nil
 }
 
+// newKubeClient builds a Kubernetes client from in-cluster config or KUBECONFIG.
+// Returns nil (with a warning log) when running outside a cluster and no KUBECONFIG is set.
+func newKubeClient() kubernetes.Interface {
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		if errors.Is(err, rest.ErrNotInCluster) {
+			kubeconfig := os.Getenv("KUBECONFIG")
+			if kubeconfig == "" {
+				log.Warn().Msg("Not running in cluster and KUBECONFIG not set; pod annotation mount options will be unavailable")
+				return nil
+			}
+			cfg, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to build kubeconfig; pod annotation mount options will be unavailable")
+				return nil
+			}
+		} else {
+			log.Warn().Err(err).Msg("Failed to get in-cluster config; pod annotation mount options will be unavailable")
+			return nil
+		}
+	}
+	client, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to create Kubernetes client; pod annotation mount options will be unavailable")
+		return nil
+	}
+	return client
+}
+
 func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounter AnyMounter, config *DriverConfig) *NodeServer {
 	//goland:noinspection GoBoolExpressions
 	return &NodeServer{
@@ -206,6 +239,12 @@ func NewNodeServer(nodeId string, maxVolumesPerNode int64, api *ApiStore, mounte
 		api:               api,
 		config:            config,
 		semaphores:        make(map[string]*semaphore.Weighted),
+		kubeClient: func() kubernetes.Interface {
+			if config.allowCustomPodMount {
+				return newKubeClient()
+			}
+			return nil
+		}(),
 	}
 }
 
@@ -327,6 +366,31 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if req.GetPublishContext() != nil {
 		deviceId = req.GetPublishContext()[deviceID]
 	}
+
+	attrib := req.GetVolumeContext()
+	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
+	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
+
+	// Apply per-pod mount option overrides from the weka.io/mount-options annotation.
+	// Requires podInfoOnMount: true on the CSIDriver so Kubernetes injects pod info into VolumeContext.
+	if ns.config.allowCustomPodMount && ns.kubeClient != nil && params != nil {
+		podName := params[CSIPodNameKey]
+		podNamespace := params[CSIPodNamespaceKey]
+		if podName != "" && podNamespace != "" {
+			pvcName, pvErr := getPVCClaimNameFromTargetPath(ctx, ns.kubeClient, targetPath)
+			if pvErr != nil {
+				logger.Warn().Err(pvErr).Str("target_path", targetPath).
+					Msg("Failed to resolve PVC name from target path; skipping pod annotation mount options")
+			} else if pvcName != "" {
+				rawOpts := getPodAnnotationMountOptions(ctx, ns.kubeClient, podNamespace, podName, pvcName)
+				if rawOpts != "" {
+					volume.mountOptions = applyAnnotationMountOptions(volume.mountOptions, rawOpts, ns.getConfig().mutuallyExclusiveOptions)
+					volume.pruneUnsupportedMountOptions(ctx)
+				}
+			}
+		}
+	}
+
 	var innerMountOpts = []string{"bind"}
 
 	readOnly := req.GetReadonly()
@@ -337,10 +401,6 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		volume.mountOptions.Merge(roMountOptions, ns.getConfig().mutuallyExclusiveOptions)
 		innerMountOpts = append(innerMountOpts, "ro")
 	}
-
-	attrib := req.GetVolumeContext()
-	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
-	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
 
 	logger.Debug().Str("target_path", targetPath).
 		Str("fs_type", fsType).

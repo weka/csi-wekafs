@@ -49,6 +49,7 @@ type DriverConfig struct {
 	wekafsContainerName              string
 	enforceDirVolTotalCapacity       bool
 	setOwnershipOnDynamicFilesystems bool
+	allowCustomPodMount              bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -78,6 +79,7 @@ func (dc *DriverConfig) Log() {
 		Str("wekafs_container_name", dc.wekafsContainerName).
 		Bool("enforce_dir_vol_total_capacity", dc.enforceDirVolTotalCapacity).
 		Bool("set_ownership_on_dynamic_filesystems", dc.setOwnershipOnDynamicFilesystems).
+		Bool("allow_custom_pod_mount", dc.allowCustomPodMount).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -98,6 +100,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	wekafsContainerName string,
 	enforceDirVolTotalCapacity bool,
 	setOwnershipOnDynamicFilesystems bool,
+	allowCustomPodMount bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -151,6 +154,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		wekafsContainerName:              wekafsContainerName,
 		enforceDirVolTotalCapacity:       enforceDirVolTotalCapacity,
 		setOwnershipOnDynamicFilesystems: setOwnershipOnDynamicFilesystems,
+		allowCustomPodMount:              allowCustomPodMount,
 	}
 }
 
