@@ -17,12 +17,13 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/constraints"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	timestamp "google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 const (
@@ -344,7 +345,7 @@ func GetMountContainerNameFromActualMountPoint(mountPointBase string) (string, e
 			return containerName, nil
 		}
 	}
-	return "", errors.New(fmt.Sprintf("mount point not found: %s", mountPointBase))
+	return "", fmt.Errorf("mount point not found: %s", mountPointBase)
 }
 
 func validateVolumeId(volumeId string) error {

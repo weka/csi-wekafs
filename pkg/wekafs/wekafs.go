@@ -357,7 +357,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		}
 	}
 
-	mounter := driver.NewMounter()
+	mounter := driver.NewMounter(ctx)
 
 	// Create servers
 	log.Info().Msg("Loading IdentityServer")
@@ -823,20 +823,20 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 	}
 }
 
-func (driver *WekaFsDriver) NewMounter() AnyMounter {
+func (driver *WekaFsDriver) NewMounter(ctx context.Context) AnyMounter {
 	log.Info().Msg("Configuring Mounter")
 	if driver.config.useNfs {
 		log.Warn().Msg("Enforcing NFS transport due to configuration")
-		return newNfsMounter(driver)
+		return newNfsMounter(ctx, driver)
 	}
 	if driver.config.allowNfsFailback && !isWekaRunning() {
 		if driver.config.isInDevMode() {
 			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
 		} else {
 			log.Warn().Msg("Weka Driver not found. Failing back to NFS transport")
-			return newNfsMounter(driver)
+			return newNfsMounter(ctx, driver)
 		}
 	}
 	log.Info().Msg("Enforcing WekaFS transport")
-	return newWekafsMounter(driver)
+	return newWekafsMounter(ctx, driver)
 }

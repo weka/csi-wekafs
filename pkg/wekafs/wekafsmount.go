@@ -49,8 +49,8 @@ func (m *wekafsMount) isInDevMode() bool {
 	return m.debugPath != ""
 }
 
-func (m *wekafsMount) isMounted() bool {
-	return PathExists(m.getMountPoint()) && PathIsWekaMount(context.Background(), m.getMountPoint())
+func (m *wekafsMount) isMounted(ctx context.Context) bool {
+	return PathExists(m.getMountPoint()) && PathIsWekaMount(ctx, m.getMountPoint())
 }
 
 func (m *wekafsMount) getRefcountIdx() string {
@@ -58,7 +58,7 @@ func (m *wekafsMount) getRefcountIdx() string {
 }
 
 func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
-	logger := log.Ctx(ctx)
+	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	if m.mounter == nil {
 		logger.Error().Msg("Mounter is nil")
 		return errors.New("mounter is nil")
@@ -71,29 +71,28 @@ func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient
 		refCount = 0
 	}
 	if refCount == 0 {
+		logger.Debug().Strs("mount_options", m.getMountOptions().Strings()).Msg("No existing mount, mounting wekafs filesystem")
 		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
 			return err
 		}
 	}
-	if refCount > 0 && !m.isMounted() {
-		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", refCount).Msg("Mount not exists although should!")
+	if refCount > 0 && !m.isMounted(ctx) {
+		logger.Warn().Int("refcount", refCount).Msg("Mount not found in /proc/mounts despite positive refcount, remounting")
 		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
 			return err
 		}
 	}
 	refCount++
 	m.mounter.mountMap[m.getRefcountIdx()] = refCount
-	logger.Trace().
+	logger.Debug().
 		Int("refcount", refCount).
 		Strs("mount_options", m.getMountOptions().Strings()).
-		Str("filesystem_name", m.fsName).
-		Str("mount_point", m.getMountPoint()).
-		Msg("RefCount increased")
+		Msg("Mount refcount incremented")
 	return nil
 }
 
 func (m *wekafsMount) decRef(ctx context.Context) error {
-	logger := log.Ctx(ctx)
+	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	if m.mounter == nil {
 		logger.Error().Msg("Mounter is nil")
 		return errors.New("mounter is nil")
@@ -102,23 +101,26 @@ func (m *wekafsMount) decRef(ctx context.Context) error {
 	defer m.mounter.lock.Unlock()
 	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
 	if !ok {
-		logger.Error().Int("refcount", refCount).Str("mount_options", m.getMountOptions().String()).Str("mount_point", m.getMountPoint()).Msg("During decRef refcount not found")
+		logger.Error().Int("refcount", refCount).Str("mount_options", m.getMountOptions().String()).Msg("Mount map entry not found during decRef")
 		refCount = 0
 	}
 	if refCount < 0 {
-		logger.Error().Int("refcount", refCount).Msg("During decRef negative refcount encountered, probably due to failed unmount")
+		logger.Error().Int("refcount", refCount).Msg("Negative refcount during decRef")
 	}
-	if refCount > 0 {
-		logger.Trace().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
-		refCount--
-		m.mounter.mountMap[m.getRefcountIdx()] = refCount
-	}
-	if refCount == 0 {
-		if m.isMounted() {
+	if refCount == 1 {
+		if m.isMounted(ctx) {
+			logger.Debug().Msg("Last reference released, unmounting wekafs filesystem")
 			if err := m.doUnmount(ctx); err != nil {
 				return err
 			}
+		} else {
+			logger.Warn().Msg("Last reference released but mount not found in /proc/mounts, skipping unmount")
 		}
+	}
+	if refCount > 0 {
+		refCount--
+		m.mounter.mountMap[m.getRefcountIdx()] = refCount
+		logger.Debug().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Msg("Mount refcount decremented")
 	}
 	return nil
 }
@@ -140,16 +142,24 @@ func (m *wekafsMount) doUnmount(ctx context.Context) error {
 	err := m.kMounter.Unmount(m.getMountPoint())
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
-	} else {
-		logger.Trace().Msg("Unmounted successfully")
-		if err := os.Remove(m.getMountPoint()); err != nil {
-			logger.Error().Err(err).Msg("Failed to remove mount point")
-			return err
-		} else {
-			logger.Trace().Msg("Removed mount point successfully")
-		}
+		return err
 	}
-	return err
+	// WekaFS kernel module may return success from umount(2) while the mount remains
+	// visible in /proc/mounts (e.g. when Bidirectional mount propagation holds a peer
+	// reference on the host). Verify the mount is truly gone before considering this
+	// a success, so decRef does not decrement refCount prematurely.
+	if m.isMounted(ctx) {
+		err := fmt.Errorf("mount point %s still exists in /proc/mounts after umount", m.getMountPoint())
+		logger.Error().Err(err).Msg("Failed to unmount: mount still visible after umount returned success")
+		return err
+	}
+	logger.Debug().Msg("Unmounted successfully")
+	if err := os.Remove(m.getMountPoint()); err != nil {
+		logger.Warn().Err(err).Msg("Failed to remove mount point directory, will be cleaned up on next use")
+	} else {
+		logger.Trace().Msg("Removed mount point successfully")
+	}
+	return nil
 }
 
 func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *apiclient.ApiClient) error {
@@ -208,8 +218,12 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 			mountOptions = mountOptions.AddOption(fmt.Sprintf("container_name=%s", m.containerName))
 		}
 
-		logger.Trace().Strs("mount_options", mountOptions.Strings()).Msg("Performing mount")
-		return m.kMounter.MountSensitive(m.fsName, m.getMountPoint(), "wekafs", mountOptions.Strings(), mountOptionsSensitive)
+		logger.Debug().Strs("mount_options", mountOptions.Strings()).Msg("Mounting wekafs filesystem")
+		if err := m.kMounter.MountSensitive(m.fsName, m.getMountPoint(), "wekafs", mountOptions.Strings(), mountOptionsSensitive); err != nil {
+			return err
+		}
+		logger.Debug().Msg("Mounted successfully")
+		return nil
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsName)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {

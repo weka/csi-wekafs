@@ -334,7 +334,7 @@ func (v *Volume) getSeedSnapshotAccessPoint() string {
 }
 
 // UpdateParams updates params on volume upon creation. Was part of Create initially, but must be done after content source is applied
-func (v *Volume) UpdateParams(ctx context.Context) error {
+func (v *Volume) UpdateParams(ctx context.Context) (retErr error) {
 	op := "UpdateParams"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -343,7 +343,7 @@ func (v *Volume) UpdateParams(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		return err
 	}
@@ -369,7 +369,7 @@ func (v *Volume) UpdateParams(ctx context.Context) error {
 }
 
 // getFilesystemFreeSpace returns maximum capacity that can be obtained on filesystem, e.g. disk free (for directory volumes)
-func (v *Volume) getFilesystemFreeSpace(ctx context.Context) (int64, error) {
+func (v *Volume) getFilesystemFreeSpace(ctx context.Context) (freeSpace int64, retErr error) {
 	op := "getFilesystemFreeSpace"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -382,7 +382,7 @@ func (v *Volume) getFilesystemFreeSpace(ctx context.Context) (int64, error) {
 	}
 
 	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		return 0, err
 	}
@@ -502,7 +502,7 @@ func (v *Volume) GetType() VolumeType {
 	return VolumeTypeUnified
 }
 
-func (v *Volume) getCapacityFromQuota(ctx context.Context) (int64, error) {
+func (v *Volume) getCapacityFromQuota(ctx context.Context) (capacity int64, retErr error) {
 	op := "getCapacityFromQuota"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -511,7 +511,7 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (int64, error) {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		return 0, err
 	}
@@ -709,7 +709,7 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 
 }
 
-func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool, capacityLimit int64) error {
+func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool, capacityLimit int64) (retErr error) {
 	op := "updateCapacityXattr"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -718,12 +718,11 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	if !v.isMounted(ctx) {
-		err, unmountFunc := v.MountUnderlyingFS(ctx)
-		if err != nil {
-			return err
-		} else {
-			defer unmountFunc()
+		mountErr, unmountFunc := v.MountUnderlyingFS(ctx)
+		if mountErr != nil {
+			return mountErr
 		}
+		defer deferUmount(unmountFunc, &retErr)
 	}
 
 	logger.Trace().Int64("desired_capacity", capacityLimit).Msg("Updating xattrs on volume")
@@ -776,7 +775,7 @@ func (v *Volume) getMountPath() string {
 }
 
 // getInodeId used for obtaining the mount Path inode ID (to set quota on it later)
-func (v *Volume) getInodeId(ctx context.Context) (uint64, error) {
+func (v *Volume) getInodeId(ctx context.Context) (inode uint64, retErr error) {
 	op := "getInodeId"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -788,7 +787,7 @@ func (v *Volume) getInodeId(ctx context.Context) (uint64, error) {
 		return v.getInodeIdFromApi(ctx)
 	}
 	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		return 0, err
 	}
@@ -907,10 +906,10 @@ func (v *Volume) getSizeFromQuota(ctx context.Context) (uint64, error) {
 }
 
 // getSizeFromXattr returns volume size from extended attributes, mostly fallback for very old pre-API Weka clusters
-func (v *Volume) getSizeFromXattr(ctx context.Context) (uint64, error) {
+func (v *Volume) getSizeFromXattr(ctx context.Context) (size uint64, retErr error) {
 
 	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		return 0, err
 	}
@@ -973,18 +972,19 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	if v.server.getMounter() == nil {
-		return errors.New("could not mount volume, mounter not in context"), func() {}
+		return errors.New("could not mount volume, mounter not in context"), NoOpUnmount
 	}
 
 	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
 
 	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
-	retUmountFunc := func() {}
+	retUmountFunc := NoOpUnmount
 	if err == nil {
 		v.mountPath = mount
-		retUmountFunc = func() {
-			unmountFunc()
+		retUmountFunc = func() error {
+			err := unmountFunc()
 			v.mountPath = ""
+			return err
 		}
 	} else {
 		logger.Error().Err(err).Msg("Failed to mount volume")
@@ -1016,7 +1016,7 @@ func (v *Volume) UnmountUnderlyingFS(ctx context.Context) error {
 }
 
 // Exists returns true if the actual data representing volume object exists,e.g. filesystem, snapshot and innerPath
-func (v *Volume) Exists(ctx context.Context) (bool, error) {
+func (v *Volume) Exists(ctx context.Context) (exists bool, retErr error) {
 	op := "VolumeExists"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -1054,7 +1054,11 @@ func (v *Volume) Exists(ctx context.Context) (bool, error) {
 	}
 	if v.hasInnerPath() {
 		err, unmount := v.MountUnderlyingFS(ctx)
-		defer unmount()
+		defer func() {
+			if uErr := unmount(); uErr != nil && retErr == nil {
+				retErr = uErr
+			}
+		}()
 		if err != nil {
 			return false, err
 		}
@@ -1123,12 +1127,12 @@ func (v *Volume) snapshotExists(ctx context.Context) (bool, error) {
 }
 
 // isFilesystemEmpty returns true if the filesystem root directory is empty (excluding SnapshotsSubDirectory)
-func (v *Volume) isFilesystemEmpty(ctx context.Context) (bool, error) {
+func (v *Volume) isFilesystemEmpty(ctx context.Context) (empty bool, retErr error) {
 	err, umount := v.MountUnderlyingFS(ctx)
 	if err != nil {
 		return false, err
 	}
-	defer umount()
+	defer deferUmount(umount, &retErr)
 
 	dir, err := os.Open(v.mountPath)
 	if err != nil {
@@ -1265,7 +1269,11 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
 
 		err, unmount := v.MountUnderlyingFS(ctx)
-		defer unmount()
+		defer func() {
+			if uErr := unmount(); uErr != nil {
+				log.Ctx(ctx).Error().Err(uErr).Msg("Failed to release filesystem mount after seed snapshot debug setup")
+			}
+		}()
 		if err != nil {
 			return snap, err
 		}
@@ -1281,7 +1289,7 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 }
 
 // Create actually creates the storage location for the particular volume object
-func (v *Volume) Create(ctx context.Context, capacity int64) error {
+func (v *Volume) Create(ctx context.Context, capacity int64) (retErr error) {
 	op := "VolumeCreate"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -1408,7 +1416,11 @@ func (v *Volume) Create(ctx context.Context, capacity int64) error {
 		}
 
 		err, unmount := v.MountUnderlyingFS(ctx)
-		defer unmount()
+		defer func() {
+			if uErr := unmount(); uErr != nil && retErr == nil {
+				retErr = uErr
+			}
+		}()
 		if err != nil {
 			return err
 		}
@@ -1551,12 +1563,12 @@ func (v *Volume) enrichWithEncryptionParams(ctx context.Context) {
 	}
 }
 
-func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
+func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) (retErr error) {
 	logger := log.Ctx(ctx)
 	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside filesystem .fsnapshots to mimic Weka snapshot behavior")
 
 	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		return err
 	}
@@ -1636,11 +1648,11 @@ func (v *Volume) Delete(ctx context.Context) error {
 	return nil
 }
 
-func (v *Volume) deleteDirectory(ctx context.Context) error {
+func (v *Volume) deleteDirectory(ctx context.Context) (retErr error) {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		return err
 	}

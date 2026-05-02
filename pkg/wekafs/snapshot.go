@@ -167,13 +167,13 @@ func (s *Snapshot) Create(ctx context.Context) error {
 	return nil
 }
 
-func (s *Snapshot) mimicDirectoryStructureForDebugMode(ctx context.Context) error {
+func (s *Snapshot) mimicDirectoryStructureForDebugMode(ctx context.Context) (retErr error) {
 	logger := log.Ctx(ctx)
 	logger.Warn().Bool("debug_mode", true).Msg("Creating directory mimicPath inside filesystem .snapshots to mimic Weka snapshot behavior")
 
 	v := s.SourceVolume
 	err, unmount := v.MountUnderlyingFS(ctx)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		return err
 	}
