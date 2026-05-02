@@ -358,10 +358,18 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		if errors.Is(err, apiclient.MountPermissionDenied) {
 			return NodePublishVolumeError(ctx, codes.PermissionDenied, err.Error())
 		}
-
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
-	defer unmount() // unmount the parent mount since there is a bind mount anyway
+	// The parent wekafs mount lives in the container's private mount namespace and
+	// is released here on every exit path. The bind mount below is propagated to
+	// the host via Bidirectional mountPropagation and holds an independent reference
+	// to the wekafs filesystem superblock, so data access is unaffected after the
+	// parent is released.
+	defer func() {
+		if uErr := unmount(); uErr != nil {
+			logger.Error().Err(uErr).Str("target_path", targetPath).Msg("Failed to release parent filesystem mount")
+		}
+	}()
 
 	fullPath := volume.GetFullPath(ctx)
 
@@ -373,7 +381,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 	logger.Debug().Str("target_path", targetPath).Msg("Creating target path")
 	if err = os.Mkdir(targetPath, 0750); err != nil {
-		// If failed to create directory - other call succeded and not this one,
+		// If failed to create directory - other call succeeded and not this one,
 		// TODO: Returning success, but this is not completely right.
 		// As potentially some other process holds. Need a good way to inspect binds
 		// SearchMountPoints and GetMountRefs failed to do the job
@@ -381,20 +389,19 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			if !ns.isInDevMode() {
 				if PathIsWekaMount(ctx, targetPath) {
 					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
-					unmount()
+					// Bind already exists — idempotent return. The defer releases the incRef.
+					result = "SUCCESS"
 					return &csi.NodePublishVolumeResponse{}, nil
 				} else {
 					log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
 				}
 			} else {
 				log.Ctx(ctx).Trace().Msg("Assuming debug execution and not validating WekaFS mount")
-				unmount()
+				result = "SUCCESS"
 				return &csi.NodePublishVolumeResponse{}, nil
 			}
-
 		} else {
 			log.Error().Err(err).Str("target_path", targetPath).Msg("Failed creating directory")
-			unmount()
 			return NodePublishVolumeError(ctx, codes.Internal, err.Error())
 		}
 	}
@@ -406,8 +413,8 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		logger.Error().Err(err).Str("full_path", fullPath).Str("target_path", targetPath).Msg("Failed to perform mount")
 		return NodePublishVolumeError(ctx, codes.Internal, fmt.Sprintf("failed to Mount device: %s at %s: %s", fullPath, targetPath, err.Error()))
 	}
+	// Bind mount is active. The defer above will release the parent mount.
 	result = "SUCCESS"
-	// Not doing unmount, NodePublish should do unmount but only when it unmounts bind successfully
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 

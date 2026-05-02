@@ -21,22 +21,23 @@ type nfsMounter struct {
 	clientGroupName       string
 	nfsProtocolVersion    string
 	exclusiveMountOptions []mutuallyExclusiveMountOptionSet
+	mountBaseDir          string
 }
 
 func (m *nfsMounter) getGarbageCollector() *innerPathVolGc {
 	return m.gc
 }
 
-func newNfsMounter(driver *WekaFsDriver) *nfsMounter {
+func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 	var selinuxSupport *bool
 	if driver.selinuxSupport {
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions}
+	mounter := &nfsMounter{mountMap: make(nfsMountsMap), debugPath: driver.debugPath, selinuxSupport: selinuxSupport, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions, mountBaseDir: mountBaseDirForRole(driver.csiMode)}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
-	mounter.schedulePeriodicMountGc()
+	mounter.schedulePeriodicMountGc(ctx)
 	mounter.clientGroupName = driver.config.clientGroupName
 	mounter.nfsProtocolVersion = driver.config.nfsProtocolVersion
 
@@ -53,7 +54,7 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		kMounter:        m.kMounter,
 		fsName:          fsName,
 		debugPath:       m.debugPath,
-		mountPoint:      "/run/weka-fs-mounts/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+		mountPoint:      m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
 		mountOptions:    options,
 		clientGroupName: m.clientGroupName,
 		protocolVersion: apiclient.NfsVersionString(fmt.Sprintf("V%s", m.nfsProtocolVersion)),
@@ -77,19 +78,20 @@ func (m *nfsMounter) mountWithOptions(ctx context.Context, fsName string, mountO
 	mountObj := m.NewMount(fsName, mountOptions).(*nfsMount)
 
 	if err := mountObj.ensureMountIpAddress(ctx, apiClient); err != nil {
-		return "", err, func() {}
+		return "", err, NoOpUnmount
 	}
 
 	mountErr := mountObj.incRef(ctx, apiClient)
 
 	if mountErr != nil {
 		log.Ctx(ctx).Error().Err(mountErr).Msg("Failed mounting")
-		return "", mountErr, func() {}
+		return "", mountErr, NoOpUnmount
 	}
-	return mountObj.getMountPoint(), nil, func() {
+	return mountObj.getMountPoint(), nil, func() error {
 		if mountErr == nil {
-			_ = mountObj.decRef(ctx)
+			return mountObj.decRef(ctx)
 		}
+		return nil
 	}
 }
 
@@ -113,7 +115,7 @@ func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, opti
 	return mnt.decRef(ctx)
 }
 
-func (m *nfsMounter) LogActiveMounts() {
+func (m *nfsMounter) LogActiveMounts(ctx context.Context) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if len(m.mountMap) > 0 {
@@ -136,7 +138,7 @@ func (m *nfsMounter) LogActiveMounts() {
 	}
 }
 
-func (m *nfsMounter) gcInactiveMounts() {
+func (m *nfsMounter) gcInactiveMounts(ctx context.Context) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	if len(m.mountMap) > 0 {
@@ -153,13 +155,18 @@ func (m *nfsMounter) gcInactiveMounts() {
 	}
 }
 
-func (m *nfsMounter) schedulePeriodicMountGc() {
+func (m *nfsMounter) schedulePeriodicMountGc(ctx context.Context) {
 	go func() {
 		log.Debug().Msg("Initializing periodic mount GC for nfs transport")
-		for true {
-			m.LogActiveMounts()
-			m.gcInactiveMounts()
-			time.Sleep(10 * time.Minute)
+		for {
+			m.LogActiveMounts(ctx)
+			m.gcInactiveMounts(ctx)
+			select {
+			case <-ctx.Done():
+				log.Debug().Msg("Stopping periodic mount GC for nfs transport")
+				return
+			case <-time.After(inactiveMountGcPeriod):
+			}
 		}
 	}()
 }

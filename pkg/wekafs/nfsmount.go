@@ -46,8 +46,8 @@ func (m *nfsMount) isInDevMode() bool {
 	return m.debugPath != ""
 }
 
-func (m *nfsMount) isMounted() bool {
-	return PathExists(m.getMountPoint()) && PathIsWekaMount(context.Background(), m.getMountPoint())
+func (m *nfsMount) isMounted(ctx context.Context) bool {
+	return PathExists(m.getMountPoint()) && PathIsWekaMount(ctx, m.getMountPoint())
 }
 
 func (m *nfsMount) getRefcountIdx() string {
@@ -72,7 +72,7 @@ func (m *nfsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) e
 			return err
 		}
 	}
-	if refCount > 0 && !m.isMounted() {
+	if refCount > 0 && !m.isMounted(ctx) {
 		logger.Warn().Str("mount_point", m.getMountPoint()).Int("refcount", refCount).Msg("Mount not exists although should!")
 		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
 			return err
@@ -106,17 +106,17 @@ func (m *nfsMount) decRef(ctx context.Context) error {
 	if refCount < 0 {
 		logger.Error().Int("refcount", refCount).Msg("During decRef negative refcount encountered, probably due to failed unmount")
 	}
-	if refCount > 0 {
-		logger.Trace().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
-		refCount--
-		m.mounter.mountMap[m.getRefcountIdx()] = refCount
-	}
-	if refCount == 0 {
-		if m.isMounted() {
+	if refCount == 1 {
+		if m.isMounted(ctx) {
 			if err := m.doUnmount(ctx); err != nil {
 				return err
 			}
 		}
+	}
+	if refCount > 0 {
+		logger.Trace().Int("refcount", refCount - 1).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
+		refCount--
+		m.mounter.mountMap[m.getRefcountIdx()] = refCount
 	}
 	return nil
 }
@@ -138,16 +138,15 @@ func (m *nfsMount) doUnmount(ctx context.Context) error {
 	err := m.kMounter.Unmount(m.getMountPoint())
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
-	} else {
-		logger.Trace().Msg("Unmounted successfully")
-		if err := os.Remove(m.getMountPoint()); err != nil {
-			logger.Error().Err(err).Msg("Failed to remove mount point")
-			return err
-		} else {
-			logger.Trace().Msg("Removed mount point successfully")
-		}
+		return err
 	}
-	return err
+	logger.Trace().Msg("Unmounted successfully")
+	if err := os.Remove(m.getMountPoint()); err != nil {
+		logger.Warn().Err(err).Msg("Failed to remove mount point directory, will be cleaned up on next use")
+	} else {
+		logger.Trace().Msg("Removed mount point successfully")
+	}
+	return nil
 }
 
 func (m *nfsMount) ensureMountIpAddress(ctx context.Context, apiClient *apiclient.ApiClient) error {

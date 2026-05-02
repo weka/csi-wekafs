@@ -42,7 +42,7 @@ func (gc *innerPathVolGc) triggerGcVolume(ctx context.Context, volume *Volume) e
 	return gc.moveVolumeToTrash(ctx, volume)
 }
 
-func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume) error {
+func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume) (retErr error) {
 	op := "moveVolumeToTrash"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
@@ -58,7 +58,7 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	}
 
 	path, err, unmount := gc.mounter.Mount(ctx, fsName, volume.apiClient)
-	defer unmount()
+	defer deferUmount(unmount, &retErr)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to mount filesystem for GC processing")
 		return err
@@ -103,7 +103,11 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	gc.isRunning[fs] = true
 	gc.Unlock()
 	path, err, unmount := gc.mounter.Mount(ctx, fs, apiClient)
-	defer unmount()
+	defer func() {
+		if uErr := unmount(); uErr != nil {
+			log.Ctx(ctx).Error().Err(uErr).Str("filesystem", fs).Str("path", path).Msg("Failed to release filesystem mount after garbage collection")
+		}
+	}()
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Str("filesystem", fs).Str("path", path).Msg("Failed mounting FS for garbage collection")
 		return
