@@ -614,7 +614,7 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 
 	// - Standby: OK (process is alive)
 	// - Leader: verify gRPC server accepts connections + Weka client running (if needed)
-	if err := mgr.AddHealthzCheck("healthz", func(_ *http.Request) error {
+	if err := mgr.AddHealthzCheck("healthz", func(r *http.Request) error {
 		if d.isLeader.Load() {
 			// Leader: verify gRPC server accepts connections
 			conn, err := net.DialTimeout(socketProto, socketPath, time.Second)
@@ -624,8 +624,10 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 			_ = conn.Close()
 
 			if !d.config.useNfs && !d.config.allowNfsFailback && !d.config.isInDevMode() {
-				if !isWekaRunning() {
-					return fmt.Errorf("weka client not running on leader node")
+				wekaCtx, wekaCancel := context.WithTimeout(r.Context(), d.config.healthProbeWekaTimeout)
+				defer wekaCancel()
+				if !isWekaRunning(wekaCtx) {
+					return fmt.Errorf("weka client not running or unresponsive")
 				}
 			}
 			return nil
@@ -709,7 +711,7 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		if d.config.useNfs {
 			return "nfs"
 		}
-		wekaRunning := isWekaRunning()
+		wekaRunning := isWekaRunning(ctx)
 		if d.config.allowNfsFailback && !wekaRunning {
 			return "nfs"
 		}
@@ -829,7 +831,7 @@ func (driver *WekaFsDriver) NewMounter(ctx context.Context) AnyMounter {
 		log.Warn().Msg("Enforcing NFS transport due to configuration")
 		return newNfsMounter(ctx, driver)
 	}
-	if driver.config.allowNfsFailback && !isWekaRunning() {
+	if driver.config.allowNfsFailback && !isWekaRunning(ctx) {
 		if driver.config.isInDevMode() {
 			log.Info().Msg("Not Enforcing NFS transport due to dev mode")
 		} else {

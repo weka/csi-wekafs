@@ -83,7 +83,6 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | controller.podLabels | object | `{}` | optional labels to add to controller pods |
 | controller.terminationGracePeriodSeconds | int | `10` | termination grace period for controller pods |
 | controller.resources | object | `{"csiAttacher":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiProvisioner":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}},"csiResizer":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiSnapshotter":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"48Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for controller containers |
-| node.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
 | node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
 | node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | node.nodeSelector | object | `{}` | optional nodeSelector for node components only |

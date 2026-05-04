@@ -89,8 +89,9 @@ var (
 	maxConcurrentCreateSnapshotReqs      = flag.Int64("concurrency.createSnapshot", 1, "Maximum concurrent CreateSnapshot requests")
 	maxConcurrentDeleteSnapshotReqs      = flag.Int64("concurrency.deleteSnapshot", 1, "Maximum concurrent DeleteSnapshot requests")
 	maxConcurrentNodePublishVolumeReqs   = flag.Int64("concurrency.nodePublishVolume", 1, "Maximum concurrent NodePublishVolume requests")
-	maxConcurrentNodeUnpublishVolumeReqs = flag.Int64("concurrency.nodeUnpublishVolume", 1, "Maximum concurrent NodeUnpublishVolume requests")
+	maxConcurrentNodeUnpublishVolumeReqs = flag.Int64("concurrency.nodeUnpublishVolume", 5, "Maximum concurrent NodeUnpublishVolume requests")
 	grpcRequestTimeoutSeconds            = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
+	healthProbeWekaTimeoutSeconds        = flag.Int("healthprobewekatimeoutseconds", 2, "Timeout in seconds for WekaFS health check in liveness probe")
 	allowProtocolContainers              = flag.Bool("allowprotocolcontainers", false, "Allow protocol containers to be used for mounting filesystems")
 	allowNfsFailback                     = flag.Bool("allownfsfailback", false, "Allow NFS failback")
 	useNfs                               = flag.Bool("usenfs", false, "Use NFS for mounting volumes")
@@ -230,6 +231,7 @@ func handle(ctx context.Context) {
 		*maxConcurrentNodePublishVolumeReqs,
 		*maxConcurrentNodeUnpublishVolumeReqs,
 		*grpcRequestTimeoutSeconds,
+		*healthProbeWekaTimeoutSeconds,
 		*allowProtocolContainers,
 		*allowNfsFailback,
 		*useNfs,

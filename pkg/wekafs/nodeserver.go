@@ -491,12 +491,15 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 FORCEUMOUNT:
 	logger.Trace().Str("target_path", targetPath).Msg("Unmounting")
-	if err := mount.New("").Unmount(targetPath); err != nil {
+	unmountStart := time.Now()
+	unmountErr := mount.New("").Unmount(targetPath)
+	unmountElapsed := time.Since(unmountStart).Seconds()
+	if unmountErr != nil {
+		logger.Warn().Float64("elapsed_seconds", unmountElapsed).Str("target_path", targetPath).Msg("Unmount failed")
 		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
-		return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
-	} else {
-		logger.Trace().Msg("Success")
+		return NodeUnpublishVolumeError(ctx, codes.Internal, unmountErr.Error())
 	}
+	logger.Trace().Float64("elapsed_seconds", unmountElapsed).Msg("Unmount succeeded")
 	logger.Trace().Str("target_path", targetPath).Msg("Removing stale target path")
 	if err := os.Remove(targetPath); err != nil {
 		return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())

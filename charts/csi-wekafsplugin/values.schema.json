@@ -205,11 +205,14 @@
                 "grpcRequestTimeoutSeconds": {
                     "type": "integer"
                 },
+                "healthProbeWekaTimeoutSeconds": {
+                    "type": "integer"
+                },
                 "labels": {
                     "type": "object"
                 },
-                "maxConcurrentRequests": {
-                    "type": "integer"
+                "livenessProbeTimeout": {
+                    "type": "string"
                 },
                 "nodeSelector": {
                     "type": "object"
@@ -262,6 +265,9 @@
                         },
                         "snapshotVolumesWithoutQuotaEnforcement": {
                             "type": "boolean"
+                        },
+                        "enforceDirVolTotalCapacity": {
+                            "type": "boolean"
                         }
                     }
                 },
@@ -296,6 +302,9 @@
                         },
                         "useNfs": {
                             "type": "boolean"
+                        },
+                        "wekafsContainerName": {
+                            "type": "string"
                         }
                     }
                 },
@@ -318,6 +327,9 @@
                             "type": "string"
                         }
                     }
+                },
+                "setOwnershipOnDynamicFilesystems": {
+                    "type": "boolean"
                 },
                 "skipGarbageCollection": {
                     "type": "boolean"

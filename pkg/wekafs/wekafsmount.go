@@ -198,7 +198,7 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 		return err
 	}
 	if !m.isInDevMode() {
-		if !isWekaRunning() {
+		if !isWekaRunning(ctx) {
 			logger.Error().Msg("WEKA is not running, cannot mount. Make sure WEKA client software is running on the host")
 			return errors.New("weka is not running, cannot mount")
 		}

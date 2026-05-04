@@ -33,6 +33,7 @@ type DriverConfig struct {
 	mutuallyExclusiveOptions         []mutuallyExclusiveMountOptionSet
 	maxConcurrencyPerOp              map[string]int64
 	grpcRequestTimeout               time.Duration
+	healthProbeWekaTimeout           time.Duration
 	allowProtocolContainers          bool
 	allowNfsFailback                 bool
 	useNfs                           bool
@@ -66,6 +67,7 @@ func (dc *DriverConfig) Log() {
 		Int64("max_node_publish_volume_reqs", dc.maxConcurrencyPerOp["NodePublishVolume"]).
 		Int64("max_node_unpublish_volume_reqs", dc.maxConcurrencyPerOp["NodeUnpublishVolume"]).
 		Int("grpc_request_timeout_seconds", int(dc.grpcRequestTimeout.Seconds())).
+		Int("health_probe_weka_timeout_seconds", int(dc.healthProbeWekaTimeout.Seconds())).
 		Bool("allow_protocol_containers", dc.allowProtocolContainers).
 		Bool("allow_nfs_failback", dc.allowNfsFailback).
 		Bool("use_nfs", dc.useNfs).
@@ -87,6 +89,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
 	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
 	grpcRequestTimeoutSeconds int,
+	healthProbeWekaTimeoutSeconds int,
 	allowProtocolContainers bool,
 	allowNfsFailback, useNfs bool,
 	interfaceGroupName, clientGroupName, nfsProtocolVersion string,
@@ -110,6 +113,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	}
 
 	grpcRequestTimeout := time.Duration(grpcRequestTimeoutSeconds) * time.Second
+	healthProbeWekaTimeout := time.Duration(healthProbeWekaTimeoutSeconds) * time.Second
 
 	concurrency := make(map[string]int64)
 	concurrency["CreateVolume"] = maxCreateVolumeReqs
@@ -136,6 +140,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		mutuallyExclusiveOptions:         MutuallyExclusiveMountOptions,
 		maxConcurrencyPerOp:              concurrency,
 		grpcRequestTimeout:               grpcRequestTimeout,
+		healthProbeWekaTimeout:           healthProbeWekaTimeout,
 		allowProtocolContainers:          allowProtocolContainers,
 		allowNfsFailback:                 allowNfsFailback,
 		useNfs:                           useNfs,
