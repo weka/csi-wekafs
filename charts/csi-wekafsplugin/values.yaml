@@ -118,17 +118,8 @@ controller:
       requests:
         cpu: 4m
         memory: 48Mi
-    livenessProbe:
-      limits:
-        cpu: 1
-        memory: 1Gi
-      requests:
-        cpu: 12m
-        memory: 48Mi
 # Node-specific parameters, please do not change unless explicitly guided
 node:
-  # -- Maximum concurrent requests from sidecars (global)
-  maxConcurrentRequests: 5
   # -- maximum concurrent operations per operation type (to avoid API starvation)
   concurrency:
     nodePublishVolume: 5

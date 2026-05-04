@@ -114,7 +114,7 @@ func (m *nfsMount) decRef(ctx context.Context) error {
 		}
 	}
 	if refCount > 0 {
-		logger.Trace().Int("refcount", refCount - 1).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
+		logger.Trace().Int("refcount", refCount-1).Strs("mount_options", m.getMountOptions().Strings()).Str("filesystem_name", m.fsName).Msg("RefCount decreased")
 		refCount--
 		m.mounter.mountMap[m.getRefcountIdx()] = refCount
 	}

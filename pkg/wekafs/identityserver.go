@@ -82,7 +82,9 @@ func (ids *identityServer) getConfig() *DriverConfig {
 //goland:noinspection GoUnusedParameter
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	logger := log.Ctx(ctx)
-	isReady := ids.getConfig().isInDevMode() || isWekaRunning()
+	probeCtx, probeCancel := context.WithTimeout(ctx, ids.config.healthProbeWekaTimeout)
+	defer probeCancel()
+	isReady := ids.getConfig().isInDevMode() || isWekaRunning(probeCtx)
 	if !isReady {
 		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
 			isReady = true

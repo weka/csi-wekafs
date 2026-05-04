@@ -563,12 +563,12 @@ func isWekaDriverLoaded() bool {
 	return false
 }
 
-func isWekaRunning() bool {
+func isWekaRunning(ctx context.Context) bool {
 	if !isWekaDriverLoaded() {
 		return false
 	}
 
-	frontends, err := apiclient.GetFrontendsFromDriver(context.Background())
+	frontends, err := apiclient.GetFrontendsFromDriver(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to read frontend statuses from driver interface")
 		return false

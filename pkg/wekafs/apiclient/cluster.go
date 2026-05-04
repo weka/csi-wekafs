@@ -291,10 +291,9 @@ func GetFrontendsFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
 
 	logger := log.Ctx(ctx)
 
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-
-	// Use a channel to handle timeout for os.Open
+	// os.Open may block if the WekaFS kernel module is unresponsive.
+	// Run it in a goroutine and abandon it via ctx if it doesn't return in time.
+	// The goroutine itself leaks until the syscall completes, but the caller returns promptly.
 	type openResult struct {
 		file *os.File
 		err  error
@@ -312,11 +311,25 @@ func GetFrontendsFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
 			return nil, result.err
 		}
 		f = result.file
-	case <-ctxWithTimeout.Done():
-		return nil, fmt.Errorf("timeout opening %s: %w", ProcFsPath, ctxWithTimeout.Err())
+	case <-ctx.Done():
+		return nil, fmt.Errorf("timeout opening %s: %w", ProcFsPath, ctx.Err())
 	}
 
 	defer func() { _ = f.Close() }()
+
+	// If the context is cancelled while scanner.Scan() is blocked on a kernel read,
+	// closing the file unblocks the read syscall immediately. The double-close with the
+	// defer above is safe: os.File.Close() on an already-closed file returns an error
+	// we intentionally ignore.
+	scanDone := make(chan struct{})
+	defer close(scanDone)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = f.Close()
+		case <-scanDone:
+		}
+	}()
 
 	var frontends []ProcFsContainer
 	scanner := bufio.NewScanner(f)
@@ -376,7 +389,13 @@ func GetFrontendsFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
 			Connected:     true,
 		})
 	}
-	return frontends, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, err
+	}
+	return frontends, nil
 }
 
 func (a *ApiClient) getLocalContainersFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
