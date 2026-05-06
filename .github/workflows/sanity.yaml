@@ -1,9 +1,9 @@
 name: sanity
 on:
   pull_request:
-    paths-exclude:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
       - '.github/**'
-      - '!.github/workflows/**'
 
 concurrency:
   group: ${{ github.ref }}
