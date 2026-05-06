@@ -9,9 +9,10 @@ allowHostDirVolumePlugin: true
 {{- if or .Values.hostNetwork .Values.pluginConfig.mountProtocol.allowNfsFailback .Values.pluginConfig.mountProtocol.useNfs }}
 allowHostNetwork: true
 {{- end }}
-allowedVolumeTypes:
+volumes:
   - hostPath
   - secret
+  - emptyDir
 readOnlyRootFilesystem: false
 allowHostPorts: true
 runAsUser:
