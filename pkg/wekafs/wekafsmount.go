@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -99,13 +100,18 @@ func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *a
 }
 
 func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
+	logger := log.Ctx(ctx).With().
+		Str("mount_point", m.getMountPoint()).
+		Str("filesystem", m.fsName).
+		Strs("mount_options", mountOptions.Strings()).
+		Logger()
 	var mountOptionsSensitive []string
 	if apiClient == nil {
 		logger.Trace().Msg("No API client for mount, cannot proceed")
 		return errors.New("no api client bound, cannot obtain mount token")
 	}
 
+	logger.Trace().Msg("Ensuring mount point exists")
 	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 		return err
 	}
@@ -114,8 +120,6 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 		return errors.New("weka is not running, cannot mount")
 	}
 
-	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing mount")
-
 	if mountToken, err := apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
 		return err
 	} else {
@@ -123,9 +127,19 @@ func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClien
 	}
 
 	logger.Debug().Strs("mount_options", mountOptions.Strings()).Msg("Mounting wekafs filesystem")
-	if err := m.kMounter.MountSensitive(m.fsName, m.getMountPoint(), "wekafs", mountOptions.Strings(), mountOptionsSensitive); err != nil {
-		return err
+	err := m.kMounter.MountSensitive(m.fsName, m.getMountPoint(), "wekafs", mountOptions.Strings(), mountOptionsSensitive)
+	if err == nil {
+		logger.Debug().Msg("Mounted successfully")
+		return nil
 	}
-	logger.Debug().Msg("Mounted successfully")
-	return nil
+	if os.IsNotExist(err) || strings.Contains(strings.ToLower(err.Error()), "no such file or directory") {
+		logger.Error().Err(err).Msg("Mount point not found")
+	} else if os.IsPermission(err) {
+		logger.Error().Err(err).Msg("Mount failed due to permissions issue")
+	} else if strings.Contains(err.Error(), "invalid argument") {
+		logger.Error().Err(err).Msg("Mount failed due to invalid argument")
+	} else {
+		logger.Error().Err(err).Msg("Mount failed due to unknown issue")
+	}
+	return err
 }

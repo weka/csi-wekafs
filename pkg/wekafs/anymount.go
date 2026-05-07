@@ -10,7 +10,11 @@ import (
 )
 
 func anyMountIncref(ctx context.Context, apiClient *apiclient.ApiClient, m AnyMount) error {
-	logger := log.Ctx(ctx)
+	logger := log.Ctx(ctx).With().
+		Str("filesystem", m.getFsName()).
+		Str("mount_point", m.getMountPoint()).
+		Strs("mount_options", m.getMountOptions().Strings()).
+		Logger()
 	if m.getMounter() == nil {
 		logger.Error().Msg("Mounter is nil")
 		return errors.New("mounter is nil")
@@ -30,9 +34,6 @@ func anyMountIncref(ctx context.Context, apiClient *apiclient.ApiClient, m AnyMo
 	refCount.Inc()
 	logger.Trace().
 		Int32("refcount", refCount.Load()).
-		Strs("mount_options", m.getMountOptions().Strings()).
-		Str("filesystem_name", m.getFsName()).
-		Str("mount_point", m.getMountPoint()).
 		Msg("RefCount increased")
 	return nil
 }
@@ -50,7 +51,7 @@ func anyMountDecRef(ctx context.Context, m AnyMount) error {
 	if refCount.Load() <= 1 {
 		if err := m.doUnmount(ctx); err != nil {
 			if err == ErrorMountPointNotFound {
-				logger.Error().Err(err).Msg("Unmount failed, but continuing")
+				logger.Error().Err(err).Msg("Unmount failed since mount point not exists, but continuing")
 			} else {
 				return err
 			}
@@ -72,28 +73,34 @@ func anyMountDecRef(ctx context.Context, m AnyMount) error {
 var ErrorMountPointNotFound = errors.New("mount point not found")
 
 func anyMountDoUnmount(ctx context.Context, m AnyMount) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.getFsName()).Logger()
-	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing umount via k8s native mounter")
+	logger := log.Ctx(ctx).With().
+		Str("mount_point", m.getMountPoint()).
+		Str("filesystem", m.getFsName()).
+		Strs("mount_options", m.getMountOptions().Strings()).
+		Logger()
 	mountPoint := m.getMountPoint()
 	if !PathExists(mountPoint) {
 		logger.Warn().Msgf("Mount point %s does not exist before unmount, skipping unmount and remove", mountPoint)
 		return ErrorMountPointNotFound
 	}
+	logger.Debug().Msg("Performing umount via k8s native mounter")
 	err := m.getKMounter().Unmount(mountPoint)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
-	} else {
-		logger.Trace().Msg("Unmounted successfully")
-		if PathExists(mountPoint) {
-			if err := os.Remove(mountPoint); err != nil {
-				logger.Error().Err(err).Msg("Failed to remove mount point")
-				return err
-			} else {
-				logger.Trace().Msg("Removed mount point successfully")
-			}
+		return err
+	}
+
+	logger.Trace().Msg("Unmounted successfully")
+
+	if PathExists(mountPoint) {
+		if err = os.Remove(mountPoint); err != nil {
+			logger.Error().Err(err).Msg("Failed to remove mount point")
+			return err
 		} else {
-			logger.Warn().Msgf("Mount point %s already removed after unmount", mountPoint)
+			logger.Trace().Msg("Removed mount point successfully")
 		}
+	} else {
+		logger.Warn().Msgf("Mount point %s already removed after unmount", mountPoint)
 	}
 	return err
 }
