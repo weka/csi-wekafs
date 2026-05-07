@@ -34,6 +34,7 @@ type AnyMounter interface {
 	isEnabled() bool
 	Enable()
 	Disable()
+	Config() *DriverConfig
 	getSelinuxSupport() *bool
 	setSelinuxSupport(bool)
 }

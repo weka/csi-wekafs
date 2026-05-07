@@ -3,7 +3,6 @@ package wekafs
 import (
 	"context"
 	"path"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -11,15 +10,13 @@ import (
 )
 
 type wekafsMounter struct {
-	mountMap                *mountMap
-	lock                    sync.Mutex
-	kMounter                mount.Interface
-	selinuxSupport          *bool
-	gc                      *innerPathVolGc
-	allowProtocolContainers bool
-	config                  *DriverConfig
-	mountBaseDir            string
-	enabled                 bool
+	mountMap       *mountMap
+	kMounter       mount.Interface
+	selinuxSupport *bool
+	gc             *innerPathVolGc
+	config         *DriverConfig
+	mountBaseDir   string
+	enabled        bool
 }
 
 func (m *wekafsMounter) setSelinuxSupport(b bool) {
@@ -76,6 +73,10 @@ func (m *wekafsMounter) getTransport() DataTransport {
 	return dataTransportWekafs
 }
 
+func (m *wekafsMounter) Config() *DriverConfig {
+	return m.config
+}
+
 func newWekafsMounter(ctx context.Context, driver *WekaFsDriver) *wekafsMounter {
 	var selinuxSupport *bool
 	if driver.selinuxSupport {
@@ -90,7 +91,6 @@ func newWekafsMounter(ctx context.Context, driver *WekaFsDriver) *wekafsMounter 
 		enabled:        true,
 	}
 	mounter.gc = initInnerPathVolumeGc(mounter)
-	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc(ctx)
 
 	return mounter
@@ -107,7 +107,7 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		fsName:                  fsName,
 		mountPoint:              path.Join(m.mountBaseDir, m.getTransport().String(), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:            options,
-		allowProtocolContainers: m.allowProtocolContainers,
+		allowProtocolContainers: m.config.allowProtocolContainers,
 	}
 	return wMount
 }
