@@ -29,4 +29,5 @@ RUN curl -sSL -o /locar https://github.com/weka/locar/releases/download/${LOCAR_
     chmod 655 /locar
 COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/wekafsplugin /wekafsplugin
 COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/metricsserver /metricsserver
+COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/wait-for-leader /wait-for-leader
 
