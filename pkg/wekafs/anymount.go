@@ -49,7 +49,11 @@ func anyMountDecRef(ctx context.Context, m AnyMount) error {
 
 	if refCount.Load() <= 1 {
 		if err := m.doUnmount(ctx); err != nil {
-			return err
+			if err == ErrorMountPointNotFound {
+				logger.Error().Err(err).Msg("Unmount failed, but continuing")
+			} else {
+				return err
+			}
 		}
 	}
 	refCount.Dec()
@@ -65,19 +69,30 @@ func anyMountDecRef(ctx context.Context, m AnyMount) error {
 	return nil
 }
 
+var ErrorMountPointNotFound = errors.New("mount point not found")
+
 func anyMountDoUnmount(ctx context.Context, m AnyMount) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.getFsName()).Logger()
 	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing umount via k8s native mounter")
-	err := m.getKMounter().Unmount(m.getMountPoint())
+	mountPoint := m.getMountPoint()
+	if !PathExists(mountPoint) {
+		logger.Warn().Msgf("Mount point %s does not exist before unmount, skipping unmount and remove", mountPoint)
+		return ErrorMountPointNotFound
+	}
+	err := m.getKMounter().Unmount(mountPoint)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to unmount")
 	} else {
 		logger.Trace().Msg("Unmounted successfully")
-		if err := os.Remove(m.getMountPoint()); err != nil {
-			logger.Error().Err(err).Msg("Failed to remove mount point")
-			return err
+		if PathExists(mountPoint) {
+			if err := os.Remove(mountPoint); err != nil {
+				logger.Error().Err(err).Msg("Failed to remove mount point")
+				return err
+			} else {
+				logger.Trace().Msg("Removed mount point successfully")
+			}
 		} else {
-			logger.Trace().Msg("Removed mount point successfully")
+			logger.Warn().Msgf("Mount point %s already removed after unmount", mountPoint)
 		}
 	}
 	return err

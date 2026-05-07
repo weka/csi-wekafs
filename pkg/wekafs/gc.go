@@ -3,14 +3,15 @@ package wekafs
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"go.opentelemetry.io/otel"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.opentelemetry.io/otel"
 )
 
 type innerPathVolGc struct {
@@ -18,7 +19,6 @@ type innerPathVolGc struct {
 	isDeferred map[string]bool
 	sync.Mutex
 	mounter AnyMounter
-	config  *DriverConfig
 }
 
 func initInnerPathVolumeGc(mounter AnyMounter) *innerPathVolGc {
@@ -46,7 +46,7 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	logger := log.Ctx(ctx).With().Str("volume_id", volume.GetId()).Logger()
 	fsName := volume.FilesystemName
 
-	if gc.config.skipGarbageCollection {
+	if gc.mounter.Config().skipGarbageCollection {
 		logger.Debug().Msg("Moving volume to trash, skipping garbage collection according to configuration")
 	} else {
 		logger.Debug().Msg("Moving volume to trash and starting garbage collection")

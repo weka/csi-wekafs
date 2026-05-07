@@ -12,16 +12,14 @@ import (
 )
 
 type nfsMounter struct {
-	mountMap              *mountMap
-	lock                  sync.Mutex
-	kMounter              mount.Interface
-	selinuxSupport        *bool
-	gc                    *innerPathVolGc
-	clientGroupName       string
-	nfsProtocolVersion    string
-	exclusiveMountOptions []mutuallyExclusiveMountOptionSet
-	mountBaseDir          string
-	enabled               bool
+	mountMap       *mountMap
+	lock           sync.Mutex
+	kMounter       mount.Interface
+	selinuxSupport *bool
+	gc             *innerPathVolGc
+	config         *DriverConfig
+	mountBaseDir   string
+	enabled        bool
 }
 
 func (m *nfsMounter) setSelinuxSupport(b bool) {
@@ -78,6 +76,10 @@ func (m *nfsMounter) getTransport() DataTransport {
 	return dataTransportNfs
 }
 
+func (m *nfsMounter) Config() *DriverConfig {
+	return m.config // fallback to gc's mounter config if not present directly
+}
+
 func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 	var selinuxSupport *bool
 	if driver.selinuxSupport {
@@ -87,15 +89,12 @@ func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 	mounter := &nfsMounter{
 		mountMap:              newMountMap(),
 		selinuxSupport:        selinuxSupport,
-		exclusiveMountOptions: driver.config.mutuallyExclusiveOptions,
+		config:                driver.config,
 		mountBaseDir:          mountBaseDirForRole(driver.csiMode),
 		enabled:               false,
 	}
 	mounter.gc = initInnerPathVolumeGc(mounter)
-	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc(ctx)
-	mounter.clientGroupName = driver.config.clientGroupName
-	mounter.nfsProtocolVersion = driver.config.nfsProtocolVersion
 
 	return mounter
 }
@@ -111,8 +110,8 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		fsName:          fsName,
 		mountPoint:      path.Join(m.mountBaseDir, m.getTransport().String(), getAsciiPart(fsName, 64)+"-"+uniqueId),
 		mountOptions:    options,
-		clientGroupName: m.clientGroupName,
-		protocolVersion: apiclient.NfsVersionString(fmt.Sprintf("V%s", m.nfsProtocolVersion)),
+		clientGroupName: m.config.clientGroupName,
+		protocolVersion: apiclient.NfsVersionString(fmt.Sprintf("V%s", m.config.nfsProtocolVersion)),
 	}
 	return wMount
 }
@@ -120,7 +119,7 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 func (m *nfsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
 	mountOptions.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	mountOptions = mountOptions.AsNfs()
-	mountOptions.Merge(mountOptions, m.exclusiveMountOptions)
+	mountOptions.Merge(mountOptions, m.config.mutuallyExclusiveOptions)
 	mountObj := m.NewMount(fsName, mountOptions).(*nfsMount)
 
 	if err := mountObj.ensureMountIpAddress(ctx, apiClient); err != nil {
@@ -148,7 +147,7 @@ func (m *nfsMounter) Mount(ctx context.Context, fs string, apiClient *apiclient.
 func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
 	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
 	options = options.AsNfs()
-	options.Merge(options, m.exclusiveMountOptions)
+	options.Merge(options, m.config.mutuallyExclusiveOptions)
 	log.Ctx(ctx).Trace().Strs("mount_options", options.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
 	mnt := m.NewMount(fsName, options).(*nfsMount)
 	// since we are not aware of the IP address of the mount, we need to find the mount point by listing the mounts
