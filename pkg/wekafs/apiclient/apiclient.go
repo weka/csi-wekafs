@@ -18,6 +18,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type ApiUserRole string
@@ -106,7 +108,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 	err := a.resetDefaultEndpoints(ctx)
 	if err != nil || len(a.Credentials.Endpoints) < 1 {
 		return nil, &ApiNoEndpointsError{
-			Err: errors.New("no endpoints could be found for API client"),
+			Err: status.Errorf(codes.Unavailable, "No endpoints available %v", err),
 		}
 	}
 

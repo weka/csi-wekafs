@@ -30,6 +30,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
+const (
+	// ControllerHealthProbePort is the port for the health probe endpoint
+	ControllerHealthProbePort       = "8081"
+	MetricsServerReadinessProbePort = "9196"
+)
+
 type WekaFsDriver struct {
 	name              string
 	nodeID            string
@@ -92,9 +98,16 @@ func NewWekaFsDriver(
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
-	err := driver.initManager(ctx)
-	if err != nil {
-		log.Fatal().Msg("Failed to initialize controller-runtime manager")
+
+	if err := driver.initManager(ctx); err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize Kubernetes manager, running without leader election")
+	}
+
+	// cleanup of stale leader file on container crash/restart
+	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+		if err := removeLeaderReadyFile(); err != nil {
+			log.Warn().Err(err).Msg("Failed to remove stale leader ready file on startup")
+		}
 	}
 
 	if driver.csiMode != CsiModeMetricsServer {
@@ -146,7 +159,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	// Controller mode with manager: use leader election
 	// Controller mode without manager (not in K8s): run without leader election
 	// Node-only mode: run without leader election
-	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll) && driver.manager != nil {
+	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll || driver.csiMode == CsiModeMetricsServer) && driver.manager != nil {
 		driver.runWithLeaderElection(ctx, termContext, s)
 	} else {
 		driver.runWithoutLeaderElection(ctx, termContext, s)
@@ -156,48 +169,55 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 // runWithLeaderElection runs the controller with leader election enabled.
 // Only the leader starts the gRPC server; standby pods wait for leadership.
 func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termContext context.Context, s *nonBlockingGRPCServer) {
-	log.Info().Msg("Running controller with leader election")
+	log.Info().Msg("Running with leader election")
 
 	runCtx, cancelRun := context.WithCancel(ctx)
 	var shutdownOnce sync.Once
 
 	// Add runnable that starts gRPC server when we become leader
-	if driver.csiMode != CsiModeMetricsServer {
-		err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-			// This only runs when we are the leader
+	err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+
+		// This only runs when we are the leader
+		if s.csiMode != CsiModeMetricsServer {
 			log.Info().Msg("Became leader - starting gRPC server")
-
 			s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
+		}
 
-			// Mark as leader for health checks
-			driver.isLeader.Store(true)
+		// Mark as leader for health checks
+		driver.isLeader.Store(true)
 
-			// Signal to sidecars that we are the leader
+		// Signal to sidecars that we are the leader
+		if driver.csiMode != CsiModeMetricsServer {
 			if err := createLeaderReadyFile(); err != nil {
 				log.Error().Err(err).Msg("Failed to create leader ready file")
 			}
+		}
 
-			// Wait for context cancellation (leadership lost or shutdown)
-			<-ctx.Done()
+		// Wait for context cancellation (leadership lost or shutdown)
+		<-ctx.Done()
 
-			log.Info().Msg("Leadership lost or shutdown - stopping gRPC server")
+		log.Info().Msg("Leadership lost or shutdown - stopping gRPC server")
 
-			// Mark as not leader for health checks
-			driver.isLeader.Store(false)
+		// Mark as not leader for health checks
+		driver.isLeader.Store(false)
 
-			// Remove leader ready file before stopping gRPC
+		// Remove leader ready file before stopping gRPC
+		if driver.csiMode != CsiModeMetricsServer {
 			if err := removeLeaderReadyFile(); err != nil {
 				log.Error().Err(err).Msg("Failed to remove leader ready file")
 			}
-
+		}
+		if driver.csiMode == CsiModeMetricsServer {
+			driver.ms.Wait()
+		} else {
 			s.Stop() // GracefulStop blocks until in-flight RPCs complete
 			// Lease is held until this function returns (LeaderElectionReleaseOnCancel: true)
-
-			return nil
-		}))
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to add gRPC runnable to manager")
 		}
+
+		return nil
+	}))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to add gRPC runnable to manager")
 	}
 
 	// Handle termination signal
@@ -408,8 +428,7 @@ func (driver *WekaFsDriver) initManager(ctx context.Context) error {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		if errors.Is(err, rest.ErrNotInCluster) {
-			log.Error().Msg("Not running in a Kubernetes cluster, trying to fetch default kubeconfig")
-			// Fallback to using kubeconfig from the local environment
+			logger.Warn().Msg("Not running in cluster, trying KUBECONFIG")
 			kubeconfig := os.Getenv("KUBECONFIG")
 			if kubeconfig == "" {
 				log.Error().Msg("KUBECONFIG environment variable is not set, failed to create K8s API config")

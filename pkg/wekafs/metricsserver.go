@@ -19,7 +19,6 @@ import (
 	"go.uber.org/atomic"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -51,7 +50,6 @@ type MetricsServer struct {
 
 	backgroundTasks *sync.WaitGroup
 
-	manager               ctrl.Manager
 	persistentVolumesChan chan *v1.PersistentVolume // channel for streaming PersistentVolume objects for further processing
 	volumeMetricsChan     chan *VolumeMetric        // channel for incoming requests
 
@@ -473,9 +471,6 @@ func (ms *MetricsServer) ensurePersistentVolumeValid(pv *v1.PersistentVolume) er
 	}
 	if pv.Spec.Capacity == nil || len(pv.Spec.Capacity) == 0 {
 		return errors.New("pv has a zero capacity, half-baked volume possible")
-	}
-	if pv.Spec.CSI.VolumeAttributes == nil || len(pv.Spec.CSI.VolumeAttributes) == 0 {
-		return errors.New("pv is missing volumeAttributes")
 	}
 	if !slices.Contains(KnownVolTypes[:], VolumeType(pv.Spec.CSI.VolumeAttributes["volumeType"])) {
 		return errors.New("pv is missing volumeType or has an unsupported volumeType")
