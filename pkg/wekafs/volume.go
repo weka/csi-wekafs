@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	v1 "k8s.io/api/core/v1"
 	"math"
 	"os"
 	"path/filepath"
@@ -22,6 +21,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	v1 "k8s.io/api/core/v1"
 )
 
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)

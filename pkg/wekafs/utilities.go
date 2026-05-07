@@ -625,8 +625,8 @@ func getDataTransportFromMountPath(ctx context.Context, path string) DataTranspo
 			}
 		}
 	}
-	logger.Warn().Str("path", path).Msg("Mount path not found in mounts list")
-	return ""
+	// just default
+	return dataTransportWekafs
 }
 
 // Die used to intentionally panic and exit, while updating termination log
@@ -725,6 +725,9 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 		minimal.Spec.PersistentVolumeSource.CSI = &v1.CSIPersistentVolumeSource{
 			Driver:       pv.Spec.CSI.Driver,       // Need to filter by driver
 			VolumeHandle: pv.Spec.CSI.VolumeHandle, // Need to extract filesystem path
+			// those parame are required for metrics server
+			NodePublishSecretRef: pv.Spec.CSI.NodePublishSecretRef, // Need to extract secret for metrics server
+			VolumeAttributes:     pv.Spec.CSI.VolumeAttributes,     // Need to check validity of volume for metrics server
 		}
 	}
 
