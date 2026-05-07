@@ -421,10 +421,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		// SearchMountPoints and GetMountRefs failed to do the job
 		if os.IsExist(err) {
 			if PathIsWekaMount(targetPath) {
-				log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
+				log.Ctx(ctx).Error().Str("target_path", targetPath).Bool("weka_mounted", true).Msg("Target path exists")
 				return &csi.NodePublishVolumeResponse{}, nil
 			} else {
-				log.Ctx(ctx).Trace().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
+				log.Ctx(ctx).Error().Str("target_path", targetPath).Bool("weka_mounted", false).Msg("Target path exists")
 			}
 		} else {
 			log.Error().Err(err).Str("target_path", targetPath).Msg("Failed creating directory")
@@ -432,7 +432,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		}
 	}
 	logger.Debug().Str("volume_id", volumeID).Str("target_path", targetPath).Str("source_path", fullPath).
-		Fields(innerMountOpts).Msg("Performing bind mount")
+		Fields(innerMountOpts).Msg("Performing bind mount to inner path")
 
 	// if we run in K8s isolated environment, 2nd mount must be done using mapped volume path
 	if err := mounter.Mount(fullPath, targetPath, "", innerMountOpts); err != nil {
@@ -458,7 +458,7 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
-	logger := log.Ctx(ctx)
+	logger := log.Ctx(ctx).With().Str("operation", op).Str("volume_id", req.VolumeId).Str("target_path", req.TargetPath).Logger()
 	logger.Info().Msg(">>>> Received request")
 	defer func() {
 		level := zerolog.InfoLevel
@@ -484,14 +484,14 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	// TODO: Verify that targetPath is indeed equals to expected source of bind mount
 	//		 Which is not straightforward in case plugin was restarted, as in this case
 	//		 we lose information of source. Probably Context can be used
-	logger.Debug().Str("target_path", targetPath).Msg("Checking if target path exists")
-	if _, err := os.Stat(targetPath); err != nil {
+	logger.Debug().Msg("Checking if target path exists")
+	if _, err := os.Stat(targetPath); err != nil { // by purpose using os.Stat and not PathExists()
 		if os.IsNotExist(err) {
-			logger.Debug().Msg("Target path does not exist, assuming repeating unpublish request")
+			logger.Warn().Msg("Target path does not exist, assuming repeating unpublish request")
 			result = "SUCCESS"
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		} else if pathErr, ok := err.(*os.PathError); ok && errors.Is(pathErr.Err, syscall.ESTALE) {
-			logger.Debug().Msg("Target path is stale, assuming NFS publish failure")
+			logger.Warn().Msg("Target path is stale, assuming NFS publish failure")
 			goto FORCEUMOUNT
 		} else {
 			logger.Error().Err(err).Msg("Failed to check target path")
@@ -520,12 +520,13 @@ FORCEUMOUNT:
 	unmountElapsed := time.Since(unmountStart).Seconds()
 	if unmountErr != nil {
 		logger.Warn().Float64("elapsed_seconds", unmountElapsed).Str("target_path", targetPath).Msg("Unmount failed")
-		//it seems that when NodeUnpublishRequest appears, this target path is already not existing, e.g. due to pod being deleted
 		return NodeUnpublishVolumeError(ctx, codes.Internal, unmountErr.Error())
 	}
 	logger.Trace().Float64("elapsed_seconds", unmountElapsed).Msg("Unmount succeeded")
 	logger.Trace().Str("target_path", targetPath).Msg("Removing stale target path")
+	logger.Trace().Msg("Removing stale target path")
 	if err := os.Remove(targetPath); err != nil {
+		logger.Error().Err(err).Msg("Failed to remove stale target path")
 		return NodeUnpublishVolumeError(ctx, codes.Internal, err.Error())
 	}
 

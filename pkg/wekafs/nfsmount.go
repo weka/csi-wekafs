@@ -93,7 +93,11 @@ func (m *nfsMount) ensureMountIpAddress(ctx context.Context, apiClient *apiclien
 }
 
 func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
+	logger := log.Ctx(ctx).With().
+		Str("mount_point", m.getMountPoint()).
+		Str("filesystem", m.fsName).
+		Strs("mount_options", mountOptions.Strings()).
+		Logger()
 	var mountOptionsSensitive []string
 	if apiClient == nil {
 		logger.Trace().Msg("No API client for mount, cannot proceed")
@@ -114,22 +118,19 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 	}
 
 	mountTarget := m.mountIpAddress + ":/" + m.fsName
-	logger.Trace().
-		Strs("mount_options", m.getMountOptions().Strings()).
-		Str("mount_target", mountTarget).
-		Str("mount_point", m.getMountPoint()).
-		Str("mount_ip_address", m.mountIpAddress).
-		Msg("Performing mount")
+	logger = logger.With().Str("mount_target", mountTarget).Str("mount_ip_address", m.mountIpAddress).Logger()
 
 	logger.Trace().Msg("Ensuring mount point exists")
 	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 		return err
 	}
+
+	logger.Debug().Msg("Performing mount")
 	maxRetries := 3
 	for i := 0; i < maxRetries; i++ {
 		err = m.kMounter.MountSensitive(mountTarget, m.getMountPoint(), "nfs", mountOptions.Strings(), mountOptionsSensitive)
 		if err == nil {
-			logger.Trace().Msg("Mounted successfully")
+			logger.Debug().Msg("Mounted successfully")
 			return nil
 		}
 		if os.IsNotExist(err) || strings.Contains(strings.ToLower(err.Error()), "no such file or directory") {
@@ -142,7 +143,7 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 			logger.Error().Err(err).Msg("Mount failed due to unknown issue")
 		}
 		logger.Warn().Int("attempt", i+1).Msg("Retrying mount")
-		time.Sleep(2 * time.Second) // Optional: Add a delay between retries
+		time.Sleep(2 * time.Second)
 	}
 	logger.Error().Err(err).Int("retry_count", maxRetries).Msg("Failed to mount after retries")
 	return err
