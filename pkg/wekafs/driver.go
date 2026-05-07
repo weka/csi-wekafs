@@ -8,13 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync/atomic"
+	"sync"
 	"syscall"
 	"time"
 
-	"sync"
-
 	"github.com/rs/zerolog/log"
+	"go.uber.org/atomic"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -282,9 +281,7 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 	if driver.csiMode == CsiModeMetricsServer {
 		driver.ms.Wait()
 	}
-
 }
-
 func (driver *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if driver.csiMode != CsiModeNode && driver.csiMode != CsiModeAll {
 		return
@@ -292,6 +289,12 @@ func (driver *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 
 	if driver.manager == nil {
 		log.Error().Msg("Manager is not initialized, cannot cleanup node labels")
+		return
+	}
+
+	// Ensure manager cache is started
+	if !driver.manager.GetCache().WaitForCacheSync(ctx) {
+		log.Error().Msg("Manager cache is not started, cannot set node labels")
 		return
 	}
 
@@ -357,10 +360,18 @@ func (driver *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 		return
 	}
 
+	// when no manager - assume not running in Kubernetes environment and skip cleanup (also avoids nil pointer dereference)
 	if driver.manager == nil {
 		log.Error().Msg("Manager is not initialized, cannot cleanup node labels")
 		return
 	}
+
+	// Ensure manager cache is started
+	if !driver.manager.GetCache().WaitForCacheSync(ctx) {
+		log.Error().Msg("Manager cache is not started, cannot set node labels")
+		return
+	}
+
 	client := driver.manager.GetClient()
 	if client == nil {
 		log.Error().Msg("Failed to get Kubernetes client")
