@@ -1102,10 +1102,12 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 	ms.running = true
 	ms.Unlock()
 
-	ms.initManager(ctx) // Initialize the controller-runtime manager
+	if !ms.driver.manager.GetCache().WaitForCacheSync(ctx) {
+		logger.Error().Msg("Failed to sync caches, cannot start MetricsServer")
+		return
+	}
 
-	time.Sleep(1 * time.Second) // to ensure the manager cache is fully started before fetching PersistentVolumes
-	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
+	logger.Info().Msg("Starting to fetch PersistentVolumes")
 
 	// Initialize the incoming requests channel and report all incoming prometheusMetrics
 	ms.wg.Add(1)
