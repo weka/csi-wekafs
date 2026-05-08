@@ -2,12 +2,13 @@ package wekafs
 
 import (
 	"context"
+	"sync"
+
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sync"
 )
 
 // VolumeMetric represents the prometheusMetrics for a single Persistent Volume in Kubernetes
@@ -50,6 +51,8 @@ type VmIndex struct {
 }
 
 func (vmi *VmIndex) GetForFilesystem(fsUid uuid.UUID) *PerInodeIndex {
+	vmi.RLock()
+	defer vmi.RUnlock()
 	if fsMetrics, exists := vmi.index.m[fsUid]; exists {
 		return fsMetrics
 	}
@@ -144,6 +147,8 @@ func (vms *VolumeMetrics) GetAllMetricsByFilesystemUid(ctx context.Context, fsUi
 		log.Ctx(ctx).Debug().Msgf("No volume metrics found for filesystem %s", fsUid.String())
 		return metrics // return empty slice if no metrics found
 	}
+	index.RLock()
+	defer index.RUnlock()
 	for _, vm := range index.m {
 		if vm != nil {
 			metrics = append(metrics, vm)

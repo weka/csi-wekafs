@@ -1,4 +1,4 @@
-# Default values for csi-wekafsplugin.
+# Default values for csi-wekafsplugin (WEKA CSI Plugin)
 
 # -- Directory in root of file system where dynamic volumes are provisioned
 dynamicProvisionPath: "csi-volumes"

@@ -98,6 +98,10 @@ spec:
             - containerPort: {{ .Values.readinessProbe.metricsServerPort | default 9196 }}
               name: ms-healthz
               protocol: TCP
+          {{- if .Values.metricsServer.resources }}
+          resources:
+            {{- toYaml .Values.metricsServer.resources | nindent 12 }}
+          {{- end }}
           livenessProbe:
             failureThreshold: 5
             httpGet:
@@ -129,7 +133,5 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      resources:
-        {{- toYaml .Values.metricsServer.resources | nindent 8}}
       terminationGracePeriodSeconds: {{ .Values.metricsServer.terminationGracePeriodSeconds | default 30 }}
 {{- end }}

@@ -220,11 +220,6 @@ spec:
               name: dev-dir
             - mountPath: /leader-state
               name: leader-state
-            {{- if .Values.legacyVolumeSecretName }}
-            - mountPath: /legacy-volume-access
-              name: legacy-volume-access
-              readOnly: true
-            {{- end }}
           {{- if .Values.controller.resources.wekafs }}
           resources:
             {{- toYaml .Values.controller.resources.wekafs | nindent 12 }}
