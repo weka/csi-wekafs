@@ -87,11 +87,11 @@ func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 		selinuxSupport = &[]bool{true}[0]
 	}
 	mounter := &nfsMounter{
-		mountMap:              newMountMap(),
-		selinuxSupport:        selinuxSupport,
-		config:                driver.config,
-		mountBaseDir:          mountBaseDirForRole(driver.csiMode),
-		enabled:               false,
+		mountMap:       newMountMap(),
+		selinuxSupport: selinuxSupport,
+		config:         driver.config,
+		mountBaseDir:   mountBaseDirForRole(driver.csiMode),
+		enabled:        false,
 	}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.schedulePeriodicMountGc(ctx)
