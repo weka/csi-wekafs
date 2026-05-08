@@ -2,12 +2,13 @@ package wekafs
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"go.uber.org/atomic"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.uber.org/atomic"
 )
 
 type ObservedFilesystems struct {
@@ -26,7 +27,11 @@ func NewObservedFilesystems(ms *MetricsServer) *ObservedFilesystems {
 func (ofu *ObservedFilesystems) GetMap() map[uuid.UUID]*ObservedFilesystem {
 	ofu.RLock()
 	defer ofu.RUnlock()
-	return ofu.uids // return a copy of the map
+	ret := make(map[uuid.UUID]*ObservedFilesystem, len(ofu.uids))
+	for k, v := range ofu.uids {
+		ret[k] = v
+	}
+	return ret // return a copy of the map
 }
 
 func (ofu *ObservedFilesystems) GetByQuotaUpdateTime() []*ObservedFilesystem {
@@ -134,6 +139,9 @@ func (ofu *ObservedFilesystem) GetFileSystem(ctx context.Context, fromCache bool
 	ofu.Lock()
 	defer ofu.Unlock()
 	if ofu.fsObj == nil || !fromCache || ofu.lastSeen.Load().Add(1*time.Minute).Before(time.Now()) {
+		if ofu.fsObj == nil {
+			ofu.fsObj = &apiclient.FileSystem{}
+		}
 		err := ofu.apiClient.GetFileSystemByUid(ctx, ofu.fsUid, ofu.fsObj, false)
 		if err != nil {
 			ofu.fsObj = nil // reset the filesystem object if there was an error

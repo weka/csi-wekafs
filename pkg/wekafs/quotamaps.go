@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
-	"sync"
-	"time"
 )
 
 type QMLocks struct {
@@ -44,7 +45,7 @@ func (qml *QMLocks) Delete(uid uuid.UUID) {
 	if lock, ok := qml.locks.Load(uid); ok {
 		lock.(*sync.RWMutex).Lock() // Lock before deleting to ensure thread safety
 		defer lock.(*sync.RWMutex).Unlock()
-		qml.Delete(uid)
+		qml.locks.Delete(uid)
 	}
 }
 

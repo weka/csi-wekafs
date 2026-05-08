@@ -33,7 +33,7 @@ const (
 	MountOptionContainerName            = "container_name"
 	MountOptionAcl                      = "acl"
 	MountOptionNfsAsync                 = "async"
-	MountOptionNfsSync                  = "async"
+	MountOptionNfsSync                  = "sync"
 	MountOptionNfsHard                  = "hard"
 	MountOptionNfsNoac                  = "noac"
 	MountOptionNfsAc                    = "ac"

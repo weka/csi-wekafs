@@ -1,13 +1,17 @@
 # Default values for metricsserver.
-# -- Name of the driver (and provisioner)
+# -- Name of the driver. Only PersistentVolumes from this driver will be monitored and have metrics collected. Must match the name in the CSI driver deployment. Required.
 csiDriverName: "csi.weka.io"
 
 image:
+  # -- CSI metrics server repository URL
   repository: quay.io/weka.io/csi-metricsserver
+  # -- Pull policy for CSI metrics server image. Always is recommended to ensure latest image is always pulled, but can be set to IfNotPresent in case of private registry with manually updated images.
   pullPolicy: Always
   tag: ""
+# -- image pull secret required for image download. Must have permissions to access all images above.
+#    Should be used in case of private registry that requires authentication
 imagePullSecret: ""
-
+# -- Set to true to use host networking. Required if WEKA API is only accessible via host network. Not recommended, as it can cause port conflicts and security issues. Use with caution.
 hostNetwork: false
 metricsServer:
   # -- Number of replicas for metrics server
@@ -54,8 +58,8 @@ metricsServer:
       cpu: 2
       memory: 4Gi
 
-# -- Log level of CSI plugin
-logLevel: 6
+# -- Log level of metrics server
+logLevel: 4
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
 useJsonLogging: false
 
@@ -75,4 +79,5 @@ tracingUrl: ""
 tracingDeploymentIdentifier: ""
 
 pluginConfig:
+  # -- Allow insecure HTTPS (skip TLS certificate verification)
   allowInsecureHttps: false
