@@ -27,6 +27,19 @@ https://github.com/weka/csi-wekafs
 - [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
 - [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
 
+> **NOTE:** On **Red Hat OpenShift**, the namespace must be created manually with pod-security labels before running Helm,
+> otherwise installation warnings will appear. `--create-namespace` cannot apply labels to the namespace it creates.
+> ```shell
+> oc create project csi-wekafsplugin
+> oc label namespace csi-wekafsplugin \
+>   pod-security.kubernetes.io/enforce=privileged \
+>   pod-security.kubernetes.io/audit=privileged \
+>   pod-security.kubernetes.io/warn=privileged \
+>   --overwrite
+> helm repo add csi-wekafs https://weka.github.io/csi-wekafs
+> helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin [--set selinuxSupport=<off | mixed | enforced>]
+> ```
+
 ## Usage
 - [Deploy an Example application](docs/usage.md)
 - [SELinux Support & Installation Notes](selinux/README.md)

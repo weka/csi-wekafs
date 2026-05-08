@@ -24,6 +24,19 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 > **NOTE:** Since version 0.8.0, Weka CSI plugin supports installation on SELinux-enabled Kubernetes clusters
 > Refer to [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md) for additional information
 
+> **NOTE:** On **Red Hat OpenShift**, the namespace must be created manually with pod-security labels before running Helm,
+> otherwise installation warnings will appear. `--create-namespace` cannot apply labels to the namespace it creates.
+> ```shell
+> oc create project csi-wekafsplugin
+> oc label namespace csi-wekafsplugin \
+>   pod-security.kubernetes.io/enforce=privileged \
+>   pod-security.kubernetes.io/audit=privileged \
+>   pod-security.kubernetes.io/warn=privileged \
+>   --overwrite
+> helm repo add csi-wekafs https://weka.github.io/csi-wekafs
+> helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin [--set selinuxSupport=<off | mixed | enforced>]
+> ```
+
 > **NOTE:** Since version 0.7.0, Weka CSI plugin transitions to API-based deployment model which requires API
 > connectivity and credentials parameters to be set in Storage Class.
 >
