@@ -165,9 +165,12 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		// override the maximum count of PersistentVolumes to fetch from environment variable if set
 		maxCountStr := os.Getenv("MAXIMUM_PERSISTENT_VOLUME_COUNT")
 		if maxCountStr != "" {
-			maxCount, err := strconv.ParseInt(maxCountStr, 10, 64)
+			maxCount, err := strconv.Atoi(maxCountStr)
 			if err == nil { // handle error (e.g., log or set a default value)
 				volumeLimit = int(maxCount)
+			}
+			if maxCount > math.MaxInt32 {
+				maxCount = math.MaxInt32
 			}
 		}
 
