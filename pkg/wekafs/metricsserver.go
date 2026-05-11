@@ -1153,14 +1153,6 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
 		Die("Failed to add processors to manager, cannot run MetricsServer without it")
 	}
-
-	go func() {
-		if err := ms.driver.manager.Start(ctx); err != nil {
-			logger.Error().Err(err).Msg("Cannot continue running MetricsServer")
-			os.Exit(1)
-		}
-	}()
-
 }
 
 func (ms *MetricsServer) Wait() {
