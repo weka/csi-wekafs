@@ -2,12 +2,13 @@
 
 ## What's Changed
 ### Bug Fixes
-* fix: add timeout to frontends check by @assafgi in https://github.com/weka/csi-wekafs/pull/646
-* fix: add socket file permissions for containers using WekaFS (CSI-405) by @assafgi in https://github.com/weka/csi-wekafs/pull/647
-* fix: security issues by @rugggger in https://github.com/weka/csi-wekafs/pull/650
+* fix: remove semconv schema attributes from otel trace provider by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/662
+* fix: update OCP SecurityContextConstraints to allow emptyDir volume type by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/661
+* fix: propagate unmount func errors, fix decRef order, isolate mount paths by CSI role by @kristina-solovyova in https://github.com/weka/csi-wekafs/pull/659
+* fix: prevent liveness probe from hanging on unresponsive WekaFS, propagate context (CSI-412) by @kristina-solovyova in https://github.com/weka/csi-wekafs/pull/660
+* fix: mount selinux filesystem in node server daemonset to correctly manage labels in UBI image by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/676
 ### Miscellaneous
-* chore(deps): bump go.opentelemetry.io/otel/sdk from 1.36.0 to 1.40.0 by @dependabot[bot] in https://github.com/weka/csi-wekafs/pull/644
+* chore: trigger sanity workflow on ready_for_review events by @kristina-solovyova in https://github.com/weka/csi-wekafs/pull/663
+* docs: add OCP namespace pod-security label instructions, regenerate readme by @kristina-solovyova in https://github.com/weka/csi-wekafs/pull/675
 
-## New Contributors
-* @dependabot[bot] made their first contribution in https://github.com/weka/csi-wekafs/pull/644
 
