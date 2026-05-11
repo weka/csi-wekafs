@@ -145,7 +145,6 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	if driver.csiMode == CsiModeMetricsServer || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading MetricsServer")
 		driver.ms = NewMetricsServer(driver)
-		driver.ms.Start(ctx)
 	}
 
 	s := NewNonBlockingGRPCServer(driver.csiMode, driver.config)
@@ -189,6 +188,9 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 				log.Error().Err(err).Msg("Failed to create leader ready file")
 			}
 		}
+		if driver.csiMode == CsiModeMetricsServer || driver.csiMode == CsiModeAll {
+			driver.ms.Start(ctx)
+		}
 
 		// Wait for context cancellation (leadership lost or shutdown)
 		<-ctx.Done()
@@ -204,11 +206,12 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 				log.Error().Err(err).Msg("Failed to remove leader ready file")
 			}
 		}
-		if driver.csiMode == CsiModeMetricsServer {
-			driver.ms.Wait()
-		} else {
+		if driver.csiMode != CsiModeMetricsServer {
 			s.Stop() // GracefulStop blocks until in-flight RPCs complete
 			// Lease is held until this function returns (LeaderElectionReleaseOnCancel: true)
+		}
+		if driver.ms != nil {
+			driver.ms.Stop(ctx)
 		}
 
 		return nil
@@ -245,33 +248,43 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 	}
 
 	s.Wait()
+	if driver.ms != nil {
+		driver.ms.Wait()
+	}
 	log.Info().Msg("Shutdown complete")
 }
 
 // runWithoutLeaderElection runs the driver without leader election (for node-only mode)
 func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termContext context.Context, s *nonBlockingGRPCServer) {
-	log.Info().Msg("Running without leader election (node-only mode)")
+	log.Info().Msg("Running without leader election")
+
+	runCtx, cancelRun := context.WithCancel(ctx)
+	var shutdownOnce sync.Once
 
 	go func() {
 		<-termContext.Done()
-		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) &&
-			driver.config.manageNodeTopologyLabels {
-			log.Info().Msg("Cleanup of node labels...")
-			driver.CleanupNodeLabels(ctx)
-			log.Info().Msg("Cleanup of node labels completed")
-		}
-		if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
-			log.Info().Msg("Waiting for background tasks to complete")
-			driver.cs.getBackgroundTasksWg().Wait()
-			driver.ns.getBackgroundTasksWg().Wait()
-			driver.ms.getBackgroundTasksWg().Wait()
-			log.Info().Msg("Background tasks completed")
-		}
+		shutdownOnce.Do(func() {
+			if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) &&
+				driver.config.manageNodeTopologyLabels {
+				log.Info().Msg("Cleanup of node labels...")
+				driver.CleanupNodeLabels(ctx)
+				log.Info().Msg("Cleanup of node labels completed")
+			}
+			if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+				log.Info().Msg("Waiting for background tasks to complete")
+				driver.cs.getBackgroundTasksWg().Wait()
+				driver.ns.getBackgroundTasksWg().Wait()
+				driver.ms.getBackgroundTasksWg().Wait()
+				log.Info().Msg("Background tasks completed")
+			}
+			cancelRun()
+		})
 
 		s.Stop()
 		log.Info().Msg("Server stopped")
 		os.Exit(1)
 	}()
+
 	if s.csiMode != CsiModeMetricsServer {
 		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 		s.Wait()
@@ -279,6 +292,21 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 	if driver.csiMode == CsiModeMetricsServer {
 		driver.ms.Wait()
 	}
+
+	// Start manager (blocks until shutdown)
+	if driver.manager != nil {
+		log.Info().Msg("Starting manager - without waiting for leadership")
+		if err := driver.manager.Start(runCtx); err != nil {
+			log.Error().Err(err).Msg("Manager exited with error")
+		}
+	}
+	if driver.csiMode == CsiModeMetricsServer || driver.csiMode == CsiModeAll {
+		driver.ms.Start(ctx)
+		driver.ms.Wait()
+	}
+
+	s.Wait()
+
 }
 func (driver *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if driver.csiMode != CsiModeNode && driver.csiMode != CsiModeAll {
@@ -431,7 +459,7 @@ func (driver *WekaFsDriver) initManager(ctx context.Context) error {
 		healthPort = HealthProbePort
 
 	}
-	logger.Info().Str("readiness_port", healthPort).Msg("Using default readiness port")
+	logger.Info().Str("readiness_port", healthPort).Msg("Using readiness port")
 
 	// Get Kubernetes config
 	config, err := rest.InClusterConfig()
@@ -449,8 +477,7 @@ func (driver *WekaFsDriver) initManager(ctx context.Context) error {
 				return err
 			}
 		}
-		logger.Error().Err(err).Msg("Failed to create K8s API config")
-		return err
+		logger.Error().Err(err).Msg("Created K8S API configuration from $KUBECONFIG")
 	}
 
 	// Get namespace for leader election
