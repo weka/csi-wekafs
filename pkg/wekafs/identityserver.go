@@ -123,36 +123,41 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 	driver := config.GetDriver()
 	mounters := driver.mounters
 
-	nfsReady := config.useNfs || config.allowNfsFailback
-	// weka is ready if we are in dev mode or weka is running AND NFS is not forced
-
-	probeCtx, probeCancel := context.WithTimeout(ctx, ids.config.healthProbeWekaTimeout)
-	defer probeCancel()
-	wekafsReady := isWekaRunning(probeCtx)
-	if !wekafsReady {
-		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
-			wekafsReady = true
-			logger.Trace().Msg("CSI Probe: Weka client not running but NFS transport available, reporting ready")
-		}
+	// wekafs is considered ready if 1. not force disabled by config.useNFS AND 2. if the Weka software is running on the node
+	wekafsReady := true
+	if config.useNfs {
+		wekafsReady = false
+	} else {
+		probeCtx, probeCancel := context.WithTimeout(ctx, ids.config.healthProbeWekaTimeout)
+		defer probeCancel()
+		wekafsReady = isWekaRunning(probeCtx)
 	}
-		if nfsReady {
+
+	if !wekafsReady {
+		mounters.wekafs.Disable()
+	} else {
+		mounters.wekafs.Enable()
+	}
+
+	// nfs is considered ready if 1. force enabled by config.useNFS 2. allowNfsFailback is set AND Weka software is NOT running on the node
+	nfsReady := config.useNfs || config.allowNfsFailback
+	if nfsReady {
 		mounters.nfs.Enable()
 	} else {
 		mounters.nfs.Disable()
 	}
 
-	if wekafsReady {
-		mounters.wekafs.Enable()
-	} else {
-		mounters.wekafs.Disable()
+	serverReady := wekafsReady || nfsReady
+	if serverReady && !wekafsReady {
+		logger.Trace().Msg("CSI Probe: Weka client not running but NFS transport available, reporting ready")
 	}
-
-	serverReady := nfsReady || wekafsReady
+	if !serverReady {
+		logger.Error().Msg("CSI Probe FAILED: Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
+	}
 
 	// manage node topology labels only if set by configuration
 	if ids.config.manageNodeTopologyLabels {
 		if !serverReady {
-			logger.Error().Msg("CSI Probe FAILED: Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
 			if ids.config.driverRef.csiMode == CsiModeNode || ids.config.driverRef.csiMode == CsiModeAll {
 				ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
 			}

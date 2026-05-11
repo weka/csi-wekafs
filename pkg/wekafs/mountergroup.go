@@ -41,10 +41,9 @@ func (mg *MounterGroup) GetMounterByTransport(ctx context.Context, transport Dat
 		return mg.nfs
 	} else if transport == dataTransportWekafs {
 		return mg.wekafs
-	} else {
-		logger.Error().Msgf("Unknown transport type: %s", transport)
-		return nil
 	}
+	logger.Error().Msgf("Unknown transport type: %s", transport)
+	return nil
 }
 
 func (mg *MounterGroup) GetPreferredMounter(ctx context.Context) AnyMounter {

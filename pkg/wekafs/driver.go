@@ -116,9 +116,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		driver.ids = NewIdentityServer(driver)
 
 	} else {
-		log.Info().Msg("Running in Metrics Server mode, skipping IdentityServer and MounterGroup initialization")
-		driver.ids = nil
-		driver.mounters = nil
+		log.Info().Msg("Running in Metrics Server mode")
 	}
 	// Create GRPC servers
 

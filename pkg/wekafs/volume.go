@@ -921,12 +921,12 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	if v.server.getMounter(ctx) == nil {
+	mounter := v.server.getMounter(ctx)
+	if mounter == nil {
 		return errors.New("could not mount volume, mounter not in context"), NoOpUnmount
 	}
-
 	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
-	mount, err, unmountFunc := v.server.getMounter(ctx).mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	mount, err, unmountFunc := mounter.mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := NoOpUnmount
 	if err == nil {
 		v.mountPath = mount
