@@ -1,6 +1,7 @@
 package wekafs
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -157,5 +158,322 @@ func TestMountOptions_AsNfs(t *testing.T) {
 	opts = opts6.AsNfs()
 	if !opts.hasOption("async") {
 		t.Errorf("Expected option 'async' to be added")
+	}
+}
+
+// Tests for MountOptionOverride functionality
+func TestMountOptionOverride_ApplyToOptions_AddOption(t *testing.T) {
+	opts := NewMountOptions([]string{"ro"})
+	exclusives := []mutuallyExclusiveMountOptionSet{
+		{"ro", "rw"},
+	}
+
+	override := MountOptionOverride("+readcache")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if !result.hasOption("readcache") {
+		t.Errorf("Expected 'readcache' to be added with + prefix")
+	}
+	if !result.hasOption("ro") {
+		t.Errorf("Expected 'ro' to remain")
+	}
+}
+
+func TestMountOptionOverride_ApplyToOptions_RemoveOption(t *testing.T) {
+	opts := NewMountOptions([]string{"ro", "readcache"})
+	exclusives := []mutuallyExclusiveMountOptionSet{
+		{"ro", "rw"},
+	}
+
+	override := MountOptionOverride("-readcache")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if result.hasOption("readcache") {
+		t.Errorf("Expected 'readcache' to be removed with - prefix")
+	}
+	if !result.hasOption("ro") {
+		t.Errorf("Expected 'ro' to remain")
+	}
+}
+
+func TestMountOptionOverride_ApplyToOptions_AddWithoutPrefix(t *testing.T) {
+	opts := NewMountOptions([]string{})
+	exclusives := []mutuallyExclusiveMountOptionSet{}
+
+	override := MountOptionOverride("noatime")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if !result.hasOption("noatime") {
+		t.Errorf("Expected 'noatime' to be added without prefix")
+	}
+}
+
+func TestMountOptionOverride_ApplyToOptions_MultipleModifiers(t *testing.T) {
+	opts := NewMountOptions([]string{"forcedirect"})
+	exclusives := []mutuallyExclusiveMountOptionSet{
+		{"coherent", "forcedirect", "readcache", "writecache"},
+	}
+
+	override := MountOptionOverride("-forcedirect, +readcache, +noatime")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if result.hasOption("forcedirect") {
+		t.Errorf("Expected 'forcedirect' to be removed")
+	}
+	if !result.hasOption("readcache") {
+		t.Errorf("Expected 'readcache' to be added")
+	}
+	if !result.hasOption("noatime") {
+		t.Errorf("Expected 'noatime' to be added")
+	}
+}
+
+func TestMountOptionOverride_ApplyToOptions_WithMutuallyExclusive(t *testing.T) {
+	opts := NewMountOptions([]string{"writecache", "ro"})
+	exclusives := []mutuallyExclusiveMountOptionSet{
+		{"ro", "rw"},
+		{"coherent", "forcedirect", "readcache", "writecache"},
+	}
+
+	override := MountOptionOverride("+readcache, +rw")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if !result.hasOption("readcache") {
+		t.Errorf("Expected 'readcache' to be added")
+	}
+	if result.hasOption("writecache") {
+		t.Errorf("Expected 'writecache' to be removed due to exclusivity with readcache")
+	}
+	if !result.hasOption("rw") {
+		t.Errorf("Expected 'rw' to be added")
+	}
+	if result.hasOption("ro") {
+		t.Errorf("Expected 'ro' to be removed due to exclusivity with rw")
+	}
+}
+
+func TestMountOptionOverride_ApplyToOptions_WithValuedOption(t *testing.T) {
+	opts := NewMountOptions([]string{})
+	exclusives := []mutuallyExclusiveMountOptionSet{}
+
+	override := MountOptionOverride("readahead_kb=32768, dentry_max_age_positive=1000")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if !result.hasOption("readahead_kb") {
+		t.Errorf("Expected 'readahead_kb' to be added")
+	}
+	if result.getOptionValue("readahead_kb") != "32768" {
+		t.Errorf("Expected 'readahead_kb' value to be '32768', got '%s'", result.getOptionValue("readahead_kb"))
+	}
+	if !result.hasOption("dentry_max_age_positive") {
+		t.Errorf("Expected 'dentry_max_age_positive' to be added")
+	}
+	if result.getOptionValue("dentry_max_age_positive") != "1000" {
+		t.Errorf("Expected 'dentry_max_age_positive' value to be '1000', got '%s'", result.getOptionValue("dentry_max_age_positive"))
+	}
+}
+
+func TestMountOptionOverride_ApplyToOptions_EmptyString(t *testing.T) {
+	opts := NewMountOptions([]string{"ro"})
+	exclusives := []mutuallyExclusiveMountOptionSet{}
+
+	override := MountOptionOverride("")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if !result.hasOption("ro") {
+		t.Errorf("Expected 'ro' to remain unchanged with empty override")
+	}
+}
+
+func TestMountOptionOverride_ApplyToOptions_WithWhitespace(t *testing.T) {
+	opts := NewMountOptions([]string{})
+	exclusives := []mutuallyExclusiveMountOptionSet{}
+
+	override := MountOptionOverride("  +readcache  ,  -forcedirect  ,  noatime  ")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if !result.hasOption("readcache") {
+		t.Errorf("Expected 'readcache' to be added (whitespace handling)")
+	}
+	if !result.hasOption("noatime") {
+		t.Errorf("Expected 'noatime' to be added (whitespace handling)")
+	}
+}
+
+func TestParsePodMountAnnotation_SingleEntry(t *testing.T) {
+	annotation := "my-volume: -forcedirect, +readcache"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(entries))
+	}
+
+	if !entries[0].pattern.MatchString("my-volume") {
+		t.Errorf("Expected pattern to match 'my-volume'")
+	}
+
+	if entries[0].override.String() != "-forcedirect, +readcache" {
+		t.Errorf("Expected override to be '-forcedirect, +readcache', got '%s'", entries[0].override.String())
+	}
+}
+
+func TestParsePodMountAnnotation_MultipleEntries_WithNewline(t *testing.T) {
+	annotation := "my-volume-.*: -forcedirect, +readcache\nmy-vol-2: +writecache"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries, got %d", len(entries))
+	}
+
+	if !entries[0].pattern.MatchString("my-volume-abc") {
+		t.Errorf("Expected first pattern to match 'my-volume-abc'")
+	}
+
+	if !entries[1].pattern.MatchString("my-vol-2") {
+		t.Errorf("Expected second pattern to match 'my-vol-2'")
+	}
+}
+
+func TestParsePodMountAnnotation_MultipleEntries_WithSemicolon(t *testing.T) {
+	annotation := "my-volume: +readcache; other-volume: -writecache"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries, got %d", len(entries))
+	}
+}
+
+func TestParsePodMountAnnotation_WithComments(t *testing.T) {
+	annotation := "# This is a comment\nmy-volume: +readcache\n# Another comment\nother: -forcedirect"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries (ignoring comments), got %d", len(entries))
+	}
+}
+
+func TestParsePodMountAnnotation_EmptyLines(t *testing.T) {
+	annotation := "my-volume: +readcache\n\nother-volume: -writecache"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries (ignoring empty lines), got %d", len(entries))
+	}
+}
+
+func TestParsePodMountAnnotation_InvalidRegex(t *testing.T) {
+	annotation := "invalid[: +readcache\nvalid-volume: -writecache"
+	entries := parsePodMountAnnotation(annotation)
+
+	// Should only have 1 entry (valid one), the invalid regex is skipped
+	if len(entries) != 1 {
+		t.Errorf("Expected 1 entry (invalid regex skipped), got %d", len(entries))
+	}
+}
+
+func TestParsePodMountAnnotation_NoColonSeparator(t *testing.T) {
+	annotation := "my-volume -forcedirect, +readcache"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 0 {
+		t.Errorf("Expected 0 entries (no colon separator), got %d", len(entries))
+	}
+}
+
+func TestParsePodMountAnnotation_RegexPatterns(t *testing.T) {
+	annotation := "cache-.*: +readcache\npvc-[0-9]+: -forcedirect"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries with regex patterns, got %d", len(entries))
+	}
+
+	if !entries[0].pattern.MatchString("cache-volume") {
+		t.Errorf("Expected first pattern to match regex")
+	}
+	if !entries[0].pattern.MatchString("cache-vol-123") {
+		t.Errorf("Expected first pattern to match regex with suffix")
+	}
+
+	if !entries[1].pattern.MatchString("pvc-123") {
+		t.Errorf("Expected second pattern to match 'pvc-123'")
+	}
+	if entries[1].pattern.MatchString("pvc-abc") {
+		t.Errorf("Expected second pattern not to match 'pvc-abc' (not digits)")
+	}
+}
+
+func TestParsePodMountAnnotation_PatternMatchingPriority(t *testing.T) {
+	annotation := "my-.*: +readcache\nmy-volume: +writecache"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries, got %d", len(entries))
+	}
+
+	// Both patterns match "my-volume", but first one should be found first
+	if !entries[0].pattern.MatchString("my-volume") {
+		t.Errorf("Expected first pattern to match 'my-volume'")
+	}
+	if !entries[1].pattern.MatchString("my-volume") {
+		t.Errorf("Expected second pattern to match 'my-volume'")
+	}
+}
+
+func TestMountOptionOverride_String(t *testing.T) {
+	override := MountOptionOverride("test-option")
+	if override.String() != "test-option" {
+		t.Errorf("Expected String() to return 'test-option', got '%s'", override.String())
+	}
+}
+
+func TestParsePodMountAnnotation_MixedWhitespace(t *testing.T) {
+	annotation := "my-vol-1:  -forcedirect , +readcache , +writecache\nmy-vol-2: +noatime"
+	entries := parsePodMountAnnotation(annotation)
+
+	if len(entries) != 2 {
+		t.Errorf("Expected 2 entries, got %d", len(entries))
+	}
+
+	if !entries[0].pattern.MatchString("my-vol-1") {
+		t.Errorf("Expected pattern to match 'my-vol-1'")
+	}
+
+	// Verify the override string is preserved with spaces
+	override := entries[0].override.String()
+	parts := strings.Split(override, ",")
+	if len(parts) != 3 {
+		t.Errorf("Expected 3 parts after split, got %d", len(parts))
+	}
+}
+
+func TestMountOptionOverride_ApplyToOptions_ComplexScenario(t *testing.T) {
+	// Simulating a real-world scenario with multiple mutually exclusive options
+	opts := NewMountOptions([]string{"writecache", "forcedirect", "ro"})
+	exclusives := []mutuallyExclusiveMountOptionSet{
+		{"ro", "rw"},
+		{"coherent", "forcedirect", "readcache", "writecache"},
+	}
+
+	override := MountOptionOverride("-writecache, -fo, +coherent, +rw, +noatime")
+	result := override.ApplyToOptions(opts, exclusives)
+
+	if result.hasOption("writecache") {
+		t.Errorf("Expected 'writecache' to be removed")
+	}
+	if !result.hasOption("coherent") {
+		t.Errorf("Expected 'coherent' to be added")
+	}
+	if result.hasOption("forcedirect") {
+		t.Errorf("Expected 'forcedirect' to be removed due to coherent mutual exclusivity")
+	}
+	if !result.hasOption("rw") {
+		t.Errorf("Expected 'rw' to be added")
+	}
+	if result.hasOption("ro") {
+		t.Errorf("Expected 'ro' to be removed due to rw mutual exclusivity")
+	}
+	if !result.hasOption("noatime") {
+		t.Errorf("Expected 'noatime' to be added")
 	}
 }
