@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-for-pvc-override
+  # PVC annotation for mount option overrides
+  # Format: <mount-option-modifiers> (applies to all pods mounting the PVC)
+  # Mount option modifiers:
+  #   + prefix: add the option (respecting mutually exclusive sets)
+  #   - prefix: remove the option
+  annotations:
+    weka.io/mount-options-override: -forcedirect, +readcache, +noatime
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: storageclass-wekafs-fs-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: csi-app-pvc-override
+spec:
+  # make sure that pod is scheduled only on node having weka CSI node running
+  nodeSelector:
+    topology.csi.weka.io/global: "true"
+  containers:
+    - name: my-frontend
+      image: ubuntu
+      volumeMounts:
+      - mountPath: "/data"
+        name: my-csi-volume
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do mount -t wekafs; sleep 30; done"]
+  volumes:
+    - name: my-csi-volume
+      persistentVolumeClaim:
+        claimName: pvc-for-pvc-override
+

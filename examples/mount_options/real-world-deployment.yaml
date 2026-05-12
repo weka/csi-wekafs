@@ -1,0 +1,252 @@
+---
+# Example: Real-world deployment using mount option overrides
+# This demonstrates how to use PVC and pod annotations in a typical application setup
+#
+# Scenario: Multi-tier application with different performance requirements
+# - Web tier: read-heavy, needs read caching
+# - Database tier: write-heavy, needs write caching
+# - Cache tier: high-frequency access, direct I/O preferred
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: wekafs-app-storage
+provisioner: csi.weka.io
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+parameters:
+  volumeType: weka/v2
+  filesystemGroupName: default
+  # Base mount options - moderate caching
+  mountOptions: "coherent,noatime"
+  csi.storage.k8s.io/provisioner-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: csi-wekafs
+  csi.storage.k8s.io/controller-publish-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/controller-publish-secret-namespace: csi-wekafs
+  csi.storage.k8s.io/controller-expand-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/controller-expand-secret-namespace: csi-wekafs
+  csi.storage.k8s.io/node-stage-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/node-stage-secret-namespace: csi-wekafs
+  csi.storage.k8s.io/node-publish-secret-name: csi-wekafs-api-secret
+  csi.storage.k8s.io/node-publish-secret-namespace: csi-wekafs
+
+---
+# Database volume with write-optimized settings for all consumers
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-db-data
+  namespace: myapp
+  annotations:
+    # Optimize for write-heavy workloads
+    weka.io/mount-options-override: "-coherent, +writecache, dentry_max_age_positive=100, dentry_max_age_negative=10"
+spec:
+  storageClassName: wekafs-app-storage
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+# Web tier volume with read-optimized settings for all consumers
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-web-assets
+  namespace: myapp
+  annotations:
+    # Optimize for read-heavy workloads
+    weka.io/mount-options-override: "-coherent, +readcache, readahead_kb=65536"
+spec:
+  storageClassName: wekafs-app-storage
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# Cache volume without specific optimization (uses defaults)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-cache
+  namespace: myapp
+spec:
+  storageClassName: wekafs-app-storage
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 25Gi
+
+---
+# Database Pod with specific tuning
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: app-database
+  namespace: myapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: database
+  template:
+    metadata:
+      labels:
+        tier: database
+      annotations:
+        # Further tune the database volume for this specific pod if needed
+        weka.io/mount-options-overrides: |
+          # Direct I/O for the database for predictable performance
+          app-db-data: +forcedirect, dentry_max_age_positive=50
+    spec:
+      nodeSelector:
+        topology.csi.weka.io/global: "true"
+      containers:
+      - name: postgres
+        image: postgres:14
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        volumeMounts:
+        - name: db-data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: db-data
+        persistentVolumeClaim:
+          claimName: app-db-data
+
+---
+# Web Pod with specific tuning for read-heavy workload
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: app-web-server
+  namespace: myapp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      tier: web
+  template:
+    metadata:
+      labels:
+        tier: web
+      annotations:
+        # Optimize for static asset serving
+        weka.io/mount-options-overrides: |
+          app-web-assets: +readahead_kb=131072, dentry_max_age_positive=3600
+          app-cache: +readcache, readahead_kb=65536
+    spec:
+      nodeSelector:
+        topology.csi.weka.io/global: "true"
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: assets
+          mountPath: /usr/share/nginx/html
+        - name: cache
+          mountPath: /var/cache/nginx
+      volumes:
+      - name: assets
+        persistentVolumeClaim:
+          claimName: app-web-assets
+      - name: cache
+        persistentVolumeClaim:
+          claimName: app-cache
+
+---
+# Cache Pod with direct I/O for latency-sensitive workload
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: app-cache-layer
+  namespace: myapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      tier: cache
+  template:
+    metadata:
+      labels:
+        tier: cache
+      annotations:
+        # Low-latency settings for cache tier
+        weka.io/mount-options-overrides: |
+          app-cache: +forcedirect, dentry_max_age_positive=30, dentry_max_age_negative=5
+    spec:
+      nodeSelector:
+        topology.csi.weka.io/global: "true"
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        volumeMounts:
+        - name: cache-data
+          mountPath: /data
+        command: ["redis-server", "--appendonly", "yes", "--dir", "/data"]
+      volumes:
+      - name: cache-data
+        persistentVolumeClaim:
+          claimName: app-cache
+
+---
+# A/B Testing Example: Two versions of the same pod with different mount options
+kind: Pod
+apiVersion: v1
+metadata:
+  name: app-variant-a
+  namespace: myapp
+  annotations:
+    # Variant A: Read caching for performance
+    weka.io/mount-options-overrides: |
+      app-db-data: -forcedirect, +readcache, dentry_max_age_positive=300
+spec:
+  nodeSelector:
+    topology.csi.weka.io/global: "true"
+  containers:
+  - name: app
+    image: myapp:variant-a
+    volumeMounts:
+    - name: db
+      mountPath: /data
+  volumes:
+  - name: db
+    persistentVolumeClaim:
+      claimName: app-db-data
+
+---
+# Variant B: Direct I/O for predictability
+kind: Pod
+apiVersion: v1
+metadata:
+  name: app-variant-b
+  namespace: myapp
+  annotations:
+    # Variant B: Direct I/O for predictable latency
+    weka.io/mount-options-overrides: |
+      app-db-data: +forcedirect, dentry_max_age_positive=50
+spec:
+  nodeSelector:
+    topology.csi.weka.io/global: "true"
+  containers:
+  - name: app
+    image: myapp:variant-b
+    volumeMounts:
+    - name: db
+      mountPath: /data
+  volumes:
+  - name: db
+    persistentVolumeClaim:
+      claimName: app-db-data
+
