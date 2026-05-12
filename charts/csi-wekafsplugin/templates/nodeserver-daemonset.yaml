@@ -118,7 +118,7 @@ spec:
             - "--managenodetopologylabels"
           {{- end }}
           {{- if .Values.pluginConfig.allowMountOptionOverrides }}
-            - "--allowMountOptionOverrides"
+            - "--allowmountoptionoverrides"
           {{- end }}
           {{- if or .Values.node.livenessProbeEnabled .Values.metrics.enabled }}
           ports:

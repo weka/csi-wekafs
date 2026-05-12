@@ -273,6 +273,7 @@ spec:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
+            - "--extra-create-metadata=true"
             - "--timeout=60s"
             - "--prevent-volume-mode-conversion"
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
