@@ -20,6 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -29,12 +36,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -254,6 +256,51 @@ func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 	return &csi.NodePublishVolumeResponse{}, err
 }
 
+func (ns *NodeServer) applyMountOptionsOverridesToVolume(ctx context.Context, req *csi.NodePublishVolumeRequest, volume *Volume) error {
+	logger := log.Ctx(ctx)
+	if req == nil {
+		logger.Error().Msg("Request cannot be nil")
+		return nil
+	}
+
+	params := req.GetVolumeContext()
+	if params == nil {
+		logger.Error().Msg("Volume Context is nil")
+		return nil
+	}
+
+	logger.Debug().Msg("Applying mount option overrides")
+	crclient := ns.getConfig().GetDriver().manager.GetClient()
+	if crclient == nil {
+		logger.Error().Msg("Failed to get config manager client")
+		return nil
+	}
+
+	// Requires podInfoOnMount: true on the CSIDriver so Kubernetes injects pod info into VolumeContext.
+	podName, podNameOk := params[VolumeContextPodNameKey]
+	podNamespace, podNamespaceOk := params[VolumeContextPodNamespaceKey]
+
+	pvcName, pvcNameOk := params[VolumeContextPvcNameKey]
+	pvcNamespace, pvcNamespaceOk := params[VolumeContextPvcNamespaceKey]
+
+	if pvcNameOk && pvcNamespaceOk {
+		pvcOverride := getPvcMountOptionsOverride(ctx, crclient, pvcNamespace, pvcName)
+		if pvcOverride != "" {
+			logger.Debug().Str("override", pvcOverride.String()).Msg("Applying PVC mount option override")
+			volume.mountOptions = pvcOverride.ApplyToOptions(volume.mountOptions, ns.config.mutuallyExclusiveOptions)
+		}
+	}
+
+	if podNameOk && podNamespaceOk {
+		podOverride := getPodMountOptionsOverride(ctx, crclient, podNamespace, podName, pvcName)
+		if podOverride != "" {
+			logger.Debug().Str("override", podOverride.String()).Msg("Applying Pod mount option override")
+			volume.mountOptions = podOverride.ApplyToOptions(volume.mountOptions, ns.config.mutuallyExclusiveOptions)
+		}
+	}
+	return nil
+}
+
 func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	op := "NodePublishVolume"
 	volumeID := req.GetVolumeId()
@@ -327,7 +374,31 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	if req.GetPublishContext() != nil {
 		deviceId = req.GetPublishContext()[deviceID]
 	}
+
 	var innerMountOpts = []string{"bind"}
+
+	attrib := req.GetVolumeContext()
+	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
+	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
+
+	// Apply per-pod mount option overrides from the weka.io/mount-options annotation.
+	// First, check if we have CR client
+	var crclient runtimeclient.Client
+	manager := ns.getConfig().GetDriver().manager
+	if manager != nil {
+		crclient = ns.getConfig().GetDriver().manager.GetClient()
+	}
+
+	// Second, apply overrides only if we have client and allowMountOptionOverrides is true, as it requires additional API calls and we want to avoid it if not needed
+	if crclient != nil {
+		if ns.config.allowMountOptionOverrides && params != nil {
+			if err := ns.applyMountOptionsOverridesToVolume(ctx, req, volume); err != nil {
+				return NodePublishVolumeError(ctx, codes.Internal, err.Error())
+			}
+		}
+	} else {
+		logger.Debug().Msg("Cannot apply per-pod mount option overrides as Kubernetes client is not initialized")
+	}
 
 	readOnly := req.GetReadonly()
 	// create a readonly mount
@@ -337,10 +408,6 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		volume.mountOptions.Merge(roMountOptions, ns.getConfig().mutuallyExclusiveOptions)
 		innerMountOpts = append(innerMountOpts, "ro")
 	}
-
-	attrib := req.GetVolumeContext()
-	mountFlags := req.GetVolumeCapability().GetMount().GetMountFlags()
-	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
 
 	logger.Debug().Str("target_path", targetPath).
 		Str("fs_type", fsType).
