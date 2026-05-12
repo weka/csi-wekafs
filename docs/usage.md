@@ -329,6 +329,265 @@ weka/v2/my_awesome_filesystem:snap02/another/awsome/path
 
 > **NOTE:** Additional examples can be found in `examples` directory
 
+## Customizing Mount Options via Annotations
+
+Weka CSI plugin supports dynamic customization of mount options through Kubernetes annotations on pods and PersistentVolumeClaims.
+This allows you to fine-tune mount behavior at runtime without modifying StorageClasses, enabling use cases such as:
+
+- Performance tuning for specific workloads
+- A/B testing different mount configurations
+- Development vs. production mount optimizations
+- Per-pod customization of shared volumes
+
+### Mount Option Override Annotations
+
+Two annotations are supported for dynamic mount option overrides:
+
+#### Pod-Level Overrides (`weka.io/mount-options-overrides`)
+
+Applied to individual pods to customize mount options for specific PVCs using regex pattern matching.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-pod
+  annotations:
+    weka.io/mount-options-overrides: |
+      my-volume: -forcedirect, +readcache
+      cache-.*: +writecache, readahead_kb=65536
+spec:
+  containers:
+  - name: app
+    image: myapp:latest
+    volumeMounts:
+    - name: vol
+      mountPath: /data
+  volumes:
+  - name: vol
+    persistentVolumeClaim:
+      claimName: my-volume
+```
+
+**Format**: `<pvc-name-regex>: <mount-option-modifiers>`
+- Each line specifies a PVC name regex pattern and the mount option modifiers to apply
+- Multiple entries can be specified separated by newlines or semicolons
+- First matching pattern wins
+- Comments (lines starting with `#`) are supported
+
+#### PVC-Level Overrides (`weka.io/mount-options-override`)
+
+Applied to PersistentVolumeClaims to set base mount options for all pods mounting the PVC.
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+  annotations:
+    weka.io/mount-options-override: -forcedirect, +readcache, noatime
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: wekafs-storage
+  resources:
+    requests:
+      storage: 10Gi
+```
+
+**Format**: `<mount-option-modifiers>`
+- Simple list of modifiers (no PVC name pattern needed, applies to all pods)
+- Overridden by pod-level annotations
+
+### Mount Option Modifiers
+
+Mount option modifiers support the following prefixes:
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `+` | Add option (respects mutual exclusivity) | `+readcache` |
+| `-` | Remove option | `-writecache` |
+| (none) | Add option (respects mutual exclusivity) | `noatime` |
+
+Options can be simple flags or key-value pairs:
+
+```
+-forcedirect              # Remove forcedirect option
++readcache               # Add readcache option
+readahead_kb=65536       # Add option with value
+coherent                 # Add coherent option
+```
+
+### Common Mount Options
+
+**Caching modes (mutually exclusive)**:
+- `readcache` - Enable read caching
+- `writecache` - Enable write caching
+- `forcedirect` - Direct I/O (no caching)
+- `coherent` - Coherent caching mode
+
+**Access time options**:
+- `noatime` - Don't update access times (faster)
+- `relatime` - Update access times only if needed
+
+**Performance tuning**:
+- `readahead_kb=<size>` - Read-ahead buffer size in KB (e.g., `readahead_kb=65536`)
+- `dentry_max_age_positive=<secs>` - Positive dentry cache TTL (e.g., `dentry_max_age_positive=600`)
+- `dentry_max_age_negative=<secs>` - Negative dentry cache TTL (e.g., `dentry_max_age_negative=10`)
+
+### Application Order
+
+Mount options are applied sequentially, with later configurations overriding earlier ones:
+
+1. **StorageClass default options** - Base configuration
+2. **Node Publish default options** - Node-level defaults
+3. **PVC annotation options** (`weka.io/mount-options-override`) - Shared base overrides
+4. **Pod annotation options** (`weka.io/mount-options-overrides`) - Pod-specific overrides (highest priority)
+
+Example sequence:
+```
+StorageClass defaults:      coherent, noatime
+PVC annotation:             -coherent, +readcache      → Result: readcache, noatime
+Pod annotation:             -readcache, +writecache    → Final: writecache, noatime
+```
+
+### Practical Examples
+
+**Example 1: Read-optimized vs. Write-optimized pods on same PVC**
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: wekafs-storage
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# Pod optimized for reading
+apiVersion: v1
+kind: Pod
+metadata:
+  name: reader-pod
+  annotations:
+    weka.io/mount-options-overrides: "shared-data: +readcache, readahead_kb=131072"
+spec:
+  containers:
+  - name: app
+    image: reader:latest
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: shared-data
+
+---
+# Pod optimized for writing
+apiVersion: v1
+kind: Pod
+metadata:
+  name: writer-pod
+  annotations:
+    weka.io/mount-options-overrides: "shared-data: +writecache, dentry_max_age_positive=100"
+spec:
+  containers:
+  - name: app
+    image: writer:latest
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: shared-data
+```
+
+**Example 2: PVC with base settings and pod-specific tuning**
+
+```yaml
+---
+# PVC with base read-cache configuration
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data
+  annotations:
+    weka.io/mount-options-override: "-coherent, +readcache"
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: wekafs-balanced
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+# Pod that further tunes the base configuration
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tuned-app
+  annotations:
+    weka.io/mount-options-overrides: |
+      app-data: readahead_kb=65536, dentry_max_age_positive=300
+spec:
+  containers:
+  - name: app
+    image: myapp:latest
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: app-data
+```
+
+### Verification
+
+To verify that mount option overrides are applied correctly:
+
+```bash
+# Check mounted options on a pod
+kubectl exec <pod-name> -- mount -t wekafs
+
+# Example output:
+# csivol-abc123 on /data type wekafs (rw,relatime,readcache,noatime,readahead_kb=65536,dentry_max_age_positive=300)
+```
+
+### Enabling Mount Option Overrides
+
+Mount option overrides are disabled by default for security reasons. To enable them, set the following in your Helm values:
+
+```yaml
+pluginConfig:
+  allowMountOptionOverrides: true
+```
+
+Or via Helm command line:
+
+```bash
+helm install csi-wekafs ... --set pluginConfig.allowMountOptionOverrides=true
+```
+
+### Additional Resources
+
+For comprehensive documentation on mount option overrides, including:
+- Advanced regex patterns
+- Troubleshooting
+- Best practices
+- Complete list of supported options
+
+See the [Mount Option Overrides Guide](../examples/mount_options/MOUNT_OPTION_OVERRIDES.md) and [Quick Reference](../examples/mount_options/QUICK_REFERENCE.md).
+
+Example configurations are available in [examples/mount_options/](../examples/mount_options/).
+
+---
+
 ## Expanding a PersistentVolumeClaim
 
 Weka supports online or offline expansion of PersistentVolumeClaim.
