@@ -211,6 +211,9 @@
                 "labels": {
                     "type": "object"
                 },
+                "livenessProbeEnabled": {
+                    "type": "boolean"
+                },
                 "livenessProbeTimeout": {
                     "type": "string"
                 },
