@@ -134,6 +134,8 @@ node:
   labels: {}
   # -- optional labels to add to node pods
   podLabels: {}
+  # -- Enable liveness probe on node pods. Set to false to disable health checks for debugging pod restart issues
+  livenessProbeEnabled: true
   # -- termination grace period for node pods
   terminationGracePeriodSeconds: 10
   # -- resource requests and limits for node containers

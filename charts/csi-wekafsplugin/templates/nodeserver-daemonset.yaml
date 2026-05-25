@@ -117,23 +117,29 @@ spec:
           {{- if .Values.pluginConfig.manageNodeTopologyLabels }}
             - "--managenodetopologylabels"
           {{- end }}
+          {{- if or .Values.node.livenessProbeEnabled .Values.metrics.enabled }}
           ports:
+          {{- if .Values.node.livenessProbeEnabled }}
             - containerPort: 9899
               name: healthz
               protocol: TCP
+          {{- end }}
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.nodePort }}
               name: metrics
               protocol: TCP
           {{- end }}
+          {{- end }}
+          {{- if .Values.node.livenessProbeEnabled }}
           livenessProbe:
             failureThreshold: 10
             httpGet:
               path: /healthz
               port: healthz
             initialDelaySeconds: 10
-            timeoutSeconds: 3
+            timeoutSeconds: 10
             periodSeconds: 10
+          {{- end }}
           env:
             - name: CSI_DRIVER_NAME
               value: {{ required "Provide CSI Driver Name"  .Values.csiDriverName }}
@@ -187,6 +193,7 @@ spec:
           resources:
             {{- toYaml .Values.node.resources.wekafs | nindent 12 }}
           {{- end }}
+        {{- if .Values.node.livenessProbeEnabled }}
         - name: liveness-probe
           volumeMounts:
             - mountPath: /csi
@@ -206,6 +213,7 @@ spec:
           resources:
             {{- toYaml .Values.node.resources.livenessProbe | nindent 12 }}
           {{- end }}
+        {{- end }}
         - name: csi-registrar
           image: {{ required "Provide the csi node registrar sidecar container image." .Values.images.registrarsidecar }}
           args:
