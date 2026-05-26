@@ -119,14 +119,14 @@ func parsePodMountAnnotation(annotation string) []podMountEntry {
 // getPodMountOptionsOverride fetches the pod, reads the PodMountOptionOverrideAnnotation annotation,
 // and returns the raw mount option modifiers for the first pattern that matches pvcClaimName.
 // Returns "" if the annotation is absent or no pattern matches.
-func getPodMountOptionsOverride(ctx context.Context, crclient runtimeclient.Client, podNamespace, podName, pvcName string) MountOptionOverride {
+func getPodMountOptionsOverride(ctx context.Context, crclient runtimeclient.Reader, podNamespace, podName, pvcName string) MountOptionOverride {
 	logger := log.Ctx(ctx)
-	var pod *v1.Pod
+	pod := &v1.Pod{}
 	err := crclient.Get(ctx, types.NamespacedName{
-		Namespace: podNamespace, // we assume that pod and PVC are always in same namespace?
-		Name:      pvcName,
+		Namespace: podNamespace,
+		Name:      podName,
 	}, pod)
-	if err != nil || pod == nil {
+	if err != nil {
 		logger.Warn().Err(err).
 			Str("pod_namespace", podNamespace).
 			Str("pod_name", podName).
@@ -154,14 +154,14 @@ func getPodMountOptionsOverride(ctx context.Context, crclient runtimeclient.Clie
 // getPvcMountOptionsOverride fetches the PVC, reads the PvcMountOptionOverrideAnnotation annotation,
 // and returns the raw mount option modifiers that apply to all pods mounting the PVC.
 // Returns "" if the annotation is absent.
-func getPvcMountOptionsOverride(ctx context.Context, crclient runtimeclient.Client, pvcNamespace, pvcName string) MountOptionOverride {
+func getPvcMountOptionsOverride(ctx context.Context, crclient runtimeclient.Reader, pvcNamespace, pvcName string) MountOptionOverride {
 	logger := log.Ctx(ctx)
-	var claim *v1.PersistentVolumeClaim
+	claim := &v1.PersistentVolumeClaim{}
 	err := crclient.Get(ctx, types.NamespacedName{
 		Namespace: pvcNamespace,
 		Name:      pvcName,
 	}, claim)
-	if err != nil || claim == nil {
+	if err != nil {
 		logger.Warn().Err(err).
 			Str("pvc_namespace", pvcNamespace).
 			Str("pvc_name", pvcName).
