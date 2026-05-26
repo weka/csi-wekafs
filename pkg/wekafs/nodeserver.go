@@ -256,25 +256,19 @@ func NodePublishVolumeError(ctx context.Context, errorCode codes.Code, errorMess
 	return &csi.NodePublishVolumeResponse{}, err
 }
 
-func (ns *NodeServer) applyMountOptionsOverridesToVolume(ctx context.Context, req *csi.NodePublishVolumeRequest, volume *Volume) error {
+func (ns *NodeServer) applyMountOptionsOverridesToVolume(ctx context.Context, req *csi.NodePublishVolumeRequest, volume *Volume, apireader runtimeclient.Reader) error {
 	logger := log.Ctx(ctx)
 	if req == nil {
-		logger.Error().Msg("Request cannot be nil")
-		return nil
+		return fmt.Errorf("request cannot be nil")
 	}
 
 	params := req.GetVolumeContext()
 	if params == nil {
-		logger.Error().Msg("Volume Context is nil")
+		logger.Warn().Msg("No volume context (podInfoOnMount not set on CSIDriver), skipping mount option overrides")
 		return nil
 	}
 
 	logger.Debug().Msg("Applying mount option overrides")
-	crclient := ns.getConfig().GetDriver().manager.GetClient()
-	if crclient == nil {
-		logger.Error().Msg("Failed to get config manager client")
-		return nil
-	}
 
 	// Requires podInfoOnMount: true on the CSIDriver so Kubernetes injects pod info into VolumeContext.
 	podName, podNameOk := params[VolumeContextPodNameKey]
@@ -284,7 +278,7 @@ func (ns *NodeServer) applyMountOptionsOverridesToVolume(ctx context.Context, re
 	pvcNamespace, pvcNamespaceOk := params[VolumeContextPvcNamespaceKey]
 
 	if pvcNameOk && pvcNamespaceOk {
-		pvcOverride := getPvcMountOptionsOverride(ctx, crclient, pvcNamespace, pvcName)
+		pvcOverride := getPvcMountOptionsOverride(ctx, apireader, pvcNamespace, pvcName)
 		if pvcOverride != "" {
 			logger.Debug().Str("override", pvcOverride.String()).Msg("Applying PVC mount option override")
 			volume.mountOptions = pvcOverride.ApplyToOptions(volume.mountOptions, ns.config.mutuallyExclusiveOptions)
@@ -292,7 +286,7 @@ func (ns *NodeServer) applyMountOptionsOverridesToVolume(ctx context.Context, re
 	}
 
 	if podNameOk && podNamespaceOk {
-		podOverride := getPodMountOptionsOverride(ctx, crclient, podNamespace, podName, pvcName)
+		podOverride := getPodMountOptionsOverride(ctx, apireader, podNamespace, podName, pvcName)
 		if podOverride != "" {
 			logger.Debug().Str("override", podOverride.String()).Msg("Applying Pod mount option override")
 			volume.mountOptions = podOverride.ApplyToOptions(volume.mountOptions, ns.config.mutuallyExclusiveOptions)
@@ -382,17 +376,18 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	volume.mountOptions.Merge(NewMountOptionsFromString(strings.Join(mountFlags, ",")), ns.getConfig().mutuallyExclusiveOptions)
 
 	// Apply per-pod mount option overrides from the weka.io/mount-options annotation.
-	// First, check if we have CR client
-	var crclient runtimeclient.Client
+	// Use GetAPIReader (direct API calls) instead of the cached client: pods only have
+	// 'get' permission (no list/watch), so cache informers would fail at startup.
+	var apireader runtimeclient.Reader
 	manager := ns.getConfig().GetDriver().manager
 	if manager != nil {
-		crclient = ns.getConfig().GetDriver().manager.GetClient()
+		apireader = manager.GetAPIReader()
 	}
 
-	// Second, apply overrides only if we have client and allowMountOptionOverrides is true, as it requires additional API calls and we want to avoid it if not needed
-	if crclient != nil {
+	// Apply overrides only if we have an API reader and allowMountOptionOverrides is true.
+	if apireader != nil {
 		if ns.config.allowMountOptionOverrides && params != nil {
-			if err := ns.applyMountOptionsOverridesToVolume(ctx, req, volume); err != nil {
+			if err := ns.applyMountOptionsOverridesToVolume(ctx, req, volume, apireader); err != nil {
 				return NodePublishVolumeError(ctx, codes.Internal, err.Error())
 			}
 		}

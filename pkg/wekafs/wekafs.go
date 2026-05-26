@@ -48,6 +48,7 @@ import (
 	clog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 const (
@@ -367,7 +368,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		log.Info().Msg("Loading ControllerServer")
 
 		// Initialize manager with leader election
-		if err := driver.initManager(ctx); err != nil {
+		if err := driver.initManager(ctx, true); err != nil {
 			log.Warn().Err(err).Msg("Failed to initialize Kubernetes manager, running without leader election")
 		}
 
@@ -381,6 +382,16 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		if driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Cleaning up node stale labels")
 			driver.CleanupNodeLabels(ctx)
+		}
+
+		// In node-only mode the controller block above didn't run, so the manager (and
+		// its embedded K8s client) is not yet initialized.  Initialize it now without
+		// leader election – the node server only needs the client to read PVC/Pod
+		// annotations for per-pod mount option overrides.
+		if driver.csiMode == CsiModeNode {
+			if err := driver.initManager(ctx, false); err != nil {
+				log.Warn().Err(err).Msg("Failed to initialize Kubernetes client for node mode, per-pod mount option overrides will be unavailable")
+			}
 		}
 
 		log.Info().Msg("Loading NodeServer")
@@ -477,6 +488,18 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termContext context.Context, s *nonBlockingGRPCServer) {
 	log.Info().Msg("Running without leader election (node-only mode)")
 
+	runCtx, cancelRun := context.WithCancel(ctx)
+
+	// If a manager was initialized (for K8s client access in node mode), start it so
+	// its cache syncs and GetClient() returns a working client.
+	if driver.manager != nil {
+		go func() {
+			if err := driver.manager.Start(runCtx); err != nil {
+				log.Error().Err(err).Msg("Kubernetes manager exited with error")
+			}
+		}()
+	}
+
 	go func() {
 		<-termContext.Done()
 		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) &&
@@ -484,6 +507,7 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 			log.Info().Msg("Cleanup of node labels...")
 			driver.CleanupNodeLabels(ctx)
 		}
+		cancelRun()
 		s.Stop()
 		log.Info().Msg("Server stopped")
 		os.Exit(1)
@@ -534,15 +558,11 @@ func getOwnNamespace() (string, error) {
 	return string(nsBytes), nil
 }
 
-// initManager initializes the controller-runtime manager with leader election for controller mode
-func (d *WekaFsDriver) initManager(ctx context.Context) error {
+// initManager initializes the controller-runtime manager.
+// Pass leaderElection=true for controller mode (acquires a lease before serving).
+// Pass leaderElection=false for node mode (client-only, no lease required).
+func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) error {
 	logger := log.Ctx(ctx).With().Str("component", "manager-init").Logger()
-
-	// Get health port from environment variable
-	healthPort := os.Getenv("HEALTH_PORT")
-	if healthPort == "" {
-		healthPort = HealthProbePort // Default to 8081
-	}
 
 	// Get Kubernetes config
 	config, err := rest.InClusterConfig()
@@ -562,12 +582,6 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 		}
 	}
 
-	// Get namespace for leader election
-	namespace, err := getOwnNamespace()
-	if err != nil {
-		return fmt.Errorf("failed to get namespace for leader election: %w", err)
-	}
-
 	// Create scheme and register core v1 types
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -575,8 +589,6 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 	// Setup logger for controller-runtime
 	zapLogger := zap.New(zap.UseDevMode(false))
 	clog.SetLogger(zapLogger)
-
-	leaderElectionID := fmt.Sprintf("%s-controller-leader", d.name)
 
 	// Configure cache options (only if enforceDirVolTotalCapacity is enabled)
 	cacheOpts := cache.Options{}
@@ -590,61 +602,85 @@ func (d *WekaFsDriver) initManager(ctx context.Context) error {
 		}
 	}
 
-	mgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme:                        scheme,
-		LeaderElection:                true,
-		LeaderElectionNamespace:       namespace,
-		LeaderElectionID:              leaderElectionID,
-		LeaderElectionReleaseOnCancel: true,
-		Cache:                         cacheOpts,
-		HealthProbeBindAddress:        ":" + healthPort,
-	})
+	mgrOpts := ctrl.Options{
+		Scheme: scheme,
+		Cache:  cacheOpts,
+		// Node mode: disable both HTTP servers to avoid port conflicts.
+		// Controller and node pods share the host network namespace (hostNetwork: true),
+		// so any port the node manager binds would block the controller manager from using it.
+		Metrics:                metricsserver.Options{BindAddress: "0"},
+		HealthProbeBindAddress: "",
+	}
+
+	if leaderElection {
+		// Controller mode: bind health probe so Kubernetes liveness probes work.
+		// Override the node-mode defaults set above.
+		healthPort := os.Getenv("HEALTH_PORT")
+		if healthPort == "" {
+			healthPort = HealthProbePort
+		}
+		mgrOpts.HealthProbeBindAddress = ":" + healthPort
+
+		// Get namespace for leader election lease
+		namespace, err := getOwnNamespace()
+		if err != nil {
+			return fmt.Errorf("failed to get namespace for leader election: %w", err)
+		}
+		mgrOpts.LeaderElection = true
+		mgrOpts.LeaderElectionNamespace = namespace
+		mgrOpts.LeaderElectionID = fmt.Sprintf("%s-controller-leader", d.name)
+		mgrOpts.LeaderElectionReleaseOnCancel = true
+	}
+
+	mgr, err := ctrl.NewManager(config, mgrOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create manager: %w", err)
 	}
 
-	// Parse socket path from endpoint (format: "unix:///path/to/socket")
-	socketProto, socketPath, err := parseEndpoint(d.endpoint)
-	if err != nil {
-		return fmt.Errorf("failed to parse endpoint for health check: %w", err)
-	}
-	if socketProto == "unix" {
-		socketPath = "/" + socketPath // parseEndpoint strips leading slash
-	}
-
-	// - Standby: OK (process is alive)
-	// - Leader: verify gRPC server accepts connections + Weka client running (if needed)
-	if err := mgr.AddHealthzCheck("healthz", func(r *http.Request) error {
-		if d.isLeader.Load() {
-			// Leader: verify gRPC server accepts connections
-			conn, err := net.DialTimeout(socketProto, socketPath, time.Second)
-			if err != nil {
-				return fmt.Errorf("gRPC server not accessible: %w", err)
-			}
-			_ = conn.Close()
-
-			if !d.config.useNfs && !d.config.allowNfsFailback && !d.config.isInDevMode() {
-				wekaCtx, wekaCancel := context.WithTimeout(r.Context(), d.config.healthProbeWekaTimeout)
-				defer wekaCancel()
-				if !isWekaRunning(wekaCtx) {
-					return fmt.Errorf("weka client not running or unresponsive")
-				}
-			}
-			return nil
+	if leaderElection {
+		// Parse socket path from endpoint (format: "unix:///path/to/socket")
+		socketProto, socketPath, err := parseEndpoint(d.endpoint)
+		if err != nil {
+			return fmt.Errorf("failed to parse endpoint for health check: %w", err)
 		}
-		// Standby: alive is enough
-		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to add health check: %w", err)
+		if socketProto == "unix" {
+			socketPath = "/" + socketPath // parseEndpoint strips leading slash
+		}
+
+		// - Standby: OK (process is alive)
+		// - Leader: verify gRPC server accepts connections + Weka client running (if needed)
+		if err := mgr.AddHealthzCheck("healthz", func(r *http.Request) error {
+			if d.isLeader.Load() {
+				// Leader: verify gRPC server accepts connections
+				conn, err := net.DialTimeout(socketProto, socketPath, time.Second)
+				if err != nil {
+					return fmt.Errorf("gRPC server not accessible: %w", err)
+				}
+				_ = conn.Close()
+
+				if !d.config.useNfs && !d.config.allowNfsFailback && !d.config.isInDevMode() {
+					wekaCtx, wekaCancel := context.WithTimeout(r.Context(), d.config.healthProbeWekaTimeout)
+					defer wekaCancel()
+					if !isWekaRunning(wekaCtx) {
+						return fmt.Errorf("weka client not running or unresponsive")
+					}
+				}
+				return nil
+			}
+			// Standby: alive is enough
+			return nil
+		}); err != nil {
+			return fmt.Errorf("failed to add health check: %w", err)
+		}
 	}
 
 	d.manager = mgr
 	logger.Info().
-		Str("leader_election_id", leaderElectionID).
-		Str("namespace", namespace).
-		Str("health_probe_port", healthPort).
+		Bool("leader_election", leaderElection).
 		Bool("enforce_capacity", d.config.enforceDirVolTotalCapacity).
-		Msg("Kubernetes manager initialized with leader election")
+		Str("leader_election_id", mgrOpts.LeaderElectionID).
+		Str("namespace", mgrOpts.LeaderElectionNamespace).
+		Msg("Kubernetes manager initialized")
 	return nil
 }
 
