@@ -2,22 +2,22 @@ package wekafs
 
 import (
 	"context"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"sync"
 	"time"
-)
 
-const (
-	dataTransportNfs    DataTransport = "nfs"
-	dataTransportWekafs DataTransport = "wekafs"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.uber.org/atomic"
+	"k8s.io/mount-utils"
 )
 
 type AnyServer interface {
-	getMounter() AnyMounter
+	getMounter(ctx context.Context) AnyMounter
+	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
-	isInDevMode() bool
 	getDefaultMountOptions() MountOptions
 	getNodeId() string
+	getBackgroundTasksWg() *sync.WaitGroup
 }
 
 type AnyMounter interface {
@@ -30,11 +30,27 @@ type AnyMounter interface {
 	schedulePeriodicMountGc(ctx context.Context)
 	getGarbageCollector() *innerPathVolGc
 	getTransport() DataTransport
+	getMountMap() *mountMap
+	isEnabled() bool
+	Enable()
+	Disable()
+	Config() *DriverConfig
+	getSelinuxSupport() *bool
+	setSelinuxSupport(bool)
 }
 
-type nfsMountsMap map[string]int // we only follow the mountPath and number of references
-type wekafsMountsMap map[string]int
+type nfsMountsMap map[string]*atomic.Int32 // we only follow the mountPath and number of references
+type wekafsMountsMap map[string]*atomic.Int32
 type DataTransport string
+
+func (dt DataTransport) Unknown() bool {
+	return dt == ""
+}
+
+func (dt DataTransport) String() string {
+	return string(dt)
+}
+
 type UnmountFunc func() error
 
 // NoOpUnmount is a no-op UnmountFunc returned on error paths where no mount succeeded.
@@ -49,14 +65,20 @@ func deferUmount(fn UnmountFunc, retErr *error) {
 }
 
 type AnyMount interface {
-	isInDevMode() bool
+	getMounter() AnyMounter
+	getKMounter() mount.Interface
 	isMounted(ctx context.Context) bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error
-	getRefCount() int
 	doUnmount(ctx context.Context) error
 	doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error
 	getMountPoint() string
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
+	getRefCountIndex() string
+	getFsName() string
 }
+
+type VolumeBackingType string
+type VolumeType string
+type CsiPluginMode string

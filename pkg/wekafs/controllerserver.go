@@ -20,61 +20,44 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	v1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
-
-const (
-	deviceID                            = "deviceID"
-	maxVolumeIdLength                   = 1920
-	TracerName                          = "weka-csi"
-	ControlServerAdditionalMountOptions = MountOptionAcl + "," + MountOptionWriteCache
-	capacityRefreshInterval             = 5 * time.Second  // How often to refresh from K8s
-	pendingReservationTTL               = 30 * time.Minute // Threshold to warn about stale pending reservations
-)
-
-// CapacityReservation tracks a volume create request that passed validation
-// but hasn't been confirmed in Kubernetes yet
-type CapacityReservation struct {
-	Filesystem     string
-	SourceCapacity int64 // Current PV size
-	TargetCapacity int64 // Desired PV size
-	Timestamp      time.Time
-}
-
-// CapacityTracker maintains capacity totals and pending reservations for validation
-type CapacityTracker struct {
-	mu                  sync.Mutex
-	confirmedCapacity   map[string]int64               // filesystem → total capacity from last K8s List()
-	pendingReservations map[string]CapacityReservation // volumeID → pending create
-	lastRefreshTime     time.Time
-	manager             ctrl.Manager
-}
 
 type ControllerServer struct {
 	csi.UnimplementedControllerServer
 	caps            []*csi.ControllerServiceCapability
 	nodeID          string
-	mounter         AnyMounter
+	mounters        *MounterGroup
 	api             *ApiStore
 	config          *DriverConfig
-	semaphores      map[string]*semaphore.Weighted
+	semaphores      map[string]*SemaphoreWrapper
+	backgroundTasks *sync.WaitGroup
+	metrics         *ControllerServerMetrics
+
 	manager         ctrl.Manager     // For listing PVs via K8s client
 	capacityTracker *CapacityTracker // Tracks confirmed + pending capacity
 	sync.Mutex
+}
+
+func (cs *ControllerServer) getBackgroundTasksWg() *sync.WaitGroup {
+	if cs == nil {
+		return &sync.WaitGroup{}
+	}
+	return cs.backgroundTasks
 }
 
 func (cs *ControllerServer) getDefaultMountOptions() MountOptions {
@@ -85,16 +68,16 @@ func (cs *ControllerServer) getNodeId() string {
 	return cs.nodeID
 }
 
-func (cs *ControllerServer) isInDevMode() bool {
-	return cs.getConfig().isInDevMode()
-}
-
 func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }
 
-func (cs *ControllerServer) getMounter() AnyMounter {
-	return cs.mounter
+func (cs *ControllerServer) getMounter(ctx context.Context) AnyMounter {
+	return cs.mounters.GetPreferredMounter(ctx)
+}
+
+func (cs *ControllerServer) getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter {
+	return cs.mounters.GetMounterByTransport(ctx, transport)
 }
 
 func (cs *ControllerServer) getApiStore() *ApiStore {
@@ -131,37 +114,43 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	panic("implement me")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig, manager ctrl.Manager) *ControllerServer {
+func NewControllerServer(driver *WekaFsDriver) *ControllerServer {
+	if driver == nil {
+		panic("driver is nil")
+	}
+
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
-		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod supoort
+		csi.ControllerServiceCapability_RPC_SINGLE_NODE_MULTI_WRITER, // add ReadWriteOncePod support
 	}
-	if config.advertiseSnapshotSupport {
+	if driver.config.advertiseSnapshotSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CREATE_DELETE_SNAPSHOT)
 	}
-	if config.advertiseVolumeCloneSupport {
+	if driver.config.advertiseVolumeCloneSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CLONE_VOLUME)
 	}
 
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
 	cs := &ControllerServer{
-		caps:       capabilities,
-		nodeID:     nodeID,
-		mounter:    mounter,
-		api:        api,
-		config:     config,
-		semaphores: make(map[string]*semaphore.Weighted),
-		manager:    manager,
+		caps:            capabilities,
+		nodeID:          driver.nodeID,
+		mounters:        driver.mounters,
+		api:             driver.api,
+		config:          driver.config,
+		semaphores:      make(map[string]*SemaphoreWrapper),
+		backgroundTasks: new(sync.WaitGroup),
+		metrics:         NewControllerServerMetrics(),
+		manager:         driver.manager,
 	}
 
 	// Initialize capacity tracker if manager available
-	if manager != nil {
+	if driver.manager != nil {
 		cs.capacityTracker = &CapacityTracker{
 			confirmedCapacity:   make(map[string]int64),
 			pendingReservations: make(map[string]CapacityReservation),
-			manager:             manager,
+			manager:             driver.manager,
 		}
 	}
 
@@ -209,9 +198,9 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 	return nil
 }
 
-type releaseSempahore func()
+type releaseSemaphore func()
 
-func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSempahore) {
+func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (error, releaseSemaphore) {
 	logger := log.Ctx(ctx)
 	cs.initializeSemaphore(ctx, op)
 	sem := cs.semaphores[op]
@@ -220,15 +209,54 @@ func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (er
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
+
+	// select metrics histogram based on the operation type
+	var histogram *prometheus.HistogramVec
+	var gauge *prometheus.GaugeVec
+	driverName := cs.getConfig().GetDriver().name
+
+	switch op {
+	case "CreateVolume":
+		histogram = cs.metrics.Concurrency.CreateVolumeWaitDuration
+		gauge = cs.metrics.Concurrency.CreateVolume
+	case "DeleteVolume":
+		histogram = cs.metrics.Concurrency.DeleteVolumeWaitDuration
+		gauge = cs.metrics.Concurrency.DeleteVolume
+	case "ExpandVolume":
+		histogram = cs.metrics.Concurrency.ExpandVolumeWaitDuration
+		gauge = cs.metrics.Concurrency.ExpandVolume
+	case "CreateSnapshot":
+		histogram = cs.metrics.Concurrency.CreateSnapshotWaitDuration
+		gauge = cs.metrics.Concurrency.CreateSnapshot
+	case "DeleteSnapshot":
+		histogram = cs.metrics.Concurrency.DeleteSnapshotWaitDuration
+		gauge = cs.metrics.Concurrency.DeleteSnapshot
+	}
+
+	// update concurrent operations
+	currentOps := func() {
+		if gauge != nil {
+			gauge.WithLabelValues(driverName, "acquired").Set(float64(sem.CurrentCount()))
+		}
+	}
+	currentOps()
+
 	if err == nil {
+		if histogram != nil {
+			histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
+		}
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
 		return nil, func() {
+			defer currentOps()
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
 		}
 	}
 	logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Failed to acquire semaphore")
+	if histogram != nil {
+		histogram.WithLabelValues(driverName, "failure").Observe(elapsed.Seconds())
+	}
 	return err, func() {}
 }
 
@@ -242,10 +270,13 @@ func (cs *ControllerServer) initializeSemaphore(ctx context.Context, op string) 
 	if _, ok := cs.semaphores[op]; ok {
 		return
 	}
-	max := cs.getConfig().maxConcurrencyPerOp[op]
+	m, ok := cs.getConfig().maxConcurrencyPerOp[op]
+	if !ok { // if not set, default to 1
+		m = 1
+	}
 	logger := log.Ctx(ctx)
-	logger.Info().Str("op", op).Int64("max_concurrency", max).Msg("Initializing semaphore")
-	sem := semaphore.NewWeighted(max)
+	logger.Info().Str("op", op).Int64("max_concurrency", m).Msg("Initializing semaphore")
+	sem := NewSemaphoreWrapper(m)
 	cs.semaphores[op] = sem
 }
 
@@ -254,17 +285,26 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	params := req.GetParameters()
 	result := "FAILURE"
 	logger := log.Ctx(ctx)
 	logger.Info().Str("name", req.GetName()).Fields(params).Msg(">>>> Received request")
-
+	var backingType VolumeBackingType
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		driverName := cs.getConfig().GetDriver().name
+		bt := string(backingType)
+		if bt != "" {
+			cs.metrics.Operations.CreateVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(float64(req.GetCapacityRange().GetRequiredBytes()))
+			cs.metrics.Operations.CreateVolumeCounter.WithLabelValues(driverName, result, bt).Inc()
+			cs.metrics.Operations.CreateVolumeDuration.WithLabelValues(driverName, result, bt).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+		}
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -290,9 +330,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	if volume == nil {
 		return CreateVolumeError(ctx, codes.Internal, "Could not initialize volume representation object from request")
 	}
+	backingType = volume.GetBackingType()
 
 	// check if with current API client state we can modify this volume or not
-	// (basically only legacy dirVolume with xAttr fallback can be operated without API client)
 	if err := volume.CanBeOperated(); err != nil {
 		return CreateVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
@@ -332,7 +372,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	} else if volExists && err == nil {
 		// current capacity explicitly differs from requested, this is another volume request
 		return CreateVolumeError(ctx, codes.AlreadyExists, "Volume with same name and different capacity already exists")
-	} else if volExists && err != nil {
+	} else if volExists {
 		// can happen if volume is half-made (object was created but capacity was not set on it on previous run)
 		if err := volume.UpdateCapacity(ctx, &volume.enforceCapacity, capacity); err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch OR set capacity for a volume")
@@ -385,242 +425,6 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}, nil
 }
 
-// validateAndReserveCapacity validates capacity and reserves it for this volume.
-// currentCapacity: existing PV size (0 for new volumes)
-// targetCapacity: desired PV size after operation
-func (cs *ControllerServer) validateAndReserveCapacity(ctx context.Context, v *Volume, currentCapacity int64, targetCapacity int64) error {
-	ctx, span := otel.Tracer(TracerName).Start(ctx, "ValidateAndReserveCapacity")
-	defer span.End()
-
-	logger := log.Ctx(ctx).With().
-		Str("volume_id", v.GetId()).
-		Str("filesystem", v.FilesystemName).
-		Int64("current_capacity", currentCapacity).
-		Int64("target_capacity", targetCapacity).
-		Logger()
-
-	// Only validate directory-backed volumes
-	if !v.hasInnerPath() || v.isOnSnapshot() {
-		logger.Debug().Msg("Skipping capacity validation for non-directory-backed volume")
-		return nil
-	}
-
-	// Check if capacity tracker is available
-	if cs.capacityTracker == nil {
-		return status.Errorf(codes.Internal,
-			"capacity enforcement enabled but tracker not initialized - kubernetes manager may have failed to start")
-	}
-
-	// Get filesystem total capacity
-	fsObj, err := v.getFilesystemObj(ctx, true)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch filesystem object")
-		return status.Errorf(codes.Internal, "failed to fetch filesystem %s: %v", v.FilesystemName, err)
-	}
-	if fsObj == nil {
-		return status.Errorf(codes.Internal, "filesystem %s not found", v.FilesystemName)
-	}
-
-	// Validate and reserve capacity (atomic operation)
-	cs.capacityTracker.mu.Lock()
-	defer cs.capacityTracker.mu.Unlock()
-
-	// Refresh capacity from K8s if needed (every 5s)
-	if time.Since(cs.capacityTracker.lastRefreshTime) > capacityRefreshInterval {
-		if err := cs.capacityTracker.refreshFromKubernetesLocked(ctx, cs.config.GetDriver().name); err != nil {
-			logger.Warn().Err(err).Msg("Failed to refresh capacity from Kubernetes, using stale data")
-		}
-	}
-
-	// Get confirmed capacity from last refresh
-	confirmedCapacity := cs.capacityTracker.confirmedCapacity[v.FilesystemName]
-
-	// Calculate additional capacity
-	additionalCapacity := targetCapacity - currentCapacity
-
-	// Check if pending reservation already exists
-	existing, existingReservation := cs.capacityTracker.pendingReservations[v.GetId()]
-
-	var sourceCapacity int64
-	if existingReservation {
-		// Validate: target capacity cannot decrease (prevents conflicting expansions)
-		if targetCapacity < existing.TargetCapacity {
-			logger.Warn().
-				Int64("existing_target", existing.TargetCapacity).
-				Int64("new_target", targetCapacity).
-				Msg("Rejecting conflicting expansion - target capacity cannot decrease")
-			return status.Errorf(codes.FailedPrecondition,
-				"conflicting expansion for volume %s: target cannot decrease from %d to %d",
-				v.GetId(), existing.TargetCapacity, targetCapacity)
-		}
-		// Preserve existing SourceCapacity for the reservation record
-		sourceCapacity = existing.SourceCapacity
-	} else {
-		// New reservation - set SourceCapacity from current PV size
-		sourceCapacity = currentCapacity
-	}
-
-	// Sum pending reservations for this filesystem
-	pendingCapacity := cs.capacityTracker.getPendingCapacityLocked(v.FilesystemName)
-
-	// Calculate total including this request
-	totalRequired := confirmedCapacity + pendingCapacity + additionalCapacity
-
-	// Validate
-	if totalRequired > fsObj.AvailableSsd {
-		logger.Warn().
-			Int64("confirmed_capacity", confirmedCapacity).
-			Int64("pending_capacity", pendingCapacity).
-			Int64("additional_capacity", additionalCapacity).
-			Int64("total_required", totalRequired).
-			Int64("filesystem_capacity", fsObj.TotalCapacity).
-			Int64("exceeded_by", totalRequired-fsObj.TotalCapacity).
-			Msg("Insufficient filesystem capacity")
-		return status.Errorf(codes.ResourceExhausted,
-			"insufficient capacity on filesystem %s: required %d bytes (confirmed %d + pending %d + additional %d) exceeds total capacity %d bytes",
-			v.FilesystemName, totalRequired, confirmedCapacity, pendingCapacity, additionalCapacity, fsObj.TotalCapacity)
-	}
-
-	// Reserve capacity for this volume
-	cs.capacityTracker.pendingReservations[v.GetId()] = CapacityReservation{
-		Filesystem:     v.FilesystemName,
-		SourceCapacity: sourceCapacity,
-		TargetCapacity: targetCapacity,
-		Timestamp:      time.Now(),
-	}
-
-	logger.Debug().
-		Int64("confirmed_capacity", confirmedCapacity).
-		Int64("pending_capacity", pendingCapacity).
-		Int64("additional_capacity", additionalCapacity).
-		Int64("total_required", totalRequired).
-		Int64("filesystem_capacity", fsObj.TotalCapacity).
-		Msg("Capacity validation details")
-
-	logger.Info().Msg("Capacity validation passed")
-
-	return nil
-}
-
-// releaseCapacityReservation removes a pending reservation
-func (cs *ControllerServer) releaseCapacityReservation(volumeID string) {
-	if cs.config.enforceDirVolTotalCapacity && cs.capacityTracker != nil {
-		cs.capacityTracker.mu.Lock()
-		defer cs.capacityTracker.mu.Unlock()
-		cs.capacityTracker.deleteReservationLocked(volumeID)
-	}
-}
-
-// refreshFromKubernetesLocked fetches current PV list from K8s and updates confirmed capacity.
-// REQUIRES: ct.mu must be held by caller.
-func (ct *CapacityTracker) refreshFromKubernetesLocked(ctx context.Context, driverName string) error {
-	ctx, span := otel.Tracer(TracerName).Start(ctx, "RefreshCapacityFromKubernetes")
-	defer span.End()
-
-	logger := log.Ctx(ctx)
-
-	// Check if manager is initialized
-	if ct.manager == nil {
-		err := fmt.Errorf("kubernetes manager not initialized - cannot refresh capacity")
-		logger.Error().Err(err).Msg("")
-		return err
-	}
-
-	// List all PVs from Kubernetes cache
-	pvList := &v1.PersistentVolumeList{}
-	if err := ct.manager.GetClient().List(ctx, pvList); err != nil {
-		logger.Error().Err(err).Msg("Failed to list PVs from Kubernetes")
-		return fmt.Errorf("failed to list PVs: %w", err)
-	}
-
-	logger.Info().Int("total_pvs", len(pvList.Items)).Msg("Successfully listed PVs from Kubernetes")
-
-	// calculate capacity AND remove confirmed reservations
-	capacityByFS := make(map[string]int64)
-	for _, pv := range pvList.Items {
-		// Filter for our driver
-		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != driverName {
-			continue
-		}
-
-		volumeID := pv.Spec.CSI.VolumeHandle
-
-		// Only count directory-backed volumes for capacity
-		fsName := sliceFilesystemNameFromVolumeId(volumeID)
-		if fsName == "" {
-			continue
-		}
-
-		// Skip snapshots
-		innerPath := sliceInnerPathFromVolumeId(volumeID)
-		if innerPath == "" || strings.Contains(volumeID, ":") {
-			continue
-		}
-
-		if capacity, ok := pv.Spec.Capacity[v1.ResourceStorage]; ok {
-			capacityByFS[fsName] += capacity.Value()
-
-			// Update pending reservation based on PV state
-			if reservation, exists := ct.pendingReservations[volumeID]; exists {
-				pvCapacity := capacity.Value()
-				if pvCapacity >= reservation.TargetCapacity {
-					// Operation completed - PV reached target size
-					delete(ct.pendingReservations, volumeID)
-				} else {
-					// Operation still in progress - update source to current PV size
-					reservation.SourceCapacity = pvCapacity
-					ct.pendingReservations[volumeID] = reservation
-				}
-			}
-		}
-	}
-
-	// Update confirmed capacity
-	ct.confirmedCapacity = capacityByFS
-	ct.lastRefreshTime = time.Now()
-
-	// Warn about stale reservations
-	ct.logStaleReservationsLocked()
-
-	return nil
-}
-
-// logStaleReservationsLocked logs warnings for pending reservations older than threshold.
-// REQUIRES: ct.mu must be held by caller.
-func (ct *CapacityTracker) logStaleReservationsLocked() {
-	now := time.Now()
-	for volumeID, reservation := range ct.pendingReservations {
-		age := now.Sub(reservation.Timestamp)
-		if age > pendingReservationTTL {
-			log.Warn().
-				Str("volume_id", volumeID).
-				Str("filesystem", reservation.Filesystem).
-				Int64("source_capacity", reservation.SourceCapacity).
-				Int64("target_capacity", reservation.TargetCapacity).
-				Dur("age", age).
-				Msg("Stale pending reservation detected")
-		}
-	}
-}
-
-// getPendingCapacityLocked sums all pending capacity deltas for a filesystem.
-// REQUIRES: ct.mu must be held by caller.
-func (ct *CapacityTracker) getPendingCapacityLocked(filesystem string) int64 {
-	var total int64
-	for _, reservation := range ct.pendingReservations {
-		if reservation.Filesystem == filesystem {
-			total += reservation.TargetCapacity - reservation.SourceCapacity
-		}
-	}
-	return total
-}
-
-// deleteReservationLocked removes a pending reservation.
-// REQUIRES: ct.mu must be held by caller.
-func (ct *CapacityTracker) deleteReservationLocked(volumeID string) {
-	delete(ct.pendingReservations, volumeID)
-}
-
 func (cs *ControllerServer) generateAccessibleTopology() []*csi.Topology {
 	accessibleTopology := make(map[string]string)
 	driverName := cs.getConfig().GetDriver().name
@@ -645,26 +449,26 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	volumeID := req.GetVolumeId()
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	var backingType VolumeBackingType
+	driverName := cs.getConfig().GetDriver().name
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		bt := string(backingType)
+		if bt != "" {
+			cs.metrics.Operations.DeleteVolumeCounter.WithLabelValues(driverName, result, bt).Inc()
+			cs.metrics.Operations.DeleteVolumeDuration.WithLabelValues(driverName, result, bt).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
-
-	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
-	err, dec := cs.acquireSemaphore(ctx, op)
-	defer dec()
-	defer cancel()
-	if err != nil {
-		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
-	}
 
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
@@ -687,6 +491,17 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
 
+	// obtain capacity and backing for metrics
+	backingType = volume.GetBackingType()
+
+	ctx, cancel := context.WithTimeout(ctx, cs.config.grpcRequestTimeout)
+	err, dec := cs.acquireSemaphore(ctx, op)
+	defer dec()
+	defer cancel()
+	if err != nil {
+		return DeleteVolumeError(ctx, codes.Unavailable, "Too many concurrent requests, please retry")
+	}
+
 	err = volume.Trash(ctx)
 	if os.IsNotExist(err) {
 		logger.Debug().Str("volume_id", volume.GetId()).Msg("Volume not found, but returning success for idempotence")
@@ -697,7 +512,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 	// cleanup
 	if err != nil {
-		if err == ErrFilesystemHasUnderlyingSnapshots {
+		if errors.Is(err, ErrFilesystemHasUnderlyingSnapshots) {
 			return &csi.DeleteVolumeResponse{}, err
 		}
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
@@ -724,6 +539,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).
 		Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).
 		Str("volume_id", volumeID).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -733,10 +549,21 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		capacity = capRange.GetRequiredBytes()
 	}
 	logger.Info().Int64("capacity", capacity).Msg(">>>> Received request")
+	var backingType VolumeBackingType
+	driverName := cs.getConfig().GetDriver().name
+
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
+		}
+		bt := string(backingType)
+		if bt != "" {
+			if capacity > 0 {
+				cs.metrics.Operations.ExpandVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(float64(capacity))
+			}
+			cs.metrics.Operations.ExpandVolumeCounter.WithLabelValues(driverName, result, bt).Inc()
+			cs.metrics.Operations.ExpandVolumeDuration.WithLabelValues(driverName, result, bt).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
@@ -767,6 +594,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if err != nil {
 		return ExpandVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
 	}
+	backingType = volume.GetBackingType()
 
 	maxStorageCapacity, err := volume.getMaxCapacity(ctx)
 	if err != nil {
@@ -821,6 +649,7 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	srcVolumeId := req.GetSourceVolumeId()
 	secrets := req.GetSecrets()
@@ -833,6 +662,10 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		dn := cs.getConfig().GetDriver().name
+		cs.metrics.Operations.CreateSnapshotCounter.WithLabelValues(dn, result).Inc()
+		cs.metrics.Operations.CreateSnapshotDuration.WithLabelValues(dn, result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
+
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -896,6 +729,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+	ctx = context.WithValue(ctx, "startTime", time.Now())
 
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
@@ -905,6 +739,9 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		dn := cs.getConfig().GetDriver().name
+		cs.metrics.Operations.DeleteSnapshotCounter.WithLabelValues(dn, result).Inc()
+		cs.metrics.Operations.DeleteSnapshotDuration.WithLabelValues(dn, result).Observe(time.Since(ctx.Value("startTime").(time.Time)).Seconds())
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 

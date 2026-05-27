@@ -4,125 +4,68 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"k8s.io/mount-utils"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
 )
 
 type wekafsMount struct {
 	mounter                 *wekafsMounter
 	fsName                  string
 	mountPoint              string
-	refCount                int
-	lock                    sync.Mutex
 	kMounter                mount.Interface
-	debugPath               string
 	mountOptions            MountOptions
 	lastUsed                time.Time
 	allowProtocolContainers bool
 	containerName           string
 }
 
-func (m *wekafsMount) getMountPoint() string {
-	if m.containerName != "" {
-		return fmt.Sprintf("%s-%s", m.mountPoint, m.containerName)
-	}
-	return m.mountPoint
+func (m *wekafsMount) getKMounter() mount.Interface {
+	return m.kMounter
 }
 
-func (m *wekafsMount) getRefCount() int {
-	return m.refCount
+func (m *wekafsMount) getFsName() string {
+	return m.fsName
+}
+
+func (m *wekafsMount) getMounter() AnyMounter {
+	return m.mounter
+}
+
+func (m *wekafsMount) getMountPoint() string {
+	return fmt.Sprintf("%s-%s", m.mountPoint, m.containerName)
 }
 
 func (m *wekafsMount) getMountOptions() MountOptions {
-	return m.mountOptions
+	return m.mountOptions.AddOption(fmt.Sprintf("container_name=%s", m.containerName))
 }
+
 func (m *wekafsMount) getLastUsed() time.Time {
 	return m.lastUsed
 }
 
-func (m *wekafsMount) isInDevMode() bool {
-	return m.debugPath != ""
-}
-
 func (m *wekafsMount) isMounted(ctx context.Context) bool {
-	return PathExists(m.getMountPoint()) && PathIsWekaMount(ctx, m.getMountPoint())
+	return anyMountIsMounted(ctx, m)
 }
 
-func (m *wekafsMount) getRefcountIdx() string {
-	return m.getMountPoint() + "^" + m.getMountOptions().String()
+func (m *wekafsMount) getRefCountIndex() string {
+	return anyMountGetRefCountIndex(m)
 }
 
 func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
-	if m.mounter == nil {
-		logger.Error().Msg("Mounter is nil")
-		return errors.New("mounter is nil")
-	}
-
-	m.mounter.lock.Lock()
-	defer m.mounter.lock.Unlock()
-	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
-	if !ok {
-		refCount = 0
-	}
-	if refCount == 0 {
-		logger.Debug().Strs("mount_options", m.getMountOptions().Strings()).Msg("No existing mount, mounting wekafs filesystem")
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
-	}
-	if refCount > 0 && !m.isMounted(ctx) {
-		logger.Warn().Int("refcount", refCount).Msg("Mount not found in /proc/mounts despite positive refcount, remounting")
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
-	}
-	refCount++
-	m.mounter.mountMap[m.getRefcountIdx()] = refCount
-	logger.Debug().
-		Int("refcount", refCount).
-		Strs("mount_options", m.getMountOptions().Strings()).
-		Msg("Mount refcount incremented")
-	return nil
+	return anyMountIncref(ctx, apiClient, m)
 }
 
 func (m *wekafsMount) decRef(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
-	if m.mounter == nil {
-		logger.Error().Msg("Mounter is nil")
-		return errors.New("mounter is nil")
-	}
-	m.mounter.lock.Lock()
-	defer m.mounter.lock.Unlock()
-	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
-	if !ok {
-		logger.Error().Int("refcount", refCount).Str("mount_options", m.getMountOptions().String()).Msg("Mount map entry not found during decRef")
-		refCount = 0
-	}
-	if refCount < 0 {
-		logger.Error().Int("refcount", refCount).Msg("Negative refcount during decRef")
-	}
-	if refCount == 1 {
-		if m.isMounted(ctx) {
-			logger.Debug().Msg("Last reference released, unmounting wekafs filesystem")
-			if err := m.doUnmount(ctx); err != nil {
-				return err
-			}
-		} else {
-			logger.Warn().Msg("Last reference released but mount not found in /proc/mounts, skipping unmount")
-		}
-	}
-	if refCount > 0 {
-		refCount--
-		m.mounter.mountMap[m.getRefcountIdx()] = refCount
-		logger.Debug().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Msg("Mount refcount decremented")
-	}
-	return nil
+	return anyMountDecRef(ctx, m)
+}
+
+func (m *wekafsMount) doUnmount(ctx context.Context) error {
+	return anyMountDoUnmount(ctx, m)
 }
 
 func (m *wekafsMount) locateContainerName() error {
@@ -136,32 +79,6 @@ func (m *wekafsMount) locateContainerName() error {
 	return nil
 }
 
-func (m *wekafsMount) doUnmount(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
-	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing umount via k8s native mounter")
-	err := m.kMounter.Unmount(m.getMountPoint())
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to unmount")
-		return err
-	}
-	// WekaFS kernel module may return success from umount(2) while the mount remains
-	// visible in /proc/mounts (e.g. when Bidirectional mount propagation holds a peer
-	// reference on the host). Verify the mount is truly gone before considering this
-	// a success, so decRef does not decrement refCount prematurely.
-	if m.isMounted(ctx) {
-		err := fmt.Errorf("mount point %s still exists in /proc/mounts after umount", m.getMountPoint())
-		logger.Error().Err(err).Msg("Failed to unmount: mount still visible after umount returned success")
-		return err
-	}
-	logger.Debug().Msg("Unmounted successfully")
-	if err := os.Remove(m.getMountPoint()); err != nil {
-		logger.Warn().Err(err).Msg("Failed to remove mount point directory, will be cleaned up on next use")
-	} else {
-		logger.Trace().Msg("Removed mount point successfully")
-	}
-	return nil
-}
-
 func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *apiclient.ApiClient) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 
@@ -170,16 +87,6 @@ func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *a
 		return nil
 	}
 
-	// legacy flow
-	if apiClient == nil {
-		return nil
-	}
-
-	// dev mode, no actual wekafs mount happens
-	if m.isInDevMode() {
-		logger.Trace().Msg("In dev mode, skipping container name check")
-		return nil
-	}
 	var err error
 	configuredContainerName := ""
 	if m.mounter.config != nil {
@@ -188,49 +95,51 @@ func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *a
 	if m.containerName, err = apiClient.EnsureLocalContainer(ctx, m.allowProtocolContainers, configuredContainerName); err != nil {
 		logger.Error().Err(err).Msg("Failed to ensure local container")
 	}
+	m.mountOptions.AddOption(fmt.Sprintf("container_name=%s", m.containerName))
 	return nil
 }
 
 func (m *wekafsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
+	logger := log.Ctx(ctx).With().
+		Str("mount_point", m.getMountPoint()).
+		Str("filesystem", m.fsName).
+		Strs("mount_options", mountOptions.Strings()).
+		Logger()
 	var mountOptionsSensitive []string
+	if apiClient == nil {
+		logger.Trace().Msg("No API client for mount, cannot proceed")
+		return errors.New("no api client bound, cannot obtain mount token")
+	}
+
+	logger.Trace().Msg("Ensuring mount point exists")
 	if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 		return err
 	}
-	if !m.isInDevMode() {
-		if !isWekaRunning(ctx) {
-			logger.Error().Msg("WEKA is not running, cannot mount. Make sure WEKA client software is running on the host")
-			return errors.New("weka is not running, cannot mount")
-		}
-		if apiClient == nil {
-			// this flow is relevant only for legacy volumes, will not work with SCMC / authenticated mounts / non-root org
-			logger.Trace().Msg("No API client for mount, not requesting mount token")
-		} else {
-			if mountToken, err := apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
-				return err
-			} else {
-				mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
-			}
-		}
+	if !isWekaRunning(ctx) {
+		logger.Error().Msg("WEKA is not running, cannot mount. Make sure WEKA client software is running on the host")
+		return errors.New("weka is not running, cannot mount")
+	}
 
-		// if needed, add containerName to the mount options
-		if m.containerName != "" {
-			mountOptions = mountOptions.AddOption(fmt.Sprintf("container_name=%s", m.containerName))
-		}
+	if mountToken, err := apiClient.GetMountTokenForFilesystemName(ctx, m.fsName); err != nil {
+		return err
+	} else {
+		mountOptionsSensitive = append(mountOptionsSensitive, fmt.Sprintf("token=%s", mountToken))
+	}
 
-		logger.Debug().Strs("mount_options", mountOptions.Strings()).Msg("Mounting wekafs filesystem")
-		if err := m.kMounter.MountSensitive(m.fsName, m.getMountPoint(), "wekafs", mountOptions.Strings(), mountOptionsSensitive); err != nil {
-			return err
-		}
+	logger.Debug().Strs("mount_options", mountOptions.Strings()).Msg("Mounting wekafs filesystem")
+	err := m.kMounter.MountSensitive(m.fsName, m.getMountPoint(), "wekafs", mountOptions.Strings(), mountOptionsSensitive)
+	if err == nil {
 		logger.Debug().Msg("Mounted successfully")
 		return nil
-	} else {
-		fakePath := filepath.Join(m.debugPath, m.fsName)
-		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
-			Die(fmt.Sprintf("Failed to create directory %s, while running in debug mode", fakePath))
-		}
-		logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Str("debug_path", m.debugPath).Msg("Performing mount")
-
-		return m.kMounter.Mount(fakePath, m.getMountPoint(), "", []string{"bind"})
 	}
+	if os.IsNotExist(err) || strings.Contains(strings.ToLower(err.Error()), "no such file or directory") {
+		logger.Error().Err(err).Msg("Mount point not found")
+	} else if os.IsPermission(err) {
+		logger.Error().Err(err).Msg("Mount failed due to permissions issue")
+	} else if strings.Contains(err.Error(), "invalid argument") {
+		logger.Error().Err(err).Msg("Mount failed due to invalid argument")
+	} else {
+		logger.Error().Err(err).Msg("Mount failed due to unknown issue")
+	}
+	return err
 }

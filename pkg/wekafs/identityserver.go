@@ -18,6 +18,8 @@ package wekafs
 
 import (
 	"context"
+	"sync"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -35,13 +37,47 @@ type identityServer struct {
 	config  *DriverConfig
 }
 
+func (ids *identityServer) getMounter() AnyMounter {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getApiStore() *ApiStore {
+	panic("not implemented")
+}
+
+func (ids *identityServer) isInDevMode() bool {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getDefaultMountOptions() MountOptions {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getNodeId() string {
+	panic("not implemented")
+}
+
+func (ids *identityServer) getBackgroundTasksWg() *sync.WaitGroup {
+	panic("not implemented")
+}
+
 //goland:noinspection GoExportedFuncWithUnexportedType
-func NewIdentityServer(name, version string, config *DriverConfig) *identityServer {
-	return &identityServer{
-		name:    name,
-		version: version,
-		config:  config,
+func NewIdentityServer(driver *WekaFsDriver) *identityServer {
+	if driver == nil {
+		panic("Driver is nil")
 	}
+	return &identityServer{
+		name:    driver.name,
+		version: driver.version,
+		config:  driver.config,
+	}
+}
+
+func (ids *identityServer) GetConfig() *DriverConfig {
+	if ids.config == nil {
+		panic("DriverConfig is nil")
+	}
+	return ids.config
 }
 
 //goland:noinspection GoUnusedParameter
@@ -83,30 +119,57 @@ func (ids *identityServer) getConfig() *DriverConfig {
 func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
 	logger := log.Ctx(ctx)
 	logger.Trace().Dur("timeout", ids.config.healthProbeWekaTimeout).Msg("CSI Probe: checking Weka client status")
-	probeCtx, probeCancel := context.WithTimeout(ctx, ids.config.healthProbeWekaTimeout)
-	defer probeCancel()
-	isReady := ids.getConfig().isInDevMode() || isWekaRunning(probeCtx)
-	if !isReady {
-		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
-			logger.Trace().Msg("CSI Probe: Weka client not running but NFS transport available, reporting ready")
-			isReady = true
-		}
+	config := ids.getConfig()
+	driver := config.GetDriver()
+	mounters := driver.mounters
+
+	// wekafs is considered ready if 1. not force disabled by config.useNFS AND 2. if the Weka software is running on the node
+	wekafsReady := true
+	if config.useNfs {
+		wekafsReady = false
+	} else {
+		probeCtx, probeCancel := context.WithTimeout(ctx, ids.config.healthProbeWekaTimeout)
+		defer probeCancel()
+		wekafsReady = isWekaRunning(probeCtx)
 	}
+
+	if !wekafsReady {
+		mounters.wekafs.Disable()
+	} else {
+		mounters.wekafs.Enable()
+	}
+
+	// nfs is considered ready if 1. force enabled by config.useNFS 2. allowNfsFailback is set AND Weka software is NOT running on the node
+	nfsReady := config.useNfs || config.allowNfsFailback
+	if nfsReady {
+		mounters.nfs.Enable()
+	} else {
+		mounters.nfs.Disable()
+	}
+
+	serverReady := wekafsReady || nfsReady
+	if serverReady && !wekafsReady {
+		logger.Trace().Msg("CSI Probe: Weka client not running but NFS transport available, reporting ready")
+	}
+	if !serverReady {
+		logger.Error().Msg("CSI Probe FAILED: Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
+	}
+
 	// manage node topology labels only if set by configuration
 	if ids.config.manageNodeTopologyLabels {
-		if !isReady {
-			logger.Error().Msg("CSI Probe FAILED: Weka driver not running on host and NFS transport is not configured, not ready to perform operations")
+		if !serverReady {
 			if ids.config.driverRef.csiMode == CsiModeNode || ids.config.driverRef.csiMode == CsiModeAll {
 				ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
 			}
-		} else if !ids.getConfig().isInDevMode() {
+		} else {
 			ids.getConfig().GetDriver().SetNodeLabels(ctx)
 		}
 	}
-	logger.Trace().Bool("ready", isReady).Msg("CSI Probe completed")
+
+	logger.Trace().Bool("ready", serverReady).Msg("CSI Probe completed")
 	return &csi.ProbeResponse{
 		Ready: &wrapperspb.BoolValue{
-			Value: isReady,
+			Value: serverReady,
 		},
 	}, nil
 }

@@ -117,6 +117,9 @@ spec:
           {{- if .Values.pluginConfig.manageNodeTopologyLabels }}
             - "--managenodetopologylabels"
           {{- end }}
+          {{- if .Values.pluginConfig.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.pluginConfig.apiTimeoutSeconds }}"
+          {{- end }}
           {{- if or .Values.node.livenessProbeEnabled .Values.metrics.enabled }}
           ports:
           {{- if .Values.node.livenessProbeEnabled }}
@@ -126,7 +129,7 @@ spec:
           {{- end }}
           {{- if .Values.metrics.enabled }}
             - containerPort: {{ .Values.metrics.nodePort }}
-              name: metrics
+              name: ns-metrics
               protocol: TCP
           {{- end }}
           {{- end }}
@@ -178,11 +181,6 @@ spec:
               name: csi-data-dir
             - mountPath: /dev
               name: dev-dir
-{{- if .Values.legacyVolumeSecretName }}
-            - mountPath: /legacy-volume-access
-              name: legacy-volume-access
-              readOnly: true
-{{- end }}
             {{- if or (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") (eq .Values.selinuxSupport "enforced") }}
             - mountPath: /etc/selinux/config
               name: selinux-config
@@ -195,6 +193,17 @@ spec:
           {{- end }}
         {{- if .Values.node.livenessProbeEnabled }}
         - name: liveness-probe
+          ports:
+            - containerPort: {{ .Values.readinessProbe.nodeServerPort | default 9191 }}
+              name: ns-healthz
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              port: ns-healthz
+              path: /healthz
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
@@ -208,7 +217,7 @@ spec:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
-              value: "9899"
+              value: "{{ .Values.readinessProbe.nodeServerPort | default 9191 }}"
           {{- if .Values.node.resources.livenessProbe }}
           resources:
             {{- toYaml .Values.node.resources.livenessProbe | nindent 12 }}
@@ -221,13 +230,13 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
             - "--timeout=60s"
-            - "--health-port=9809"
+            - "--health-port={{ .Values.readinessProbe.registrarPort }}"
           ports:
-            - containerPort: 9809
-              name: healthz
+            - containerPort: {{ .Values.readinessProbe.registrarPort }}
+              name: reg-healthz
           livenessProbe:
             httpGet:
-              port: healthz
+              port: reg-healthz
               path: /healthz
             initialDelaySeconds: 5
             timeoutSeconds: 5
@@ -293,8 +302,3 @@ spec:
             type: Directory
           name: selinux-fs
       {{- end }}
-{{- if .Values.legacyVolumeSecretName }}
-        - name: legacy-volume-access
-          secret:
-            secretName: {{ .Values.legacyVolumeSecretName }}
-{{- end }}
