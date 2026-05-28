@@ -180,9 +180,9 @@ spec:
       labels:
         tier: cache
       annotations:
-        # Low-latency settings for cache tier
+        # Low-latency settings for cache tier: enable write caching and reduce dentry TTLs
         weka.io/mount-options-overrides: |
-          app-cache: +forcedirect, dentry_max_age_positive=30, dentry_max_age_negative=5
+          app-cache: +writecache, dentry_max_age_positive=30, dentry_max_age_negative=5
     spec:
       nodeSelector:
         topology.csi.weka.io/global: "true"

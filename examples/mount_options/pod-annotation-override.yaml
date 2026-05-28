@@ -12,6 +12,20 @@ spec:
       storage: 1Gi
 
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-other-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: storageclass-wekafs-fs-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 1Gi
+
+---
 kind: Pod
 apiVersion: v1
 metadata:
@@ -21,7 +35,8 @@ metadata:
   # Mount option modifiers:
   #   + prefix: add the option (respecting mutually exclusive sets)
   #   - prefix: remove the option
-  # Multiple patterns can be specified separated by semicolon or newline
+  # Multiple patterns can be specified separated by semicolon or newline.
+  # First matching pattern wins.
   annotations:
     weka.io/mount-options-overrides: |
       pvc-for-pod-override: -forcedirect, +readcache
@@ -36,10 +51,14 @@ spec:
       volumeMounts:
       - mountPath: "/data"
         name: my-csi-volume
+      - mountPath: "/other-data"
+        name: my-csi-volume-other
       command: ["/bin/sh"]
       args: ["-c", "while true; do mount -t wekafs; sleep 30; done"]
   volumes:
     - name: my-csi-volume
       persistentVolumeClaim:
         claimName: pvc-for-pod-override
-
+    - name: my-csi-volume-other
+      persistentVolumeClaim:
+        claimName: pvc-other-data
