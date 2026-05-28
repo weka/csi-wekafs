@@ -379,6 +379,8 @@ spec:
 
 Applied to PersistentVolumeClaims to set base mount options for all pods mounting the PVC.
 
+> **Important**: PVC-level annotation overrides require the PVC to have been provisioned by **WEKA CSI Plugin v2.8.4 or later**. Earlier versions of the plugin do not request the extra PVC metadata (`csi.storage.k8s.io/pvc/name`, `csi.storage.k8s.io/pvc/namespace`) from the CSI provisioner sidecar, so the annotation will be silently ignored for PVCs provisioned with older versions. For static PVs, these fields must be added manually to `spec.csi.volumeAttributes`.
+
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -439,7 +441,7 @@ coherent                 # Add coherent option
 Mount options are applied sequentially, with later configurations overriding earlier ones:
 
 1. **StorageClass default options** - Base configuration
-2. **Node Publish default options** - Node-level defaults
+2. **Node Publish default options** - Hardcoded defaults, controlled by WEKA
 3. **PVC annotation options** (`weka.io/mount-options-override`) - Shared base overrides
 4. **Pod annotation options** (`weka.io/mount-options-overrides`) - Pod-specific overrides (highest priority)
 
