@@ -396,6 +396,12 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 
 		log.Info().Msg("Loading NodeServer")
 		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
+
+		// Read zone/region from node labels at startup so they are available
+		// when NodeGetInfo is called during registration (e.g. after CSI upgrade).
+		// This only needs to happen once — these labels are set by the cloud provider
+		// and don't change at runtime.
+		driver.readNodeTopologyLabels(ctx)
 	} else {
 		driver.ns = &NodeServer{}
 	}
@@ -715,6 +721,31 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 	}
 
 	return minimal, nil
+}
+
+// readNodeTopologyLabels reads the standard topology.kubernetes.io/zone and region
+// labels from the Kubernetes node object and stores them on the NodeServer.
+// Called once at startup before gRPC registration.
+func (d *WekaFsDriver) readNodeTopologyLabels(ctx context.Context) {
+	if d.ns == nil || d.manager == nil {
+		return
+	}
+	// Use the API reader (direct client) instead of the cached client because
+	// this runs before the manager is started and its informer cache is synced.
+	readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	node := &v1.Node{}
+	if err := d.manager.GetAPIReader().Get(readCtx, runtimeclient.ObjectKey{Name: d.nodeID}, node); err != nil {
+		log.Warn().Err(err).Msg("Failed to get node object for reading topology labels")
+		return
+	}
+	if zone, ok := node.Labels[TopologyKeyZone]; ok {
+		d.ns.zone = zone
+	}
+	if region, ok := node.Labels[TopologyKeyRegion]; ok {
+		d.ns.region = region
+	}
+	log.Info().Str("zone", d.ns.zone).Str("region", d.ns.region).Msg("Read standard topology labels from node")
 }
 
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
