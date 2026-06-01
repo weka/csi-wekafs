@@ -49,6 +49,9 @@ const (
 	TopologyLabelNodePattern      = "topology.%s/node"
 	TopologyLabelTransportPattern = "topology.%s/transport"
 
+	TopologyKeyZone   = "topology.kubernetes.io/zone"
+	TopologyKeyRegion = "topology.kubernetes.io/region"
+
 	WekaKernelModuleName             = "wekafsgw"
 	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
 )
@@ -62,6 +65,8 @@ type NodeServer struct {
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
+	zone   string
+	region string
 	sync.Mutex
 }
 
@@ -598,6 +603,7 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		}
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
+
 	driverName := ns.getConfig().GetDriver().name
 	type topologySegments map[string]string
 	segments := topologySegments{
@@ -611,6 +617,13 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		segments[fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)] = "true"
 	} else {
 		logger.Warn().Msg("Node topology labels management is disabled, using global label only")
+	}
+
+	if ns.zone != "" {
+		segments[TopologyKeyZone] = ns.zone
+	}
+	if ns.region != "" {
+		segments[TopologyKeyRegion] = ns.region
 	}
 
 	topology := &csi.Topology{
