@@ -326,7 +326,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 				VolumeContext:      params,
 				ContentSource:      volume.getCsiContentSource(ctx),
-				AccessibleTopology: cs.generateAccessibleTopology(),
+				AccessibleTopology: cs.generateAccessibleTopology(req.GetAccessibilityRequirements()),
 			},
 		}, nil
 	} else if volExists && err == nil {
@@ -351,7 +351,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 				CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 				VolumeContext:      params,
 				ContentSource:      volume.getCsiContentSource(ctx),
-				AccessibleTopology: cs.generateAccessibleTopology(),
+				AccessibleTopology: cs.generateAccessibleTopology(req.GetAccessibilityRequirements()),
 			},
 		}, nil
 
@@ -380,7 +380,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			CapacityBytes:      req.GetCapacityRange().GetRequiredBytes(),
 			VolumeContext:      params,
 			ContentSource:      volume.getCsiContentSource(ctx),
-			AccessibleTopology: cs.generateAccessibleTopology(),
+			AccessibleTopology: cs.generateAccessibleTopology(req.GetAccessibilityRequirements()),
 		},
 	}, nil
 }
@@ -621,17 +621,54 @@ func (ct *CapacityTracker) deleteReservationLocked(volumeID string) {
 	delete(ct.pendingReservations, volumeID)
 }
 
-func (cs *ControllerServer) generateAccessibleTopology() []*csi.Topology {
-	accessibleTopology := make(map[string]string)
+func (cs *ControllerServer) generateAccessibleTopology(topologyRequirements *csi.TopologyRequirement) []*csi.Topology {
 	driverName := cs.getConfig().GetDriver().name
 	localWekaLabel := fmt.Sprintf(TopologyLabelWekaLocalPattern, driverName)
-	accessibleTopology[TopologyLabelWekaGlobal] = "true"
-	accessibleTopology[localWekaLabel] = "true"
-	return []*csi.Topology{
-		{
-			Segments: accessibleTopology,
-		},
+
+	baseSegments := map[string]string{
+		TopologyLabelWekaGlobal: "true",
+		localWekaLabel:          "true",
 	}
+
+	// If no topology requirements were provided (no allowedTopologies on StorageClass),
+	// return the base driver segments only — preserves existing behavior.
+	if topologyRequirements == nil {
+		return []*csi.Topology{{Segments: baseSegments}}
+	}
+
+	// Use requisite topologies as the base for accessibility — these represent
+	// all topologies where the volume must be accessible. Preferred topologies
+	// only guide placement priority, not accessibility scope.
+	requestedTopologies := topologyRequirements.GetRequisite()
+	if len(requestedTopologies) == 0 {
+		requestedTopologies = topologyRequirements.GetPreferred()
+	}
+	if len(requestedTopologies) == 0 {
+		return []*csi.Topology{{Segments: baseSegments}}
+	}
+
+	// For each requested topology, produce a response topology that merges
+	// the base driver labels with the zone/region keys from the request.
+	// Only well-known topology keys are copied to avoid leaking arbitrary labels.
+	allowedKeys := map[string]bool{
+		TopologyKeyZone:   true,
+		TopologyKeyRegion: true,
+	}
+
+	var result []*csi.Topology
+	for _, reqTopo := range requestedTopologies {
+		merged := make(map[string]string, len(baseSegments)+2)
+		for k, v := range baseSegments {
+			merged[k] = v
+		}
+		for k, v := range reqTopo.GetSegments() {
+			if allowedKeys[k] {
+				merged[k] = v
+			}
+		}
+		result = append(result, &csi.Topology{Segments: merged})
+	}
+	return result
 }
 
 func DeleteVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.DeleteVolumeResponse, error) {
