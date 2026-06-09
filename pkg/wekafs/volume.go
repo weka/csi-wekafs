@@ -108,9 +108,6 @@ func (v *Volume) pruneUnsupportedMountOptions(ctx context.Context) {
 		if v.apiClient != nil && !v.apiClient.SupportsSyncOnCloseMountOption() {
 			logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
 			v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
-		} else if v.apiClient == nil {
-			logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Cannot determine current Weka cluster version, dropping mount option.")
-			v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
 		}
 	}
 	if v.mountOptions.hasOption(MountOptionReadOnly) {
@@ -218,6 +215,9 @@ func (v *Volume) isEncrypted(ctx context.Context) (bool, error) {
 				}
 			}
 		}
+	}
+	if v.encrypted == nil {
+		return false, nil
 	}
 	return *v.encrypted, nil
 }
@@ -474,12 +474,6 @@ func (v *Volume) getFilesystemTotalCapacity(ctx context.Context) (int64, error) 
 }
 
 func (v *Volume) getMaxCapacity(ctx context.Context) (int64, error) {
-
-	if v.apiClient == nil {
-		// this is a legacy, API-unbound volume
-		return v.getFilesystemFreeSpace(ctx)
-	}
-
 	// max size of the volume is the current size of the filesystem (or 0 if not exists) + free space on storage
 	currentFsSize, err := v.getFilesystemTotalCapacity(ctx)
 	if err != nil {
@@ -523,7 +517,6 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (capacity int64, retE
 			return int64(size), nil
 		}
 	}
-	logger.Trace().Msg("Volume appears to be a legacy volume, failing back to Xattr")
 	size, err := v.getSizeFromXattr(ctx)
 	if err != nil {
 		return 0, err
@@ -594,12 +587,6 @@ func (v *Volume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Context, cap
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
-	if v.apiClient == nil {
-		logger.Trace().Msg("Volume is not bound to API client, expansion is not possible")
-		return nil
-	} else {
-
-	}
 	currentFsCapacity, err := v.getCapacityFromFsSize(ctx)
 	if err != nil {
 		return status.Errorf(codes.FailedPrecondition, "Failed to get current volume capacity for volume %s", v.GetId())
@@ -640,10 +627,6 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 	capacityEntity := "quota"
 	if v.server.isInDevMode() {
 		logger.Trace().Msg("Updating quota via API is not possible since running in DEV mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if v.apiClient == nil {
-		logger.Trace().Msg("Volume has no API client bound, updating capacity in legacy mode")
 		primaryFunc = fallbackFunc
 		capacityEntity = "xattr"
 	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
@@ -1952,7 +1935,7 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, er
 	return s, nil
 }
 
-// CanBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
+// CanBeOperated returns nil if the volume can be CRUDed, or an error if it cannot
 func (v *Volume) CanBeOperated() error {
 	if v.isOnSnapshot() || v.isFilesystem() {
 		if v.apiClient == nil && !v.server.isInDevMode() {
