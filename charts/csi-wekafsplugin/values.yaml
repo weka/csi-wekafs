@@ -237,6 +237,11 @@ pluginConfig:
     snapshotVolumesWithoutQuotaEnforcement: false
     # -- Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)
     enforceDirVolTotalCapacity: false
+    # -- When expanding a thinly-provisioned (tiered) filesystem, scale its thin min-SSD and max-SSD
+    #    by the same factor the total capacity grows, preserving the SSD ratios. When false, the thin
+    #    min-SSD and max-SSD are left unchanged and only total capacity (object tier) grows. Has no
+    #    effect on thick (non-tiered) filesystems.
+    keepThinProvisioningRatioOnExpand: true
   mutuallyExclusiveMountOptions:
     - "readcache,writecache,coherent,forcedirect"
     - "sync,async"

@@ -16,6 +16,7 @@ import (
 	"io"
 	"io/fs"
 	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -563,6 +564,22 @@ func (v *Volume) GetCapacity(ctx context.Context) (int64, error) {
 	}
 }
 
+// scaleThinSsdOnExpand returns the thin SSD value (min or max) to send when expanding a
+// thinly-provisioned (tiered) filesystem from oldTotal to newTotal.
+//   - keepRatio: scale the value by newTotal/oldTotal, preserving its ratio to total capacity.
+//     For max this preserves the overcommit ratio (and pins max to newTotal when it equaled
+//     the old total); for min it preserves the guaranteed-SSD ratio.
+//   - !keepRatio: freeze the value at its current setting (grow only total / object tier).
+func scaleThinSsdOnExpand(oldTotal, oldVal, newTotal int64, keepRatio bool) int64 {
+	if !keepRatio {
+		return oldVal
+	}
+	// Use big.Int to avoid int64 overflow on byte-scale multiplication.
+	res := new(big.Int).Mul(big.NewInt(oldVal), big.NewInt(newTotal))
+	res.Div(res, big.NewInt(oldTotal))
+	return res.Int64()
+}
+
 func (v *Volume) resizeFilesystem(ctx context.Context, capacity int64) error {
 	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
@@ -578,6 +595,20 @@ func (v *Volume) resizeFilesystem(ctx context.Context, capacity int64) error {
 	capLimit := capacity
 
 	fsu := apiclient.NewFileSystemResizeRequest(fsObj.Uid, &capLimit)
+	if fsObj.IsThinlyProvisioned {
+		// Weka reverts a filesystem to thick provisioning if SSD params are omitted on resize.
+		// Preserve the existing thin configuration so an auto-expand does not silently convert it.
+		// When keeping the ratio, scale both min and max SSD by the same factor as total capacity.
+		keepRatio := v.server.getConfig().keepThinProvisioningRatioOnExpand
+		minSsd := scaleThinSsdOnExpand(fsObj.TotalCapacity, fsObj.ThinProvisioningMinSsd, capLimit, keepRatio)
+		fsu.ThinProvisionMinSsd = &minSsd
+		maxSsd := scaleThinSsdOnExpand(fsObj.TotalCapacity, fsObj.ThinProvisioningMaxSsd, capLimit, keepRatio)
+		fsu.ThinProvisionMaxSsd = &maxSsd
+		log.Ctx(ctx).Info().Str("filesystem", v.FilesystemName).
+			Int64("old_total", fsObj.TotalCapacity).Int64("new_total", capLimit).
+			Int64("thin_min_ssd", minSsd).Int64("thin_max_ssd", maxSsd).Bool("keep_ratio", keepRatio).
+			Msg("Preserving thin provisioning while expanding filesystem")
+	}
 	err = v.apiClient.UpdateFileSystem(ctx, fsu, fsObj)
 	return err
 }

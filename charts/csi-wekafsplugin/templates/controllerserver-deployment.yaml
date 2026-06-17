@@ -119,6 +119,7 @@ spec:
           {{- if .Values.pluginConfig.allowedOperations.enforceDirVolTotalCapacity }}
             - "--enforcedirvoltotalcapacity"
           {{- end }}
+            - "--keepthinprovisioningratioonexpand={{ .Values.pluginConfig.allowedOperations.keepThinProvisioningRatioOnExpand }}"
           {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
             - "--usenfs"
           {{- end }}
