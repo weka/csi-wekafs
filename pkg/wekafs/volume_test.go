@@ -19,7 +19,7 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 		true, true, mutuallyExclusive,
 		1, 1, 1, 1, 1, 1, 1, 10, 5,
 		true, true, true, "", "", "4.1", "v1", false, false, true,
-		"", false, "", false, false, false)
+		"", false, "", false, false, false, true)
 	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", "", CsiModeAll, false, driverConfig)
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)
@@ -88,4 +88,50 @@ func TestVolume_getFilesystemFreeSpace(t *testing.T) {
 	free, err := volume.getFilesystemFreeSpace(ctx)
 	assert.NoError(t, err)
 	assert.NotZero(t, free)
+}
+
+func TestScaleThinSsdOnExpand(t *testing.T) {
+	cases := []struct {
+		name      string
+		oldTotal  int64
+		oldVal    int64
+		newTotal  int64
+		keepRatio bool
+		want      int64
+	}{
+		{
+			name:     "pinned: val equals total, keepRatio true",
+			oldTotal: 100, oldVal: 100, newTotal: 200, keepRatio: true,
+			want: 200,
+		},
+		{
+			name:     "val > total scales proportionally",
+			oldTotal: 100, oldVal: 120, newTotal: 200, keepRatio: true,
+			want: 240, // 120 * 200 / 100
+		},
+		{
+			name:     "overcommit: val < total, keepRatio true, scale",
+			oldTotal: 100, oldVal: 50, newTotal: 200, keepRatio: true,
+			want: 100, // 50 * 200 / 100
+		},
+		{
+			name:     "overcommit: val < total, keepRatio false, leave unchanged",
+			oldTotal: 100, oldVal: 50, newTotal: 200, keepRatio: false,
+			want: 50,
+		},
+		{
+			name:     "large scale: no int64 overflow",
+			oldTotal: 2 << 50, oldVal: 1 << 50, newTotal: 4 << 50, keepRatio: true,
+			want: 2 << 50, // (1<<50) * (4<<50) / (2<<50)
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := scaleThinSsdOnExpand(tc.oldTotal, tc.oldVal, tc.newTotal, tc.keepRatio)
+			if got != tc.want {
+				t.Errorf("scaleThinSsdOnExpand(%d, %d, %d, %v) = %d, want %d",
+					tc.oldTotal, tc.oldVal, tc.newTotal, tc.keepRatio, got, tc.want)
+			}
+		})
+	}
 }

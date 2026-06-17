@@ -39,6 +39,10 @@ type FileSystem struct {
 	AvailableSsd         int64     `json:"available_ssd" url:"-"`
 	FreeSsd              int64     `json:"free_ssd" url:"-"`
 
+	IsThinlyProvisioned    bool  `json:"is_thinly_provisioned" url:"-"`
+	ThinProvisioningMinSsd int64 `json:"thin_provisioning_min_ssd" url:"-"`
+	ThinProvisioningMaxSsd int64 `json:"thin_provisioning_max_ssd" url:"-"`
+
 	ObsBuckets     []interface{} `json:"obs_buckets" url:"-"`
 	ObjectStorages []interface{} `json:"object_storages" url:"-"`
 
@@ -382,8 +386,10 @@ func NewFilesystemCreateRequest(name, groupName string, totalCapacity int64, enc
 }
 
 type FileSystemResizeRequest struct {
-	Uid           uuid.UUID `json:"-"`
-	TotalCapacity *int64    `json:"total_capacity,omitempty"`
+	Uid                 uuid.UUID `json:"-"`
+	TotalCapacity       *int64    `json:"total_capacity,omitempty"`
+	ThinProvisionMinSsd *int64    `json:"thin_provision_min_ssd,omitempty"`
+	ThinProvisionMaxSsd *int64    `json:"thin_provision_max_ssd,omitempty"`
 }
 
 func NewFileSystemResizeRequest(fsUid uuid.UUID, totalCapacity *int64) *FileSystemResizeRequest {
