@@ -1,4 +1,4 @@
-#syntax=docker/dockerfile:1.17
+#syntax=docker/dockerfile:1.25
 ARG UBI_HASH=9.6-1754584681
 FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS base
 
