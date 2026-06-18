@@ -33,7 +33,7 @@ func TestMountOptions_Merge(t *testing.T) {
 	}
 
 	opts1.Merge(opts2, exclusives)
-	opts1.AddOption("acl")
+	opts1 = opts1.AddOption("acl")
 
 	if opts1.hasOption("ro") {
 		t.Errorf("Expected option 'ro' to be removed due to exclusivity")
@@ -475,5 +475,91 @@ func TestMountOptionOverride_ApplyToOptions_ComplexScenario(t *testing.T) {
 	}
 	if !result.hasOption("noatime") {
 		t.Errorf("Expected 'noatime' to be added")
+	}
+}
+
+// TestMountOptions_AddOption_DoesNotMutateReceiver guards against the
+// concurrent-provisioning mount-stacking bug: AddOption must NOT mutate the
+// receiver's underlying options map. If it does, callers that use
+// MountOptions.String() as a stable identity (e.g. the mount refcount key in
+// getRefcountIdx) read one key before doMount adds container_name and write a
+// different key after, defeating mount sharing and stacking real mounts.
+func TestMountOptions_AddOption_DoesNotMutateReceiver(t *testing.T) {
+	original := NewMountOptions([]string{"acl", "writecache"})
+	before := original.String()
+
+	derived := original.AddOption("container_name=k8sclient")
+
+	if original.String() != before {
+		t.Errorf("AddOption mutated the receiver: before=%q after=%q", before, original.String())
+	}
+	if original.hasOption("container_name") {
+		t.Errorf("AddOption leaked 'container_name' into the receiver")
+	}
+	if !derived.hasOption("container_name") {
+		t.Errorf("AddOption result is missing the added option")
+	}
+}
+
+// TestMountOptions_RemoveOption_DoesNotMutateReceiver mirrors the AddOption guard.
+func TestMountOptions_RemoveOption_DoesNotMutateReceiver(t *testing.T) {
+	original := NewMountOptions([]string{"acl", "writecache", "ro"})
+	before := original.String()
+
+	derived := original.RemoveOption("ro")
+
+	if original.String() != before {
+		t.Errorf("RemoveOption mutated the receiver: before=%q after=%q", before, original.String())
+	}
+	if !original.hasOption("ro") {
+		t.Errorf("RemoveOption removed 'ro' from the receiver")
+	}
+	if derived.hasOption("ro") {
+		t.Errorf("RemoveOption result still has the removed option")
+	}
+}
+
+// TestMountOptions_RefcountKeyStableAcrossDoMount reproduces the exact refcount-key
+// corruption: doMount adds "container_name=..." while mounting. The options string
+// used to build the refcount key must be identical before and after that addition,
+// so incRef reads and writes the SAME map key and mount sharing works.
+func TestMountOptions_RefcountKeyStableAcrossDoMount(t *testing.T) {
+	mountOpts := NewMountOptions([]string{"acl", "writecache"})
+
+	keyBefore := mountOpts.String() // what incRef reads at refCount lookup
+
+	// emulate doMount: container_name is added to a derived value for the actual mount
+	_ = mountOpts.AddOption("container_name=k8sclient")
+
+	keyAfter := mountOpts.String() // what incRef would write after doMount returns
+
+	if keyBefore != keyAfter {
+		t.Fatalf("refcount key changed across doMount: before=%q after=%q (mounts will stack under concurrency)", keyBefore, keyAfter)
+	}
+}
+
+// TestMountOptions_SetSelinux_StillMutatesInPlace ensures setSelinux keeps its
+// in-place contract after the AddOption clone fix (callers rely on it mutating
+// the passed options before mounting).
+func TestMountOptions_SetSelinux_StillMutatesInPlace(t *testing.T) {
+	opts := NewMountOptions([]string{"writecache"})
+	opts.setSelinux(true, MountProtocolWekafs)
+
+	if !opts.hasOption("fscontext") {
+		t.Errorf("setSelinux did not add fscontext in place")
+	}
+	if !opts.hasOption(MountOptionAcl) {
+		t.Errorf("setSelinux did not add acl in place")
+	}
+}
+
+// TestMountOptions_AsNfs_TranslatesOptions ensures AsNfs still returns the
+// translated NFS options after the AddOption clone fix (it previously relied on
+// AddOption mutating in place).
+func TestMountOptions_AsNfs_TranslatesOptions(t *testing.T) {
+	opts := NewMountOptions([]string{"writecache"})
+	nfs := opts.AsNfs()
+	if !nfs.hasOption(MountOptionNfsAsync) {
+		t.Errorf("AsNfs did not translate writecache -> %s; got %q", MountOptionNfsAsync, nfs.String())
 	}
 }

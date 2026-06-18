@@ -62,6 +62,29 @@ type MountOptions struct {
 	excludeOptions []string
 }
 
+// cloneCustomOptions returns a deep copy of the customOptions map. MountOptions
+// methods that derive a new value (AddOption/RemoveOption/MergedWith) MUST clone
+// the map rather than share the reference: a shared map means mutating the
+// "derived" options also mutates the original, which corrupts callers that use
+// MountOptions.String() as a stable identity (e.g. the mount refcount key in
+// getRefcountIdx).
+func (opts MountOptions) cloneCustomOptions() map[string]mountOption {
+	cloned := make(map[string]mountOption, len(opts.customOptions))
+	for k, v := range opts.customOptions {
+		cloned[k] = v
+	}
+	return cloned
+}
+
+// setOption adds/replaces an option in the receiver's map IN PLACE. Only safe on a
+// MountOptions whose map the caller exclusively owns (a freshly constructed value,
+// or an intentional in-place mutation). Derivation that must not touch the receiver
+// uses AddOption instead.
+func (opts MountOptions) setOption(optstring string) {
+	o := newMountOptionFromString(optstring)
+	opts.customOptions[o.option] = o
+}
+
 // Merge merges mount options. The other object always take precedence over the original
 func (opts MountOptions) Merge(other MountOptions, exclusives []mutuallyExclusiveMountOptionSet) {
 	for _, otherOpt := range other.customOptions {
@@ -91,7 +114,7 @@ func (opts MountOptions) Merge(other MountOptions, exclusives []mutuallyExclusiv
 // MergedWith returns a new object merged with other object
 func (opts MountOptions) MergedWith(other MountOptions, exclusives []mutuallyExclusiveMountOptionSet) MountOptions {
 	ret := MountOptions{
-		customOptions:  opts.customOptions,
+		customOptions:  opts.cloneCustomOptions(),
 		excludeOptions: opts.excludeOptions,
 	}
 	ret.Merge(other, exclusives)
@@ -100,7 +123,7 @@ func (opts MountOptions) MergedWith(other MountOptions, exclusives []mutuallyExc
 
 func (opts MountOptions) AddOption(optstring string) MountOptions {
 	ret := MountOptions{
-		customOptions:  opts.customOptions,
+		customOptions:  opts.cloneCustomOptions(),
 		excludeOptions: opts.excludeOptions,
 	}
 	opt := newMountOptionFromString(optstring)
@@ -110,7 +133,7 @@ func (opts MountOptions) AddOption(optstring string) MountOptions {
 
 func (opts MountOptions) RemoveOption(optstring string) MountOptions {
 	ret := MountOptions{
-		customOptions:  opts.customOptions,
+		customOptions:  opts.cloneCustomOptions(),
 		excludeOptions: opts.excludeOptions,
 	}
 	opt := newMountOptionFromString(optstring)
@@ -186,6 +209,8 @@ func (opts MountOptions) AsVolumeContext() string {
 	return ret.String()
 }
 
+// setSelinux mutates the receiver's options in place (it operates directly on the
+// shared customOptions map rather than via AddOption, which now returns a new value).
 func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 	if selinuxSupport {
 		var o mountOption
@@ -194,8 +219,11 @@ func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 		} else if mountProtocol == MountProtocolNfs {
 			o = newMountOptionFromString(fmt.Sprintf("context=\"system_u:object_r:%s:s0\"", selinuxContextNfs))
 		}
-		opts.AddOption(o.String())
-		opts.AddOption(MountOptionAcl) // due to STIG and other security requirements we need to enable ACLs otherwise mount might fail, CSI-333
+		if o.option != "" {
+			opts.customOptions[o.option] = o
+		}
+		// due to STIG and other security requirements we need to enable ACLs otherwise mount might fail, CSI-333
+		opts.setOption(MountOptionAcl)
 	} else {
 		if mountProtocol == MountProtocolWekafs {
 			delete(opts.customOptions, "fscontext")
@@ -207,22 +235,24 @@ func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 }
 
 func (opts MountOptions) AsNfs() MountOptions {
+	// ret owns a freshly constructed map, so we mutate it in place via setOption
+	// rather than AddOption (which would clone the map on every call).
 	ret := NewMountOptionsFromString(DefaultNfsMountOptions)
 	for _, o := range opts.getOpts() {
 		switch o.option {
 		case MountOptionWriteCache:
-			ret.AddOption(MountOptionNfsAsync)
+			ret.setOption(MountOptionNfsAsync)
 		case MountOptionCoherent:
-			ret.AddOption(MountOptionNfsSync)
-			ret.AddOption(MountOptionNfsNoac)
+			ret.setOption(MountOptionNfsSync)
+			ret.setOption(MountOptionNfsNoac)
 		case MountOptionForceDirect:
-			ret.AddOption(MountOptionNfsSync)
-			ret.AddOption(MountOptionNfsNoac)
+			ret.setOption(MountOptionNfsSync)
+			ret.setOption(MountOptionNfsNoac)
 		case MountOptionReadCache:
-			ret.AddOption(MountOptionNfsAc)
+			ret.setOption(MountOptionNfsAc)
 		case "dentry_max_age_positive":
-			ret.AddOption(fmt.Sprintf("acdirmax=%s", o.value))
-			ret.AddOption(fmt.Sprintf("acregmax=%s", o.value))
+			ret.setOption(fmt.Sprintf("acdirmax=%s", o.value))
+			ret.setOption(fmt.Sprintf("acregmax=%s", o.value))
 		default:
 			continue
 		}
