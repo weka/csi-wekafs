@@ -2,9 +2,7 @@
 
 ## What's Changed
 ### Bug Fixes
-* fix: remove duplicated node server cluster role permissions by @assafgi in https://github.com/weka/csi-wekafs/pull/689
-* feat: propagate zone/region topology from CreateVolume requests by @assafgi in https://github.com/weka/csi-wekafs/pull/690
-### Miscellaneous
-* docs: fix autoExpandFilesystems description by @assafgi in https://github.com/weka/csi-wekafs/pull/688
+* fix: prevent controller mount stacking under concurrent provisioning by cloning MountOptions map (CSI-420) by @kristina-solovyova in https://github.com/weka/csi-wekafs/pull/694
+* fix: preserve thin FS on FS expansion by @assafgi in https://github.com/weka/csi-wekafs/pull/693
 
 
