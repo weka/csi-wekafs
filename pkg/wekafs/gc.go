@@ -151,18 +151,9 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
 
-	if fileExists("/locar") {
-		logger.Debug().Msg("Using locar for fast deletion")
-		deleteCmd := exec.CommandContext(opCtx, "bash", "-c",
-			fmt.Sprintf("/locar --type file %s | xargs -P128 -n128 rm -f 2>&1 | wc -l; /locar --type dir %s | /usr/bin/xargs -P128 -n128 rm -rf 2>&1 | wc -l", volumeTrashLoc, volumeTrashLoc),
-		)
-		output, err := deleteCmd.CombinedOutput()
-		if err != nil {
-			logger.Error().Err(err).Msg("Error running locar")
-			return
-		}
-		logger.Trace().Str("output", string(output)).Msg("Locar output")
-	} else {
+	// Delete the trash. Prefer the locar fast path; fall back to a dependency-free
+	// os.RemoveAll when locar/xargs is unavailable or the fast path fails.
+	if !purgeTrashViaLocar(opCtx, volumeTrashLoc) {
 		logger.Debug().Msg("Using default deletion method")
 		if err := os.RemoveAll(volumeTrashLoc); err != nil {
 			logger.Error().Err(err).Str("path", volumeTrashLoc).Msg("Failed to perform garbage collection")
@@ -171,6 +162,35 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	}
 	succeeded = true
 	logger.Debug().Msg("Garbage collection completed")
+}
+
+// purgeTrashViaLocar deletes everything under trashLoc using locar to enumerate the
+// tree in parallel and xargs+rm to remove it. It returns true only when the deletion
+// actually ran successfully, and false — so the caller falls back to os.RemoveAll —
+// when /locar or xargs is absent (the ubi-minimal base ships neither by default) or
+// the pipeline errors. The pipeline runs under pipefail with `&&` so a locar/rm
+// failure propagates instead of being masked: the prior trailing `| wc -l` made a
+// missing-xargs no-op look like success, silently stranding the trash (CSI-422).
+func purgeTrashViaLocar(ctx context.Context, trashLoc string) bool {
+	logger := log.Ctx(ctx)
+	if !fileExists("/locar") {
+		return false
+	}
+	if _, err := exec.LookPath("xargs"); err != nil {
+		logger.Debug().Msg("xargs not available, skipping locar fast deletion")
+		return false
+	}
+	logger.Debug().Msg("Using locar for fast deletion")
+	deleteCmd := exec.CommandContext(ctx, "bash", "-o", "pipefail", "-c",
+		fmt.Sprintf("/locar --type file %s | xargs -r -P128 -n128 rm -f && /locar --type dir %s | xargs -r -P128 -n128 rm -rf", trashLoc, trashLoc),
+	)
+	output, err := deleteCmd.CombinedOutput()
+	if err != nil {
+		logger.Error().Err(err).Str("output", string(output)).Msg("locar deletion failed, falling back to RemoveAll")
+		return false
+	}
+	logger.Trace().Str("output", string(output)).Msg("Locar output")
+	return true
 }
 
 func (gc *innerPathVolGc) initiateGarbageCollection(ctx context.Context, fs string, apiClient *apiclient.ApiClient) {
