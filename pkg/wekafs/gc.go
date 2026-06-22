@@ -11,9 +11,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 const garbagePath = ".__internal__wekafs-async-delete"
+
+const (
+	// garbageCollectionTimeout bounds a single purge cycle so a hung mount cannot
+	// block the detached GC goroutine indefinitely.
+	garbageCollectionTimeout = 10 * time.Minute
+	// garbageCollectionRetryBackoff delays a retry after a failed purge to avoid hot-looping.
+	garbageCollectionRetryBackoff = time.Minute
+)
 
 //const garbageCollectionMaxThreads = 32
 
@@ -99,45 +108,89 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
+
 	gc.Lock()
 	gc.isRunning[fs] = true
 	gc.Unlock()
-	path, err, unmount := gc.mounter.Mount(ctx, fs, apiClient)
+
+	succeeded := false
+	// Always clear the running flag on every exit path. Chain another run if one
+	// was deferred while we ran, or retry (after a backoff) if this run failed, so
+	// failures are retried instead of silently stranding the trash and wedging GC.
+	defer func() {
+		gc.Lock()
+		defer gc.Unlock()
+		gc.isRunning[fs] = false
+		if gc.isDeferred[fs] {
+			gc.isDeferred[fs] = false
+			go gc.purgeLeftovers(ctx, fs, apiClient)
+			return
+		}
+		if !succeeded {
+			go func() {
+				time.Sleep(garbageCollectionRetryBackoff)
+				gc.initiateGarbageCollection(ctx, fs, apiClient)
+			}()
+		}
+	}()
+
+	// Bound a single purge cycle. Derived from the (already detached) ctx, so the
+	// deferred re-run above still starts from a fresh, non-expired context.
+	opCtx, cancel := context.WithTimeout(ctx, garbageCollectionTimeout)
+	defer cancel()
+
+	path, err, unmount := gc.mounter.Mount(opCtx, fs, apiClient)
 	defer func() {
 		if uErr := unmount(); uErr != nil {
-			log.Ctx(ctx).Error().Err(uErr).Str("filesystem", fs).Str("path", path).Msg("Failed to release filesystem mount after garbage collection")
+			logger.Error().Err(uErr).Str("filesystem", fs).Str("path", path).Msg("Failed to release filesystem mount after garbage collection")
 		}
 	}()
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Str("filesystem", fs).Str("path", path).Msg("Failed mounting FS for garbage collection")
+		logger.Error().Err(err).Str("filesystem", fs).Str("path", path).Msg("Failed mounting FS for garbage collection")
 		return
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
 
-	if fileExists("/locar") {
-		logger.Debug().Msg("Using locar for fast deletion")
-		deleteCmd := exec.Command("bash", "-c",
-			fmt.Sprintf("/locar --type file %s | xargs -P128 -n128 rm -f 2>&1 | wc -l; /locar --type dir %s | /usr/bin/xargs -P128 -n128 rm -rf 2>&1 | wc -l", volumeTrashLoc, volumeTrashLoc),
-		)
-		output, err := deleteCmd.CombinedOutput()
-		if err != nil {
-			logger.Error().Err(err).Msg("Error running locar")
-		}
-		logger.Trace().Str("output", string(output)).Msg("Locar output")
-	} else {
+	// Delete the trash. Prefer the locar fast path; fall back to a dependency-free
+	// os.RemoveAll when locar/xargs is unavailable or the fast path fails.
+	if !purgeTrashViaLocar(opCtx, volumeTrashLoc) {
 		logger.Debug().Msg("Using default deletion method")
 		if err := os.RemoveAll(volumeTrashLoc); err != nil {
 			logger.Error().Err(err).Str("path", volumeTrashLoc).Msg("Failed to perform garbage collection")
+			return
 		}
 	}
+	succeeded = true
 	logger.Debug().Msg("Garbage collection completed")
-	gc.Lock()
-	defer gc.Unlock()
-	gc.isRunning[fs] = false
-	if gc.isDeferred[fs] {
-		gc.isDeferred[fs] = false
-		go gc.purgeLeftovers(ctx, fs, apiClient)
+}
+
+// purgeTrashViaLocar deletes everything under trashLoc using locar to enumerate the
+// tree in parallel and xargs+rm to remove it. It returns true only when the deletion
+// actually ran successfully, and false — so the caller falls back to os.RemoveAll —
+// when /locar or xargs is absent (the ubi-minimal base ships neither by default) or
+// the pipeline errors. The pipeline runs under pipefail with `&&` so a locar/rm
+// failure propagates instead of being masked: the prior trailing `| wc -l` made a
+// missing-xargs no-op look like success, silently stranding the trash (CSI-422).
+func purgeTrashViaLocar(ctx context.Context, trashLoc string) bool {
+	logger := log.Ctx(ctx)
+	if !fileExists("/locar") {
+		return false
 	}
+	if _, err := exec.LookPath("xargs"); err != nil {
+		logger.Debug().Msg("xargs not available, skipping locar fast deletion")
+		return false
+	}
+	logger.Debug().Msg("Using locar for fast deletion")
+	deleteCmd := exec.CommandContext(ctx, "bash", "-o", "pipefail", "-c",
+		fmt.Sprintf("/locar --type file %s | xargs -r -P128 -n128 rm -f && /locar --type dir %s | xargs -r -P128 -n128 rm -rf", trashLoc, trashLoc),
+	)
+	output, err := deleteCmd.CombinedOutput()
+	if err != nil {
+		logger.Error().Err(err).Str("output", string(output)).Msg("locar deletion failed, falling back to RemoveAll")
+		return false
+	}
+	logger.Trace().Str("output", string(output)).Msg("Locar output")
+	return true
 }
 
 func (gc *innerPathVolGc) initiateGarbageCollection(ctx context.Context, fs string, apiClient *apiclient.ApiClient) {
@@ -147,6 +200,13 @@ func (gc *innerPathVolGc) initiateGarbageCollection(ctx context.Context, fs stri
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 	logger.Trace().Msg("Initiating garbage collection")
+
+	// purgeLeftovers runs in a detached goroutine that outlives the originating
+	// gRPC request. Strip cancellation/deadline from the request context (while
+	// preserving logger and trace values) so the request returning — which fires
+	// its deferred cancel() — does not abort the background purge mid-mount (CSI-422).
+	bgCtx := context.WithoutCancel(ctx)
+
 	gc.Lock()
 	defer gc.Unlock()
 	if gc.isRunning[fs] {
@@ -156,7 +216,7 @@ func (gc *innerPathVolGc) initiateGarbageCollection(ctx context.Context, fs stri
 	}
 	if !gc.isDeferred[fs] {
 		logger.Trace().Msg("Garbage collection not running, starting")
-		go gc.purgeLeftovers(ctx, fs, apiClient)
+		go gc.purgeLeftovers(bgCtx, fs, apiClient)
 	}
 }
 
