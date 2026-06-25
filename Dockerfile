@@ -38,8 +38,9 @@ LABEL description="Weka CSI Driver"
 # NOTE: usbutils, nfs-utils, rpcbind removed — unavailable in UBI9-minimal repos.
 # nfs-utils/rpcbind were not used at runtime (app uses kernel NFS client via k8s mount-utils).
 # If USB device discovery is needed, install usbutils from EPEL.
+# findutils provides xargs, required by the locar-based garbage-collection deletion
 RUN microdnf install -y util-linux libselinux-utils pciutils \
-    procps less container-selinux && \
+    procps less container-selinux findutils && \
     microdnf clean all && rm -rf /var/cache/dnf
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
