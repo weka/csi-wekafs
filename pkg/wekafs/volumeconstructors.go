@@ -115,10 +115,9 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 
 // NewVolumeForBlankVolumeRequest can create a new volume of those types: new raw FS, snapshot of empty FS, directory on predefined filesystem
 func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, dynamicVolPath string, cs *ControllerServer) (*Volume, error) {
-	// obtain API client (or no client for legacy)
 	client, err := cs.api.GetClientFromSecrets(ctx, req.GetSecrets())
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.FailedPrecondition, "failed to obtain API client: %v", err)
 	}
 
 	requestedVolumeName := req.GetName()
