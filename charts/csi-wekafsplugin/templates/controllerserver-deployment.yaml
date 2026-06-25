@@ -255,7 +255,7 @@ spec:
           {{- if .Values.metrics.enabled }}
           ports:
             - containerPort: {{ .Values.metrics.attacherPort | default 9095 }}
-              name: pr-metrics
+              name: attacher-metrics
               protocol: TCP
           {{- end }}
           {{- if .Values.controller.resources.csiAttacher }}
@@ -296,7 +296,7 @@ spec:
           {{- if .Values.metrics.enabled }}
           ports:
             - containerPort: {{ .Values.metrics.provisionerPort }}
-              name: pr-metrics
+              name: provisioner-metrics
               protocol: TCP
           {{- end }}
           {{- if .Values.controller.resources.csiProvisioner }}
