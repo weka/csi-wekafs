@@ -2,7 +2,7 @@
 
 ## What's Changed
 ### Bug Fixes
-* fix: prevent controller mount stacking under concurrent provisioning by cloning MountOptions map (CSI-420) by @kristina-solovyova in https://github.com/weka/csi-wekafs/pull/694
-* fix: preserve thin FS on FS expansion by @assafgi in https://github.com/weka/csi-wekafs/pull/693
+* fix: remmove gc purge bound to grpc context by @assafgi in https://github.com/weka/csi-wekafs/pull/696
+* fix: missing xargs by @assafgi in https://github.com/weka/csi-wekafs/pull/697
 
 
