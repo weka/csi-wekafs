@@ -227,10 +227,10 @@ spec:
             - "--health-port=9809"
           ports:
             - containerPort: 9809
-              name: healthz
+              name: register-healthz
           livenessProbe:
             httpGet:
-              port: healthz
+              port: register-healthz
               path: /healthz
             initialDelaySeconds: 5
             timeoutSeconds: 5
