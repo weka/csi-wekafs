@@ -278,8 +278,9 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 			logger.Trace().Msg("No explicit API service for request, using legacySecrets")
 			secrets = *api.legacySecrets
 		} else {
-			logger.Trace().Msg("No API service for request, switching to legacy mode")
-			return nil, nil
+			logger.Warn().Msg("No API credentials provided for this request and no global API secret is configured")
+			return nil, fmt.Errorf("no API credentials provided for this request and no global API secret is configured; " +
+				"add csi.storage.k8s.io/provisioner-secret-name to the StorageClass or configure a global API secret")
 		}
 	}
 	client, err := api.fromSecrets(ctx, secrets, api.Hostname)
@@ -288,8 +289,8 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 		return nil, err
 	}
 	if client == nil {
-		logger.Trace().Msg("API service was not found for request, switching to legacy mode")
-		return nil, nil
+		logger.Warn().Msg("API client could not be initialized from the provided secret")
+		return nil, fmt.Errorf("API client could not be initialized from the provided secret; check secret contents and cluster reachability")
 	}
 	logger.Trace().Msg("Successfully initialized API backend for request")
 	return client, nil
