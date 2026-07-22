@@ -312,6 +312,14 @@ func GetFrontendsFromDriver(ctx context.Context) ([]ProcFsContainer, error) {
 		}
 		f = result.file
 	case <-ctx.Done():
+		// The open goroutine is still blocked in the syscall. When it eventually
+		// returns, drain the channel and close the file so we don't leak the fd
+		// (the buffered send succeeds even with no receiver, leaving the *os.File open).
+		go func() {
+			if result := <-openChan; result.file != nil {
+				_ = result.file.Close()
+			}
+		}()
 		return nil, fmt.Errorf("timeout opening %s: %w", ProcFsPath, ctx.Err())
 	}
 
