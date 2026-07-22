@@ -23,6 +23,11 @@ parameters:
   # - HARD or unspecified: pod will not be able to write above quota
   # - SOFT: warning will be issued on Weka cluster, but writing will not be blocked
   capacityEnforcement: HARD
+  # optional: grace period for SOFT capacity enforcement, as a Go duration string (e.g. "72h", "30m")
+  # time a soft-limit breach is tolerated before the soft limit is treated as a hard limit and writes are blocked
+  # ignored when capacityEnforcement is HARD
+  # default: 0 (advisory only - soft limit is never enforced, writes are never blocked)
+  #quotaGracePeriod: "168h"
   # name of the secret that stores API credentials for a cluster
   # change the name of secret to match secret of a particular cluster (if you have several Weka clusters)
   csi.storage.k8s.io/provisioner-secret-name: &secretName csi-wekafs-api-secret

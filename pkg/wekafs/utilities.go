@@ -528,6 +528,28 @@ func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 	return enforceCapacity, nil
 }
 
+// getQuotaGracePeriodParam parses the optional quotaGracePeriod storage class parameter.
+// The value is a Go duration string (e.g. "72h", "30m"). It returns the grace period in
+// seconds (0 when unset), and an error if the value is invalid.
+// The grace period only takes effect for SOFT capacity enforcement. A grace period of 0
+// (unset) makes a SOFT quota advisory only: usage is reported as exceeded on the Weka
+// cluster but writes are never blocked. A positive grace period causes the soft limit to
+// be treated as a hard limit once the grace period elapses after a breach.
+func getQuotaGracePeriodParam(params map[string]string) (uint64, error) {
+	val, ok := params["quotaGracePeriod"]
+	if !ok {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return 0, fmt.Errorf("invalid quotaGracePeriod %q: %w", val, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("quotaGracePeriod cannot be negative: %q", val)
+	}
+	return uint64(d.Seconds()), nil
+}
+
 func volumeExistsAndMatchesCapacity(ctx context.Context, v *Volume, capacity int64) (bool, bool, error) {
 	ctx, span := otel.Tracer(TracerName).Start(ctx, "CheckVolumeExistsAndMatchesCapacity")
 	defer span.End()

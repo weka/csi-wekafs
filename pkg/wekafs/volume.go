@@ -38,24 +38,25 @@ var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem s
 
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)
 type Volume struct {
-	id                    string
-	FilesystemName        string
-	filesystemGroupName   string
-	SnapshotName          string
-	SnapshotAccessPoint   string
-	SnapshotUuid          *uuid.UUID
-	innerPath             string
-	apiClient             *apiclient.ApiClient
-	permissions           fs.FileMode
-	ownerUid              int
-	ownerGid              int
-	mountPath             string
-	enforceCapacity       bool
-	initialFilesystemSize int64
-	mountOptions          MountOptions
-	encrypted             *bool // to support also encryption state fetched from actual filesystem when not set
-	manageEncryptionKeys  bool
-	encryptWithoutKms     bool
+	id                      string
+	FilesystemName          string
+	filesystemGroupName     string
+	SnapshotName            string
+	SnapshotAccessPoint     string
+	SnapshotUuid            *uuid.UUID
+	innerPath               string
+	apiClient               *apiclient.ApiClient
+	permissions             fs.FileMode
+	ownerUid                int
+	ownerGid                int
+	mountPath               string
+	enforceCapacity         bool
+	quotaGracePeriodSeconds uint64
+	initialFilesystemSize   int64
+	mountOptions            MountOptions
+	encrypted               *bool // to support also encryption state fetched from actual filesystem when not set
+	manageEncryptionKeys    bool
+	encryptWithoutKms       bool
 
 	kmsVaultNamespace     string
 	kmsVaultKeyIdentifier string
@@ -892,6 +893,9 @@ func (v *Volume) setQuota(ctx context.Context, enforceCapacity *bool, capacityLi
 		return nil, errors.New("cannot set quota, could not find inode ID of the volume")
 	}
 	qr := apiclient.NewQuotaCreateRequest(*fsObj, inodeId, quotaType, capacityLimit)
+	if quotaType == apiclient.QuotaTypeSoft {
+		qr.GraceSeconds = v.quotaGracePeriodSeconds
+	}
 	q := &apiclient.Quota{}
 	if err := v.apiClient.CreateQuota(ctx, qr, q, true); err != nil {
 		return nil, err
@@ -1903,6 +1907,16 @@ func (v *Volume) ObtainRequestParams(ctx context.Context, params map[string]stri
 		return err
 	}
 	v.enforceCapacity = enforceCapacity
+
+	// quotaGracePeriod (applies to SOFT capacity enforcement only)
+	graceSeconds, err := getQuotaGracePeriodParam(params)
+	if err != nil {
+		return err
+	}
+	v.quotaGracePeriodSeconds = graceSeconds
+	if graceSeconds > 0 && v.enforceCapacity {
+		log.Ctx(ctx).Warn().Msg("quotaGracePeriod is set but capacityEnforcement is HARD; grace period only applies to SOFT enforcement and will be ignored")
+	}
 
 	// make sure to set min capacity if comes from request
 	if val, ok := params["initialFilesystemSizeGB"]; ok {
