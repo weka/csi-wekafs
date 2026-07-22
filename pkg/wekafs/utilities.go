@@ -410,7 +410,7 @@ func validateVolumeId(volumeId string) error {
 			return errors.New(fmt.Sprintln("Volume ID does not match regex:", r, volumeId))
 		}
 	}
-	return status.Errorf(codes.InvalidArgument, fmt.Sprintf("unsupported volumeId %s for type %s", volumeId, volumeType))
+	return status.Errorf(codes.InvalidArgument, "unsupported volumeId %s for type %s", volumeId, volumeType)
 }
 
 func validateSnapshotId(snapshotId string) error {
