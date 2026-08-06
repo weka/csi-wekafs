@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/wekafs/csi-wekafs/pkg/volumeid"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
@@ -69,14 +70,7 @@ func generateWekaSnapAccessPointForSnapBasedVol(csiVolName string) string {
 
 // generateVolumeIdFromComponents constructs a full-fledged volume ID from different components of the Volume
 func generateVolumeIdFromComponents(volumeType VolumeType, filesystemName, snapshotAccessPoint, innerPath string) string {
-	volId := string(volumeType) + "/" + filesystemName
-	if snapshotAccessPoint != "" {
-		volId += ":" + snapshotAccessPoint
-	}
-	if innerPath != "" {
-		volId += "/" + innerPath
-	}
-	return volId
+	return volumeid.Build(volumeType, filesystemName, snapshotAccessPoint, innerPath)
 }
 
 // generateWekaSnapNameForSnapshot used for creating Weka snapshot name
@@ -146,63 +140,27 @@ func GetFSNameFromRequest(req *csi.CreateVolumeRequest) string {
 	return ""
 }
 
+// The volume ID slicers below delegate to pkg/volumeid, which is the single definition of
+// the handle format shared with out-of-tree tooling. See that package for the losslessness
+// guarantees the migrator relies on.
+
 func sliceVolumeTypeFromVolumeId(volumeId string) VolumeType {
-	slices := strings.Split(volumeId, "/")
-	if len(slices) >= 2 {
-		volTypeCandidate := strings.Join(slices[0:2], "/")
-		for _, volType := range KnownVolTypes {
-			if VolumeType(volTypeCandidate) == volType {
-				return volType
-			}
-		}
-	}
-	if len(slices) > 1 && !strings.HasPrefix(slices[1], "v") {
-		return VolumeTypeUNKNOWN // probably not in format of 'type/version'
-	}
-	if len(slices) == 1 {
-		return VolumeTypeUNKNOWN
-	}
-	if slices[0] == "" {
-		return VolumeTypeUNKNOWN // probably in format of Unix root path '/var/log/messages'
-	}
-	return VolumeTypeUnified
+	return volumeid.SliceType(volumeId)
 }
 
 // sliceFilesystemNameFromVolumeId: given existing volumeId, slice the filesystem name part
 func sliceFilesystemNameFromVolumeId(volumeId string) string {
-	// VolID format:
-	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
-	slices := strings.Split(volumeId, "/")
-	if len(slices) < 3 {
-		return ""
-	}
-	return strings.Split(slices[2], ":")[0]
+	return volumeid.SliceFilesystemName(volumeId)
 }
 
-// sliceSnapshotIntegrityIdFromSnapshotId: given existing snapshotId, slice the filesystem name part
+// sliceSnapshotAccessPointFromVolumeId: given existing volumeId, slice the access point part
 func sliceSnapshotAccessPointFromVolumeId(volumeId string) string {
-	// VolID format:
-	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
-	slices := strings.Split(volumeId, "/")
-	if len(slices) < 3 {
-		return ""
-	}
-	slices = strings.Split(slices[2], ":")
-	if len(slices) < 2 {
-		return ""
-	}
-	return slices[1]
+	return volumeid.SliceSnapshotAccessPoint(volumeId)
 }
 
 // sliceInnerPathFromVolumeId: returns innerPath from volumeId
 func sliceInnerPathFromVolumeId(volumeId string) string {
-	// VolID format:
-	// "dir/v1/<WEKA_FS_NAME>[:<WEKA_SNAP_NAME>]/<FOLDER_NAME_SHA1_HASH>-<FOLDER_NAME_ASCII>"
-	slices := strings.Split(volumeId, "/")
-	if len(slices) <= 3 {
-		return ""
-	}
-	return "/" + strings.Join(slices[3:], "/")
+	return volumeid.SliceInnerPath(volumeId)
 }
 
 // sliceFilesystemNameFromSnapshotId: given existing snapshotID, slice the filesystem name part

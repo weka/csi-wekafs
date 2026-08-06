@@ -36,6 +36,7 @@ https://github.com/weka/csi-wekafs
 - [SELinux Support & Installation Notes](selinux/README.md)
 - [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
 - [Giving existing volumes their missing quota](docs/quota-backfill.md)
+- [Exporting and restoring volume definitions with weka-csi-migrator](docs/migrator.md)
 
 ## Volume Health Monitoring
 The CSI plugin reports the condition and actual capacity of provisioned volumes through the CSI
@@ -71,6 +72,15 @@ If you want to build the driver yourself, you can do so with the following comma
 
 ```console
 make build
+```
+
+To build `weka-csi-migrator`, the standalone CLI for exporting and restoring Weka CSI volume
+definitions ([documentation](docs/migrator.md)):
+
+```console
+make migrator          # host platform, into ./bin
+make migrator-release  # cross-compiled release archives + checksums, into ./dist
+make migrator-image    # container image
 ```
 
 ## Values
