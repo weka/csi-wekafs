@@ -10,9 +10,12 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/yaml"
 
 	"github.com/wekafs/csi-wekafs/pkg/migrator/apply"
 	"github.com/wekafs/csi-wekafs/pkg/migrator/archive"
+	"github.com/wekafs/csi-wekafs/pkg/migrator/transform"
 )
 
 func newShowCommand() *cobra.Command {
@@ -23,6 +26,7 @@ func newShowCommand() *cobra.Command {
 		namespaceFilter string
 		nameFilter      string
 		outputDir       string
+		transformFile   string
 	)
 
 	cmd := &cobra.Command{
@@ -36,6 +40,7 @@ manifests can be reviewed or validated before an import touches a cluster:
   weka-csi-migrator show cluster.wcsi | kubectl apply --dry-run=client -f -
   weka-csi-migrator show cluster.wcsi --kind PersistentVolume
   weka-csi-migrator show cluster.wcsi --output-dir ./review
+  weka-csi-migrator show cluster.wcsi --transform-file dr.yaml
 
 Output is a multi-document YAML stream on stdout, in the order an import would apply it.
 Note that credentials appear in full if the archive was exported with --include-secret-data.`,
@@ -50,15 +55,40 @@ Note that credentials appear in full if the archive was exported with --include-
 				logger.Warn().Msg(warning)
 			}
 
+			chain, err := loadTransform(transformFile)
+			if err != nil {
+				return err
+			}
+
 			selected := selectEntries(reader, kindFilter, namespaceFilter, nameFilter)
 			if len(selected) == 0 {
 				return fmt.Errorf("no objects in %s match the given filters", args[0])
 			}
 
-			if outputDir != "" {
-				return extractEntries(cmd.Context(), reader, selected, outputDir)
+			objects, err := renderEntries(reader, selected, chain)
+			if err != nil {
+				return err
 			}
-			return printEntries(cmd.OutOrStdout(), reader, selected)
+			// Report exactly what import would report, so a preview and the real run agree.
+			for _, change := range chain.Changes() {
+				logger.Debug().Msg(change.String())
+			}
+			if changes := len(chain.Changes()); changes > 0 {
+				logger.Info().Int("changes", changes).Strs("rules", chain.Names()).Msg("Applied transform rules")
+			}
+			// Only meaningful over the whole archive: with a filter applied, a mapping that
+			// matched nothing may simply target an object the filter excluded, and warning
+			// about it would train the reader to ignore a warning that matters.
+			if kindFilter == "" && namespaceFilter == "" && nameFilter == "" {
+				for _, unused := range chain.UnusedMappings() {
+					logger.Warn().Str("mapping", unused).Msg("Transform mapping matched no object in the archive")
+				}
+			}
+
+			if outputDir != "" {
+				return extractObjects(cmd.Context(), objects, outputDir)
+			}
+			return printObjects(cmd.OutOrStdout(), objects)
 		},
 	}
 
@@ -66,6 +96,7 @@ Note that credentials appear in full if the archive was exported with --include-
 	cmd.Flags().StringVarP(&namespaceFilter, "namespace", "n", "", "only objects in this namespace")
 	cmd.Flags().StringVar(&nameFilter, "name", "", "only the object with this name")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "write one file per object into this directory instead of printing")
+	cmd.Flags().StringVar(&transformFile, "transform-file", "", "preview the objects as a transformed import would create them")
 	cmd.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read the archive password from stdin")
 	addIgnoreIntegrityFlag(cmd, &ignoreIntegrity)
 
@@ -114,43 +145,75 @@ func orderedKinds(r *archive.Reader) []string {
 	return kinds
 }
 
-func printEntries(out io.Writer, r *archive.Reader, entries []archive.Entry) error {
-	for i, entry := range entries {
+// renderedObject is one archive entry after any transform, kept alongside the path it should
+// be written to so that extraction mirrors the archive layout.
+type renderedObject struct {
+	path string
+	body []byte
+}
+
+// renderEntries decodes, transforms and re-encodes the selected entries.
+//
+// Transforming here rather than only at import is what makes `show --transform-file` an
+// exact preview: both paths run the same chain over the same objects.
+func renderEntries(r *archive.Reader, entries []archive.Entry, chain *transform.Chain) ([]renderedObject, error) {
+	rendered := make([]renderedObject, 0, len(entries))
+	for _, entry := range entries {
 		body, ok := r.Body(entry.Path)
 		if !ok {
-			return fmt.Errorf("archive entry %q has no content", entry.Path)
+			return nil, fmt.Errorf("archive entry %q has no content", entry.Path)
 		}
+		if chain == nil || chain.Len() == 0 {
+			rendered = append(rendered, renderedObject{path: entry.Path, body: body})
+			continue
+		}
+
+		var raw map[string]any
+		if err := yaml.Unmarshal(body, &raw); err != nil {
+			return nil, fmt.Errorf("decoding %s: %w", entry.Path, err)
+		}
+		obj := &unstructured.Unstructured{Object: raw}
+		if err := chain.Apply(obj); err != nil {
+			return nil, fmt.Errorf("transforming %s: %w", entry.Path, err)
+		}
+		transformed, err := yaml.Marshal(obj.Object)
+		if err != nil {
+			return nil, fmt.Errorf("encoding %s: %w", entry.Path, err)
+		}
+		rendered = append(rendered, renderedObject{path: entry.Path, body: transformed})
+	}
+	return rendered, nil
+}
+
+func printObjects(out io.Writer, objects []renderedObject) error {
+	for i, object := range objects {
 		if i > 0 {
 			if _, err := fmt.Fprintln(out, "---"); err != nil {
 				return err
 			}
 		}
-		if _, err := out.Write(body); err != nil {
-			return fmt.Errorf("writing %s: %w", entry.Path, err)
+		if _, err := out.Write(object.body); err != nil {
+			return fmt.Errorf("writing %s: %w", object.path, err)
 		}
 	}
 	return nil
 }
 
-// extractEntries writes each object to its own file, mirroring the archive's layout.
-func extractEntries(ctx context.Context, r *archive.Reader, entries []archive.Entry, dir string) error {
+// extractObjects writes each object to its own file, mirroring the archive's layout.
+func extractObjects(ctx context.Context, objects []renderedObject, dir string) error {
 	logger := zerolog.Ctx(ctx)
-	for _, entry := range entries {
-		body, ok := r.Body(entry.Path)
-		if !ok {
-			return fmt.Errorf("archive entry %q has no content", entry.Path)
-		}
-		// entry.Path is validated on open to contain no traversal, so joining is safe.
-		target := filepath.Join(dir, entry.Path)
+	for _, object := range objects {
+		// Paths are validated on open to contain no traversal, so joining is safe.
+		target := filepath.Join(dir, object.path)
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 			return fmt.Errorf("creating %s: %w", filepath.Dir(target), err)
 		}
 		// 0600: an archive exported with --include-secret-data holds live credentials.
-		if err := os.WriteFile(target, body, 0o600); err != nil {
+		if err := os.WriteFile(target, object.body, 0o600); err != nil {
 			return fmt.Errorf("writing %s: %w", target, err)
 		}
 		logger.Debug().Str("file", target).Msg("Extracted object")
 	}
-	logger.Info().Int("objects", len(entries)).Str("directory", dir).Msg("Extracted archive")
+	logger.Info().Int("objects", len(objects)).Str("directory", dir).Msg("Extracted archive")
 	return nil
 }

@@ -23,6 +23,7 @@ func newImportCommand(clients clusterConnector) *cobra.Command {
 		allowRedactedSecrets bool
 		passwordStdin        bool
 		ignoreIntegrity      bool
+		transformFile        string
 	)
 
 	cmd := &cobra.Command{
@@ -34,7 +35,12 @@ Objects are applied in dependency order: Secrets and StorageClasses first, then
 PersistentVolumes, then their claims. Nothing is overwritten; an object that already exists
 aborts the import unless --skip-existing is given.
 
-The archive is verified in full before anything is written.`,
+The archive is verified in full before anything is written.
+
+--transform-file rewrites objects on the way in, for restoring onto a cluster that differs
+from the source. Preview exactly what it produces with:
+
+  weka-csi-migrator show <archive> --transform-file <file>`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			input = args[0]
@@ -69,13 +75,16 @@ The archive is verified in full before anything is written.`,
 				Bool("dry_run", dryRun).
 				Msg("Applying objects")
 
+			chain, err := loadTransform(transformFile)
+			if err != nil {
+				return err
+			}
+
 			applier := apply.New(client, apply.Options{
 				DryRun:               dryRun,
 				SkipExisting:         skipExisting,
 				AllowRedactedSecrets: allowRedactedSecrets,
-				// v1 has no rules, so this is the identity transform. Later phases populate
-				// the chain from a mapping file without touching the import path.
-				Transform: transform.NewChain(),
+				Transform:            chain,
 			})
 			results, err := applier.Apply(cmd.Context(), reader)
 
@@ -100,6 +109,7 @@ The archive is verified in full before anything is written.`,
 	cmd.Flags().BoolVar(&skipExisting, "skip-existing", false, "leave objects that already exist untouched instead of failing")
 	cmd.Flags().BoolVar(&allowRedactedSecrets, "allow-redacted-secrets", false, "import an archive whose credentials were redacted; the secrets must be fixed by hand afterwards")
 	cmd.Flags().BoolVar(&passwordStdin, "password-stdin", false, "read the archive password from stdin")
+	cmd.Flags().StringVar(&transformFile, "transform-file", "", "mapping file rewriting objects on the way in (see docs/migrator.md)")
 
 	addIgnoreIntegrityFlag(cmd, &ignoreIntegrity)
 
@@ -158,4 +168,20 @@ func describeResult(r apply.Result) string {
 		return r.Name
 	}
 	return r.Namespace + "/" + r.Name
+}
+
+// loadTransform builds the rule chain from a mapping file. An empty path yields the identity
+// transform, which is what an unmodified restore wants.
+func loadTransform(path string) (*transform.Chain, error) {
+	if path == "" {
+		return transform.NewChain(), nil
+	}
+	cfg, err := transform.LoadConfig(path)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.IsEmpty() {
+		return nil, fmt.Errorf("%s declares no transformations", path)
+	}
+	return transform.NewChainFromConfig(cfg)
 }

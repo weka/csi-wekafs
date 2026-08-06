@@ -1,0 +1,37 @@
+# Transform for scenario (c): a different Kubernetes cluster attached to the SAME Weka cluster.
+#
+# The data is not moving, so the volume handles stay exactly as they are and `filesystems:`
+# is deliberately absent. What changes is everything around the volumes: how the new cluster
+# reaches the Weka API, where the driver is installed, and how volumes are scheduled.
+#
+# Preview before importing:
+#   weka-csi-migrator show cluster.wcsi --transform-file transform-different-kubernetes-cluster.yaml
+
+# The new cluster reaches the same Weka cluster from another network segment, so only the
+# endpoints change. Credentials are unchanged, which is why there is no `password:` here.
+secrets:
+  csi-wekafs/csi-wekafs-api-secret:
+    # The driver is installed in `weka-csi` on the target rather than `csi-wekafs`.
+    namespace: weka-csi
+    data:
+      endpoints: 10.100.0.11:14000,10.100.0.12:14000
+
+# The chart's csiDriverName was overridden on the target cluster.
+driverName: weka-infra.weka.io
+
+# The target publishes its topology label under a different key, because the driver was
+# installed with a different name. Values alone would not be enough.
+nodeAffinity:
+  key: topology.weka-infra.weka.io/accessible
+  values: ["true"]
+
+# This cluster mounts read-only, and the target uses NFS transport where the source used
+# the native Weka client.
+mountOptions: ro,noatime
+
+# Mark what was migrated, so the origin is discoverable from the objects themselves.
+metadata:
+  annotations:
+    set:
+      migrated-from: prod-cluster
+      migrated-by: weka-csi-migrator

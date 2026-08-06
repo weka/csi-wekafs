@@ -457,7 +457,7 @@ type recordingRule struct{ seen *[]string }
 
 func (r recordingRule) Name() string { return "recording" }
 
-func (r recordingRule) Apply(obj *unstructured.Unstructured) error {
+func (r recordingRule) Apply(obj, _ *unstructured.Unstructured) error {
 	*r.seen = append(*r.seen, obj.GetKind()+"/"+obj.GetName())
 	if obj.GetKind() == "PersistentVolumeClaim" {
 		obj.SetName(obj.GetName() + "-renamed")
@@ -493,5 +493,161 @@ func TestTransformChainRunsOnImport(t *testing.T) {
 	if _, err := target.CoreV1().PersistentVolumeClaims("default").
 		Get(context.Background(), "pvc-dir-renamed", metav1.GetOptions{}); err != nil {
 		t.Errorf("transformed claim was not created under its new name: %v", err)
+	}
+}
+
+// TestScenarioDCrossGeographyMigration is the whole point of phase 2: restore onto a
+// different Kubernetes cluster backed by a *different* Weka cluster in another geography,
+// where the filesystem was renamed by replication, the namespaces differ, and the API
+// endpoint and credentials are new.
+func TestScenarioDCrossGeographyMigration(t *testing.T) {
+	t.Setenv("WEKA_DR_PASSWORD", "dr-password")
+
+	// Redacted export: the DR site has its own credentials, so there is no reason to carry
+	// the production ones across.
+	reader := openArchive(t, exportTo(t, sourceCluster(),
+		collect.Options{SkipUnexportable: true}, ""), "")
+
+	cfg, err := transform.ParseConfig([]byte(`
+namespaces:
+  default: dr-default
+  team-a: dr-team-a
+filesystems:
+  testfs: testfs-replica
+storageClasses:
+  sc-dir: sc-dir-dr
+secrets:
+  csi-wekafs/csi-wekafs-api-secret:
+    namespace: weka-dr
+    data:
+      endpoints: 10.20.30.40:14000
+      organization: DR
+      password: ${WEKA_DR_PASSWORD}
+nodeAffinity:
+  key: topology.weka-dr.weka.io/accessible
+  values: ["true"]
+metadata:
+  annotations:
+    set:
+      migrated-from: prod-us-east
+`))
+	if err != nil {
+		t.Fatalf("ParseConfig returned error: %v", err)
+	}
+	chain, err := transform.NewChainFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("NewChainFromConfig returned error: %v", err)
+	}
+
+	target := fake.NewSimpleClientset()
+	// No --allow-redacted-secrets: the transform supplies the credentials, which is the
+	// normal shape of a cross-cluster move.
+	if _, err := apply.New(target, apply.Options{Transform: chain}).Apply(context.Background(), reader); err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// The volume must now address the replicated filesystem, with the rest of the handle
+	// untouched including its doubled separator.
+	pv, err := target.CoreV1().PersistentVolumes().Get(ctx, "pv-dir", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("restored PV missing: %v", err)
+	}
+	if pv.Spec.CSI.VolumeHandle != "weka/v2/testfs-replica//csi-volumes/vol-abc" {
+		t.Errorf("volumeHandle = %q, want the filesystem renamed and nothing else changed", pv.Spec.CSI.VolumeHandle)
+	}
+	if pv.Spec.StorageClassName != "sc-dir-dr" {
+		t.Errorf("PV storageClassName = %q, want sc-dir-dr", pv.Spec.StorageClassName)
+	}
+	if pv.Spec.ClaimRef.Namespace != "dr-default" {
+		t.Errorf("claimRef namespace = %q, want dr-default", pv.Spec.ClaimRef.Namespace)
+	}
+	if pv.Spec.CSI.NodePublishSecretRef.Namespace != "weka-dr" {
+		t.Errorf("secretRef namespace = %q, want weka-dr", pv.Spec.CSI.NodePublishSecretRef.Namespace)
+	}
+	if pv.Annotations["migrated-from"] != "prod-us-east" {
+		t.Errorf("annotation not applied: %v", pv.Annotations)
+	}
+
+	// The claim must land in the mapped namespace, still pinned to its volume.
+	claim, err := target.CoreV1().PersistentVolumeClaims("dr-default").Get(ctx, "pvc-dir", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("restored PVC missing from the mapped namespace: %v", err)
+	}
+	if claim.Spec.VolumeName != "pv-dir" {
+		t.Errorf("claim volumeName = %q, want pv-dir", claim.Spec.VolumeName)
+	}
+	if *claim.Spec.StorageClassName != "sc-dir-dr" {
+		t.Errorf("claim storageClassName = %q, want sc-dir-dr", *claim.Spec.StorageClassName)
+	}
+
+	// The class must agree with the volume about the filesystem.
+	class, err := target.StorageV1().StorageClasses().Get(ctx, "sc-dir-dr", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("renamed StorageClass missing: %v", err)
+	}
+	if class.Parameters["filesystemName"] != "testfs-replica" {
+		t.Errorf("class filesystemName = %q, want testfs-replica: it disagrees with the volume handle",
+			class.Parameters["filesystemName"])
+	}
+	if class.Parameters["csi.storage.k8s.io/provisioner-secret-namespace"] != "weka-dr" {
+		t.Errorf("class secret namespace = %q, want weka-dr", class.Parameters["csi.storage.k8s.io/provisioner-secret-namespace"])
+	}
+
+	// The secret must exist where everything now points, carrying the DR credentials.
+	sec, err := target.CoreV1().Secrets("weka-dr").Get(ctx, "csi-wekafs-api-secret", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("relocated Secret missing: %v", err)
+	}
+	if string(sec.Data["password"]) != "dr-password" {
+		t.Errorf("password = %q, want the value from the environment", sec.Data["password"])
+	}
+	if string(sec.Data["endpoints"]) != "10.20.30.40:14000" {
+		t.Errorf("endpoints = %q, want the DR endpoint", sec.Data["endpoints"])
+	}
+	if string(sec.Data["username"]) != "admin" {
+		t.Errorf("username = %q, want it left intact", sec.Data["username"])
+	}
+}
+
+// TestTransformCollisionIsRefused covers collapsing namespaces where claim names are not
+// unique: the import must refuse up front rather than half-populate the cluster.
+func TestTransformCollisionIsRefused(t *testing.T) {
+	// Both namespaces hold a claim, and collapsing them creates two "pvc-dir"/"pvc-fs"
+	// pairs only if names repeat; give them the same name to force it.
+	cluster := fake.NewSimpleClientset(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: "uid"}},
+		secret("csi-wekafs", "csi-wekafs-api-secret"),
+		storageClass("sc-dir", "testfs"),
+		dynamicPV("pv-a", "weka/v2/testfs/a", "sc-dir", "ns-a", "shared-name"),
+		boundPVC("ns-a", "shared-name", "sc-dir", "pv-a"),
+		dynamicPV("pv-b", "weka/v2/testfs/b", "sc-dir", "ns-b", "shared-name"),
+		boundPVC("ns-b", "shared-name", "sc-dir", "pv-b"),
+	)
+	reader := openArchive(t, exportTo(t, cluster, collect.Options{IncludeSecretData: true}, ""), "")
+
+	cfg, err := transform.ParseConfig([]byte("targetNamespace: merged\n"))
+	if err != nil {
+		t.Fatalf("ParseConfig returned error: %v", err)
+	}
+	chain, err := transform.NewChainFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("NewChainFromConfig returned error: %v", err)
+	}
+
+	target := fake.NewSimpleClientset()
+	_, err = apply.New(target, apply.Options{Transform: chain}).Apply(context.Background(), reader)
+	if err == nil {
+		t.Fatal("colliding claims were imported")
+	}
+	if !strings.Contains(err.Error(), "same identity") {
+		t.Errorf("error does not explain the collision: %v", err)
+	}
+
+	// Nothing may have been created.
+	claims, _ := target.CoreV1().PersistentVolumeClaims("merged").List(context.Background(), metav1.ListOptions{})
+	if len(claims.Items) != 0 {
+		t.Errorf("the refused import still created %d claim(s)", len(claims.Items))
 	}
 }
