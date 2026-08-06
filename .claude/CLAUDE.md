@@ -25,7 +25,7 @@ csi-wekafs/
 │   ├── collect/                 # Discovery, secret resolution, dynamic->static export
 │   ├── convert/                 # Metadata stripping, static conversion, secret redaction
 │   ├── apply/                   # Ordered restore onto a target cluster
-│   └── transform/               # Seam for scenarios c/d/e; empty chain in v1
+│   └── transform/               # Scenario c/d rules: renames, remaps, secret overrides (config.go/rules.go)
 ├── pkg/wekafs/                  # Core driver package
 │   ├── apiclient/               # Weka REST API client (auth, filesystem, snapshot, NFS, quota, KMS)
 │   ├── controllerserver.go      # CSI Controller (Create/Delete Volume, Snapshots, Expand)
@@ -124,6 +124,9 @@ Key components deployed:
 - Volume IDs encode filesystem/snapshot/path info - parsing lives in `pkg/volumeid`, which `utilities.go` delegates to
 - **Volume handles are opaque and must never be normalised.** The generator does not normalise separators, so real clusters contain handles with doubled slashes (`weka/v2/fs//path`) when `dynamicProvisionPath` is empty or slash-prefixed. `pkg/volumeid` is lossless by contract; rewriting a handle means `Handle.WithFilesystemName`, never reassembly from parsed fields
 - Removing `pv.kubernetes.io/provisioned-by` is what keeps exported PVs from being reclaimed by external-provisioner; it is a data-safety invariant, not cleanup (see `pkg/migrator/convert/static.go`)
+- Transform rules key on an **immutable snapshot** of each object (`Rule.Apply(obj, original)`), which is what makes them order-independent; a rule that reads mutated state breaks referential integrity silently
+- A rename is never a single-object edit: every transform mapping must rewrite each place the name appears (PV↔PVC↔SC↔Secret). See the table in `docs/migrator.md`
+- Well-known CSI secret strings (`SensitiveSecretKeys`, `SecretRefParamPairs`) live only in `pkg/migrator/convert`; export and transform must not keep their own copies
 - Mount operations have separate implementations: native Weka (`wekafsmount.go`) and NFS (`nfsmount.go`)
 - Controller-side Kubernetes access goes through the controller-runtime manager: `manager.GetClient()` for cached PV reads (indexed by `spec.csi.volumeHandle`), `manager.GetAPIReader()` for Secrets, so no Secret informer is started
 - Volume capacity metrics are published with `SetWithTimestamp` carrying the *measurement* time, not

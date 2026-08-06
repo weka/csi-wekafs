@@ -9,20 +9,31 @@ StorageClass and Secret pointing back at the data that was there all along.
 
 ## Status
 
-This is the v1 scope: **CLI, same Weka cluster**.
+Phase 2 scope: **CLI, with transforms for cross-cluster and cross-geography restores**.
 
 | Scenario | Supported |
 | --- | --- |
 | (a) Export PVs, PVCs, StorageClasses and Secrets | ✅ |
 | (b) Restore onto a rebuilt cluster, same Weka cluster | ✅ |
-| (c) Restore onto a different cluster with edits (endpoints, mountOptions, nodeAffinity) | planned |
-| (d) Restore against a *different* Weka cluster (renamed filesystems, namespaces) | planned |
+| (c) Restore onto a different cluster with edits (endpoints, mountOptions, nodeAffinity) | ✅ |
+| (d) Restore against a *different* Weka cluster (renamed filesystems, namespaces) | ✅ |
 | (e) Continuous replication to a second Kubernetes cluster | planned |
 | VolumeSnapshot / VolumeSnapshotContent export | planned |
 
 Snapshot-backed volumes are **exported and warned about** rather than skipped, because they
 restore correctly to any Kubernetes cluster attached to the *same* Weka cluster. See
 [Volume portability](#volume-portability).
+
+## Hands-on examples
+
+Step-by-step walkthroughs of each scenario, with real command output, live in
+[examples/migrator](../examples/migrator):
+
+| Example | Weka cluster | Kubernetes cluster |
+| --- | --- | --- |
+| [backup_restore](../examples/migrator/backup_restore) | same | rebuilt after loss |
+| [different_kubernetes_cluster](../examples/migrator/different_kubernetes_cluster) | same | different |
+| [different_weka_cluster](../examples/migrator/different_weka_cluster) | different | different |
 
 ## Install
 
@@ -341,34 +352,148 @@ decrypt if altered.
 Exports are reproducible: two exports of an unchanged cluster differ only in their timestamp
 and, when encrypted, the random salt.
 
-## Planned: transforms for scenarios (c) and (d)
+## Transforms: scenarios (c) and (d)
 
-`pkg/migrator/transform` ships an empty chain in v1, so import recreates objects exactly as
-exported. The import path already runs objects through the chain, so later phases add rules
-without restructuring anything. Planned rules:
+`--transform-file` rewrites objects on the way in, for restoring onto a cluster that differs
+from the source — a different network segment, different namespaces, or a different Weka
+cluster in another geography.
 
-- **namespace mapping** — a single target namespace, or a map for many
-- **filesystem renaming** — must rewrite the PV handle via `volumeid.Handle.WithFilesystemName`
-  *and* the StorageClass `filesystemName` parameter in lockstep, or the two disagree about
-  where the data lives
-- **secret endpoint, credential and CA overrides** — for a Weka cluster in another network
-- **secret name and namespace remapping** — the driver may not live in `csi-wekafs` on the target
-- **storageClassName mapping** — applied to volumes and claims together
-- **mountOptions replacement** — including native-Weka vs NFS transport differences
-- **nodeAffinity replacement** — the topology key as well as its values
-- **innerPath prefix rewriting** — when replicated data landed under a different subtree
-- **PV renaming** — to avoid collisions on the target
+```bash
+weka-csi-migrator show   cluster.wcsi --transform-file dr.yaml    # preview, no cluster needed
+weka-csi-migrator import cluster.wcsi --transform-file dr.yaml --dry-run
+weka-csi-migrator import cluster.wcsi --transform-file dr.yaml
+```
 
-Beyond the obvious endpoint and credential changes, a cross-geography move also has to
-account for **quotas**: Weka replicates data, but directory quotas are not carried across,
-so capacity on imported PVs is nominal until reconciliation exists.
+`show --transform-file` runs the same chain over the same objects as the import, so it is an
+exact preview rather than an approximation. Use it before every real run.
 
-Rules are deliberately never inferred. A migration that guesses at a filesystem name is
-worse than one that refuses to run, because the failure surfaces as a mount error long after
-the import reported success. `list` is the command you use to author a mapping file.
+### Mapping file
 
-A Weka API `validator` hook is stubbed as a no-op for the same phase: it will pre-flight
-that filesystems and paths exist and that quotas are present, and later reconcile them.
+Every mapping is keyed by the object's identity **as it appears in the archive**, never by
+what it becomes. `list` shows you those identities.
+
+```yaml
+# Namespaces: a map, or targetNamespace for a single destination. Mutually exclusive.
+namespaces:
+  default: dr-default
+  team-a:  dr-team-a
+
+# Weka filesystem renames. Rewrites the volume handle, the volume attribute and the
+# StorageClass parameter together, so they cannot disagree about where the data lives.
+filesystems:
+  testfs: testfs-replica
+
+# The CSI driver name on the target. A single value, not a mapping: an archive holds
+# exactly one driver, because export selects volumes by --driver-name.
+driverName: weka-infra.weka.io
+
+storageClasses:
+  sc-dir: sc-dir-dr
+
+persistentVolumes:
+  pv-dir: pv-dir-dr
+
+# Keyed "<source-namespace>/<name>"; the value is a bare name. Use namespaces to move it.
+persistentVolumeClaims:
+  default/pvc-dir: pvc-dir-dr
+
+# Keyed "<source-namespace>/<name>". Values are plaintext and are base64-encoded for you.
+# ${VAR} reads an environment variable, which is how a password stays out of this file.
+secrets:
+  csi-wekafs/csi-wekafs-api-secret:
+    name: weka-dr-api
+    namespace: weka-dr
+    data:
+      endpoints:    10.20.30.40:14000,10.20.30.41:14000
+      organization: DR
+      password:     ${WEKA_DR_PASSWORD}
+    removeData: [nfsTargetIps]
+
+# A scalar, a list, or a per-volume map. An explicit [] clears existing options.
+mountOptions: ro,noatime
+# mountOptions:
+#   pv-dir: [ro, noatime]
+
+# Replaced wholesale: a target cluster may publish a different topology key entirely.
+nodeAffinity:
+  key: topology.weka-dr.weka.io/accessible
+  values: ["true"]
+# nodeAffinity: {remove: true}
+
+metadata:
+  kinds: [PersistentVolume]        # optional; default is every object
+  annotations:
+    set:    {migrated-from: prod-us-east}
+    remove: [internal.example.com/scratch]
+    rename: {old.example.com/team: new.example.com/team}
+  labels:
+    set: {tier: dr}
+```
+
+### What the rules guarantee
+
+**Referential integrity.** Renaming is never a single-object edit, so each mapping rewrites
+every place the name appears:
+
+| Mapping | Also rewrites |
+| --- | --- |
+| `namespaces` | PVC namespace **and** the PV's `claimRef.namespace` |
+| `filesystems` | volume handle, `volumeAttributes.filesystemName`, SC `parameters.filesystemName` |
+| `driverName` | PV `spec.csi.driver` **and** SC `provisioner` |
+| `storageClasses` | the class, plus `storageClassName` on volumes **and** claims |
+| `persistentVolumes` | the volume, plus the claim's `spec.volumeName` |
+| `persistentVolumeClaims` | the claim, plus the PV's `claimRef.name` |
+| `secrets` | the Secret, all five PV `*SecretRef`s, all six SC parameter pairs |
+
+**Order independence.** Rules read the keys they match on from an immutable snapshot of the
+object as it appeared in the archive. Without that, a namespace mapping running before a
+claim rename would leave the rename unable to find its target. Because every rule keys on
+source identity, rule order cannot change the result.
+
+The `driverName` case is easy to overlook: the chart's `csiDriverName` is overridable, so a
+target cluster may run the driver under a different name. A PersistentVolume naming a driver
+the target does not have stays Pending forever with no node able to stage it, and a
+StorageClass whose `provisioner` disagrees with its volumes silently stops serving new
+claims — so both move together.
+
+**Handles are spliced, never rebuilt.** A filesystem rename goes through
+`volumeid.Handle.WithFilesystemName`, which replaces the name at a recorded offset. Everything
+else in the handle — including a doubled separator — survives byte-for-byte.
+
+### Safety
+
+Nothing is inferred. A mapping is applied only where it was declared, and:
+
+- **Strict parsing.** An unrecognised key is an error, not a silent no-op — a misspelled
+  `namespacs:` would otherwise be a transform you believe is happening but is not.
+- **Unused mappings are reported.** A mapping matching no object is almost always a typo,
+  and left unreported you would discover it only when a pod failed to mount.
+- **Collisions are refused up front.** Collapsing namespaces where claim names repeat is
+  caught before a single object is created, rather than half-populating the cluster.
+- **Unset `${VAR}` is an error.** Silently writing an empty password would produce a Secret
+  that fails authentication at first mount, with nothing pointing at the cause.
+- **Credentials never appear in logs.** `--log-level debug` prints every rewrite; secret
+  values are shown as `<overridden>`.
+
+### Redacted archives
+
+A transform can supply credentials the export redacted, so the normal cross-cluster flow
+needs no `--include-secret-data` at all — the target has different credentials anyway:
+
+```bash
+weka-csi-migrator export -o prod.wcsi                       # redacted, no password
+WEKA_DR_PASSWORD=... weka-csi-migrator import prod.wcsi --transform-file dr.yaml
+```
+
+Transforms run **before** the redaction check, so this succeeds where a plain import of a
+redacted archive would be refused.
+
+### Still to come
+
+Weka replicates data, but **directory quotas are not carried across**, so capacity on
+imported PVs is nominal until reconciliation exists. A Weka API `validator` hook is stubbed
+as a no-op: it will pre-flight that filesystems and paths exist and that quotas are present,
+and later reconcile them.
 
 ## Testing
 

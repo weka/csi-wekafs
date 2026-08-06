@@ -30,17 +30,6 @@ import (
 // DefaultDriverName matches the chart's csiDriverName default.
 const DefaultDriverName = "csi.weka.io"
 
-// secretRefParamPairs are the StorageClass parameters through which external-provisioner
-// resolves CSI secrets. Both the name and namespace halves are needed to locate a secret.
-var secretRefParamPairs = [][2]string{
-	{"csi.storage.k8s.io/provisioner-secret-name", "csi.storage.k8s.io/provisioner-secret-namespace"},
-	{"csi.storage.k8s.io/controller-publish-secret-name", "csi.storage.k8s.io/controller-publish-secret-namespace"},
-	{"csi.storage.k8s.io/node-stage-secret-name", "csi.storage.k8s.io/node-stage-secret-namespace"},
-	{"csi.storage.k8s.io/node-publish-secret-name", "csi.storage.k8s.io/node-publish-secret-namespace"},
-	{"csi.storage.k8s.io/controller-expand-secret-name", "csi.storage.k8s.io/controller-expand-secret-namespace"},
-	{"csi.storage.k8s.io/node-expand-secret-name", "csi.storage.k8s.io/node-expand-secret-namespace"},
-}
-
 // Options controls what an export includes.
 type Options struct {
 	// DriverName identifies volumes to export. The chart allows overriding it, so it is a
@@ -306,7 +295,7 @@ func (c *Collector) addStorageClasses(ctx context.Context, w *archive.Writer, na
 // the ${pvc.namespace} and ${pvc.name} templates against each claim that uses the class.
 func (c *Collector) storageClassSecretRefs(w *archive.Writer, sc *storagev1.StorageClass, claims []*corev1.PersistentVolumeClaim) []secretRef {
 	var refs []secretRef
-	for _, pair := range secretRefParamPairs {
+	for _, pair := range convert.SecretRefParamPairs {
 		nameTemplate, ok := sc.Parameters[pair[0]]
 		if !ok || nameTemplate == "" {
 			continue
