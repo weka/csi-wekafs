@@ -24,6 +24,7 @@ csi-wekafs/
 │   ├── wekafs.go                # Driver init, gRPC setup, health probes
 │   ├── volume.go                # Volume abstraction, capacity, xattr metadata
 │   ├── snapshot.go              # Snapshot operations & state
+│   ├── volumehealth.go          # ControllerGetVolume: volume condition & capacity via REST API
 │   ├── wekafsmount.go           # Native Weka mount operations
 │   ├── nfsmount.go              # NFS fallback mount operations
 │   ├── driverconfig.go          # Configuration management
@@ -70,7 +71,7 @@ go test ./pkg/wekafs/apiclient/... # API client tests
 Deploy: `helm install csi-wekafsplugin charts/csi-wekafsplugin/`
 
 Key components deployed:
-- **Controller Deployment** with sidecars: provisioner, attacher, resizer, snapshotter
+- **Controller Deployment** with sidecars: provisioner, attacher, resizer, snapshotter, external-health-monitor
 - **Node DaemonSet** with liveness probe sidecar
 - RBAC roles, CSIDriver resource, optional SELinux policy
 
@@ -80,6 +81,7 @@ Key components deployed:
 - Error types: transient vs non-transient in `apiclient/errors.go`
 - Volume IDs encode filesystem/snapshot/path info - see `utilities.go`
 - Mount operations have separate implementations: native Weka (`wekafsmount.go`) and NFS (`nfsmount.go`)
+- Controller-side Kubernetes access goes through the controller-runtime manager: `manager.GetClient()` for cached PV reads (indexed by `spec.csi.volumeHandle`), `manager.GetAPIReader()` for Secrets, so no Secret informer is started
 - Tests colocated with source files (`*_test.go`)
 
 ## Workflow Rules

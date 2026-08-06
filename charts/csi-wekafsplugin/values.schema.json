@@ -31,20 +31,19 @@
                         }
                     }
                 },
-                "configureAttacherLeaderElection": {
-                    "type": "boolean"
-                },
-                "configureProvisionerLeaderElection": {
-                    "type": "boolean"
-                },
-                "configureResizerLeaderElection": {
-                    "type": "boolean"
-                },
-                "configureSnapshotterLeaderElection": {
-                    "type": "boolean"
-                },
                 "grpcRequestTimeoutSeconds": {
                     "type": "integer"
+                },
+                "healthMonitor": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "monitorInterval": {
+                            "type": "string"
+                        }
+                    }
                 },
                 "labels": {
                     "type": "object"
@@ -125,6 +124,9 @@
                     "type": "string"
                 },
                 "csidriverTag": {
+                    "type": "string"
+                },
+                "healthmonitorsidecar": {
                     "type": "string"
                 },
                 "livenessprobesidecar": {

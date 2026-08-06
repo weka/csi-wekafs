@@ -70,6 +70,9 @@ func (a *ApiClient) ResolvePathToInode(ctx context.Context, fs *FileSystem, path
 			if strings.Contains(t.ApiResponse.Message, "PATH_NOT_FOUND") {
 				return 0, ObjectNotFoundError
 			}
+			// Any other bad request is a real failure and must not be reported as a missing
+			// path - callers act on ObjectNotFoundError as proof the path is gone.
+			return 0, err
 
 		default:
 			return 0, err

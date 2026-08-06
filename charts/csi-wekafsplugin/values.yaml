@@ -19,6 +19,8 @@ images:
   resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v2.1.0
   # -- CSI snapshotter sidecar image URL
   snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.5.0
+  # -- CSI external health monitor sidecar image URL
+  healthmonitorsidecar: registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.17.0
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
@@ -63,14 +65,12 @@ controller:
     deleteSnapshot: 5
   # -- Return GRPC Unavailable if request waits in queue for that long time (seconds)
   grpcRequestTimeoutSeconds: 30
-  # -- Configure provisioner sidecar for leader election
-  configureProvisionerLeaderElection: true
-  # -- Configure resizer sidecar for leader election
-  configureResizerLeaderElection: true
-  # -- Configure snapshotter sidecar for leader election
-  configureSnapshotterLeaderElection: true
-  # -- Configure attacher sidecar for leader election
-  configureAttacherLeaderElection: true
+  # -- Volume health monitoring: periodically checks volume condition via the Weka API and reports abnormal volumes as events on the PVC
+  healthMonitor:
+    # -- Enable the external health monitor sidecar
+    enabled: true
+    # -- How often to check volume health
+    monitorInterval: 5m
   # -- optional nodeSelector for controller components only
   nodeSelector: {}
   # -- optional affinity for controller components only
@@ -112,6 +112,13 @@ controller:
         cpu: 4m
         memory: 48Mi
     csiSnapshotter:
+      limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
+        cpu: 4m
+        memory: 48Mi
+    csiHealthMonitor:
       limits:
         cpu: 1
         memory: 1Gi

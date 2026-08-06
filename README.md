@@ -32,6 +32,25 @@ https://github.com/weka/csi-wekafs
 - [SELinux Support & Installation Notes](selinux/README.md)
 - [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
 
+## Volume Health Monitoring
+The CSI plugin reports the condition and actual capacity of provisioned volumes through the CSI
+`ControllerGetVolume` call, and the bundled `csi-external-health-monitor-controller` sidecar surfaces
+unhealthy volumes as warning events on the corresponding PersistentVolumeClaim.
+
+The condition is determined entirely through the Weka REST API - no volume is mounted for the check.
+A volume is reported abnormal when its filesystem, or the directory backing it, no longer exists on
+the Weka cluster. Credentials are taken from the API secret referenced by the PersistentVolume.
+
+- The check runs every `controller.healthMonitor.monitorInterval` (default `5m`)
+- While enabled, the controller keeps a watch on all PersistentVolumes in the cluster, holding only
+  the few fields it needs for each
+- `controller.healthMonitor.enabled=false` turns the feature off completely - the sidecar is not
+  deployed, the capability is not advertised, and the driver does not watch PersistentVolumes.
+  Outside Helm, the same is done with `--advertisevolumehealthsupport=false`
+- Reporting requires Weka 4.3 or later (4.4.7 or later when the API user has the `CSI` role), since
+  older clusters cannot resolve a path to an inode over the API. On older clusters the volume
+  condition is reported as unknown rather than abnormal, and capacity is taken from the PV
+
 ## Additional Documentation
 - [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
@@ -55,6 +74,7 @@ make build
 | images.registrarsidecar | string | `"registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.16.0"` | CSI registrar sidercar |
 | images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v2.1.0"` | CSI resizer sidecar image URL |
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.5.0"` | CSI snapshotter sidecar image URL |
+| images.healthmonitorsidecar | string | `"registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.17.0"` | CSI external health monitor sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
 | images.csidriverTag | string | `"2.8.9"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
@@ -69,16 +89,13 @@ make build
 | controller.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
 | controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
 | controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
-| controller.configureProvisionerLeaderElection | bool | `true` | Configure provisioner sidecar for leader election |
-| controller.configureResizerLeaderElection | bool | `true` | Configure resizer sidecar for leader election |
-| controller.configureSnapshotterLeaderElection | bool | `true` | Configure snapshotter sidecar for leader election |
-| controller.configureAttacherLeaderElection | bool | `true` | Configure attacher sidecar for leader election |
+| controller.healthMonitor | object | `{"enabled":true,"monitorInterval":"5m"}` | Volume health monitoring: periodically checks volume condition via the Weka API and reports abnormal volumes as events on the PVC |
 | controller.nodeSelector | object | `{}` | optional nodeSelector for controller components only |
 | controller.affinity | object | `{}` | optional affinity for controller components only |
 | controller.labels | object | `{}` | optional labels to add to controller deployment |
 | controller.podLabels | object | `{}` | optional labels to add to controller pods |
 | controller.terminationGracePeriodSeconds | int | `10` | termination grace period for controller pods |
-| controller.resources | object | `{"csiAttacher":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiProvisioner":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}},"csiResizer":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiSnapshotter":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for controller containers |
+| controller.resources | object | `{"csiAttacher":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiHealthMonitor":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiProvisioner":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}},"csiResizer":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"csiSnapshotter":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"4m","memory":"48Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for controller containers |
 | node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
 | node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | node.nodeSelector | object | `{}` | optional nodeSelector for node components only |
