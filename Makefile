@@ -45,7 +45,48 @@ push-metricsserver: build-metricsserver
 	docker push $(METRICSSERVER_IMAGE_NAME):$(VERSION)
 
 clean:
-	-rm -rf bin
+	-rm -rf bin dist
+
+# --- weka-csi-migrator ----------------------------------------------------------------
+# Standalone CLI for exporting and restoring Weka CSI volume definitions. It is a plain Go
+# binary with no cgo, so it cross-compiles to every supported platform from any host.
+
+MIGRATOR_NAME=weka-csi-migrator
+MIGRATOR_IMAGE_NAME?=$(MIGRATOR_NAME)
+MIGRATOR_LDFLAGS=-s -w -X main.version=$(VERSION)
+MIGRATOR_PLATFORMS=darwin/arm64 darwin/amd64 linux/amd64 linux/arm64
+
+.PHONY: migrator migrator-release migrator-test migrator-image
+
+# Build for the host platform into ./bin
+migrator:
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -ldflags "$(MIGRATOR_LDFLAGS)" -o ./bin/$(MIGRATOR_NAME) ./cmd/$(MIGRATOR_NAME)
+	@echo "✅ ./bin/$(MIGRATOR_NAME)"
+
+migrator-test:
+	go test ./pkg/volumeid/... ./pkg/migrator/...
+
+# Cross-compile release archives into ./dist, plus a checksum file for the Homebrew formula
+migrator-release:
+	@mkdir -p dist
+	@for platform in $(MIGRATOR_PLATFORMS); do \
+		os=$${platform%/*}; arch=$${platform#*/}; \
+		echo "🔨 $$os/$$arch"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build \
+			-ldflags "$(MIGRATOR_LDFLAGS)" \
+			-o dist/$(MIGRATOR_NAME) ./cmd/$(MIGRATOR_NAME) || exit 1; \
+		tar -czf dist/$(MIGRATOR_NAME)_$(VERSION)_$${os}_$${arch}.tar.gz -C dist $(MIGRATOR_NAME) || exit 1; \
+		rm -f dist/$(MIGRATOR_NAME); \
+	done
+	@cd dist && shasum -a 256 $(MIGRATOR_NAME)_$(VERSION)_*.tar.gz > $(MIGRATOR_NAME)_$(VERSION)_checksums.txt
+	@echo "✅ dist/"
+
+migrator-image:
+	docker buildx build --platform linux/amd64,linux/arm64 \
+		--build-arg VERSION=$(VERSION) \
+		-t $(MIGRATOR_IMAGE_NAME):$(VERSION) \
+		-f migrator.Dockerfile .
 
 # Stamp the charts in the working tree so a chart built from it installs the images that tree
 # produces. For local use only - CI stamps its own workspace and never commits the result, which is

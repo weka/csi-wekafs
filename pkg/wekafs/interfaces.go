@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/wekafs/csi-wekafs/pkg/volumeid"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
@@ -65,7 +66,9 @@ type AnyMount interface {
 	getLastUsed() time.Time
 }
 
-type VolumeType string
+// VolumeType aliases volumeid.Type so that the driver and out-of-tree tooling such as the
+// migrator share a single definition of the volume handle format.
+type VolumeType = volumeid.Type
 
 // VolumeBackingType classifies how a volume is physically backed (plain filesystem, legacy
 // directory, snapshot, or a directory rooted on a snapshot), used only as a metrics label.
