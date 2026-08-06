@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
@@ -113,11 +114,6 @@ func (cs *ControllerServer) ControllerUnpublishVolume(c context.Context, request
 }
 
 //goland:noinspection GoUnusedParameter
-func (cs *ControllerServer) ListVolumes(c context.Context, request *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
-	panic("implement me")
-}
-
-//goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) GetCapacity(c context.Context, request *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
 	panic("implement me")
 }
@@ -139,11 +135,14 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 	if config.advertiseVolumeCloneSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CLONE_VOLUME)
 	}
-	// ControllerGetVolume answers purely over the Weka REST API, but its credentials come from
-	// the PersistentVolume, so serving it needs both a Kubernetes client and a real backend.
+	// These answer purely over the Weka REST API, but their credentials come from the
+	// PersistentVolume, so serving them needs both a Kubernetes client and a real backend.
+	// LIST_VOLUMES matters for scale: it lets a consumer sweep the whole fleet in pages rather
+	// than one ControllerGetVolume per volume.
 	if config.advertiseVolumeHealthSupport && manager != nil && !config.isInDevMode() {
 		exposedCapabilities = append(exposedCapabilities,
 			csi.ControllerServiceCapability_RPC_GET_VOLUME,
+			csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
 			csi.ControllerServiceCapability_RPC_VOLUME_CONDITION)
 	}
 
@@ -543,7 +542,7 @@ func (ct *CapacityTracker) refreshFromKubernetesLocked(ctx context.Context, driv
 	capacityByFS := make(map[string]int64)
 	for _, pv := range pvList.Items {
 		// Filter for our driver
-		if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != driverName {
+		if !isDriverPersistentVolume(&pv, driverName) {
 			continue
 		}
 

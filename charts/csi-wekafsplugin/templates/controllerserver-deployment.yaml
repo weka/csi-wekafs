@@ -396,7 +396,11 @@ spec:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
+            {{/* The sidecar sweeps the fleet with ListVolumes when the driver advertises
+                 LIST_VOLUMES, and falls back to one ControllerGetVolume per volume otherwise.
+                 Those paths read different flags, so set both from the same value. */}}
             - "--monitor-interval={{ .Values.controller.healthMonitor.monitorInterval }}"
+            - "--list-volumes-interval={{ .Values.controller.healthMonitor.monitorInterval }}"
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
