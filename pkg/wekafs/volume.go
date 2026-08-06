@@ -1285,7 +1285,7 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 		}
 		if !empty && !v.server.isInDevMode() {
 			logger.Error().Err(err).Msg("Cannot create a seed snapshot, filesystem is not empty")
-			return nil, errors.New("cannot create seed snaspshot on non-empty filesystem")
+			return nil, errors.New("cannot create seed snapshot on non-empty filesystem")
 		}
 
 		if snap, err = v.createSeedSnapshot(ctx); err != nil {

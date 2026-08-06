@@ -18,8 +18,11 @@ package wekafs
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +30,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
@@ -41,6 +45,15 @@ const (
 	// about one apiserver read per distinct Secret rather than one per volume.
 	volumeSecretCacheTTL = 5 * time.Minute
 	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
+
+	// listVolumesPageSize bounds a page when the CO does not set max_entries. Every entry costs a
+	// few Weka API calls, so an unbounded page would not fit inside the gRPC request timeout.
+	listVolumesPageSize = 100
+	// listVolumesConcurrency bounds how many volumes of one page are probed at the same time, and
+	// so caps the burst of Weka API calls a single page can produce.
+	listVolumesConcurrency = 10
+	// listVolumesTokenPrefix marks a pagination cursor as this driver's own.
+	listVolumesTokenPrefix = "wekafs:v1:"
 )
 
 // ErrVolumeHealthUndetermined is returned when the volume condition cannot be established
@@ -77,7 +90,10 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 		return nil, ErrVolumeHealthUndetermined
 	}
 
-	fsObj, err := v.getFilesystemObj(ctx, false)
+	// fromCache honours a filesystem object a caller already resolved, which is how ListVolumes
+	// avoids repeating one identical lookup per volume. A single ControllerGetVolume starts with an
+	// empty cache and so still fetches fresh.
+	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		return nil, err
 	}
@@ -141,54 +157,208 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 	defer cancel()
 
 	// ControllerGetVolumeRequest carries no secrets, so the PersistentVolume is the only place
-	// left to recover the Weka API credentials from. It also holds the requested size, which is
-	// the fallback answer whenever the backend cannot supply one.
+	// left to recover the Weka API credentials from.
 	pv, err := cs.getPersistentVolumeByHandle(ctx, volumeID)
 	if err != nil {
 		return nil, err
 	}
-	response := &csi.ControllerGetVolumeResponse{
-		Volume: &csi.Volume{
-			VolumeId:      volumeID,
-			CapacityBytes: pvCapacityBytes(pv),
-		},
-		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{},
-	}
 
-	client, err := cs.apiClientFromPersistentVolume(ctx, pv)
-	if err != nil {
-		return nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
-	}
-	if client == nil {
-		logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as unknown")
-		return response, nil
-	}
-
-	volume, err := NewVolumeFromId(ctx, volumeID, client, cs)
+	volume, condition, err := cs.describeVolume(ctx, pv, nil)
 	if err != nil {
 		return nil, err
 	}
+	return &csi.ControllerGetVolumeResponse{
+		Volume: volume,
+		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{VolumeCondition: condition},
+	}, nil
+}
 
-	health, err := volume.ProbeHealth(ctx)
+// describeVolume resolves a PersistentVolume into the capacity and condition reported by both
+// ControllerGetVolume and ListVolumes. A nil condition with a nil error means the condition could
+// not be established, which callers must report as unknown rather than as abnormal.
+// The filesystems cache may be nil, in which case every lookup goes to the Weka API.
+func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (*csi.Volume, *csi.VolumeCondition, error) {
+	volumeID := pv.Spec.CSI.VolumeHandle
+	logger := log.Ctx(ctx).With().Str("volume_id", volumeID).Logger()
+
+	// The PersistentVolume holds the requested size, which stands in whenever the backend cannot
+	// supply one of its own.
+	volume := &csi.Volume{VolumeId: volumeID, CapacityBytes: pvCapacityBytes(pv)}
+
+	client, err := cs.apiClientFromPersistentVolume(ctx, pv)
+	if err != nil {
+		return volume, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
+	}
+	if client == nil {
+		logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as unknown")
+		return volume, nil, nil
+	}
+
+	vol, err := NewVolumeFromId(ctx, volumeID, client, cs)
+	if err != nil {
+		return volume, nil, err
+	}
+	// Seed the volume with an already-resolved filesystem, and publish whatever it resolved so the
+	// next volume on the same filesystem can skip the lookup.
+	vol.fileSystemObject = filesystems.get(vol.FilesystemName)
+	defer func() { filesystems.put(vol.FilesystemName, vol.fileSystemObject) }()
+
+	health, err := vol.ProbeHealth(ctx)
 	if err != nil {
 		if errors.Is(err, ErrVolumeHealthUndetermined) {
 			logger.Warn().Err(err).Msg("Reporting volume condition as unknown")
-			return response, nil
+			return volume, nil, nil
 		}
-		return nil, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
+		return volume, nil, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
 	}
 
 	if health.Capacity > 0 {
-		response.Volume.CapacityBytes = health.Capacity
-	}
-	response.Status.VolumeCondition = &csi.VolumeCondition{
-		Abnormal: health.Abnormal,
-		Message:  health.Message,
+		volume.CapacityBytes = health.Capacity
 	}
 	if health.Abnormal {
 		logger.Warn().Str("condition", health.Message).Msg("Volume is abnormal")
 	}
+	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, nil
+}
+
+func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
+	op := "ListVolumes"
+	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
+	defer span.End()
+	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
+
+	logger := log.Ctx(ctx)
+	logger.Debug().Int32("max_entries", req.GetMaxEntries()).Msg(">>>> Received request")
+	defer logger.Debug().Msg("<<<< Completed processing request")
+
+	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_LIST_VOLUMES); err != nil {
+		logger.Err(err).Msg("Volume listing is not enabled")
+		return nil, err
+	}
+	if req.GetMaxEntries() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "max_entries cannot be negative")
+	}
+	after, err := decodeListVolumesToken(req.GetStartingToken())
+	if err != nil {
+		// The spec mandates ABORTED here specifically, so the CO knows to restart the listing
+		// from the beginning rather than treating this as a transient failure.
+		return nil, status.Errorf(codes.Aborted, "invalid starting_token: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, cs.getConfig().grpcRequestTimeout)
+	defer cancel()
+
+	remaining, err := cs.listDriverPersistentVolumes(ctx, after)
+	if err != nil {
+		return nil, err
+	}
+
+	page, nextToken := paginateVolumes(remaining, int(req.GetMaxEntries()))
+
+	response := &csi.ListVolumesResponse{Entries: cs.describeVolumes(ctx, page), NextToken: nextToken}
+	logger.Debug().Int("entries", len(response.Entries)).Bool("more_pages", nextToken != "").Msg("Listed volumes")
 	return response, nil
+}
+
+// paginateVolumes cuts one page out of the remaining volumes and mints the cursor to resume from,
+// which is empty once the page is the last one. A pageSize of zero or less means the CO left
+// max_entries unset and the driver picks the page size.
+func paginateVolumes(remaining []*v1.PersistentVolume, pageSize int) (page []*v1.PersistentVolume, nextToken string) {
+	if pageSize <= 0 {
+		pageSize = listVolumesPageSize
+	}
+	if len(remaining) <= pageSize {
+		return remaining, ""
+	}
+	page = remaining[:pageSize]
+	return page, encodeListVolumesToken(page[len(page)-1].Spec.CSI.VolumeHandle)
+}
+
+// describeVolumes probes a page of volumes concurrently. A volume whose condition cannot be
+// established is still listed, just without a condition - one unreachable volume must not fail
+// the whole page.
+func (cs *ControllerServer) describeVolumes(ctx context.Context, pvs []*v1.PersistentVolume) []*csi.ListVolumesResponse_Entry {
+	entries := make([]*csi.ListVolumesResponse_Entry, len(pvs))
+	filesystems := newFilesystemCache()
+	var probes errgroup.Group
+	probes.SetLimit(listVolumesConcurrency)
+	for i, pv := range pvs {
+		probes.Go(func() error {
+			volume, condition, err := cs.describeVolume(ctx, pv, filesystems)
+			if err != nil {
+				// describeVolume already returns a nil condition alongside any error, so the entry
+				// is simply listed as unknown rather than failing the whole page.
+				log.Ctx(ctx).Warn().Err(err).Str("volume_id", volume.VolumeId).
+					Msg("Listing volume without a condition")
+			}
+			// published_node_ids is left unset: this driver has no controller publish step, and it
+			// does not advertise LIST_VOLUMES_PUBLISHED_NODES.
+			entries[i] = &csi.ListVolumesResponse_Entry{
+				Volume: volume,
+				Status: &csi.ListVolumesResponse_VolumeStatus{VolumeCondition: condition},
+			}
+			return nil
+		})
+	}
+	_ = probes.Wait()
+	return entries
+}
+
+// listDriverPersistentVolumes returns this driver's PersistentVolumes ordered by volume handle,
+// starting after the given handle. The stable ordering is what makes the pagination token a
+// cursor rather than an offset, so volumes appearing or disappearing between pages cannot shift
+// the remaining pages and cause one to be skipped.
+func (cs *ControllerServer) listDriverPersistentVolumes(ctx context.Context, after string) ([]*v1.PersistentVolume, error) {
+	if cs.manager == nil {
+		return nil, status.Error(codes.Unavailable, "kubernetes client is unavailable, cannot list volumes")
+	}
+	pvList := &v1.PersistentVolumeList{}
+	// A sweep pages through the whole fleet, so every page would otherwise deep-copy every cached
+	// PV out of the informer. These objects are only ever read here, never mutated.
+	if err := cs.manager.GetClient().List(ctx, pvList, runtimeclient.UnsafeDisableDeepCopy); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list persistent volumes: %v", err)
+	}
+	return volumesAfterHandle(pvList.Items, cs.getConfig().GetDriver().name, after), nil
+}
+
+// volumesAfterHandle keeps this driver's PersistentVolumes whose handle sorts after the cursor,
+// ordered by handle.
+func volumesAfterHandle(items []v1.PersistentVolume, driverName, after string) []*v1.PersistentVolume {
+	matching := make([]*v1.PersistentVolume, 0, len(items))
+	for i := range items {
+		pv := &items[i]
+		if !isDriverPersistentVolume(pv, driverName) || pv.Spec.CSI.VolumeHandle <= after {
+			continue
+		}
+		matching = append(matching, pv)
+	}
+	sort.Slice(matching, func(i, j int) bool {
+		return matching[i].Spec.CSI.VolumeHandle < matching[j].Spec.CSI.VolumeHandle
+	})
+	return matching
+}
+
+// encodeListVolumesToken mints a pagination cursor pointing at the last handle of a page.
+func encodeListVolumesToken(handle string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(listVolumesTokenPrefix + handle))
+}
+
+// decodeListVolumesToken recovers the handle a previous page ended at. The prefix makes tokens
+// this driver did not mint detectable, so they can be rejected with ABORTED instead of being
+// silently misread as a starting position.
+func decodeListVolumesToken(token string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return "", errors.New("token is not a valid cursor")
+	}
+	cursor, found := strings.CutPrefix(string(raw), listVolumesTokenPrefix)
+	if !found {
+		return "", errors.New("token was not issued by this driver")
+	}
+	return cursor, nil
 }
 
 // getPersistentVolumeByHandle finds the PersistentVolume carrying the given CSI volume handle.
@@ -204,11 +374,16 @@ func (cs *ControllerServer) getPersistentVolumeByHandle(ctx context.Context, vol
 	driverName := cs.getConfig().GetDriver().name
 	for i := range pvList.Items {
 		pv := &pvList.Items[i]
-		if pv.Spec.CSI != nil && pv.Spec.CSI.Driver == driverName {
+		if isDriverPersistentVolume(pv, driverName) {
 			return pv, nil
 		}
 	}
 	return nil, status.Errorf(codes.NotFound, "no persistent volume of driver %s exists for volume %s", driverName, volumeID)
+}
+
+// isDriverPersistentVolume reports whether a PersistentVolume is backed by this CSI driver.
+func isDriverPersistentVolume(pv *v1.PersistentVolume, driverName string) bool {
+	return pv.Spec.CSI != nil && pv.Spec.CSI.Driver == driverName
 }
 
 // apiClientFromPersistentVolume builds an API client from the Secret the PersistentVolume points
@@ -272,6 +447,45 @@ func pvCapacityBytes(pv *v1.PersistentVolume) int64 {
 		return capacity.Value()
 	}
 	return 0
+}
+
+// filesystemCache memoizes filesystem lookups for the span of a single ListVolumes call.
+//
+// Of the API calls a health probe makes, the filesystem lookup is identical for every volume that
+// shares a filesystem, so without this a page repeats it once per volume. It pays off for
+// directory-backed volumes, and equally for snapshot-backed ones, since a storage class pins all of
+// its volumes to one filesystem. Filesystem-backed volumes each own their filesystem, so they get
+// one cache entry apiece and no benefit - but no penalty either.
+//
+// Scoping this to one call bounds the staleness it can introduce: a filesystem removed while a page
+// is in flight is still reported as present until the next page.
+type filesystemCache struct {
+	sync.Mutex
+	byName map[string]*apiclient.FileSystem
+}
+
+func newFilesystemCache() *filesystemCache {
+	return &filesystemCache{byName: make(map[string]*apiclient.FileSystem)}
+}
+
+// get returns a previously resolved filesystem, or nil to mean "look it up". A nil cache always
+// misses, which is how single-volume callers opt out.
+func (fc *filesystemCache) get(name string) *apiclient.FileSystem {
+	if fc == nil {
+		return nil
+	}
+	fc.Lock()
+	defer fc.Unlock()
+	return fc.byName[name]
+}
+
+func (fc *filesystemCache) put(name string, fs *apiclient.FileSystem) {
+	if fc == nil || fs == nil {
+		return
+	}
+	fc.Lock()
+	defer fc.Unlock()
+	fc.byName[name] = fs
 }
 
 // secretCache memoizes Secrets read while answering ControllerGetVolume. The health monitor
