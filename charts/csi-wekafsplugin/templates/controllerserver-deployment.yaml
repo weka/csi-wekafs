@@ -120,6 +120,9 @@ spec:
             - "--enforcedirvoltotalcapacity"
           {{- end }}
             - "--keepthinprovisioningratioonexpand={{ .Values.pluginConfig.allowedOperations.keepThinProvisioningRatioOnExpand }}"
+            {{/* Tied to the sidecar: with nothing calling ControllerGetVolume, advertising the
+                 capability would only make the driver watch every PV for no consumer. */}}
+            - "--advertisevolumehealthsupport={{ .Values.controller.healthMonitor.enabled }}"
           {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
             - "--usenfs"
           {{- end }}
@@ -380,6 +383,36 @@ spec:
           resources:
             {{- toYaml .Values.controller.resources.csiSnapshotter | nindent 12 }}
           {{- end }}
+        {{- if .Values.controller.healthMonitor.enabled }}
+        - name: csi-external-health-monitor-controller
+          {{- if and .Values.hostNetwork (.Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints") }}
+          securityContext:
+            privileged: true
+          {{- end }}
+          image: {{ required "csi external health monitor sidecar image." .Values.images.healthmonitorsidecar }}
+          command: ["/shared/wait-for-leader"]
+          args:
+            - "/csi-external-health-monitor-controller"
+            - "--v={{ .Values.logLevel | default 5 }}"
+            - "--csi-address=$(ADDRESS)"
+            - "--timeout=60s"
+            - "--monitor-interval={{ .Values.controller.healthMonitor.monitorInterval }}"
+          env:
+            - name: ADDRESS
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: leader-state
+              mountPath: /leader-state
+              readOnly: true
+            - name: shared-bin
+              mountPath: /shared
+          {{- if .Values.controller.resources.csiHealthMonitor }}
+          resources:
+            {{- toYaml .Values.controller.resources.csiHealthMonitor | nindent 12 }}
+          {{- end }}
+        {{- end }}
       {{- with .Values.controllerPluginTolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

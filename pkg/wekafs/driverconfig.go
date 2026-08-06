@@ -27,6 +27,7 @@ type DriverConfig struct {
 	allowSnapshotsOfDirectoryVolumes  bool
 	advertiseSnapshotSupport          bool
 	advertiseVolumeCloneSupport       bool
+	advertiseVolumeHealthSupport      bool
 	debugPath                         string
 	allowInsecureHttps                bool
 	alwaysAllowSnapshotVolumes        bool
@@ -59,6 +60,7 @@ func (dc *DriverConfig) Log() {
 		Str("volume_prefix", dc.VolumePrefix).Str("snapshot_prefix", dc.SnapshotPrefix).Str("seed_snapshot_prefix", dc.SnapshotPrefix).
 		Bool("allow_auto_fs_creation", dc.allowAutoFsCreation).Bool("allow_auto_fs_expansion", dc.allowAutoFsExpansion).
 		Bool("advertise_snapshot_support", dc.advertiseSnapshotSupport).Bool("advertise_volume_clone_support", dc.advertiseVolumeCloneSupport).
+		Bool("advertise_volume_health_support", dc.advertiseVolumeHealthSupport).
 		Bool("allow_insecure_https", dc.allowInsecureHttps).Bool("always_allow_snapshot_volumes", dc.alwaysAllowSnapshotVolumes).
 		Interface("mutually_exclusive_mount_options", dc.mutuallyExclusiveOptions).
 		Int64("max_create_volume_reqs", dc.maxConcurrencyPerOp["CreateVolume"]).
@@ -107,6 +109,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 	setOwnershipOnDynamicFilesystems bool,
 	allowMountOptionOverrides bool,
 	keepThinProvisioningRatioOnExpand bool,
+	advertiseVolumeHealthSupport bool,
 ) *DriverConfig {
 
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -140,6 +143,7 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 		allowSnapshotsOfDirectoryVolumes:  allowSnapshotsOfDirectoryVolumes,
 		advertiseSnapshotSupport:          !suppressnapshotSupport,
 		advertiseVolumeCloneSupport:       !suppressVolumeCloneSupport,
+		advertiseVolumeHealthSupport:      advertiseVolumeHealthSupport,
 		debugPath:                         debugPath,
 		allowInsecureHttps:                allowInsecureHttps,
 		alwaysAllowSnapshotVolumes:        alwaysAllowSnapshotVolumes,
@@ -169,6 +173,14 @@ func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotP
 
 func (dc *DriverConfig) isInDevMode() bool {
 	return dc.debugPath != ""
+}
+
+// requiresPvCaching reports whether any enabled feature reads PersistentVolumes, and hence whether
+// the controller-runtime cache should be set up to hold them. Capacity enforcement lists them to
+// total up provisioned capacity, and volume health reporting resolves a CSI volume handle back to
+// its PersistentVolume. With neither enabled nothing lists PVs and no informer is started.
+func (dc *DriverConfig) requiresPvCaching() bool {
+	return dc.enforceDirVolTotalCapacity || dc.advertiseVolumeHealthSupport
 }
 
 func (dc *DriverConfig) GetVersion() string {

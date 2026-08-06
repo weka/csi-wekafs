@@ -74,6 +74,7 @@ type ControllerServer struct {
 	semaphores      map[string]*semaphore.Weighted
 	manager         ctrl.Manager     // For listing PVs via K8s client
 	capacityTracker *CapacityTracker // Tracks confirmed + pending capacity
+	secretCache     *secretCache     // Memoizes Secrets read during volume health checks
 	sync.Mutex
 }
 
@@ -122,11 +123,6 @@ func (cs *ControllerServer) GetCapacity(c context.Context, request *csi.GetCapac
 }
 
 //goland:noinspection GoUnusedParameter
-func (cs *ControllerServer) ControllerGetVolume(context.Context, *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
-	panic("implement me")
-}
-
-//goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
 	panic("implement me")
 }
@@ -143,17 +139,25 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 	if config.advertiseVolumeCloneSupport {
 		exposedCapabilities = append(exposedCapabilities, csi.ControllerServiceCapability_RPC_CLONE_VOLUME)
 	}
+	// ControllerGetVolume answers purely over the Weka REST API, but its credentials come from
+	// the PersistentVolume, so serving it needs both a Kubernetes client and a real backend.
+	if config.advertiseVolumeHealthSupport && manager != nil && !config.isInDevMode() {
+		exposedCapabilities = append(exposedCapabilities,
+			csi.ControllerServiceCapability_RPC_GET_VOLUME,
+			csi.ControllerServiceCapability_RPC_VOLUME_CONDITION)
+	}
 
 	capabilities := getControllerServiceCapabilities(exposedCapabilities)
 
 	cs := &ControllerServer{
-		caps:       capabilities,
-		nodeID:     nodeID,
-		mounter:    mounter,
-		api:        api,
-		config:     config,
-		semaphores: make(map[string]*semaphore.Weighted),
-		manager:    manager,
+		caps:        capabilities,
+		nodeID:      nodeID,
+		mounter:     mounter,
+		api:         api,
+		config:      config,
+		semaphores:  make(map[string]*semaphore.Weighted),
+		manager:     manager,
+		secretCache: newSecretCache(volumeSecretCacheTTL),
 	}
 
 	// Initialize capacity tracker if manager available

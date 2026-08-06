@@ -596,9 +596,10 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 	zapLogger := zap.New(zap.UseDevMode(false))
 	clog.SetLogger(zapLogger)
 
-	// Configure cache options (only if enforceDirVolTotalCapacity is enabled)
+	// When PVs are cached at all, keep only the fields the driver reads, so a large cluster's PV
+	// list stays cheap in memory.
 	cacheOpts := cache.Options{}
-	if d.config.enforceDirVolTotalCapacity {
+	if d.config.requiresPvCaching() {
 		cacheOpts = cache.Options{
 			ByObject: map[runtimeclient.Object]cache.ByObject{
 				&v1.PersistentVolume{}: {
@@ -643,6 +644,25 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 		return fmt.Errorf("failed to create manager: %w", err)
 	}
 
+	// ControllerGetVolume resolves a CSI volume handle back to its PersistentVolume on every
+	// health check. Index the handle so that is a cache lookup rather than a full PV scan.
+	// Registering the index starts a PV informer, so only do it where it is actually used - keyed
+	// on the csiMode that serves the controller service, which is also what gates advertising the
+	// capability, rather than on leaderElection which merely happens to correlate today.
+	servesControllerService := d.csiMode == CsiModeController || d.csiMode == CsiModeAll
+	if servesControllerService && d.config.advertiseVolumeHealthSupport {
+		if err := mgr.GetFieldIndexer().IndexField(ctx, &v1.PersistentVolume{}, pvIndexVolumeHandle,
+			func(obj runtimeclient.Object) []string {
+				pv, ok := obj.(*v1.PersistentVolume)
+				if !ok || pv.Spec.CSI == nil {
+					return nil
+				}
+				return []string{pv.Spec.CSI.VolumeHandle}
+			}); err != nil {
+			return fmt.Errorf("failed to index persistent volumes by CSI volume handle: %w", err)
+		}
+	}
+
 	if leaderElection {
 		// Parse socket path from endpoint (format: "unix:///path/to/socket")
 		socketProto, socketPath, err := parseEndpoint(d.endpoint)
@@ -684,6 +704,8 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 	logger.Info().
 		Bool("leader_election", leaderElection).
 		Bool("enforce_capacity", d.config.enforceDirVolTotalCapacity).
+		Bool("advertise_volume_health_support", d.config.advertiseVolumeHealthSupport).
+		Bool("cache_persistent_volumes", d.config.requiresPvCaching()).
 		Str("leader_election_id", mgrOpts.LeaderElectionID).
 		Str("namespace", mgrOpts.LeaderElectionNamespace).
 		Msg("Kubernetes manager initialized")
@@ -717,6 +739,12 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 		minimal.Spec.PersistentVolumeSource.CSI = &v1.CSIPersistentVolumeSource{
 			Driver:       pv.Spec.CSI.Driver,       // Need to filter by driver
 			VolumeHandle: pv.Spec.CSI.VolumeHandle, // Need to extract filesystem path
+			// ControllerGetVolume recovers the Weka API credentials from these refs, since the
+			// RPC itself carries no secrets. Refs only, the Secret contents are not cached here.
+			ControllerExpandSecretRef:  pv.Spec.CSI.ControllerExpandSecretRef,
+			ControllerPublishSecretRef: pv.Spec.CSI.ControllerPublishSecretRef,
+			NodeStageSecretRef:         pv.Spec.CSI.NodeStageSecretRef,
+			NodePublishSecretRef:       pv.Spec.CSI.NodePublishSecretRef,
 		}
 	}
 
