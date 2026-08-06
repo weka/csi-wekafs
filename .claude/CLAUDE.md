@@ -16,8 +16,16 @@ csi-wekafs/
 ├── cmd/
 │   ├── wekafsplugin/            # Main CSI driver binary entry point
 │   ├── metricsserver/           # Standalone metrics server binary (same code as --csimode=metricsserver)
-│   └── wait-for-leader/         # Leader election gate utility
+│   ├── wait-for-leader/         # Leader election gate utility
+│   └── weka-csi-migrator/       # Standalone CLI: export/import/list volume definitions
 ├── pkg/bootstrap/               # Process startup shared by the cmd/ binaries (logging, /metrics, tracing)
+├── pkg/volumeid/                # Shared, dependency-free volume handle parsing (driver + migrator)
+├── pkg/migrator/                # weka-csi-migrator internals (no cobra deps, reusable by a controller)
+│   ├── archive/                 # .wcsi container: manifest, integrity, argon2id + AES-GCM
+│   ├── collect/                 # Discovery, secret resolution, dynamic->static export
+│   ├── convert/                 # Metadata stripping, static conversion, secret redaction
+│   ├── apply/                   # Ordered restore onto a target cluster
+│   └── transform/               # Seam for scenarios c/d/e; empty chain in v1
 ├── pkg/wekafs/                  # Core driver package
 │   ├── apiclient/               # Weka REST API client (auth, filesystem, snapshot, NFS, quota, KMS)
 │   ├── controllerserver.go      # CSI Controller (Create/Delete Volume, Snapshots, Expand)
@@ -93,7 +101,10 @@ make push                     # Push to registry
 make build-debug              # Debug image with Delve
 make deploy-debug             # Build + push + deploy debug to cluster
 go test ./pkg/wekafs/...      # Unit tests
-go test ./pkg/wekafs/apiclient/... # API client tests
+go test ./pkg/wekafs/apiclient/... # API client tests (needs a live Weka API on localhost:14000)
+make migrator                 # Build weka-csi-migrator for the host platform
+make migrator-test            # Migrator + volumeid tests (no cluster needed)
+make migrator-release         # Cross-compiled release archives + checksums into ./dist
 # CSI sanity tests run via docker-compose in tests/csi-sanity/
 ```
 
@@ -110,7 +121,9 @@ Key components deployed:
 
 - Structured logging with Zerolog (use `log.Ctx(ctx)` for request-scoped loggers)
 - Error types: transient vs non-transient in `apiclient/errors.go`
-- Volume IDs encode filesystem/snapshot/path info - see `utilities.go`
+- Volume IDs encode filesystem/snapshot/path info - parsing lives in `pkg/volumeid`, which `utilities.go` delegates to
+- **Volume handles are opaque and must never be normalised.** The generator does not normalise separators, so real clusters contain handles with doubled slashes (`weka/v2/fs//path`) when `dynamicProvisionPath` is empty or slash-prefixed. `pkg/volumeid` is lossless by contract; rewriting a handle means `Handle.WithFilesystemName`, never reassembly from parsed fields
+- Removing `pv.kubernetes.io/provisioned-by` is what keeps exported PVs from being reclaimed by external-provisioner; it is a data-safety invariant, not cleanup (see `pkg/migrator/convert/static.go`)
 - Mount operations have separate implementations: native Weka (`wekafsmount.go`) and NFS (`nfsmount.go`)
 - Controller-side Kubernetes access goes through the controller-runtime manager: `manager.GetClient()` for cached PV reads (indexed by `spec.csi.volumeHandle`), `manager.GetAPIReader()` for Secrets, so no Secret informer is started
 - Volume capacity metrics are published with `SetWithTimestamp` carrying the *measurement* time, not
