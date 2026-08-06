@@ -162,7 +162,18 @@ func (a *Applier) Apply(ctx context.Context, r *archive.Reader) ([]Result, error
 	if err != nil {
 		return nil, err
 	}
+
+	// Transform before checking secrets, not after. A mapping file may supply the very
+	// credentials that were redacted at export, which is the normal case for a move to a
+	// different Weka cluster: the target has different credentials anyway.
+	if err := a.transform(ctx, objects); err != nil {
+		return nil, err
+	}
 	if err := a.checkSecrets(objects); err != nil {
+		return nil, err
+	}
+	// Collisions are only knowable once every object has its final identity.
+	if err := checkCollisions(objects); err != nil {
 		return nil, err
 	}
 
@@ -179,6 +190,60 @@ func (a *Applier) Apply(ctx context.Context, r *archive.Reader) ([]Result, error
 		}
 	}
 	return results, nil
+}
+
+// transform rewrites every object, then reports what changed and what did not.
+func (a *Applier) transform(ctx context.Context, objects []*unstructured.Unstructured) error {
+	if a.opts.Transform == nil || a.opts.Transform.Len() == 0 {
+		return nil
+	}
+	logger := zerolog.Ctx(ctx)
+	logger.Info().Strs("rules", a.opts.Transform.Names()).Msg("Applying transform rules")
+
+	for _, obj := range objects {
+		if err := a.opts.Transform.Apply(obj); err != nil {
+			return fmt.Errorf("transforming %s: %w", describe(obj), err)
+		}
+	}
+
+	for _, change := range a.opts.Transform.Changes() {
+		logger.Debug().Msg(change.String())
+	}
+	// A mapping that matched nothing is nearly always a typo. Left unreported, the operator
+	// believes a rename happened and only finds out when a pod cannot mount.
+	for _, unused := range a.opts.Transform.UnusedMappings() {
+		logger.Warn().Str("mapping", unused).Msg("Transform mapping matched no object in the archive")
+	}
+	return nil
+}
+
+// checkCollisions refuses an import whose transformed objects would overwrite each other.
+//
+// The usual cause is collapsing several namespaces into one target namespace where two
+// claims share a name. Without this the import would create one and then fail partway
+// through on the second, leaving the cluster half-populated.
+func checkCollisions(objects []*unstructured.Unstructured) error {
+	seen := map[string]bool{}
+	clashes := map[string]bool{}
+	for _, obj := range objects {
+		key := obj.GetKind() + " " + describe(obj)
+		if seen[key] {
+			clashes[key] = true
+		}
+		seen[key] = true
+	}
+	if len(clashes) == 0 {
+		return nil
+	}
+	conflicts := make([]string, 0, len(clashes))
+	for key := range clashes {
+		conflicts = append(conflicts, key)
+	}
+	sort.Strings(conflicts)
+	return fmt.Errorf("the transform would produce more than one object with the same identity: %s\n"+
+		"this usually means several namespaces were collapsed into one where names are not unique; "+
+		"rename the claims with persistentVolumeClaims, or map the namespaces separately",
+		strings.Join(conflicts, "; "))
 }
 
 // checkSecrets refuses an archive whose credentials were redacted, naming the secrets so an
@@ -201,22 +266,15 @@ func (a *Applier) checkSecrets(objects []*unstructured.Unstructured) error {
 	}
 	sort.Strings(offenders)
 	return fmt.Errorf("archive was exported without --include-secret-data, so these secrets carry no usable credentials: %s\n"+
-		"re-export with --include-secret-data (which requires a password), or pass --allow-redacted-secrets and create the secrets yourself",
+		"supply them with a transform file (secrets.<ns>/<name>.data), re-export with --include-secret-data, "+
+		"or pass --allow-redacted-secrets and create the secrets yourself",
 		strings.Join(offenders, "; "))
 }
 
 func (a *Applier) applyOne(ctx context.Context, obj *unstructured.Unstructured) (Result, error) {
+	// Objects arrive already transformed, so this reports the identity they will actually be
+	// created under.
 	result := Result{Kind: obj.GetKind(), Namespace: obj.GetNamespace(), Name: obj.GetName()}
-
-	// Transform before anything else, so that existence is checked against the object as it
-	// will actually be created. A rule that renames or re-namespaces an object would
-	// otherwise be compared against the wrong target.
-	if a.opts.Transform != nil {
-		if err := a.opts.Transform.Apply(obj); err != nil {
-			return result, fmt.Errorf("transforming %s %s: %w", obj.GetKind(), describe(obj), err)
-		}
-		result.Namespace, result.Name = obj.GetNamespace(), obj.GetName()
-	}
 
 	exists, err := a.exists(ctx, obj)
 	if err != nil {
