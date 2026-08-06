@@ -33,6 +33,21 @@ var SensitiveSecretKeys = []string{
 	"kmsVaultSecretIdForFilesystemEncryption",
 }
 
+// SecretRefParamPairs are the StorageClass parameters through which external-provisioner
+// resolves CSI secrets, as name/namespace pairs. Both halves are needed to locate a secret.
+//
+// This list lives here, alongside SensitiveSecretKeys, because export and transform must
+// agree on it exactly: a pair added to one and not the other would mean a secret that gets
+// collected but never redirected, or redirected but never collected.
+var SecretRefParamPairs = [][2]string{
+	{"csi.storage.k8s.io/provisioner-secret-name", "csi.storage.k8s.io/provisioner-secret-namespace"},
+	{"csi.storage.k8s.io/controller-publish-secret-name", "csi.storage.k8s.io/controller-publish-secret-namespace"},
+	{"csi.storage.k8s.io/node-stage-secret-name", "csi.storage.k8s.io/node-stage-secret-namespace"},
+	{"csi.storage.k8s.io/node-publish-secret-name", "csi.storage.k8s.io/node-publish-secret-namespace"},
+	{"csi.storage.k8s.io/controller-expand-secret-name", "csi.storage.k8s.io/controller-expand-secret-namespace"},
+	{"csi.storage.k8s.io/node-expand-secret-name", "csi.storage.k8s.io/node-expand-secret-namespace"},
+}
+
 // RedactSecret replaces sensitive values in a Secret and reports which keys it touched.
 // The key names themselves are preserved, so the shape of the secret stays reviewable.
 func RedactSecret(u *unstructured.Unstructured) ([]string, error) {

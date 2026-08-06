@@ -37,6 +37,7 @@ https://github.com/weka/csi-wekafs
 - [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
 - [Giving existing volumes their missing quota](docs/quota-backfill.md)
 - [Exporting and restoring volume definitions with weka-csi-migrator](docs/migrator.md)
+- [Migration walkthroughs: backup/restore, cross-cluster, cross-geography](examples/migrator)
 
 ## Volume Health Monitoring
 The CSI plugin reports the condition and actual capacity of provisioned volumes through the CSI
