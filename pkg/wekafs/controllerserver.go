@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -76,6 +77,10 @@ type ControllerServer struct {
 	manager         ctrl.Manager     // For listing PVs via K8s client
 	capacityTracker *CapacityTracker // Tracks confirmed + pending capacity
 	secretCache     *secretCache     // Memoizes Secrets read during volume health checks
+	// conditionCache holds volume conditions maintained in the background; ListVolumes answers from
+	// it. Non-nil exactly when the volume health capabilities are advertised.
+	conditionCache   *volumeConditionCache
+	healthReconciler *volumeHealthReconciler
 	sync.Mutex
 }
 
@@ -157,6 +162,13 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 		semaphores:  make(map[string]*semaphore.Weighted),
 		manager:     manager,
 		secretCache: newSecretCache(volumeSecretCacheTTL),
+	}
+
+	// Volume health is served from a cache kept warm by a background reconciler, so build both
+	// whenever those capabilities were advertised above.
+	if slices.Contains(exposedCapabilities, csi.ControllerServiceCapability_RPC_LIST_VOLUMES) {
+		cs.conditionCache = newVolumeConditionCache()
+		cs.healthReconciler = newVolumeHealthReconciler(cs, cs.conditionCache)
 	}
 
 	// Initialize capacity tracker if manager available

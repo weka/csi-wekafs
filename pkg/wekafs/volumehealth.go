@@ -30,7 +30,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
@@ -46,12 +45,10 @@ const (
 	volumeSecretCacheTTL = 5 * time.Minute
 	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
 
-	// listVolumesPageSize bounds a page when the CO does not set max_entries. Every entry costs a
-	// few Weka API calls, so an unbounded page would not fit inside the gRPC request timeout.
+	// listVolumesPageSize bounds a page when the CO does not set max_entries. Pages are served from
+	// the reconciler's cache, so this is only about response size, not about how much work one call
+	// may do.
 	listVolumesPageSize = 100
-	// listVolumesConcurrency bounds how many volumes of one page are probed at the same time, and
-	// so caps the burst of Weka API calls a single page can produce.
-	listVolumesConcurrency = 10
 	// listVolumesTokenPrefix marks a pagination cursor as this driver's own.
 	listVolumesTokenPrefix = "wekafs:v1:"
 )
@@ -90,9 +87,9 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 		return nil, ErrVolumeHealthUndetermined
 	}
 
-	// fromCache honours a filesystem object a caller already resolved, which is how ListVolumes
-	// avoids repeating one identical lookup per volume. A single ControllerGetVolume starts with an
-	// empty cache and so still fetches fresh.
+	// fromCache honours a filesystem object a caller already resolved, which is how a reconciler
+	// sweep avoids repeating one identical lookup per volume. A single ControllerGetVolume starts
+	// with an empty cache and so still fetches fresh.
 	fsObj, err := v.getFilesystemObj(ctx, true)
 	if err != nil {
 		return nil, err
@@ -274,33 +271,43 @@ func paginateVolumes(remaining []*v1.PersistentVolume, pageSize int) (page []*v1
 	return page, encodeListVolumesToken(page[len(page)-1].Spec.CSI.VolumeHandle)
 }
 
-// describeVolumes probes a page of volumes concurrently. A volume whose condition cannot be
-// established is still listed, just without a condition - one unreachable volume must not fail
-// the whole page.
+// describeVolumes builds a page of entries from the reconciler's cache, doing no Weka API work at
+// all. That is the point: the health monitor applies its --timeout to an entire paginated sweep
+// rather than to one page, so probing inline here put a hard ceiling on how many volumes could ever
+// be monitored. Volumes the reconciler has not reached yet, or whose result has aged out, are listed
+// without a condition rather than guessed at.
 func (cs *ControllerServer) describeVolumes(ctx context.Context, pvs []*v1.PersistentVolume) []*csi.ListVolumesResponse_Entry {
 	entries := make([]*csi.ListVolumesResponse_Entry, len(pvs))
-	filesystems := newFilesystemCache()
-	var probes errgroup.Group
-	probes.SetLimit(listVolumesConcurrency)
+	uncached := 0
 	for i, pv := range pvs {
-		probes.Go(func() error {
-			volume, condition, err := cs.describeVolume(ctx, pv, filesystems)
-			if err != nil {
-				// describeVolume already returns a nil condition alongside any error, so the entry
-				// is simply listed as unknown rather than failing the whole page.
-				log.Ctx(ctx).Warn().Err(err).Str("volume_id", volume.VolumeId).
-					Msg("Listing volume without a condition")
+		handle := pv.Spec.CSI.VolumeHandle
+		// The PersistentVolume holds the requested size, which stands in until a probe supplies the
+		// size the backend actually reports.
+		volume := &csi.Volume{VolumeId: handle, CapacityBytes: pvCapacityBytes(pv)}
+
+		var condition *csi.VolumeCondition
+		if entry, ok := cs.conditionCache.lookup(handle); ok {
+			if entry.capacity > 0 {
+				volume.CapacityBytes = entry.capacity
 			}
-			// published_node_ids is left unset: this driver has no controller publish step, and it
-			// does not advertise LIST_VOLUMES_PUBLISHED_NODES.
-			entries[i] = &csi.ListVolumesResponse_Entry{
-				Volume: volume,
-				Status: &csi.ListVolumesResponse_VolumeStatus{VolumeCondition: condition},
+			if entry.known {
+				condition = &csi.VolumeCondition{Abnormal: entry.abnormal, Message: entry.message}
 			}
-			return nil
-		})
+		} else {
+			uncached++
+		}
+
+		// published_node_ids is left unset: this driver has no controller publish step, and it does
+		// not advertise LIST_VOLUMES_PUBLISHED_NODES.
+		entries[i] = &csi.ListVolumesResponse_Entry{
+			Volume: volume,
+			Status: &csi.ListVolumesResponse_VolumeStatus{VolumeCondition: condition},
+		}
 	}
-	_ = probes.Wait()
+	if uncached > 0 {
+		log.Ctx(ctx).Debug().Int("uncached", uncached).Int("page", len(pvs)).
+			Msg("Some volumes have no fresh condition yet, listing them as unknown")
+	}
 	return entries
 }
 

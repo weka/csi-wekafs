@@ -429,6 +429,15 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 	runCtx, cancelRun := context.WithCancel(ctx)
 	var shutdownOnce sync.Once
 
+	// Keep volume conditions fresh in the background so ListVolumes stays a pure cache read.
+	// Registered as an ordinary runnable, which controller-runtime gates on leadership, so exactly
+	// one replica probes the fleet and the loop stops when leadership is lost.
+	if driver.cs != nil && driver.cs.healthReconciler != nil {
+		if err := driver.manager.Add(manager.RunnableFunc(driver.cs.healthReconciler.Start)); err != nil {
+			log.Error().Err(err).Msg("Failed to register volume health reconciler, conditions will not be reported")
+		}
+	}
+
 	// Add runnable that starts gRPC server when we become leader
 	err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		// This only runs when we are the leader
