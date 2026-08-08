@@ -89,85 +89,119 @@ func (dc *DriverConfig) Log() {
 		Msg("Starting driver with the following configuration")
 
 }
-func NewDriverConfig(dynamicVolPath, VolumePrefix, SnapshotPrefix, SeedSnapshotPrefix, debugPath string,
-	allowAutoFsCreation, allowAutoFsExpansion, allowSnapshotsOfDirectoryVolumes bool,
-	suppressnapshotSupport, suppressVolumeCloneSupport, allowInsecureHttps, alwaysAllowSnapshotVolumes bool,
-	mutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings,
-	maxCreateVolumeReqs, maxDeleteVolumeReqs, maxExpandVolumeReqs, maxCreateSnapshotReqs, maxDeleteSnapshotReqs, maxNodePublishVolumeReqs, maxNodeUnpublishVolumeReqs int64,
-	grpcRequestTimeoutSeconds int,
-	healthProbeWekaTimeoutSeconds int,
-	allowProtocolContainers bool,
-	allowNfsFailback, useNfs bool,
-	interfaceGroupName, clientGroupName, nfsProtocolVersion string,
-	version string,
-	skipGarbageCollection, waitForObjectDeletion bool,
-	allowEncryptionWithoutKms bool,
-	tracingUrl string,
-	manageNodeTopologyLabels bool,
-	wekafsContainerName string,
-	enforceDirVolTotalCapacity bool,
-	setOwnershipOnDynamicFilesystems bool,
-	allowMountOptionOverrides bool,
-	keepThinProvisioningRatioOnExpand bool,
-	advertiseVolumeHealthSupport bool,
-) *DriverConfig {
 
+// DriverConfigOptions carries the driver's startup settings into NewDriverConfig. Field names
+// mirror the command line flags in cmd/wekafsplugin, so the two map one to one and a new setting
+// is added in one obvious place. Every field is optional: the zero value is the "off" or
+// "unspecified" case, except where NewDriverConfig documents a default.
+type DriverConfigOptions struct {
+	DynamicVolPath     string
+	VolumePrefix       string
+	SnapshotPrefix     string
+	SeedSnapshotPrefix string
+	DebugPath          string
+	Version            string
+
+	AllowAutoFsCreation              bool
+	AllowAutoFsExpansion             bool
+	AllowSnapshotsOfDirectoryVolumes bool
+	AllowInsecureHttps               bool
+	AlwaysAllowSnapshotVolumes       bool
+	AllowProtocolContainers          bool
+	AllowEncryptionWithoutKms        bool
+	AllowMountOptionOverrides        bool
+
+	// The Suppress fields mirror the negative CLI flags of the same name. NewDriverConfig turns
+	// them into the positive advertise* settings the rest of the driver reads, so the inversion
+	// lives in exactly one place.
+	SuppressSnapshotSupport      bool
+	SuppressVolumeCloneSupport   bool
+	AdvertiseVolumeHealthSupport bool
+
+	// MutuallyExclusiveMountOptions defaults to write cache / coherent / read cache when empty.
+	MutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings
+
+	MaxCreateVolumeReqs        int64
+	MaxDeleteVolumeReqs        int64
+	MaxExpandVolumeReqs        int64
+	MaxCreateSnapshotReqs      int64
+	MaxDeleteSnapshotReqs      int64
+	MaxNodePublishVolumeReqs   int64
+	MaxNodeUnpublishVolumeReqs int64
+
+	GrpcRequestTimeoutSeconds     int
+	HealthProbeWekaTimeoutSeconds int
+
+	AllowNfsFailback   bool
+	UseNfs             bool
+	InterfaceGroupName string
+	ClientGroupName    string
+	NfsProtocolVersion string
+
+	SkipGarbageCollection             bool
+	WaitForObjectDeletion             bool
+	TracingUrl                        string
+	ManageNodeTopologyLabels          bool
+	WekafsContainerName               string
+	EnforceDirVolTotalCapacity        bool
+	SetOwnershipOnDynamicFilesystems  bool
+	KeepThinProvisioningRatioOnExpand bool
+}
+
+func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
-	for _, exclusiveSet := range mutuallyExclusiveMountOptions {
-		opts := strings.Split(exclusiveSet, ",")
-		MutuallyExclusiveMountOptions = append(MutuallyExclusiveMountOptions, opts)
+	for _, exclusiveSet := range opts.MutuallyExclusiveMountOptions {
+		MutuallyExclusiveMountOptions = append(MutuallyExclusiveMountOptions, strings.Split(exclusiveSet, ","))
 	}
 	if len(MutuallyExclusiveMountOptions) == 0 {
 		MutuallyExclusiveMountOptions = append(MutuallyExclusiveMountOptions, []string{MountOptionWriteCache, MountOptionCoherent, MountOptionReadCache})
 	}
 
-	grpcRequestTimeout := time.Duration(grpcRequestTimeoutSeconds) * time.Second
-	healthProbeWekaTimeout := time.Duration(healthProbeWekaTimeoutSeconds) * time.Second
-
-	concurrency := make(map[string]int64)
-	concurrency["CreateVolume"] = maxCreateVolumeReqs
-	concurrency["DeleteVolume"] = maxDeleteVolumeReqs
-	concurrency["ExpandVolume"] = maxExpandVolumeReqs
-	concurrency["CreateSnapshot"] = maxCreateSnapshotReqs
-	concurrency["DeleteSnapshot"] = maxDeleteSnapshotReqs
-	concurrency["NodePublishVolume"] = maxNodePublishVolumeReqs
-	concurrency["NodeUnpublishVolume"] = maxNodeUnpublishVolumeReqs
+	concurrency := map[string]int64{
+		"CreateVolume":        opts.MaxCreateVolumeReqs,
+		"DeleteVolume":        opts.MaxDeleteVolumeReqs,
+		"ExpandVolume":        opts.MaxExpandVolumeReqs,
+		"CreateSnapshot":      opts.MaxCreateSnapshotReqs,
+		"DeleteSnapshot":      opts.MaxDeleteSnapshotReqs,
+		"NodePublishVolume":   opts.MaxNodePublishVolumeReqs,
+		"NodeUnpublishVolume": opts.MaxNodeUnpublishVolumeReqs,
+	}
 
 	return &DriverConfig{
-		DynamicVolPath:                    dynamicVolPath,
-		VolumePrefix:                      VolumePrefix,
-		SnapshotPrefix:                    SnapshotPrefix,
-		SeedSnapshotPrefix:                SeedSnapshotPrefix,
-		allowAutoFsCreation:               allowAutoFsCreation,
-		allowAutoFsExpansion:              allowAutoFsExpansion,
-		allowSnapshotsOfDirectoryVolumes:  allowSnapshotsOfDirectoryVolumes,
-		advertiseSnapshotSupport:          !suppressnapshotSupport,
-		advertiseVolumeCloneSupport:       !suppressVolumeCloneSupport,
-		advertiseVolumeHealthSupport:      advertiseVolumeHealthSupport,
-		debugPath:                         debugPath,
-		allowInsecureHttps:                allowInsecureHttps,
-		alwaysAllowSnapshotVolumes:        alwaysAllowSnapshotVolumes,
+		DynamicVolPath:                    opts.DynamicVolPath,
+		VolumePrefix:                      opts.VolumePrefix,
+		SnapshotPrefix:                    opts.SnapshotPrefix,
+		SeedSnapshotPrefix:                opts.SeedSnapshotPrefix,
+		allowAutoFsCreation:               opts.AllowAutoFsCreation,
+		allowAutoFsExpansion:              opts.AllowAutoFsExpansion,
+		allowSnapshotsOfDirectoryVolumes:  opts.AllowSnapshotsOfDirectoryVolumes,
+		advertiseSnapshotSupport:          !opts.SuppressSnapshotSupport,
+		advertiseVolumeCloneSupport:       !opts.SuppressVolumeCloneSupport,
+		advertiseVolumeHealthSupport:      opts.AdvertiseVolumeHealthSupport,
+		debugPath:                         opts.DebugPath,
+		allowInsecureHttps:                opts.AllowInsecureHttps,
+		alwaysAllowSnapshotVolumes:        opts.AlwaysAllowSnapshotVolumes,
 		mutuallyExclusiveOptions:          MutuallyExclusiveMountOptions,
 		maxConcurrencyPerOp:               concurrency,
-		grpcRequestTimeout:                grpcRequestTimeout,
-		healthProbeWekaTimeout:            healthProbeWekaTimeout,
-		allowProtocolContainers:           allowProtocolContainers,
-		allowNfsFailback:                  allowNfsFailback,
-		useNfs:                            useNfs,
-		interfaceGroupName:                interfaceGroupName,
-		clientGroupName:                   clientGroupName,
-		nfsProtocolVersion:                nfsProtocolVersion,
-		csiVersion:                        version,
-		skipGarbageCollection:             skipGarbageCollection,
-		waitForObjectDeletion:             waitForObjectDeletion,
-		allowEncryptionWithoutKms:         allowEncryptionWithoutKms,
-		tracingUrl:                        tracingUrl,
-		manageNodeTopologyLabels:          manageNodeTopologyLabels,
-		wekafsContainerName:               wekafsContainerName,
-		enforceDirVolTotalCapacity:        enforceDirVolTotalCapacity,
-		setOwnershipOnDynamicFilesystems:  setOwnershipOnDynamicFilesystems,
-		allowMountOptionOverrides:         allowMountOptionOverrides,
-		keepThinProvisioningRatioOnExpand: keepThinProvisioningRatioOnExpand,
+		grpcRequestTimeout:                time.Duration(opts.GrpcRequestTimeoutSeconds) * time.Second,
+		healthProbeWekaTimeout:            time.Duration(opts.HealthProbeWekaTimeoutSeconds) * time.Second,
+		allowProtocolContainers:           opts.AllowProtocolContainers,
+		allowNfsFailback:                  opts.AllowNfsFailback,
+		useNfs:                            opts.UseNfs,
+		interfaceGroupName:                opts.InterfaceGroupName,
+		clientGroupName:                   opts.ClientGroupName,
+		nfsProtocolVersion:                opts.NfsProtocolVersion,
+		csiVersion:                        opts.Version,
+		skipGarbageCollection:             opts.SkipGarbageCollection,
+		waitForObjectDeletion:             opts.WaitForObjectDeletion,
+		allowEncryptionWithoutKms:         opts.AllowEncryptionWithoutKms,
+		tracingUrl:                        opts.TracingUrl,
+		manageNodeTopologyLabels:          opts.ManageNodeTopologyLabels,
+		wekafsContainerName:               opts.WekafsContainerName,
+		enforceDirVolTotalCapacity:        opts.EnforceDirVolTotalCapacity,
+		setOwnershipOnDynamicFilesystems:  opts.SetOwnershipOnDynamicFilesystems,
+		allowMountOptionOverrides:         opts.AllowMountOptionOverrides,
+		keepThinProvisioningRatioOnExpand: opts.KeepThinProvisioningRatioOnExpand,
 	}
 }
 
