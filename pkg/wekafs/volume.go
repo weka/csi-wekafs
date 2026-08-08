@@ -301,7 +301,10 @@ func (v *Volume) getUnderlyingSnapshots(ctx context.Context) (*[]apiclient.Snaps
 		return nil, errors.New("cannot check for underlying snaphots as volume is not bound to API")
 	}
 
-	fsObj, err := v.getFilesystemObj(ctx, true)
+	// Deliberately not from cache: the answer gates filesystem deletion, and a filesystem object
+	// cached earlier in this request could carry a stale UID, which would list the snapshots of the
+	// wrong filesystem and let one still holding snapshots be deleted.
+	fsObj, err := v.getFilesystemObj(ctx, false)
 	if err != nil {
 		return nil, err
 	}
