@@ -113,6 +113,7 @@ var (
 	advertiseVolumeHealthSupport         = flag.Bool("advertisevolumehealthsupport", true, "Expose GET_VOLUME and VOLUME_CONDITION, allowing the CSI health monitor to report volume condition and capacity")
 
 	// Metrics server settings
+	enableMetricsServer                      = flag.Bool("enablemetricsserver", false, "Enable the metrics server that reports per-PersistentVolume capacity and performance statistics to Prometheus (requires -enablemetrics and controller/all csimode)")
 	wekaMetricsFetchIntervalSeconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
 	wekaMetricsFetchConcurrentRequests       = flag.Int("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
 	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
@@ -289,6 +290,7 @@ func handle(ctx context.Context) {
 		SetOwnershipOnDynamicFilesystems:  *setOwnershipOnDynamicFilesystems,
 		KeepThinProvisioningRatioOnExpand: *keepThinProvisioningRatioOnExpand,
 
+		EnableMetricsServer:               *enableMetricsServer,
 		MetricsFetchIntervalSeconds:       *wekaMetricsFetchIntervalSeconds,
 		MetricsFetchConcurrentRequests:    *wekaMetricsFetchConcurrentRequests,
 		EnableMetricsServerLeaderElection: *enableMetricsServerLeaderElection,
@@ -302,6 +304,20 @@ func handle(ctx context.Context) {
 		os.Exit(1)
 	}
 	config.SetDriver(driver)
+
+	// Register the metrics server's own collectors, but only if metrics export is on in the first
+	// place and a metrics server was actually constructed (enablemetricsserver + a csimode with a
+	// controller-runtime manager - see NewWekaFsDriver) - a disabled metrics server must export
+	// nothing. This has to happen here rather than alongside the other collectors above: those are
+	// registered before the driver exists, and the metrics server (if any) is only built once
+	// NewWekaFsDriver runs. Registering after driver.Run(ctx) below would never happen - it blocks for
+	// the process lifetime - but that's fine: prometheus.MustRegister only needs to run before the
+	// first scrape, not before promhttp.Handler() starts serving.
+	if enableMetrics != nil && *enableMetrics {
+		if collectors := driver.MetricsServerCollectors(); len(collectors) > 0 {
+			prometheus.MustRegister(collectors...)
+		}
+	}
 
 	driver.Run(ctx)
 }

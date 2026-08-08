@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -163,6 +164,17 @@ func NewMetricsServer(driver *WekaFsDriver) (*MetricsServer, error) {
 	ret.prometheusMetrics.server.QuotaCacheValiditySeconds.Set(ret.getConfig().quotaCacheValidityDuration.Seconds())
 
 	return ret, nil
+}
+
+// MetricsServerCollectors returns the metrics server's own Prometheus collectors for main.go to
+// register, or nil if the metrics server is disabled or failed to construct. Nothing in this
+// package calls prometheus.MustRegister - that only ever happens in main.go, once for the whole
+// process, so importing this package never has the side effect of registering anything.
+func (driver *WekaFsDriver) MetricsServerCollectors() []prometheus.Collector {
+	if driver.metricsServer == nil {
+		return nil
+	}
+	return driver.metricsServer.prometheusMetrics.Collectors()
 }
 
 // PersistentVolumeStreamer periodically lists this driver's PersistentVolumes and streams the

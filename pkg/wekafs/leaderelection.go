@@ -43,6 +43,16 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 		}
 	}
 
+	// Register the metrics server's health checks and leadership-gated Runnable, same as the health
+	// reconciler above. Nil-guarded since it is only constructed when explicitly enabled and the
+	// driver is running in a mode with Kubernetes access (see NewWekaFsDriver). Must happen before
+	// driver.manager.Start below - controller-runtime rejects Add calls once the manager is started.
+	if driver.metricsServer != nil {
+		if err := driver.metricsServer.AddToManager(); err != nil {
+			log.Error().Err(err).Msg("Failed to register metrics server, metrics will not be available")
+		}
+	}
+
 	// Add runnable that starts gRPC server when we become leader
 	err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		// This only runs when we are the leader

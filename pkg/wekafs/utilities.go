@@ -675,9 +675,16 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 			Name:            pv.ObjectMeta.Name,
 			UID:             pv.ObjectMeta.UID,
 			ResourceVersion: pv.ObjectMeta.ResourceVersion,
+			// Needed by the metrics server (processSinglePersistentVolume) to skip a volume that is
+			// already being deleted rather than tracking it right before it disappears.
+			DeletionTimestamp: pv.ObjectMeta.DeletionTimestamp,
 		},
 		Spec: v1.PersistentVolumeSpec{
 			Capacity: pv.Spec.Capacity, // Need for capacity validation
+			// ClaimRef and StorageClassName are only read by the metrics server, to label the
+			// per-volume Prometheus series it reports (createPrometheusLabelsForMetric).
+			ClaimRef:         pv.Spec.ClaimRef,
+			StorageClassName: pv.Spec.StorageClassName,
 		},
 		Status: v1.PersistentVolumeStatus{
 			Phase: pv.Status.Phase, // Need to check if Bound or Released
@@ -694,6 +701,9 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 			ControllerPublishSecretRef: pv.Spec.CSI.ControllerPublishSecretRef,
 			NodeStageSecretRef:         pv.Spec.CSI.NodeStageSecretRef,
 			NodePublishSecretRef:       pv.Spec.CSI.NodePublishSecretRef,
+			// Needed by the metrics server (ensurePersistentVolumeValid) to check the volume type is
+			// one it knows how to report on.
+			VolumeAttributes: pv.Spec.CSI.VolumeAttributes,
 		}
 	}
 
