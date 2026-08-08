@@ -115,14 +115,19 @@ func newVolumeHealthReconciler(cs *ControllerServer, cache *volumeConditionCache
 // runnable, so exactly one controller replica probes the fleet and the loop stops when leadership is
 // lost or the process shuts down.
 func (r *volumeHealthReconciler) Start(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("component", "volume-health-reconciler").Logger()
+	// The manager hands runnables a bare context. zerolog's log.Ctx returns a *disabled* logger when
+	// the context carries none, so deriving from it here would silently swallow every line this loop
+	// writes. Build from the global logger instead, and attach it so log.Ctx works downstream.
+	logger := log.With().Str("component", "volume-health-reconciler").Logger()
+	ctx = logger.WithContext(ctx)
+
 	logger.Info().
 		Dur("interval", volumeHealthReconcileInterval).
 		Int("concurrency", volumeHealthProbeConcurrency).
 		Msg("Starting volume health reconciler")
 
 	for {
-		r.reconcileOnce(logger.WithContext(ctx))
+		r.reconcileOnce(ctx)
 
 		select {
 		case <-ctx.Done():
