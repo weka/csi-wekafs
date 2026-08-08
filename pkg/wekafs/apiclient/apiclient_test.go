@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient/apiclienttest"
 )
 
 func TestGenerateHash(t *testing.T) {
@@ -157,8 +158,14 @@ func TestIsValidHostname(t *testing.T) {
 var creds Credentials
 var endpoint string
 var fsName string
+var explicitEndpoint bool
 
 var client *ApiClient
+
+// fakeServer is the hermetic, in-memory Weka API used by every test in this package unless
+// -api-endpoint was explicitly passed on the command line (see TestMain). It is nil during a real
+// cluster integration run.
+var fakeServer *apiclienttest.Server
 
 func TestMain(m *testing.M) {
 	flag.StringVar(&endpoint, "api-endpoint", "localhost:14000", "API endpoint for tests")
@@ -168,7 +175,30 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&creds.HttpScheme, "api-scheme", "https", "API scheme for tests")
 	flag.StringVar(&fsName, "fs-name", "default", "Filesystem name for tests")
 	flag.Parse()
+
+	// flag.Visit only reports flags whose value was actually set on the command line, which is how
+	// we distinguish "-api-endpoint was left at its localhost:14000 default" from "someone typed
+	// -api-endpoint=<somewhere>". Only the latter should dial out to a real cluster: by default this
+	// suite must be hermetic, so it stands up an in-memory fake server and points the tests at that
+	// instead. All the other -api-* flags keep working exactly as before for a deliberate real
+	// cluster run.
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "api-endpoint" {
+			explicitEndpoint = true
+		}
+	})
+
+	if !explicitEndpoint {
+		fakeServer = apiclienttest.NewStandalone()
+		endpoint = fakeServer.Addr()
+		creds.HttpScheme = "http"
+	}
+
 	m.Run()
+
+	if fakeServer != nil {
+		fakeServer.Close()
+	}
 }
 
 func GetApiClientForTest(t *testing.T) *ApiClient {
@@ -230,7 +260,11 @@ func TestApiClientRequest(t *testing.T) {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(`{"message": "Internal Server Error"}`))
 			},
-			expectedError:  &ApiRetriesExceeded{},
+			// A 500 is treated as non-transient (see ApiClient.handleTransientErrors and the
+			// StatusInternalServerError case in request()'s retry loop), so it is returned
+			// immediately as the ApiInternalError do() produced - it is never wrapped in
+			// ApiRetriesExceeded, since that requires the retry loop to actually retry.
+			expectedError:  &ApiInternalError{},
 			expectedStatus: http.StatusInternalServerError,
 		},
 		{
@@ -253,6 +287,24 @@ func TestApiClientRequest(t *testing.T) {
 		},
 	}
 
+	// apiClient is the package-level singleton every test in this package shares (see
+	// GetApiClientForTest). Each subtest below repoints it at a throw-away mock server and shortens
+	// its timeout so the retry/backoff paths under test run quickly; both must be restored once this
+	// test is done, or every test that runs afterward would keep retrying against a mock server that
+	// has since been closed instead of talking to the real fixture.
+	apiClient := GetApiClientForTest(t)
+	originalEndpoints := apiClient.Credentials.Endpoints
+	originalScheme := apiClient.Credentials.HttpScheme
+	originalTimeout := apiClient.client.Timeout
+	t.Cleanup(func() {
+		apiClient.Credentials.Endpoints = originalEndpoints
+		apiClient.Credentials.HttpScheme = originalScheme
+		apiClient.client.Timeout = originalTimeout
+		ctx := context.Background()
+		apiClient.resetDefaultEndpoints(ctx)
+		apiClient.rotateEndpoint(ctx)
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a mock server
@@ -262,9 +314,6 @@ func TestApiClientRequest(t *testing.T) {
 				t.Fatalf("Invalid server URL: %s", server.URL)
 			}
 			defer server.Close()
-
-			// Create an ApiClient with the mock server's URL
-			apiClient := GetApiClientForTest(t)
 
 			apiClient.client.Timeout = 1 * time.Second
 			endpointString := fmt.Sprintf("%s:%s", socket[1][2:], socket[2])

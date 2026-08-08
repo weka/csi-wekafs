@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient/apiclienttest"
 )
 
 func GetDriverForTest(t *testing.T) *WekaFsDriver {
-	ctx := context.Background()
 	nodeId := "localhost"
 	mutuallyExclusive := MutuallyExclusiveMountOptsStrings{"readcache,writecache,coherent,forcedirect", "sync,async", "ro,rw"}
 	driverConfig := NewDriverConfig(DriverConfigOptions{
@@ -56,15 +56,25 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)
 	}
-	go driver.Run(ctx)
+	// driver.Run starts a full gRPC server (and, in controller mode, leader election), all on a
+	// background goroutine that races with the caller to set driver.cs. These tests only need a
+	// ControllerServer to hand to NewVolumeFromId, so build one directly instead of racing Run's
+	// initialization - faster, and it never touches the network or the filesystem.
+	driver.cs = NewControllerServer(nodeId, driver.api, nil, driverConfig, nil)
 	return driver
 }
 
 var creds apiclient.Credentials
 var endpoint string
 var fsName string
+var explicitEndpoint bool
 
 var client *apiclient.ApiClient
+
+// fakeServer is the hermetic, in-memory Weka API used by these tests unless -api-endpoint was
+// explicitly passed on the command line (see TestMain). It is nil during a real cluster
+// integration run.
+var fakeServer *apiclienttest.Server
 
 func TestMain(m *testing.M) {
 	flag.StringVar(&endpoint, "api-endpoint", "localhost:14000", "API endpoint for tests")
@@ -74,7 +84,28 @@ func TestMain(m *testing.M) {
 	flag.StringVar(&creds.HttpScheme, "api-scheme", "https", "API scheme for tests")
 	flag.StringVar(&fsName, "fs-name", "default", "Filesystem name for tests")
 	flag.Parse()
+
+	// See the identical comment in pkg/wekafs/apiclient/apiclient_test.go: by default (no
+	// -api-endpoint flag passed) this suite must be hermetic, so it stands up an in-memory fake
+	// Weka API server instead of dialing out to a real cluster. Passing -api-endpoint explicitly
+	// opts back into a real cluster integration run.
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "api-endpoint" {
+			explicitEndpoint = true
+		}
+	})
+
+	if !explicitEndpoint {
+		fakeServer = apiclienttest.NewStandalone()
+		endpoint = fakeServer.Addr()
+		creds.HttpScheme = "http"
+	}
+
 	m.Run()
+
+	if fakeServer != nil {
+		fakeServer.Close()
+	}
 }
 
 func GetApiClientForTest(t *testing.T) *apiclient.ApiClient {

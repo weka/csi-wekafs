@@ -23,9 +23,15 @@ func TestFindNfsPermissionsByFilesystemName(t *testing.T) {
 			assert.NoError(t, err)
 		}
 	}
-	err = apiClient.FindNfsPermissionsByFilesystem(context.Background(), "snapvolFilesystem", &permissions)
+	// FindNfsPermissionsByFilesystem appends to whatever slice the caller passes in (the same
+	// contract FindFileSystemsByFilter and friends use, so a caller can accumulate results across
+	// pages) - it does not truncate it first. Reusing the now-stale `permissions` slice here would
+	// keep the just-deleted entries around and defeat the assertion below regardless of what the
+	// server reports, so this second call must start from a fresh slice.
+	var remaining []NfsPermission
+	err = apiClient.FindNfsPermissionsByFilesystem(context.Background(), "snapvolFilesystem", &remaining)
 	assert.NoError(t, err)
-	assert.Empty(t, permissions)
+	assert.Empty(t, remaining)
 
 }
 
