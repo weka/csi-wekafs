@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -119,6 +120,13 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 		return nil, status.Errorf(codes.InvalidArgument, "invalid volume ID %s: %v", volumeID, err)
 	}
 
+	start := time.Now()
+	result := "FAILURE"
+	defer func() {
+		driverName := ns.getConfig().GetDriver().name
+		recordOperation(nodeMetrics.Operations.GetVolumeStats, nodeMetrics.Operations.GetVolumeStatsDuration, start, driverName, result)
+	}()
+
 	stats, err := getVolumeStats(volumePath)
 	if err != nil || stats == nil {
 		return &csi.NodeGetVolumeStatsResponse{
@@ -129,6 +137,7 @@ func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 			},
 		}, status.Errorf(codes.Internal, "Failed to get stats for volume %s: %v", volumeID, err)
 	}
+	result = "SUCCESS"
 	// Prepare response
 	return &csi.NodeGetVolumeStatsResponse{
 		Usage: []*csi.VolumeUsage{
@@ -205,17 +214,41 @@ func (ns *NodeServer) acquireSemaphore(ctx context.Context, op string) (error, r
 	ns.initializeSemaphore(ctx, op)
 	sem := ns.semaphores[op]
 
+	// select the concurrency gauge + wait-duration histogram matching this operation
+	var histogram *prometheus.HistogramVec
+	var gauge *prometheus.GaugeVec
+	var driverName string
+	switch op {
+	case "NodePublishVolume":
+		histogram, gauge = nodeMetrics.Concurrency.PublishVolumeWaitDuration, nodeMetrics.Concurrency.PublishVolume
+	case "NodeUnpublishVolume":
+		histogram, gauge = nodeMetrics.Concurrency.UnpublishVolumeWaitDuration, nodeMetrics.Concurrency.UnpublishVolume
+	}
+	driverName = ns.getConfig().GetDriver().name
+
 	logger.Trace().Msg("Acquiring semaphore")
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
 	if err == nil {
+		if gauge != nil {
+			gauge.WithLabelValues(driverName, "acquired").Inc()
+		}
+		if histogram != nil {
+			histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
+		}
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
 		return nil, func() {
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
+			if gauge != nil {
+				gauge.WithLabelValues(driverName, "acquired").Dec()
+			}
 		}
+	}
+	if histogram != nil {
+		histogram.WithLabelValues(driverName, "failure").Observe(elapsed.Seconds())
 	}
 	logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Failed to acquire semaphore")
 	return err, func() {}
@@ -300,11 +333,14 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	result := "FAILURE"
 
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	start := time.Now()
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		driverName := ns.getConfig().GetDriver().name
+		recordOperation(nodeMetrics.Operations.PublishVolume, nodeMetrics.Operations.PublishVolumeDuration, start, driverName, result)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -490,11 +526,14 @@ func (ns *NodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 
 	logger := log.Ctx(ctx)
 	logger.Info().Msg(">>>> Received request")
+	start := time.Now()
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		driverName := ns.getConfig().GetDriver().name
+		recordOperation(nodeMetrics.Operations.UnpublishVolume, nodeMetrics.Operations.UnpublishVolumeDuration, start, driverName, result)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 

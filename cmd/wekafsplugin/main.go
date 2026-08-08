@@ -160,9 +160,17 @@ func main() {
 	log.Info().Str("csi_mode", string(csiMode)).Bool("selinux_mode", *selinuxSupport).Msg("Started CSI driver")
 
 	if enableMetrics != nil && *enableMetrics {
-		// The API client builds its collectors but does not register them, so that importing the
-		// package has no effect on any registry. Register them here, where /metrics is served.
+		// Collectors are built without registering themselves, so that importing a package has no
+		// effect on any registry. Register them here, where /metrics is served, and only for the
+		// role this process serves - a node pod exporting a permanently-zero set of controller
+		// series would be misleading.
 		prometheus.MustRegister(apiclient.Collectors()...)
+		if csiMode == wekafs.CsiModeController || csiMode == wekafs.CsiModeAll {
+			prometheus.MustRegister(wekafs.ControllerCollectors()...)
+		}
+		if csiMode == wekafs.CsiModeNode || csiMode == wekafs.CsiModeAll {
+			prometheus.MustRegister(wekafs.NodeCollectors()...)
+		}
 		go func() {
 			http.Handle("/metrics", promhttp.Handler())
 			if err := http.ListenAndServe(fmt.Sprintf(":%s", *metricsPort), nil); err != nil {
@@ -279,5 +287,6 @@ func handle(ctx context.Context) {
 		os.Exit(1)
 	}
 	config.SetDriver(driver)
+
 	driver.Run(ctx)
 }

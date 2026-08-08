@@ -178,6 +178,20 @@ func (v *Volume) isFilesystem() bool {
 	return !v.isOnSnapshot() && !v.hasInnerPath()
 }
 
+// GetBackingType classifies how the volume is physically backed, for use as a metrics label.
+func (v *Volume) GetBackingType() VolumeBackingType {
+	if v.isOnSnapshot() {
+		if v.hasInnerPath() {
+			return VolumeBackingTypeHybrid
+		}
+		return VolumeBackingTypeSnapshot
+	}
+	if v.hasInnerPath() {
+		return VolumeBackingTypeDirectory
+	}
+	return VolumeBackingTypeFilesystem
+}
+
 // isEncrypted returns true if the volume is encrypted or false if it is not. If fetching the encryption status fails, an error is returned
 func (v *Volume) isEncrypted(ctx context.Context) (bool, error) {
 	if v.encrypted != nil {

@@ -59,4 +59,8 @@ type AnyMount interface {
 
 type VolumeType string
 
+// VolumeBackingType classifies how a volume is physically backed (plain filesystem, legacy
+// directory, snapshot, or a directory rooted on a snapshot), used only as a metrics label.
+type VolumeBackingType string
+
 type CsiPluginMode string
