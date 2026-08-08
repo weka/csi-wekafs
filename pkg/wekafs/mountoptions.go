@@ -63,6 +63,13 @@ func (opts MountOptions) setOption(optstring string) {
 	opts.customOptions[o.option] = o
 }
 
+// unsetOption is the in-place counterpart of setOption, for a MountOptions whose map the caller
+// exclusively owns. Prefer it over RemoveOption there, since RemoveOption clones the map.
+func (opts MountOptions) unsetOption(optstring string) {
+	o := newMountOptionFromString(optstring)
+	delete(opts.customOptions, o.option)
+}
+
 // Merge merges mount options. The other object always take precedence over the original
 func (opts MountOptions) Merge(other MountOptions, exclusives []mutuallyExclusiveMountOptionSet) {
 	for _, otherOpt := range other.customOptions {
@@ -218,15 +225,25 @@ func (opts MountOptions) AsNfs() MountOptions {
 	ret := NewMountOptionsFromString(DefaultNfsMountOptions)
 	for _, o := range opts.getOpts() {
 		switch o.option {
+		// Each translated option explicitly clears the one it contradicts. Setting it alone would
+		// leave both in place: ret starts from DefaultNfsMountOptions, which already carries async.
+		// Relying on the caller's mutually-exclusive sets to sort it out afterwards does not work -
+		// those are operator-configurable and the driver's own default does not list sync/async.
 		case MountOptionWriteCache:
+			ret.unsetOption(MountOptionNfsSync)
 			ret.setOption(MountOptionNfsAsync)
 		case MountOptionCoherent:
+			ret.unsetOption(MountOptionNfsAsync)
+			ret.unsetOption(MountOptionNfsAc)
 			ret.setOption(MountOptionNfsSync)
 			ret.setOption(MountOptionNfsNoac)
 		case MountOptionForceDirect:
+			ret.unsetOption(MountOptionNfsAsync)
+			ret.unsetOption(MountOptionNfsAc)
 			ret.setOption(MountOptionNfsSync)
 			ret.setOption(MountOptionNfsNoac)
 		case MountOptionReadCache:
+			ret.unsetOption(MountOptionNfsNoac)
 			ret.setOption(MountOptionNfsAc)
 		case "dentry_max_age_positive":
 			ret.setOption(fmt.Sprintf("acdirmax=%s", o.value))
