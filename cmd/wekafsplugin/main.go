@@ -139,6 +139,11 @@ func main() {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339Nano}).With().Caller().Logger()
 	}
 	zerolog.SetGlobalLevel(mapVerbosity(*verbosity))
+	// log.Ctx returns a *disabled* logger for a context that carries none, so anything written from
+	// a startup path or a background goroutine - neither of which passes through a gRPC handler that
+	// attaches one - is discarded without a trace. Fall back to the global logger instead, so a
+	// missing context logger costs the request fields rather than the whole line.
+	zerolog.DefaultContextLogger = &log.Logger
 
 	csiMode = wekafs.GetCsiPluginMode(csimodetext)
 	if *showVersion {
