@@ -87,11 +87,6 @@ type MetricsServer struct {
 	volumeMetrics     *VolumeMetrics
 	prometheusMetrics *PrometheusMetrics
 
-	// running guards Start/Stop against being invoked more than once concurrently, and against Stop
-	// running before Start (or twice). It is an atomic.Bool rather than a field read and written
-	// under an ad hoc lock, so the two can race safely.
-	running atomic.Bool
-
 	// persistentVolumesChan carries PersistentVolumes from PersistentVolumeStreamer to
 	// PersistentVolumeStreamProcessor.
 	persistentVolumesChan chan *v1.PersistentVolume
@@ -102,20 +97,11 @@ type MetricsServer struct {
 	quotaMaps           *QuotaMapsPerFilesystem
 	observedFilesystems *ObservedFilesystems // tracks observed filesystem UIDs, their reference counts, and API clients
 
-	// wg tracks the leader-elected Runnable started in Start, so Wait blocks for exactly as long as
-	// that Runnable's context remains live (i.e. until leadership is lost or the manager shuts down).
-	wg sync.WaitGroup
-
 	// capacityFetchRunning guards PeriodicSingleMetricsFetcher's fetch cycles against overlapping
 	// invocations: if one cycle is still running when the next tick fires, the next tick is skipped
-	// rather than piling another full fetch on top of it. It is an atomic.Bool, like `running`,
-	// because both fields are read and written from more than one goroutine.
+	// rather than piling another full fetch on top of it. It is an atomic.Bool because it is read and
+	// written from more than one goroutine.
 	capacityFetchRunning atomic.Bool
-}
-
-// getBackgroundTasksWg returns the WaitGroup tracking the metrics server's background work.
-func (ms *MetricsServer) getBackgroundTasksWg() *sync.WaitGroup {
-	return &ms.wg
 }
 
 // getMounter satisfies AnyServer. The metrics server never mounts a filesystem directly - it only
@@ -177,35 +163,6 @@ func NewMetricsServer(driver *WekaFsDriver) (*MetricsServer, error) {
 	ret.prometheusMetrics.server.QuotaCacheValiditySeconds.Set(ret.getConfig().quotaCacheValidityDuration.Seconds())
 
 	return ret, nil
-}
-
-// initManager wires the metrics server's health and readiness checks into the controller-runtime
-// manager. It returns an error instead of killing the process, so Start can decide how to react.
-func (ms *MetricsServer) initManager(ctx context.Context) error {
-	if ms.driver.manager == nil {
-		return errors.New("metrics server has no controller-runtime manager, cannot start")
-	}
-
-	logger := log.Ctx(ctx).With().Str("component", "MetricsServer").Logger()
-	if err := ms.driver.manager.AddReadyzCheck("leader", func(req *http.Request) error {
-		if !ms.getConfig().enableMetricsServerLeaderElection {
-			return nil // if leader election is not enabled, we are always ready
-		}
-		select {
-		case <-ms.driver.manager.Elected():
-			return nil // we are the leader
-		default:
-			return fmt.Errorf("not the leader yet")
-		}
-	}); err != nil {
-		logger.Error().Err(err).Msg("Failed to add readiness check for leader election")
-		return fmt.Errorf("failed to add readiness check for leader election: %w", err)
-	}
-	if err := ms.driver.manager.AddHealthzCheck("alwaysReady", healthz.Ping); err != nil {
-		logger.Error().Err(err).Msg("Failed to add health check")
-		return fmt.Errorf("failed to add health check: %w", err)
-	}
-	return nil
 }
 
 // PersistentVolumeStreamer periodically lists this driver's PersistentVolumes and streams the
@@ -1298,36 +1255,38 @@ func (ms *MetricsServer) PeriodicSingleMetricsFetcher(ctx context.Context) {
 	}
 }
 
-// Start brings the metrics server up: it wires health/readiness checks into the controller-runtime
-// manager, then registers a Runnable that only does its work while this pod holds leadership (or
-// unconditionally, if leader election is disabled for the manager itself), and starts the manager.
-func (ms *MetricsServer) Start(ctx context.Context) {
-	component := "StartMetricsServer"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, component)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
-
-	if !ms.running.CompareAndSwap(false, true) {
-		logger.Info().Msg("MetricsServer is already running")
-		return
+// AddToManager wires the metrics server's health/readiness checks into the controller-runtime
+// manager and registers a Runnable that only does its work while this pod holds leadership (or
+// unconditionally, if leader election is disabled for the manager itself). It must be called before
+// the manager is started - controller-runtime rejects Add calls afterward - so it never starts the
+// manager itself; that is the driver's job, once every runnable has been registered.
+func (ms *MetricsServer) AddToManager() error {
+	if ms.driver.manager == nil {
+		return errors.New("metrics server has no controller-runtime manager, cannot register")
 	}
 
-	logger.Info().Msg("Starting MetricsServer")
+	logger := log.With().Str("component", "MetricsServer").Logger()
 
-	if err := ms.initManager(ctx); err != nil {
-		logger.Error().Err(err).Msg("Failed to initialize MetricsServer manager, cannot start")
-		ms.running.Store(false)
-		return
+	if err := ms.driver.manager.AddReadyzCheck("leader", func(req *http.Request) error {
+		if !ms.getConfig().enableMetricsServerLeaderElection {
+			return nil // if leader election is not enabled, we are always ready
+		}
+		select {
+		case <-ms.driver.manager.Elected():
+			return nil // we are the leader
+		default:
+			return fmt.Errorf("not the leader yet")
+		}
+	}); err != nil {
+		logger.Error().Err(err).Msg("Failed to add readiness check for leader election")
+		return fmt.Errorf("failed to add readiness check for leader election: %w", err)
+	}
+	if err := ms.driver.manager.AddHealthzCheck("alwaysReady", healthz.Ping); err != nil {
+		logger.Error().Err(err).Msg("Failed to add health check")
+		return fmt.Errorf("failed to add health check: %w", err)
 	}
 
-	// give the manager's cache a moment to sync before the first PersistentVolume fetch
-	time.Sleep(1 * time.Second)
-	logger.Info().Msg("started manager, starting to fetch PersistentVolumes")
-
-	ms.wg.Add(1)
-	err := ms.driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		defer ms.wg.Done()
+	if err := ms.driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		logger.Info().Msg("Leader elected, starting MetricsServer processors")
 
 		go ms.PersistentVolumeStreamer(ctx)
@@ -1346,39 +1305,10 @@ func (ms *MetricsServer) Start(ctx context.Context) {
 		<-ctx.Done()
 		logger.Info().Msg("Leadership lost or shutdown, stopping...")
 		return nil
-	}))
-	if err != nil {
+	})); err != nil {
 		logger.Error().Err(err).Msg("Failed to add Runnable to manager")
-		ms.wg.Done()
-		ms.running.Store(false)
-		return
+		return fmt.Errorf("failed to add MetricsServer runnable to manager: %w", err)
 	}
 
-	go func() {
-		if err := ms.driver.manager.Start(ctx); err != nil {
-			logger.Error().Err(err).Msg("MetricsServer manager exited with error")
-		}
-	}()
-}
-
-// Wait blocks until the metrics server's leader-elected work has stopped, i.e. until leadership is
-// lost or the manager shuts down.
-func (ms *MetricsServer) Wait() {
-	ms.wg.Wait()
-}
-
-// Stop tears down the metrics server's channels. It is safe to call on a nil receiver, and safe to
-// call more than once or before Start - both are no-ops.
-func (ms *MetricsServer) Stop(ctx context.Context) {
-	if ms == nil {
-		return // Nothing to stop
-	}
-	if !ms.running.CompareAndSwap(true, false) {
-		return // already stopped, or never started
-	}
-	// The channels are deliberately not closed. Their producers run until the context is cancelled
-	// and send inside a select on ctx.Done, and a select gives no protection against sending on a
-	// closed channel - closing one under a live producer panics. The consumers already exit on
-	// ctx.Done, so closing buys nothing, and the channels are collected once unreferenced.
-	log.Ctx(ctx).Info().Msg("Metrics server stopped")
+	return nil
 }
