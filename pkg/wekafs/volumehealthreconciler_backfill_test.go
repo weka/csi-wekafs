@@ -481,7 +481,7 @@ func TestDescribeVolumeReportsNoApiClientPerSetting(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cs := &ControllerServer{
 				config:      NewDriverConfig(DriverConfigOptions{ReportNoApiClientAsAbnormal: tc.report}),
-				api:         NewApiStore(NewDriverConfig(DriverConfigOptions{}), "test"),
+				api:         NewApiStore(NewDriverConfig(DriverConfigOptions{}), "test", "csi.weka.io"),
 				secretCache: newSecretCache(time.Minute),
 			}
 

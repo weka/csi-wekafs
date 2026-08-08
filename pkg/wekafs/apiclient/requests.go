@@ -29,6 +29,41 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		return &ApiResponse{}, uErr
 	}
 
+	// status is overwritten as soon as the outcome is known; the initial value only survives if the
+	// function returns through a path that sets none.
+	status := "error"
+	startTime := time.Now()
+
+	// Resolved here rather than in the defer, so the sample is labelled with the endpoint that
+	// actually served this request. Read at the end it would be whatever a concurrent
+	// rotateEndpoint had moved on to, pointing per-endpoint latency and error rates at a node that
+	// never saw the call. Taken next to the getUrl above, which is what picked it.
+	//
+	// Nil-checked because getEndpoint returns nil when the client has no endpoint to offer - that
+	// is why requireEndpoint exists for callers that need one, and this function reaches it below,
+	// so the nil case is on its own error path. Dereferencing inside a defer would replace the real
+	// error with a panic, in the one situation where the metric is most worth having.
+	endpointAddress := ""
+	if endpoint := a.getEndpoint(ctx); endpoint != nil {
+		endpointAddress = endpoint.IpAddress
+	}
+
+	defer func() {
+		labels := []string{
+			a.driverName,
+			// Through the accessor, not the field: a re-login overlapping an in-flight request
+			// writes ClusterGuid under the write lock, and a torn read of the uuid would label
+			// the sample with a guid that was never a cluster's, creating a stray series.
+			a.GetClusterGuid().String(),
+			endpointAddress,
+			Method,
+			generalizeUrlPathForMetrics(Path),
+			status,
+		}
+		apiMetrics.requestCounters.WithLabelValues(labels...).Inc()
+		apiMetrics.requestDurations.WithLabelValues(labels...).Observe(time.Since(startTime).Seconds())
+	}()
+
 	//construct base request and add auth if exists
 	var body *bytes.Reader
 	if Payload != nil {
@@ -75,11 +110,13 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	if err != nil {
 		endpoint.transportErrCount.Add(1)
+		status = "transport_error"
 		return nil, &transportError{err}
 	}
 
 	if response == nil {
 		endpoint.noRespCount.Add(1)
+		status = "no_response_from_server"
 		return nil, &transportError{errors.New("received no response")}
 	}
 
@@ -93,6 +130,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	logger.Trace().Str("response", maskPayload(string(responseBody))).Msg("")
 	if err != nil {
 		endpoint.parseErrCount.Add(1)
+		status = "response_parse_error"
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
@@ -112,6 +150,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	Response.parseErrorCodes()
 	if err != nil {
 		endpoint.parseErrCount.Add(1)
+		status = "response_parse_error"
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
 		return nil, &ApiError{
 			Err:         err,
@@ -121,6 +160,10 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	}
+
+	// From here the HTTP status is known, so it becomes the metric's status. The switch below
+	// turns each code into a typed error, but they all share one label shape.
+	status = fmt.Sprintf("http_%d", response.StatusCode)
 
 	switch response.StatusCode {
 	case http.StatusOK: //200
