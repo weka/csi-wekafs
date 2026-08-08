@@ -1,9 +1,10 @@
 package wekafs
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetMountContainerNameFromActualMountPoint(t *testing.T) {

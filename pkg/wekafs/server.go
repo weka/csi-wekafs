@@ -24,17 +24,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/kubernetes-csi/csi-lib-utils/protosanitizer"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
-
-	"github.com/container-storage-interface/spec/lib/go/csi"
-)
-
-const (
-	xattrCapacity   = "user.weka_capacity"
-	xattrVolumeName = "user.weka_k8s_volname"
 )
 
 //goland:noinspection GoExportedFuncWithUnexportedType

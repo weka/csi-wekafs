@@ -3,8 +3,9 @@ package apiclient
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"net/url"
+
+	"github.com/google/uuid"
 )
 
 const (

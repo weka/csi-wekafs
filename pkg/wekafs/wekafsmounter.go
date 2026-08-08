@@ -2,16 +2,14 @@ package wekafs
 
 import (
 	"context"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"k8s.io/mount-utils"
 	"strings"
 	"sync"
 	"time"
-)
 
-const (
-	inactiveMountGcPeriod = time.Minute * 10
+	"github.com/rs/zerolog/log"
+	"k8s.io/mount-utils"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 type wekafsMounter struct {

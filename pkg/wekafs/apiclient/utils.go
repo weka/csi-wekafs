@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/showa-93/go-mask"
 	"hash/fnv"
 	"net"
 	"os"
@@ -14,6 +12,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/showa-93/go-mask"
 )
 
 // ObjectsAreEqual returns true if both ApiObject have same immutable fields (other fields and nil fields are disregarded)

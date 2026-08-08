@@ -3,12 +3,14 @@ package wekafs
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"k8s.io/mount-utils"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"k8s.io/mount-utils"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 type nfsMounter struct {

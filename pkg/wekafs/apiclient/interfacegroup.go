@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
+
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"net/url"
-	"os"
 )
 
 type InterfaceGroupType string

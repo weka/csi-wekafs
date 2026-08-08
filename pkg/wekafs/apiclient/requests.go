@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
 	"io"
 	"net/http"
 	"net/url"
 	"reflect"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 )
 
 // do Makes a basic API call to the client, returns an *ApiResponse that includes raw data, error message etc.

@@ -2,9 +2,10 @@ package apiclient
 
 import (
 	"context"
+	"time"
+
 	"github.com/rs/zerolog/log"
 	"golang.org/x/exp/maps"
-	"time"
 )
 
 // Login logs into API, updates refresh token expiry

@@ -3,13 +3,14 @@ package apiclient
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+
 	"github.com/google/go-querystring/query"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"net/url"
-	"strconv"
-	"strings"
 )
 
 type FilesystemResolvePath struct {

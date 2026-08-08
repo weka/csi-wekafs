@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
+	"time"
+
 	qs "github.com/google/go-querystring/query"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-	"net/url"
-	"strconv"
-	"time"
 )
 
 type FileSystem struct {

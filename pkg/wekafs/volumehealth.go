@@ -28,29 +28,13 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-)
 
-const (
-	// pvIndexVolumeHandle names the field index that maps a CSI volume handle to its PersistentVolume.
-	pvIndexVolumeHandle = "spec.csi.volumeHandle"
-	// volumeSecretCacheTTL bounds how long a Secret read for a volume health check is reused. It
-	// matches the chart's default health monitor interval, so a full sweep of the cluster costs
-	// about one apiserver read per distinct Secret rather than one per volume.
-	volumeSecretCacheTTL = 5 * time.Minute
-	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
-
-	// listVolumesPageSize bounds a page when the CO does not set max_entries. Pages are served from
-	// the reconciler's cache, so this is only about response size, not about how much work one call
-	// may do.
-	listVolumesPageSize = 100
-	// listVolumesTokenPrefix marks a pagination cursor as this driver's own.
-	listVolumesTokenPrefix = "wekafs:v1:"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 // ErrVolumeHealthUndetermined is returned when the volume condition cannot be established

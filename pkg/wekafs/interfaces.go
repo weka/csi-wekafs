@@ -2,13 +2,9 @@ package wekafs
 
 import (
 	"context"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"time"
-)
 
-const (
-	dataTransportNfs    DataTransport = "nfs"
-	dataTransportWekafs DataTransport = "wekafs"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 type AnyServer interface {
@@ -60,3 +56,7 @@ type AnyMount interface {
 	getMountOptions() MountOptions
 	getLastUsed() time.Time
 }
+
+type VolumeType string
+
+type CsiPluginMode string

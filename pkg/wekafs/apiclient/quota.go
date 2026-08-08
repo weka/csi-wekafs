@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type QuotaType string

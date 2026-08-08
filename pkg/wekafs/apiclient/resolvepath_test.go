@@ -2,9 +2,10 @@ package apiclient
 
 import (
 	"context"
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestApiClient_ResolvePathToInode(t *testing.T) {

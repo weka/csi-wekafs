@@ -4,15 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/google/uuid"
-	"github.com/pkg/xattr"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"go.opentelemetry.io/otel"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io"
 	"io/fs"
 	"math"
@@ -22,11 +13,17 @@ import (
 	"strconv"
 	"syscall"
 	"time"
-)
 
-const (
-	MaxHashLengthForObjectNames = 12
-	SnapshotsSubDirectory       = ".snapshots"
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/google/uuid"
+	"github.com/pkg/xattr"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
