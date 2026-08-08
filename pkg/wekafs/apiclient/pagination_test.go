@@ -43,7 +43,7 @@ func testClient(t *testing.T, srv *httptest.Server) *ApiClient {
 	c, err := NewApiClient(t.Context(), Credentials{
 		Username: "u", Password: "p", Organization: "Root",
 		Endpoints: []string{u.Host}, HttpScheme: "http",
-	}, true, "test")
+	}, ApiClientOptions{AllowInsecureHttps: true, Hostname: "test"})
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}

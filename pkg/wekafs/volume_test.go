@@ -80,7 +80,10 @@ func TestMain(m *testing.M) {
 func GetApiClientForTest(t *testing.T) *apiclient.ApiClient {
 	creds.Endpoints = []string{endpoint}
 	if client == nil {
-		apiClient, err := apiclient.NewApiClient(context.Background(), creds, true, endpoint)
+		apiClient, err := apiclient.NewApiClient(context.Background(), creds, apiclient.ApiClientOptions{
+			AllowInsecureHttps: true,
+			Hostname:           endpoint,
+		})
 		if err != nil {
 			t.Fatalf("Failed to create API client: %v", err)
 		}
