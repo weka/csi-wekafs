@@ -71,6 +71,12 @@ controller:
     enabled: true
     # -- How often to check volume health
     monitorInterval: 5m
+    # -- Time budget for one full sweep of every volume, in seconds. This is not a per-request
+    #    timeout: the sidecar walks all pages under a single deadline, so a fleet that takes longer
+    #    than this is cut off mid-sweep and restarted from the beginning, leaving later volumes
+    #    permanently unchecked. Measured at roughly 15 seconds per 1000 volumes; raise it for
+    #    larger fleets.
+    timeoutSeconds: 300
   # -- optional nodeSelector for controller components only
   nodeSelector: {}
   # -- optional affinity for controller components only

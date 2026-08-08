@@ -42,6 +42,9 @@
                         },
                         "monitorInterval": {
                             "type": "string"
+                        },
+                        "timeoutSeconds": {
+                            "type": "integer"
                         }
                     }
                 },
