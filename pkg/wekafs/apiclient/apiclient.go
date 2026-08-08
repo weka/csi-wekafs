@@ -58,6 +58,11 @@ type ApiClient struct {
 	containers           *ContainersResponse
 	containersUpdateTime time.Time
 	containersLock       sync.RWMutex
+
+	// fsCache memoises filesystem lookups by name. Callers choose how stale an answer they will
+	// accept, so a caller needing certainty can still bypass it via GetFileSystemByName.
+	fsCache   map[string]*fsCacheEntry
+	fsCacheMu sync.RWMutex
 }
 
 // ApiClientOptions carries the settings NewApiClient needs beyond the credentials themselves.
@@ -110,6 +115,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 	}
 
 	logger.Trace().Bool("insecure_skip_verify", opts.AllowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
+	a.fsCache = make(map[string]*fsCacheEntry)
 	a.clientHash = a.generateHash()
 	return a, nil
 }
