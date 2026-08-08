@@ -14,12 +14,44 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 	ctx := context.Background()
 	nodeId := "localhost"
 	mutuallyExclusive := MutuallyExclusiveMountOptsStrings{"readcache,writecache,coherent,forcedirect", "sync,async", "ro,rw"}
-	driverConfig := NewDriverConfig("csi-volumes", "csi-vol-", "csi-snap-", "csi-seed-snap-",
-		"", true, true, true, true, true,
-		true, true, mutuallyExclusive,
-		1, 1, 1, 1, 1, 1, 1, 10, 5,
-		true, true, true, "", "", "4.1", "v1", false, false, true,
-		"", false, "", false, false, false, true, true)
+	driverConfig := NewDriverConfig(DriverConfigOptions{
+		DynamicVolPath:     "csi-volumes",
+		VolumePrefix:       "csi-vol-",
+		SnapshotPrefix:     "csi-snap-",
+		SeedSnapshotPrefix: "csi-seed-snap-",
+		Version:            "v1",
+
+		AllowAutoFsCreation:              true,
+		AllowAutoFsExpansion:             true,
+		AllowSnapshotsOfDirectoryVolumes: true,
+		AllowInsecureHttps:               true,
+		AlwaysAllowSnapshotVolumes:       true,
+		AllowProtocolContainers:          true,
+		AllowEncryptionWithoutKms:        true,
+
+		SuppressSnapshotSupport:      true,
+		SuppressVolumeCloneSupport:   true,
+		AdvertiseVolumeHealthSupport: true,
+
+		MutuallyExclusiveMountOptions: mutuallyExclusive,
+
+		MaxCreateVolumeReqs:        1,
+		MaxDeleteVolumeReqs:        1,
+		MaxExpandVolumeReqs:        1,
+		MaxCreateSnapshotReqs:      1,
+		MaxDeleteSnapshotReqs:      1,
+		MaxNodePublishVolumeReqs:   1,
+		MaxNodeUnpublishVolumeReqs: 1,
+
+		GrpcRequestTimeoutSeconds:     10,
+		HealthProbeWekaTimeoutSeconds: 5,
+
+		AllowNfsFailback:   true,
+		UseNfs:             true,
+		NfsProtocolVersion: "4.1",
+
+		KeepThinProvisioningRatioOnExpand: true,
+	})
 	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", "", CsiModeAll, false, driverConfig)
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)
