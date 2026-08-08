@@ -34,7 +34,7 @@ var ClusterApiNotFoundError = errors.New("could not get API client by cluster gu
 
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
-	sync.Mutex
+	sync.RWMutex
 	apis          map[uint32]*apiclient.ApiClient
 	legacySecrets *map[string]string
 	config        *DriverConfig
@@ -43,6 +43,15 @@ type ApiStore struct {
 
 // getByHash returns pointer to existing API if found by hash, or nil
 func (api *ApiStore) getByHash(key uint32) *apiclient.ApiClient {
+	api.RLock()
+	defer api.RUnlock()
+	return api.getByHashLocked(key)
+}
+
+// getByHashLocked is getByHash for callers that already hold the lock, since Go's RWMutex is not
+// reentrant and taking it again here would deadlock.
+// REQUIRES: api's read or write lock is held by the caller.
+func (api *ApiStore) getByHashLocked(key uint32) *apiclient.ApiClient {
 	if val, ok := api.apis[key]; ok {
 		return val
 	}
@@ -50,6 +59,8 @@ func (api *ApiStore) getByHash(key uint32) *apiclient.ApiClient {
 }
 
 func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, error) {
+	api.RLock()
+	defer api.RUnlock()
 	for _, val := range api.apis {
 		if val.ClusterGuid == guid {
 			return val, nil
@@ -159,8 +170,8 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	}
 	api.Lock()
 	defer api.Unlock()
-	if api.getByHash(hash) != nil {
-		return api.getByHash(hash), nil
+	if existingApi := api.getByHashLocked(hash); existingApi != nil {
+		return existingApi, nil
 	}
 	if err := newClient.Init(ctx); err != nil {
 		logger.Error().Err(err).Msg("Failed to initialize API client")
@@ -233,7 +244,6 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 
 func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
 	s := &ApiStore{
-		Mutex:    sync.Mutex{},
 		apis:     make(map[uint32]*apiclient.ApiClient),
 		config:   config,
 		Hostname: hostname,
