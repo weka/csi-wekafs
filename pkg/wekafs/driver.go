@@ -66,6 +66,7 @@ type WekaFsDriver struct {
 	config         *DriverConfig
 	manager        ctrl.Manager // controller-runtime manager for K8s client access
 	isLeader       atomic.Bool  // tracks current leadership state for health checks
+	metricsServer  *MetricsServer
 }
 
 func NewWekaFsDriver(
@@ -92,7 +93,7 @@ func NewWekaFsDriver(
 	log.Info().Msg(fmt.Sprintf("csiMode: %s", csiMode))
 	config.Log()
 
-	return &WekaFsDriver{
+	driver := &WekaFsDriver{
 		name:              driverName,
 		nodeID:            nodeID,
 		version:           vendorVersion,
@@ -103,7 +104,23 @@ func NewWekaFsDriver(
 		csiMode:           csiMode, // either "controller", "node", "all"
 		selinuxSupport:    selinuxSupport,
 		config:            config,
-	}, nil
+	}
+
+	// The metrics server lists PersistentVolumes cluster-wide through the controller-runtime manager,
+	// so it is only ever constructed for the modes that have one - never for a node-only pod, which
+	// would otherwise list the same cluster-wide PVs from every node. Constructing it here rather than
+	// lazily in Run() lets main.go register its Prometheus collectors right after the driver is built,
+	// before Run() blocks for the lifetime of the process. A construction failure must not stop the
+	// driver from starting: metrics are a bonus, not the CSI driver's core job.
+	if config.enableMetricsServer && (csiMode == CsiModeController || csiMode == CsiModeAll) {
+		if ms, err := NewMetricsServer(driver); err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize metrics server, continuing without it")
+		} else {
+			driver.metricsServer = ms
+		}
+	}
+
+	return driver, nil
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
