@@ -54,10 +54,9 @@ type DriverConfig struct {
 	allowMountOptionOverrides         bool
 	keepThinProvisioningRatioOnExpand bool
 
-	// Metrics server settings. enableMetricsServer is read by the main driver process (it gates
-	// whether a MetricsServer is constructed at all in NewWekaFsDriver); the rest only matter to the
-	// metrics server lifecycle (see metricsserver.go) once it is running.
-	enableMetricsServer               bool          // master on/off switch for the metrics server; off by default
+	// Metrics server settings. Whether a MetricsServer is constructed at all in NewWekaFsDriver is
+	// gated on csiMode (CsiModeMetricsServer or CsiModeAll), not on any of these; the settings below
+	// only matter to the metrics server lifecycle (see metricsserver.go) once it is running.
 	metricsFetchInterval              time.Duration // how often the PV streamer refreshes its list and re-polls Weka for stats
 	metricsFetchConcurrentRequests    int           // concurrency cap for both PV processing and single-metric fetches
 	enableMetricsServerLeaderElection bool          // gate the metrics server's readiness on holding leadership
@@ -97,7 +96,6 @@ func (dc *DriverConfig) Log() {
 		Bool("set_ownership_on_dynamic_filesystems", dc.setOwnershipOnDynamicFilesystems).
 		Bool("allow_mount_option_overrides", dc.allowMountOptionOverrides).
 		Bool("keep_thin_provisioning_ratio_on_expand", dc.keepThinProvisioningRatioOnExpand).
-		Bool("enable_metrics_server", dc.enableMetricsServer).
 		Dur("metrics_fetch_interval", dc.metricsFetchInterval).
 		Int("metrics_fetch_concurrent_requests", dc.metricsFetchConcurrentRequests).
 		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
@@ -164,10 +162,6 @@ type DriverConfigOptions struct {
 	EnforceDirVolTotalCapacity        bool
 	SetOwnershipOnDynamicFilesystems  bool
 	KeepThinProvisioningRatioOnExpand bool
-
-	// EnableMetricsServer is the master on/off switch for the metrics server; it defaults to false
-	// (off), unlike the settings below which only matter once it is on.
-	EnableMetricsServer bool
 
 	// MetricsFetchIntervalSeconds, MetricsFetchConcurrentRequests, QuotaFetchConcurrentRequests and
 	// QuotaCacheValiditySeconds default to sensible non-zero values in NewDriverConfig when left at
@@ -260,7 +254,6 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		allowMountOptionOverrides:         opts.AllowMountOptionOverrides,
 		keepThinProvisioningRatioOnExpand: opts.KeepThinProvisioningRatioOnExpand,
 
-		enableMetricsServer:               opts.EnableMetricsServer,
 		metricsFetchInterval:              time.Duration(metricsFetchIntervalSeconds) * time.Second,
 		metricsFetchConcurrentRequests:    metricsFetchConcurrentRequests,
 		enableMetricsServerLeaderElection: opts.EnableMetricsServerLeaderElection,
