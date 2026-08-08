@@ -639,7 +639,8 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 	switch ret {
 	case CsiModeNode,
 		CsiModeController,
-		CsiModeAll:
+		CsiModeAll,
+		CsiModeMetricsServer:
 		return ret
 	default:
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")

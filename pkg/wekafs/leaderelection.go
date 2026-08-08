@@ -53,41 +53,46 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 		}
 	}
 
-	// Add runnable that starts gRPC server when we become leader
-	err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		// This only runs when we are the leader
-		log.Info().Msg("Became leader - starting gRPC server")
+	// The metrics server has no CSI gRPC surface - no Identity/Controller/Node services - so a
+	// metrics-server-only pod never registers the leader-gated gRPC runnable below; its work is
+	// driven entirely by the metrics server Runnable registered above.
+	if driver.csiMode != CsiModeMetricsServer {
+		// Add runnable that starts gRPC server when we become leader
+		err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+			// This only runs when we are the leader
+			log.Info().Msg("Became leader - starting gRPC server")
 
-		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
+			s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 
-		// Mark as leader for health checks
-		driver.isLeader.Store(true)
+			// Mark as leader for health checks
+			driver.isLeader.Store(true)
 
-		// Signal to sidecars that we are the leader
-		if err := createLeaderReadyFile(); err != nil {
-			log.Error().Err(err).Msg("Failed to create leader ready file")
+			// Signal to sidecars that we are the leader
+			if err := createLeaderReadyFile(); err != nil {
+				log.Error().Err(err).Msg("Failed to create leader ready file")
+			}
+
+			// Wait for context cancellation (leadership lost or shutdown)
+			<-ctx.Done()
+
+			log.Info().Msg("Leadership lost or shutdown - stopping gRPC server")
+
+			// Mark as not leader for health checks
+			driver.isLeader.Store(false)
+
+			// Remove leader ready file before stopping gRPC
+			if err := removeLeaderReadyFile(); err != nil {
+				log.Error().Err(err).Msg("Failed to remove leader ready file")
+			}
+
+			s.Stop() // GracefulStop blocks until in-flight RPCs complete
+			// Lease is held until this function returns (LeaderElectionReleaseOnCancel: true)
+
+			return nil
+		}))
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to add gRPC runnable to manager")
 		}
-
-		// Wait for context cancellation (leadership lost or shutdown)
-		<-ctx.Done()
-
-		log.Info().Msg("Leadership lost or shutdown - stopping gRPC server")
-
-		// Mark as not leader for health checks
-		driver.isLeader.Store(false)
-
-		// Remove leader ready file before stopping gRPC
-		if err := removeLeaderReadyFile(); err != nil {
-			log.Error().Err(err).Msg("Failed to remove leader ready file")
-		}
-
-		s.Stop() // GracefulStop blocks until in-flight RPCs complete
-		// Lease is held until this function returns (LeaderElectionReleaseOnCancel: true)
-
-		return nil
-	}))
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add gRPC runnable to manager")
 	}
 
 	// Handle termination signal
@@ -142,6 +147,13 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 		log.Info().Msg("Server stopped")
 		os.Exit(1)
 	}()
+
+	// The metrics server has no CSI gRPC surface to serve. Without a manager it has no Kubernetes
+	// access either, so there is nothing useful left to do here beyond staying alive until terminated.
+	if driver.csiMode == CsiModeMetricsServer {
+		<-runCtx.Done()
+		return
+	}
 
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
