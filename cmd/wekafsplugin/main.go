@@ -116,6 +116,14 @@ var (
 	reportNoApiClientAsAbnormal          = flag.Bool("reportvolumeswithoutapiclientasabnormal", false, "Report a volume with no Weka API credentials as abnormal rather than as unknown. Off by default: the driver cannot tell whether such a volume is healthy, and unknown says exactly that")
 	reportNoQuotaAsAbnormal              = flag.Bool("reportvolumeswithoutquotaasabnormal", false, "Report a volume that has no quota as abnormal, raising a warning event on its PersistentVolumeClaim. Off by default: such a volume works, it merely has no capacity enforcement")
 	setQuotaOnStaticVolumes              = flag.Bool("setquotaonstaticvolumes", false, "Extend quota backfilling to statically provisioned volumes. Requires backfillmissingquotas. Off by default: a static volume is administrator-managed and was never given a quota by the driver")
+
+	// Metrics server settings
+	wekaMetricsFetchIntervalSeconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
+	wekaMetricsFetchConcurrentRequests       = flag.Int("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
+	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
+	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
+	wekaMetricsQuotaCacheValiditySeconds     = flag.Int("wekametricsquotacachevalidityseconds", 60, "Duration in seconds for which the quota map is considered valid")
+	fetchQuotasInBatchMode                   = flag.Bool("fetchquotasinbatchmode", false, "Use batch mode for metrics server, fetch all filesystem quotas in one go")
 	// Set by the build process
 	version = ""
 )
@@ -290,6 +298,13 @@ func handle(ctx context.Context) {
 		EnforceDirVolTotalCapacity:        *enforceDirVolTotalCapacity,
 		SetOwnershipOnDynamicFilesystems:  *setOwnershipOnDynamicFilesystems,
 		KeepThinProvisioningRatioOnExpand: *keepThinProvisioningRatioOnExpand,
+
+		MetricsFetchIntervalSeconds:       *wekaMetricsFetchIntervalSeconds,
+		MetricsFetchConcurrentRequests:    *wekaMetricsFetchConcurrentRequests,
+		EnableMetricsServerLeaderElection: *enableMetricsServerLeaderElection,
+		QuotaFetchConcurrentRequests:      *wekaMetricsQuotaUpdateConcurrentRequests,
+		QuotaCacheValiditySeconds:         *wekaMetricsQuotaCacheValiditySeconds,
+		UseQuotaMapsForMetrics:            *fetchQuotasInBatchMode,
 	})
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
