@@ -135,6 +135,85 @@ func (a *ApiClient) GetFileSystemByName(ctx context.Context, name string) (*File
 	return a.GetFileSystemByFilter(ctx, query)
 }
 
+type fsCacheEntry struct {
+	fs        *FileSystem
+	timestamp time.Time
+}
+
+// FileSystems is a paginated list of filesystems.
+type FileSystems []FileSystem
+
+func (f *FileSystems) CombinePartialResponse(page ApiObjectResponse) error {
+	partial, ok := page.(*FileSystems)
+	if !ok {
+		return fmt.Errorf("cannot combine a %T into a filesystem list", page)
+	}
+	*f = append(*f, *partial...)
+	return nil
+}
+
+// CachedGetFileSystemByName returns a filesystem by name, reusing a previously fetched copy when it
+// is younger than acceptedTtl.
+//
+// On a miss it fetches the whole filesystem list and caches all of it, because callers that ask for
+// one filesystem by name generally go on to ask for others - one list is far cheaper than a lookup
+// per name. Callers that must not see a stale answer should use GetFileSystemByName instead.
+func (a *ApiClient) CachedGetFileSystemByName(ctx context.Context, name string, acceptedTtl time.Duration) (*FileSystem, error) {
+	if fs, ok := a.cachedFileSystem(name, acceptedTtl); ok {
+		return fs, nil
+	}
+
+	// Deliberately fetched without holding the lock. Holding it across the request would serialise
+	// every filesystem lookup on this client behind one network round trip. Concurrent callers may
+	// each fetch once; they converge on the same result and only the cache write is serialised.
+	fsList := &FileSystems{}
+	if err := a.FindFileSystemsByFilter(ctx, &FileSystem{}, (*[]FileSystem)(fsList)); err != nil {
+		return nil, err
+	}
+	a.cacheFileSystems(*fsList)
+
+	// Accept whatever that listing produced regardless of acceptedTtl: it was just fetched, and
+	// re-applying the TTL here would make a caller asking for zero staleness fall through to a
+	// second, redundant request.
+	a.fsCacheMu.RLock()
+	entry, found := a.fsCache[name]
+	a.fsCacheMu.RUnlock()
+	if found {
+		return entry.fs, nil
+	}
+
+	// Not present in the listing: fall back to a direct lookup so a filesystem the caller is
+	// allowed to see but the list omitted is still found.
+	fs, err := a.GetFileSystemByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if fs != nil {
+		a.cacheFileSystems([]FileSystem{*fs})
+	}
+	return fs, nil
+}
+
+func (a *ApiClient) cachedFileSystem(name string, acceptedTtl time.Duration) (*FileSystem, bool) {
+	a.fsCacheMu.RLock()
+	defer a.fsCacheMu.RUnlock()
+	entry, found := a.fsCache[name]
+	if !found || time.Since(entry.timestamp) >= acceptedTtl {
+		return nil, false
+	}
+	return entry.fs, true
+}
+
+func (a *ApiClient) cacheFileSystems(filesystems []FileSystem) {
+	now := time.Now()
+	a.fsCacheMu.Lock()
+	defer a.fsCacheMu.Unlock()
+	for i := range filesystems {
+		fs := filesystems[i]
+		a.fsCache[fs.Name] = &fsCacheEntry{fs: &fs, timestamp: now}
+	}
+}
+
 func (a *ApiClient) CreateFileSystem(ctx context.Context, r *FileSystemCreateRequest, fs *FileSystem) error {
 	op := "CreateFileSystem"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
