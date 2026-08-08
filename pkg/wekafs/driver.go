@@ -80,7 +80,9 @@ func NewWekaFsDriver(
 		return nil, errors.New("no node id provided")
 	}
 
-	if endpoint == "" {
+	// A mode with no CSI gRPC surface has no endpoint to listen on, and must not be made to invent a
+	// placeholder one just to satisfy this check.
+	if endpoint == "" && csiMode.servesCsiGrpc() {
 		return nil, errors.New("no driver endpoint provided")
 	}
 	if version != "" {
@@ -141,10 +143,10 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		}
 	}
 
-	// The metrics server has no CSI gRPC surface to serve - no volumes to mount, no
-	// Identity/Controller/Node services - so skip building a real mounter and the IdentityServer.
+	// Without a CSI gRPC surface there are no volumes to mount and no Identity service to answer, so
+	// skip building a real mounter and the IdentityServer.
 	var mounter AnyMounter
-	if driver.csiMode != CsiModeMetricsServer {
+	if driver.csiMode.servesCsiGrpc() {
 		mounter = driver.NewMounter(ctx)
 
 		// Create servers
@@ -320,7 +322,9 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 		}
 	}
 
-	if leaderElection {
+	// This probe reports on the gRPC server, so it belongs only to the modes that run one. A metrics
+	// server has no endpoint to parse or dial; AddToManager registers its own healthz instead.
+	if leaderElection && d.csiMode.servesCsiGrpc() {
 		// Parse socket path from endpoint (format: "unix:///path/to/socket")
 		socketProto, socketPath, err := parseEndpoint(d.endpoint)
 		if err != nil {
