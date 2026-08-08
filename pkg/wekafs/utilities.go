@@ -690,15 +690,19 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 			// volume look statically provisioned - silently, since a missing annotation is
 			// indistinguishable from an absent one.
 			Annotations: pv.ObjectMeta.Annotations,
+			// Needed by the metrics server (processSinglePersistentVolume) to skip a volume that is
+			// already being deleted rather than tracking it right before it disappears.
+			DeletionTimestamp: pv.ObjectMeta.DeletionTimestamp,
 		},
 		Spec: v1.PersistentVolumeSpec{
 			Capacity: pv.Spec.Capacity, // Need for capacity validation
-			// Both are read by csiVolumeLabelValues, which labels every per-volume metric series.
-			// Dropped, they do not fail - they come back as the empty string, so storage_class_name
-			// and every pvc_* label would be blank for the whole fleet and the volume dashboards
-			// would have nothing to group or filter by.
-			StorageClassName: pv.Spec.StorageClassName,
+			// Read by csiVolumeLabelValues, which labels every per-volume metric series, and by the
+			// metrics server's createPrometheusLabelsForMetric. Dropped, they do not fail - they
+			// come back as the empty string, so storage_class_name and every pvc_* label would be
+			// blank for the whole fleet and the volume dashboards would have nothing to group or
+			// filter by.
 			ClaimRef:         pv.Spec.ClaimRef,
+			StorageClassName: pv.Spec.StorageClassName,
 		},
 		Status: v1.PersistentVolumeStatus{
 			Phase: pv.Status.Phase, // Need to check if Bound or Released
@@ -718,7 +722,9 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 			// The StorageClass parameters a volume was provisioned with are persisted here, and are
 			// the only record of them once the StorageClass has moved on. capacityEnforcement and
 			// quotaGracePeriod decide what kind of quota a volume should have, so dropping these
-			// left every volume looking as though it asked for the defaults.
+			// left every volume looking as though it asked for the defaults. The metrics server
+			// also reads them (ensurePersistentVolumeValid), to check the volume type is one it
+			// knows how to report on.
 			VolumeAttributes: pv.Spec.CSI.VolumeAttributes,
 		}
 	}
