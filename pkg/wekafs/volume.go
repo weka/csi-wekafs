@@ -70,6 +70,14 @@ type Volume struct {
 	// inodeId caches the root inode ID of the volume, once resolved, so repeated lookups (e.g. from
 	// the metrics server, which polls quotas by inode) don't re-resolve or re-mount for it every time.
 	inodeId uint64
+
+	// lastUsageStats caches the metrics server's last one-by-one Weka fetch for this volume (only
+	// used on the useQuotaMapsForMetrics=false path), so a fetch cycle that runs before
+	// quotaCacheValidityDuration has elapsed can serve the cached reading instead of hitting the API
+	// again. There is no equivalent for the quota-map path: a filesystem's quota map is already
+	// cached at the filesystem level by QuotaMapsPerFilesystem, so caching it a second time here
+	// would buy nothing.
+	lastUsageStats *UsageStats
 }
 
 func (v *Volume) hasCustomEncryptionSettings() bool {
