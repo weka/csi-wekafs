@@ -44,11 +44,16 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 	}
 
 	// Register the metrics server's health checks and leadership-gated Runnable, same as the health
-	// reconciler above. Nil-guarded since it is only constructed when explicitly enabled and the
-	// driver is running in a mode with Kubernetes access (see NewWekaFsDriver). Must happen before
+	// reconciler above. Nil-guarded since it is only constructed for the modes that run one - under
+	// CsiModeAll it may legitimately be absent (see NewWekaFsDriver). Must happen before
 	// driver.manager.Start below - controller-runtime rejects Add calls once the manager is started.
-	if driver.metricsServer != nil {
-		if err := driver.metricsServer.AddToManager(); err != nil {
+	// A failure is fatal in a dedicated metrics-server pod, whose only job this is, and tolerated under
+	// CsiModeAll, where the CSI services carry on without metrics (same split as in NewWekaFsDriver).
+	if driver.ms != nil {
+		if err := driver.ms.AddToManager(); err != nil {
+			if driver.csiMode == CsiModeMetricsServer {
+				log.Fatal().Err(err).Msg("Failed to register metrics server, nothing left for this pod to run")
+			}
 			log.Error().Err(err).Msg("Failed to register metrics server, metrics will not be available")
 		}
 	}
@@ -148,13 +153,8 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 		os.Exit(1)
 	}()
 
-	// The metrics server has no CSI gRPC surface to serve. Without a manager it has no Kubernetes
-	// access either, so there is nothing useful left to do here beyond staying alive until terminated.
-	if driver.csiMode == CsiModeMetricsServer {
-		<-runCtx.Done()
-		return
-	}
-
+	// CsiModeMetricsServer never reaches here: Run() treats a failed manager init as fatal in that mode,
+	// so the manager is always present and the driver takes the leader-election path instead.
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
 }
