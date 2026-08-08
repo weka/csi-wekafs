@@ -244,13 +244,16 @@ func TestVolumeId(t *testing.T) {
 	testBadPattern("dir/v1")            // no filesystem name, only volumeType
 	testBadPattern("/var/log/messages") // volumeType starts with / - bad path
 
-	// FsVolume
-	testPattern("fs/v1/filesystem") // OK
-	testBadPattern("fs/v1")         // no filesystem name, only volumeType
-	testBadPattern("fs/filesystem") // no version
-
-	// FsSnap
-	testBadPattern("fssnap/v1") // no filesystem and no snapshot
+	// The fs/v1 and fssnap/v1 volume types no longer exist - KnownVolTypes is dir/v1 and weka/v2
+	// only. An unrecognised type/version prefix is deliberately treated as a unified volume ID
+	// rather than rejected, which TestVolumeType asserts for weka/v1 as well: a volume built from
+	// an ID is always unified, so there is nothing to gain from splitting it out. Nor could these
+	// be rejected - "fs/v1" is indistinguishable from a unified ID whose inner path starts with a
+	// "v". They therefore validate.
+	testPattern("fs/v1/filesystem")
+	testPattern("fs/v1")
+	testPattern("fssnap/v1")
+	testBadPattern("fs/filesystem") // second element is not a version, so the type stays ambiguous
 
 	testPattern("weka/v1/filesystem")
 	testPattern("weka/v1/filesystem:snapshotname")
