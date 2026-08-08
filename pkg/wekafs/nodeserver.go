@@ -49,8 +49,8 @@ type NodeServer struct {
 	api               *ApiStore
 	config            *DriverConfig
 	semaphores        map[string]*semaphore.Weighted
-	zone   string
-	region string
+	zone              string
+	region            string
 	sync.Mutex
 }
 
