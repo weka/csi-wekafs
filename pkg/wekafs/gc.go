@@ -2,16 +2,16 @@ package wekafs
 
 import (
 	"context"
-	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"go.opentelemetry.io/otel"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
+	"go.opentelemetry.io/otel"
 )
 
 const garbagePath = ".__internal__wekafs-async-delete"
@@ -26,9 +26,31 @@ const (
 
 //const garbageCollectionMaxThreads = 32
 
+// gcKey identifies one filesystem's trash on one Weka API client.
+//
+// Filesystem names are only unique within a tenant, so with multitenancy two tenants can each have
+// a filesystem called "default" that are entirely different objects. Keying the GC state by name
+// alone made one tenant's purge look like it covered the other's: the second tenant's request would
+// see the name as already running, mark it deferred, and the chained re-run would then purge the
+// first tenant's filesystem again - leaving the second tenant's trash behind indefinitely.
+type gcKey struct {
+	apiClientHash uint32
+	filesystem    string
+}
+
+// newGcKey scopes a filesystem to its API client. A nil client is legacy, API-unbound mode, where
+// there is only one cluster in play and a zero hash is the right shared scope.
+func newGcKey(fs string, apiClient *apiclient.ApiClient) gcKey {
+	key := gcKey{filesystem: fs}
+	if apiClient != nil {
+		key.apiClientHash = apiClient.Hash()
+	}
+	return key
+}
+
 type innerPathVolGc struct {
-	isRunning  map[string]bool
-	isDeferred map[string]bool
+	isRunning  map[gcKey]bool
+	isDeferred map[gcKey]bool
 	sync.Mutex
 	mounter AnyMounter
 	config  *DriverConfig
@@ -36,8 +58,8 @@ type innerPathVolGc struct {
 
 func initInnerPathVolumeGc(mounter AnyMounter) *innerPathVolGc {
 	gc := innerPathVolGc{mounter: mounter}
-	gc.isRunning = make(map[string]bool)
-	gc.isDeferred = make(map[string]bool)
+	gc.isRunning = make(map[gcKey]bool)
+	gc.isDeferred = make(map[gcKey]bool)
 	return &gc
 }
 
@@ -109,23 +131,29 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
 
-	gc.Lock()
-	gc.isRunning[fs] = true
-	gc.Unlock()
+	// The caller claimed this key before spawning the goroutine, so only one purge per filesystem
+	// per API client is ever in flight.
+	key := newGcKey(fs, apiClient)
+	// Carry the tenant scope on every line: under multitenancy the filesystem name alone no longer
+	// identifies which trash a message is about.
+	scoped := logger.With().Str("filesystem", fs).Uint32("api_client", key.apiClientHash).Logger()
+	logger = &scoped
 
 	succeeded := false
-	// Always clear the running flag on every exit path. Chain another run if one
-	// was deferred while we ran, or retry (after a backoff) if this run failed, so
-	// failures are retried instead of silently stranding the trash and wedging GC.
+	// Release the claim on every exit path. Chain another run if one was deferred while we ran, or
+	// retry (after a backoff) if this run failed, so failures are retried instead of silently
+	// stranding the trash and wedging GC.
 	defer func() {
 		gc.Lock()
 		defer gc.Unlock()
-		gc.isRunning[fs] = false
-		if gc.isDeferred[fs] {
-			gc.isDeferred[fs] = false
+		if gc.isDeferred[key] {
+			gc.isDeferred[key] = false
+			// Hand the claim straight to the chained run rather than releasing it, so no other
+			// caller can start a competing purge in the gap.
 			go gc.purgeLeftovers(ctx, fs, apiClient)
 			return
 		}
+		gc.isRunning[key] = false
 		if !succeeded {
 			go func() {
 				time.Sleep(garbageCollectionRetryBackoff)
@@ -142,11 +170,11 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	path, err, unmount := gc.mounter.Mount(opCtx, fs, apiClient)
 	defer func() {
 		if uErr := unmount(); uErr != nil {
-			logger.Error().Err(uErr).Str("filesystem", fs).Str("path", path).Msg("Failed to release filesystem mount after garbage collection")
+			logger.Error().Err(uErr).Str("path", path).Msg("Failed to release filesystem mount after garbage collection")
 		}
 	}()
 	if err != nil {
-		logger.Error().Err(err).Str("filesystem", fs).Str("path", path).Msg("Failed mounting FS for garbage collection")
+		logger.Error().Err(err).Str("path", path).Msg("Failed mounting FS for garbage collection")
 		return
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
@@ -187,15 +215,24 @@ func (gc *innerPathVolGc) initiateGarbageCollection(ctx context.Context, fs stri
 	// its deferred cancel() — does not abort the background purge mid-mount (CSI-422).
 	bgCtx := context.WithoutCancel(ctx)
 
+	// Scope the state to the API client as well as the filesystem name, so that two tenants sharing
+	// a filesystem name do not share GC state.
+	key := newGcKey(fs, apiClient)
+
 	gc.Lock()
 	defer gc.Unlock()
-	if gc.isRunning[fs] {
+	if gc.isRunning[key] {
 		logger.Trace().Msg("Garbage collection already running, deferring next run")
-		gc.isDeferred[fs] = true
+		gc.isDeferred[key] = true
 		return
 	}
-	if !gc.isDeferred[fs] {
+	if !gc.isDeferred[key] {
 		logger.Trace().Msg("Garbage collection not running, starting")
+		// Claim the filesystem before spawning, while still holding the lock. The goroutine cannot
+		// claim it itself: between the go statement and the goroutine acquiring the lock, another
+		// caller would still see the filesystem as idle and start a second, concurrent purge of the
+		// same trash directory.
+		gc.isRunning[key] = true
 		go gc.purgeLeftovers(bgCtx, fs, apiClient)
 	}
 }
