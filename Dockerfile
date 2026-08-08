@@ -7,7 +7,7 @@ RUN apk add --no-cache libc6-compat gcc musl-dev
 COPY go.mod /src/go.mod
 COPY go.sum /src/go.sum
 WORKDIR /src
-ARG LOCAR_VERSION=0.4.3
+ARG LOCAR_VERSION=0.5.0
 ADD --chmod=655 https://github.com/weka/locar/releases/download/$LOCAR_VERSION/locar-$LOCAR_VERSION-$TARGETOS-$TARGETARCH locar
 RUN go mod download
 ARG VERSION
@@ -38,9 +38,8 @@ LABEL description="Weka CSI Driver"
 # NOTE: usbutils, nfs-utils, rpcbind removed — unavailable in UBI9-minimal repos.
 # nfs-utils/rpcbind were not used at runtime (app uses kernel NFS client via k8s mount-utils).
 # If USB device discovery is needed, install usbutils from EPEL.
-# findutils provides xargs, required by the locar-based garbage-collection deletion
 RUN microdnf install -y util-linux libselinux-utils pciutils \
-    procps less container-selinux findutils && \
+    procps less container-selinux && \
     microdnf clean all && rm -rf /var/cache/dnf
 RUN mkdir -p /licenses
 COPY LICENSE /licenses

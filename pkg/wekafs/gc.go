@@ -179,23 +179,23 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
 
-	if fileExists("/locar") {
+	// locar empties the trash far faster than a single-threaded walk, but --delete-all only
+	// removes what it finds inside the directory, never the directory itself. Skip it when there
+	// is no trash yet, since locar treats a missing path as an error.
+	if fileExists("/locar") && PathExists(volumeTrashLoc) {
 		logger.Debug().Msg("Using locar for fast deletion")
-		deleteCmd := exec.CommandContext(opCtx, "bash", "-c",
-			fmt.Sprintf("/locar --type file %s | xargs -P128 -n128 rm -f 2>&1 | wc -l; /locar --type dir %s | /usr/bin/xargs -P128 -n128 rm -rf 2>&1 | wc -l", volumeTrashLoc, volumeTrashLoc),
-		)
-		output, err := deleteCmd.CombinedOutput()
+		output, err := exec.CommandContext(opCtx, "/locar", "--delete-all", volumeTrashLoc).CombinedOutput()
 		if err != nil {
-			logger.Error().Err(err).Msg("Error running locar")
+			logger.Error().Err(err).Str("output", string(output)).Msg("Error running locar")
 			return
 		}
 		logger.Trace().Str("output", string(output)).Msg("Locar output")
-	} else {
-		logger.Debug().Msg("Using default deletion method")
-		if err := os.RemoveAll(volumeTrashLoc); err != nil {
-			logger.Error().Err(err).Str("path", volumeTrashLoc).Msg("Failed to perform garbage collection")
-			return
-		}
+	}
+
+	// Removes just the emptied trash directory after a locar pass, or the whole tree without one.
+	if err := os.RemoveAll(volumeTrashLoc); err != nil {
+		logger.Error().Err(err).Str("path", volumeTrashLoc).Msg("Failed to perform garbage collection")
+		return
 	}
 	succeeded = true
 	logger.Debug().Msg("Garbage collection completed")
