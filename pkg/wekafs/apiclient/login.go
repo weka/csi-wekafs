@@ -26,7 +26,7 @@ func (a *ApiClient) Login(ctx context.Context) error {
 		return err
 	}
 	responseData := &LoginResponse{}
-	if err := a.request(ctx, "POST", ApiPathLogin, jb, nil, responseData); err != nil {
+	if _, err := a.request(ctx, "POST", ApiPathLogin, jb, nil, responseData); err != nil {
 		if err.getType() == "ApiAuthorizationError" {
 			logger.Error().Err(err).Str("endpoint", a.getEndpoint(ctx).String()).Msg("Could not log in to endpoint")
 		}
@@ -80,7 +80,7 @@ func (a *ApiClient) Init(ctx context.Context) error {
 	r := RefreshRequest{RefreshToken: a.refreshToken}
 	responseData := &RefreshResponse{}
 	payload, _ := marshalRequest(r)
-	if err := a.request(ctx, "POST", ApiPathRefresh, payload, nil, responseData); err != nil {
+	if _, err := a.request(ctx, "POST", ApiPathRefresh, payload, nil, responseData); err != nil {
 		log.Ctx(ctx).Trace().Msg("Failed to refresh auth token, logging in...")
 		return a.Login(ctx)
 	}

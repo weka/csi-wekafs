@@ -2,8 +2,6 @@ package apiclient
 
 import (
 	"encoding/json"
-
-	"github.com/google/uuid"
 )
 
 // ApiObject generic interface of API object of any type (FileSystem, Quota, etc.)
@@ -21,8 +19,19 @@ type ApiResponse struct {
 	Data           json.RawMessage `json:"data"` // Data, may be either object, dict or list
 	ErrorCodes     []string        `json:"data.exceptionClass,omitempty"`
 	Message        string          `json:"message,omitempty"`    // Optional, can have error message
-	NextToken      uuid.UUID       `json:"next_token,omitempty"` // For paginated objects
+	NextToken      string          `json:"next_token,omitempty"` // For paginated objects
 	HttpStatusCode int
+}
+
+// ApiObjectResponse is implemented by response types the backend may return across several pages.
+//
+// Implementing it is what opts a type into pagination, so there is no separate boolean to keep in
+// step with the method. A response type that does not implement it is fetched in a single request,
+// exactly as before.
+type ApiObjectResponse interface {
+	// CombinePartialResponse folds one fetched page into the accumulated response. Implementations
+	// append, since the accumulated value is the caller's own object.
+	CombinePartialResponse(page ApiObjectResponse) error
 }
 
 // ApiObjectRequest interface that describes a request for an ApiObject CRUD operation

@@ -89,6 +89,19 @@ func (q *Quota) GetCapacityLimit() uint64 {
 	return q.SoftLimitBytes
 }
 
+// Quotas is a paginated list of quotas. A filesystem can hold far more quotas than the backend
+// returns in one response, so this is the type to fetch into rather than a plain slice.
+type Quotas []Quota
+
+func (q *Quotas) CombinePartialResponse(page ApiObjectResponse) error {
+	partial, ok := page.(*Quotas)
+	if !ok {
+		return fmt.Errorf("cannot combine a %T into a quota list", page)
+	}
+	*q = append(*q, *partial...)
+	return nil
+}
+
 type QuotaCreateRequest struct {
 	filesystemUid  uuid.UUID
 	inodeId        uint64
@@ -272,7 +285,7 @@ func (a *ApiClient) FindQuotaByFilter(ctx context.Context, query *Quota, resultS
 	if query.FilesystemUid == uuid.Nil {
 		return RequestMissingParams
 	}
-	ret := &[]Quota{}
+	ret := &Quotas{}
 	err := a.Get(ctx, query.GetBasePath(a), nil, ret)
 	if err != nil {
 		return err
