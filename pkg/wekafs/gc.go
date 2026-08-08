@@ -10,18 +10,9 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
-)
 
-const garbagePath = ".__internal__wekafs-async-delete"
-
-const (
-	// garbageCollectionTimeout bounds a single purge cycle so a hung mount cannot
-	// block the detached GC goroutine indefinitely.
-	garbageCollectionTimeout = 10 * time.Minute
-	// garbageCollectionRetryBackoff delays a retry after a failed purge to avoid hot-looping.
-	garbageCollectionRetryBackoff = time.Minute
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 //const garbageCollectionMaxThreads = 32

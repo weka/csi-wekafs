@@ -5,10 +5,11 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 func NewVolumeFromId(ctx context.Context, volumeId string, apiClient *apiclient.ApiClient, server AnyServer) (*Volume, error) {

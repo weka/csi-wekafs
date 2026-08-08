@@ -4,23 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
-	"go.opentelemetry.io/otel"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
-)
 
-const (
-	MaxSnapshotDeletionDuration = time.Hour * 2 // Max time to delete snapshot
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 type Snapshot struct {

@@ -30,30 +30,14 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-)
 
-const (
-	TopologyKeyNode              = "topology.wekafs.csi/node"
-	TopologyLabelNodeGlobal      = "topology.csi.weka.io/node"
-	TopologyLabelWekaGlobal      = "topology.csi.weka.io/global"
-	TopologyLabelTransportGlobal = "topology.csi.weka.io/transport"
-
-	TopologyLabelWekaLocalPattern = "topology.%s/accessible"
-	TopologyLabelNodePattern      = "topology.%s/node"
-	TopologyLabelTransportPattern = "topology.%s/transport"
-
-	TopologyKeyZone   = "topology.kubernetes.io/zone"
-	TopologyKeyRegion = "topology.kubernetes.io/region"
-
-	WekaKernelModuleName             = "wekafsgw"
-	NodeServerAdditionalMountOptions = MountOptionWriteCache + "," + MountOptionSyncOnClose
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 type NodeServer struct {

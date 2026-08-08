@@ -26,19 +26,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	// volumeHealthReconcileInterval is how long the reconciler waits between finishing one sweep of
-	// every volume and starting the next. A sweep that overruns simply delays the next one.
-	volumeHealthReconcileInterval = 5 * time.Minute
-	// volumeHealthProbeConcurrency bounds how many volumes the reconciler probes at once, and so
-	// caps the sustained Weka API call rate it can produce.
-	volumeHealthProbeConcurrency = 10
-	// volumeHealthMaxAge is how long a probe result may be served before it is reported as unknown
-	// instead. Generous relative to the interval, so a slow or partially failing sweep degrades to
-	// stale-but-useful rather than blanking every condition at once.
-	volumeHealthMaxAge = 30 * time.Minute
-)
-
 // volumeConditionEntry is one volume's last probe result, in domain terms rather than CSI protos so
 // nothing shared is mutable.
 type volumeConditionEntry struct {

@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
 	qs "github.com/google/go-querystring/query"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"golang.org/x/exp/slices"
-	"net/url"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type NfsPermissionType string

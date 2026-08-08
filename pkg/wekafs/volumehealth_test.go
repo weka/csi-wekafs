@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 func TestPreferredSecretRef(t *testing.T) {

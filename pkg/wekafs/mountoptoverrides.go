@@ -11,40 +11,6 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-
-	// VolumeContextPodNameKey is the key in VolumeContext that describes the pod name
-	VolumeContextPodNameKey = "csi.storage.k8s.io/pod.name"
-	// VolumeContextPodNamespaceKey is the key in VolumeContext that describes the pod namespace
-	VolumeContextPodNamespaceKey = "csi.storage.k8s.io/pod.namespace"
-	// VolumeContextPvcNameKey is the key in VolumeContext that describes the PVC name
-	VolumeContextPvcNameKey = "csi.storage.k8s.io/pvc/name"
-	// VolumeContextPvcNamespaceKey is the key in VolumeContext that describes the PVC namespace
-	VolumeContextPvcNamespaceKey = "csi.storage.k8s.io/pvc/namespace"
-
-	// PodMountOptionOverrideAnnotation is the annotation key on pods for per-PVC mount option overrides.
-	// Format: one entry per line (or separated by ';'):
-	//   <pvc-name-regex>: <mount-option-modifiers>
-	// Mount option modifiers are comma-separated with + (add) or - (remove) prefix
-	// Example:
-	//   my-volume-.*: -forcedirect, +readcache
-	//   my-vol-1: -forcedirect, +readcache, +writecache
-	//   my-vol-2: +inode_bits=64
-	PodMountOptionOverrideAnnotation = "weka.io/mount-options-overrides"
-
-	// PvcMountOptionOverrideAnnotation is the annotation key on PVCs for mount option overrides that apply to all pods mounting the PVC.
-	// Format: same as PodMountOptionOverrideAnnotation but without the PVC name regex (applies to all pods).
-	// Example:
-	//   -forcedirect, +readcache
-	PvcMountOptionOverrideAnnotation = "weka.io/mount-options-override"
-
-	// Order of application:
-	// 1. StorageClass default options
-	// 2. Node Publish default options
-	// 3. PvcMountOptionOverrideAnnotation
-	// 4. PodMountOptionOverrideAnnotation (first matching pattern wins)
-)
-
 type podMountEntry struct {
 	pattern  *regexp.Regexp
 	override MountOptionOverride
