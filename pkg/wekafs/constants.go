@@ -44,6 +44,15 @@ const (
 	CsiModeMetricsServer CsiPluginMode = "metricsserver"
 )
 
+// servesCsiGrpc reports whether this mode runs the CSI gRPC surface - the Identity/Controller/Node
+// services, the socket they listen on, and the mounter behind them. Everything that follows from
+// having no gRPC surface (no endpoint to validate, no socket to health-check, no leader-gated gRPC
+// runnable to register) tests this one property, so it is named here rather than restated as a
+// comparison against CsiModeMetricsServer at each site.
+func (mode CsiPluginMode) servesCsiGrpc() bool {
+	return mode != CsiModeMetricsServer
+}
+
 var DefaultVolumePermissions fs.FileMode = 0750
 
 var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeUnified}
