@@ -111,6 +111,14 @@ var (
 	allowMountOptionOverrides            = flag.Bool("allowmountoptionoverrides", false, "Allow mount option overrides via PVC and pod annotations")
 	keepThinProvisioningRatioOnExpand    = flag.Bool("keepthinprovisioningratioonexpand", true, "On filesystem expansion, scale thin-provisioning min-SSD and max-SSD to preserve their ratios to total capacity")
 	advertiseVolumeHealthSupport         = flag.Bool("advertisevolumehealthsupport", true, "Expose GET_VOLUME and VOLUME_CONDITION, allowing the CSI health monitor to report volume condition and capacity")
+
+	// Metrics server settings
+	wekaMetricsFetchIntervalSeconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
+	wekaMetricsFetchConcurrentRequests       = flag.Int("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
+	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
+	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
+	wekaMetricsQuotaCacheValiditySeconds     = flag.Int("wekametricsquotacachevalidityseconds", 60, "Duration in seconds for which the quota map is considered valid")
+	fetchQuotasInBatchMode                   = flag.Bool("fetchquotasinbatchmode", false, "Use batch mode for metrics server, fetch all filesystem quotas in one go")
 	// Set by the build process
 	version = ""
 )
@@ -280,6 +288,13 @@ func handle(ctx context.Context) {
 		EnforceDirVolTotalCapacity:        *enforceDirVolTotalCapacity,
 		SetOwnershipOnDynamicFilesystems:  *setOwnershipOnDynamicFilesystems,
 		KeepThinProvisioningRatioOnExpand: *keepThinProvisioningRatioOnExpand,
+
+		MetricsFetchIntervalSeconds:       *wekaMetricsFetchIntervalSeconds,
+		MetricsFetchConcurrentRequests:    *wekaMetricsFetchConcurrentRequests,
+		EnableMetricsServerLeaderElection: *enableMetricsServerLeaderElection,
+		QuotaFetchConcurrentRequests:      *wekaMetricsQuotaUpdateConcurrentRequests,
+		QuotaCacheValiditySeconds:         *wekaMetricsQuotaCacheValiditySeconds,
+		UseQuotaMapsForMetrics:            *fetchQuotasInBatchMode,
 	})
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
