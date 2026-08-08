@@ -1,0 +1,43 @@
+{{- if and .Values.metrics.enabled .Values.metrics.podMonitor.enabled }}
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Release.Name }}-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-controller
+    component: {{ .Release.Name }}-controller
+    release: {{ .Release.Name }}
+    {{- with .Values.metrics.podMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-controller
+      component: {{ .Release.Name }}-controller
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  # One entry per named metrics port. A PodMonitor selects ports by name, so every container whose
+  # metrics should be collected needs its own entry and its own unique port name.
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.metrics.podMonitor.interval }}
+    - port: at-metrics
+      path: /metrics
+      interval: {{ .Values.metrics.podMonitor.interval }}
+    - port: pr-metrics
+      path: /metrics
+      interval: {{ .Values.metrics.podMonitor.interval }}
+    - port: rs-metrics
+      path: /metrics
+      interval: {{ .Values.metrics.podMonitor.interval }}
+    - port: sn-metrics
+      path: /metrics
+      interval: {{ .Values.metrics.podMonitor.interval }}
+{{- end }}
+{{- end }}
