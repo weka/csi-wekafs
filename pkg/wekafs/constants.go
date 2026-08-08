@@ -38,9 +38,10 @@ const (
 
 	LegacySecretPath = "/legacy-volume-access"
 
-	CsiModeNode       CsiPluginMode = "node"
-	CsiModeController CsiPluginMode = "controller"
-	CsiModeAll        CsiPluginMode = "all"
+	CsiModeNode          CsiPluginMode = "node"
+	CsiModeController    CsiPluginMode = "controller"
+	CsiModeAll           CsiPluginMode = "all"
+	CsiModeMetricsServer CsiPluginMode = "metricsserver"
 )
 
 var DefaultVolumePermissions fs.FileMode = 0750
