@@ -15,7 +15,7 @@ func testApiClient(t *testing.T, org string) *apiclient.ApiClient {
 		Organization: org,
 		Endpoints:    []string{"10.0.0.1:14000"},
 		HttpScheme:   "https",
-	}, true, "test-host")
+	}, apiclient.ApiClientOptions{AllowInsecureHttps: true, Hostname: "test-host"})
 	if err != nil {
 		t.Fatalf("could not build api client for %s: %v", org, err)
 	}

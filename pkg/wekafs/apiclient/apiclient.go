@@ -60,10 +60,20 @@ type ApiClient struct {
 	containersLock       sync.RWMutex
 }
 
-func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHttps bool, hostname string) (*ApiClient, error) {
+// ApiClientOptions carries the settings NewApiClient needs beyond the credentials themselves.
+// Grouping them keeps the constructor from growing another positional parameter each time a
+// setting is added.
+type ApiClientOptions struct {
+	// AllowInsecureHttps skips TLS certificate verification.
+	AllowInsecureHttps bool
+	// Hostname identifies this client to the Weka cluster.
+	Hostname string
+}
+
+func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOptions) (*ApiClient, error) {
 	logger := log.Ctx(ctx)
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: allowInsecureHttps},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: opts.AllowInsecureHttps},
 	}
 	useCustomCACert := credentials.CaCertificate != ""
 	if useCustomCACert {
@@ -88,7 +98,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		ClusterGuid:        uuid.UUID{},
 		Credentials:        credentials,
 		CompatibilityMap:   &WekaCompatibilityMap{},
-		hostname:           hostname,
+		hostname:           opts.Hostname,
 		actualApiEndpoints: make(map[string]*ApiEndPoint),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
@@ -99,7 +109,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, allowInsecureHtt
 		}
 	}
 
-	logger.Trace().Bool("insecure_skip_verify", allowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
+	logger.Trace().Bool("insecure_skip_verify", opts.AllowInsecureHttps).Bool("custom_ca_cert", useCustomCACert).Msg("Creating new API client")
 	a.clientHash = a.generateHash()
 	return a, nil
 }
