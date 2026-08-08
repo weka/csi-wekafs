@@ -43,7 +43,7 @@ func (n *WekaNode) GetType() string {
 
 func (n *WekaNode) GetBasePath(a *ApiClient) string {
 	if a != nil {
-		if a.CompatibilityMap.NewNodeApiObjectPath {
+		if a.compatibility().NewNodeApiObjectPath {
 			return "processes"
 		}
 	}

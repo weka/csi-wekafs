@@ -44,8 +44,8 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 	}
 	r.Header.Set("content-type", "application/json")
-	if a.isLoggedIn() {
-		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", a.apiToken))
+	if token := a.authToken(); token != "" {
+		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	}
 
 	//add query params
@@ -63,30 +63,30 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	//perform the request and update endpoint with stats
 	endpoint := a.getEndpoint(ctx)
-	endpoint.requestCount++
+	endpoint.requestCount.Add(1)
 	start := time.Now()
 	response, err := a.client.Do(r)
 
 	if err != nil {
-		endpoint.transportErrCount++
+		endpoint.transportErrCount.Add(1)
 		return nil, &transportError{err}
 	}
 
 	if response == nil {
-		endpoint.noRespCount++
+		endpoint.noRespCount.Add(1)
 		return nil, &transportError{errors.New("received no response")}
 	}
 
 	// update endpoint stats for success and total duration
-	endpoint.requestDurationTotal += time.Since(start)
+	endpoint.requestDurationTotal.Add(int64(time.Since(start)))
 	if response.StatusCode != http.StatusOK {
-		endpoint.failCount++
+		endpoint.failCount.Add(1)
 	}
 
 	responseBody, err := io.ReadAll(response.Body)
 	logger.Trace().Str("response", maskPayload(string(responseBody))).Msg("")
 	if err != nil {
-		endpoint.parseErrCount++
+		endpoint.parseErrCount.Add(1)
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
@@ -102,9 +102,9 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	Response := &ApiResponse{}
 	err = json.Unmarshal(responseBody, Response)
-	endpoint.parseErrCount++
 	Response.HttpStatusCode = response.StatusCode
 	if err != nil {
+		endpoint.parseErrCount.Add(1)
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
 		return nil, &ApiError{
 			Err:         err,
@@ -125,7 +125,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	case http.StatusNoContent: //203
 		return Response, nil
 	case http.StatusBadRequest: //400
-		endpoint.http400ErrCount++
+		endpoint.http400ErrCount.Add(1)
 		return Response, &ApiBadRequestError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -134,7 +134,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusUnauthorized: //401
-		endpoint.http401ErrCount++
+		endpoint.http401ErrCount.Add(1)
 		return Response, &ApiAuthorizationError{
 			Err:         nil,
 			Text:        "Operation failed",
@@ -143,7 +143,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusForbidden: //403
-		endpoint.http403ErrCount++
+		endpoint.http403ErrCount.Add(1)
 		return Response, &ApiForbiddenError{
 			Err:         err,
 			Text:        "Permission denied",
@@ -152,7 +152,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusNotFound: //404
-		endpoint.http404ErrCount++
+		endpoint.http404ErrCount.Add(1)
 		return Response, &ApiNotFoundError{
 			Err:         nil,
 			Text:        "Object not found",
@@ -161,7 +161,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	case http.StatusConflict: //409
-		endpoint.http409ErrCount++
+		endpoint.http409ErrCount.Add(1)
 		return Response, &ApiConflictError{
 			ApiError: ApiError{
 				Err:         nil,
@@ -174,7 +174,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	case http.StatusInternalServerError: //500
-		endpoint.http500ErrCount++
+		endpoint.http500ErrCount.Add(1)
 		return Response, &ApiInternalError{
 			Err:         nil,
 			Text:        Response.Message,
@@ -184,7 +184,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	case http.StatusServiceUnavailable: //503
-		endpoint.http503ErrCount++
+		endpoint.http503ErrCount.Add(1)
 		return Response, &ApiNotAvailableError{
 			Err:         nil,
 			Text:        Response.Message,
@@ -194,7 +194,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		}
 
 	default:
-		endpoint.generalErrCount++
+		endpoint.generalErrCount.Add(1)
 		return Response, &ApiError{
 			Err:         err,
 			Text:        "General failure during API command",
