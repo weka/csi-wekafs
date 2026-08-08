@@ -395,7 +395,10 @@ spec:
             - "/csi-external-health-monitor-controller"
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
-            - "--timeout=60s"
+            {{/* This budget covers the WHOLE paginated sweep, not one page, so it has to exceed the
+                 time to walk every volume. Too low and the sweep is cut off mid-fleet and restarts
+                 from the beginning next time, leaving the tail permanently unchecked. */}}
+            - "--timeout={{ .Values.controller.healthMonitor.timeoutSeconds }}s"
             {{/* The sidecar sweeps the fleet with ListVolumes when the driver advertises
                  LIST_VOLUMES, and falls back to one ControllerGetVolume per volume otherwise.
                  Those paths read different flags, so set both from the same value. */}}

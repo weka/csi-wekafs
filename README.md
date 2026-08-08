@@ -89,7 +89,7 @@ make build
 | controller.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
 | controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
 | controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
-| controller.healthMonitor | object | `{"enabled":true,"monitorInterval":"5m"}` | Volume health monitoring: periodically checks volume condition via the Weka API and reports abnormal volumes as events on the PVC |
+| controller.healthMonitor | object | `{"enabled":true,"monitorInterval":"5m","timeoutSeconds":300}` | Volume health monitoring: periodically checks volume condition via the Weka API and reports abnormal volumes as events on the PVC |
 | controller.nodeSelector | object | `{}` | optional nodeSelector for controller components only |
 | controller.affinity | object | `{}` | optional affinity for controller components only |
 | controller.labels | object | `{}` | optional labels to add to controller deployment |
