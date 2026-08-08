@@ -72,6 +72,16 @@ const (
 )
 
 const (
+	VolumeBackingTypeDirectory  VolumeBackingType = "DIRECTORY"
+	VolumeBackingTypeFilesystem VolumeBackingType = "FILESYSTEM"
+	VolumeBackingTypeSnapshot   VolumeBackingType = "SNAPSHOT"
+	VolumeBackingTypeHybrid     VolumeBackingType = "HYBRID"
+	// VolumeBackingTypeUnknown is used when a request failed before its volume was constructed, so
+	// the backing type was never determined.
+	VolumeBackingTypeUnknown VolumeBackingType = "UNKNOWN"
+)
+
+const (
 	selinuxContextWekaFs     = "wekafs_csi_volume_t"
 	selinuxContextNfs        = "nfs_t"
 	MountOptionSyncOnClose   = "sync_on_close"
