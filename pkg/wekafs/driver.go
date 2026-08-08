@@ -59,6 +59,7 @@ type WekaFsDriver struct {
 	ids            *identityServer
 	ns             *NodeServer
 	cs             *ControllerServer
+	ms             *MetricsServer
 	api            *ApiStore
 	debugPath      string
 	csiMode        CsiPluginMode
@@ -66,7 +67,6 @@ type WekaFsDriver struct {
 	config         *DriverConfig
 	manager        ctrl.Manager // controller-runtime manager for K8s client access
 	isLeader       atomic.Bool  // tracks current leadership state for health checks
-	metricsServer  *MetricsServer
 }
 
 func NewWekaFsDriver(
@@ -112,13 +112,21 @@ func NewWekaFsDriver(
 	// service is running, and never for a node-only pod, which would otherwise list the same
 	// cluster-wide PVs from every node. Constructing it here rather than lazily in Run() lets main.go
 	// register its Prometheus collectors right after the driver is built, before Run() blocks for the
-	// lifetime of the process. A construction failure must not stop the driver from starting: metrics
-	// are a bonus, not the CSI driver's core job.
+	// lifetime of the process.
+	//
+	// How a failure is handled depends on the mode. A CsiModeMetricsServer pod exists only to export
+	// metrics, so one that came up without a metrics server would sit there looking healthy while
+	// collecting nothing - fail instead, and let the Deployment surface it. Under CsiModeAll the CSI
+	// services are the job and metrics are a bonus, so carry on without them.
 	if csiMode == CsiModeMetricsServer || csiMode == CsiModeAll {
-		if ms, err := NewMetricsServer(driver); err != nil {
+		ms, err := NewMetricsServer(driver)
+		if err != nil {
+			if csiMode == CsiModeMetricsServer {
+				return nil, fmt.Errorf("failed to initialize metrics server: %w", err)
+			}
 			log.Warn().Err(err).Msg("Failed to initialize metrics server, continuing without it")
 		} else {
-			driver.metricsServer = ms
+			driver.ms = ms
 		}
 	}
 
@@ -189,9 +197,12 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	// Metrics-server-only mode has no ControllerServer to bring up a manager for, but it still needs
 	// one for Kubernetes access and (optionally) leader election - the same mechanism controller mode
 	// uses. It never registers a gRPC surface though; see runWithLeaderElection/runWithoutLeaderElection.
+	// Unlike controller mode, there is no useful degraded mode to fall back to here: without a manager
+	// the metrics server has no Kubernetes access, so it would discover no PersistentVolumes and export
+	// nothing at all. Fail rather than idle.
 	if driver.csiMode == CsiModeMetricsServer {
 		if err := driver.initManager(ctx, true); err != nil {
-			log.Warn().Err(err).Msg("Failed to initialize Kubernetes manager, running metrics server without leader election")
+			log.Fatal().Err(err).Msg("Failed to initialize Kubernetes manager, metrics server cannot run")
 		}
 	}
 

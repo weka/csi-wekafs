@@ -171,10 +171,10 @@ func NewMetricsServer(driver *WekaFsDriver) (*MetricsServer, error) {
 // package calls prometheus.MustRegister - that only ever happens in main.go, once for the whole
 // process, so importing this package never has the side effect of registering anything.
 func (driver *WekaFsDriver) MetricsServerCollectors() []prometheus.Collector {
-	if driver.metricsServer == nil {
+	if driver.ms == nil {
 		return nil
 	}
-	return driver.metricsServer.prometheusMetrics.Collectors()
+	return driver.ms.prometheusMetrics.Collectors()
 }
 
 // PersistentVolumeStreamer periodically lists this driver's PersistentVolumes and streams the
