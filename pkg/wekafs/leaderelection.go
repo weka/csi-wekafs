@@ -58,10 +58,9 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 		}
 	}
 
-	// The metrics server has no CSI gRPC surface - no Identity/Controller/Node services - so a
-	// metrics-server-only pod never registers the leader-gated gRPC runnable below; its work is
-	// driven entirely by the metrics server Runnable registered above.
-	if driver.csiMode != CsiModeMetricsServer {
+	// A mode with no CSI gRPC surface never registers the leader-gated gRPC runnable below; a
+	// metrics-server pod's work is driven entirely by the Runnable registered above.
+	if driver.csiMode.servesCsiGrpc() {
 		// Add runnable that starts gRPC server when we become leader
 		err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
 			// This only runs when we are the leader

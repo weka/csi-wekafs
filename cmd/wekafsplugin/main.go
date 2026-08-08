@@ -20,41 +20,16 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
-	"net/http"
 	"os"
-	"os/signal"
 	"path"
-	"strconv"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
+	"github.com/wekafs/csi-wekafs/pkg/bootstrap"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
-	zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {
-		short := file
-		for i := len(file) - 1; i > 0; i-- {
-			if file[i] == '/' {
-				short = file[i+1:]
-				break
-			}
-		}
-		file = short
-		return file + ":" + strconv.Itoa(line)
-	}
-
-}
 
 var (
 	mutuallyExclusiveMountOptionsStrings wekafs.MutuallyExclusiveMountOptsStrings
@@ -124,38 +99,12 @@ var (
 	version = ""
 )
 
-func mapVerbosity(verbosity int) zerolog.Level {
-	verbMap := make(map[int]zerolog.Level)
-
-	verbMap[0] = zerolog.Disabled
-	verbMap[1] = zerolog.PanicLevel
-	verbMap[2] = zerolog.FatalLevel
-	verbMap[3] = zerolog.ErrorLevel
-	verbMap[4] = zerolog.InfoLevel
-	verbMap[5] = zerolog.DebugLevel
-	verbMap[6] = zerolog.TraceLevel
-
-	v := verbosity
-	if v >= len(verbMap) {
-		v = len(verbMap) - 1
-	}
-	return verbMap[v]
-}
-
 func main() {
 	// set mountOptions
 	flag.Var(&mutuallyExclusiveMountOptionsStrings, "mutuallyexclusivemountoptions", "Set list of mount options that cannot be set together")
 
 	flag.Parse()
-	if !*usejsonlogging {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339Nano}).With().Caller().Logger()
-	}
-	zerolog.SetGlobalLevel(mapVerbosity(*verbosity))
-	// log.Ctx returns a *disabled* logger for a context that carries none, so anything written from
-	// a startup path or a background goroutine - neither of which passes through a gRPC handler that
-	// attaches one - is discarded without a trace. Fall back to the global logger instead, so a
-	// missing context logger costs the request fields rather than the whole line.
-	zerolog.DefaultContextLogger = &log.Logger
+	bootstrap.SetupLogging(*usejsonlogging, *verbosity)
 
 	csiMode = wekafs.GetCsiPluginMode(csimodetext)
 	if *showVersion {
@@ -180,61 +129,12 @@ func main() {
 		if csiMode == wekafs.CsiModeNode || csiMode == wekafs.CsiModeAll {
 			prometheus.MustRegister(wekafs.NodeCollectors()...)
 		}
-		go func() {
-			http.Handle("/metrics", promhttp.Handler())
-			if err := http.ListenAndServe(fmt.Sprintf(":%s", *metricsPort), nil); err != nil {
-				log.Error().Str("metrics_port", *metricsPort).Err(err).Msg("Failed to start metrics service")
-			}
-			log.Debug().Str("metrics_port", *metricsPort).Msg("Started metrics service")
-		}()
+		bootstrap.ServeMetrics(*metricsPort)
 	}
 
 	ctx := context.Background()
-	var tp *sdktrace.TracerProvider
-	var err error
-	var url string
-	if *tracingUrl != "" {
-		url = *tracingUrl
-
-	} else {
-		url = ""
-	}
-	tp, err = wekafs.TracerProvider(version, url, csiMode)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
-	} else {
-		otel.SetTracerProvider(tp)
-		log.Info().Str("tracing_url", url).Msg("OpenTelemetry tracing initialized")
-		ctx, cancel := context.WithCancel(ctx)
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		defer func() {
-			signal.Stop(c)
-			cancel()
-		}()
-		go func() {
-			select {
-			case <-c:
-				cancel()
-			case <-ctx.Done():
-			}
-		}()
-
-		defer func() {
-			if err := tp.ForceFlush(ctx); err != nil {
-				log.Error().Err(err).Msg("Failed to flush traces")
-			} else {
-				log.Info().Msg("Flushed traces successfully")
-			}
-
-			if err := tp.Shutdown(ctx); err != nil {
-				log.Error().Err(err).Msg("Failed to shutdown tracing engine")
-			} else {
-				log.Info().Msg("Tracing engine shut down successfully")
-			}
-
-		}()
-	}
+	shutdownTracing := bootstrap.SetupTracing(ctx, version, *tracingUrl, csiMode)
+	defer shutdownTracing()
 
 	handle(ctx)
 	os.Exit(0)
