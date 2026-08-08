@@ -127,75 +127,84 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.SetSelfAsFilesystemOwnerOnCreate = v.GreaterThanOrEqual(sfo)
 }
 
+// compatibility returns the compatibility map established at login. Reads go through here because
+// fetchClusterInfo replaces it on every login, concurrently with requests that consult it.
+func (a *ApiClient) compatibility() *WekaCompatibilityMap {
+	a.RLock()
+	defer a.RUnlock()
+	return a.CompatibilityMap
+}
+
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
-	return a.CompatibilityMap.QuotaOnDirectoryVolume
+	return a.compatibility().QuotaOnDirectoryVolume
 }
 
 func (a *ApiClient) SupportsQuotaOnSnapshots() bool {
-	return a.CompatibilityMap.QuotaOnSnapshot
+	return a.compatibility().QuotaOnSnapshot
 }
 
 func (a *ApiClient) SupportsFilesystemAsVolume() bool {
-	return a.CompatibilityMap.FilesystemAsCSIVolume
+	return a.compatibility().FilesystemAsCSIVolume
 }
 
 func (a *ApiClient) SupportsDirectoryAsVolume() bool {
-	return a.CompatibilityMap.DirectoryAsCSIVolume
+	return a.compatibility().DirectoryAsCSIVolume
 }
 
 func (a *ApiClient) SupportsAuthenticatedMounts() bool {
-	return a.CompatibilityMap.MountFilesystemsUsingAuthToken
+	return a.compatibility().MountFilesystemsUsingAuthToken
 }
 
 func (a *ApiClient) SupportsFilesystemCloning() bool {
-	return a.CompatibilityMap.CloneFilesystem
+	return a.compatibility().CloneFilesystem
 }
 
 func (a *ApiClient) SupportsNewFileSystemFromSnapshot() bool {
-	return a.CompatibilityMap.CreateNewFilesystemFromSnapshot
+	return a.compatibility().CreateNewFilesystemFromSnapshot
 }
 
 func (a *ApiClient) SupportsUrlQueryParams() bool {
-	return a.CompatibilityMap.UrlQueryParams
+	return a.compatibility().UrlQueryParams
 }
 
 func (a *ApiClient) SupportsSyncOnCloseMountOption() bool {
-	return a.CompatibilityMap.SyncOnCloseMountOption
+	return a.compatibility().SyncOnCloseMountOption
 }
 
 func (a *ApiClient) SupportsMultipleClusters() bool {
-	return a.CompatibilityMap.SingleClientMultipleClusters
+	return a.compatibility().SingleClientMultipleClusters
 }
 
 func (a *ApiClient) SupportsEncryptionWithNoKms() bool {
-	return a.CompatibilityMap.EncryptionWithNoKms
+	return a.compatibility().EncryptionWithNoKms
 }
 
 func (a *ApiClient) SupportsEncryptionWithCommonKey() bool {
-	return a.CompatibilityMap.EncryptionWithClusterKey
+	return a.compatibility().EncryptionWithClusterKey
 }
 
 func (a *ApiClient) SupportsCustomEncryptionSettings() bool {
-	return a.CompatibilityMap.EncryptionWithCustomSettings
+	return a.compatibility().EncryptionWithCustomSettings
 }
 
 func (a *ApiClient) RequiresNewNodePath() bool {
-	return a.CompatibilityMap.NewNodeApiObjectPath
+	return a.compatibility().NewNodeApiObjectPath
 }
 
 func (a *ApiClient) SupportsResolvePathToInode() bool {
-	if !a.CompatibilityMap.ResolvePathToInode {
+	if !a.compatibility().ResolvePathToInode {
 		return false
 	}
-	if a.ApiUserRole == "" {
+	role := a.userRole()
+	if role == "" {
 		return false
 	}
-	if a.ApiUserRole == ApiUserRoleCSI {
-		return a.CompatibilityMap.ResolvePathToInodeCsiRole
+	if role == ApiUserRoleCSI {
+		return a.compatibility().ResolvePathToInodeCsiRole
 	}
 	return true
 }
 
 func (a *ApiClient) SupportsSettingSelfAsFilesystemOwner() bool {
-	return a.CompatibilityMap.SetSelfAsFilesystemOwnerOnCreate
+	return a.compatibility().SetSelfAsFilesystemOwnerOnCreate
 }

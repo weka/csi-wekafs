@@ -31,14 +31,17 @@ type ApiUserRole string
 // currentEndpointId: refers to the currently working API endpoint
 // Timeout sets max request timeout duration
 type ApiClient struct {
-	sync.Mutex
+	// Guards the mutable state below: Login writes it while concurrent requests read it.
+	sync.RWMutex
+	// loginMu serialises login attempts. Kept separate from RWMutex so a login, which makes several
+	// round-trips, never holds the state lock across I/O.
+	loginMu                    sync.Mutex
 	client                     *http.Client
 	Credentials                Credentials
 	ClusterGuid                uuid.UUID
 	ClusterName                string
 	MountEndpoints             []string
-	actualApiEndpoints         map[string]*ApiEndPoint
-	currentEndpoint            string
+	apiEndpoints               *ApiEndPoints
 	apiToken                   string
 	apiTokenExpiryDate         time.Time
 	refreshToken               string
@@ -93,7 +96,6 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 	}
 
 	a := &ApiClient{
-		Mutex: sync.Mutex{},
 		client: &http.Client{
 			Transport:     tr,
 			CheckRedirect: nil,
@@ -104,7 +106,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 		Credentials:        credentials,
 		CompatibilityMap:   &WekaCompatibilityMap{},
 		hostname:           opts.Hostname,
-		actualApiEndpoints: make(map[string]*ApiEndPoint),
+		apiEndpoints:       NewApiEndPoints(),
 		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
 	}
 	a.resetDefaultEndpoints(ctx)

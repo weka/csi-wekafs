@@ -38,8 +38,10 @@ func (a *ApiClient) updateTokensExpiryInterval(ctx context.Context) error {
 	if err := a.Get(ctx, ApiPathTokenExpiry, nil, responseData); err != nil {
 		return err
 	}
+	a.Lock()
 	a.refreshTokenExpiryInterval = responseData.RefreshTokenExpiry
 	a.apiTokenExpiryInterval = responseData.AccessTokenExpiry
+	a.Unlock()
 	log.Ctx(ctx).Trace().Msg("Updated refresh token validity period")
 	return nil
 }
@@ -50,12 +52,18 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	if err := a.Get(ctx, ApiPathClusterInfo, nil, responseData); err != nil {
 		return err
 	}
+	clusterVersion := fmt.Sprintf("v%s", responseData.Release)
+	// fillIn mutates in place, so build the map here and publish it by pointer swap: readers take a
+	// fully populated map or the previous one, never a half-filled one.
+	compat := &WekaCompatibilityMap{}
+	compat.fillIn(clusterVersion)
+	a.Lock()
 	a.ClusterName = responseData.Name
 	a.ClusterGuid = responseData.Guid
-	clusterVersion := fmt.Sprintf("v%s", responseData.Release)
-	a.CompatibilityMap.fillIn(clusterVersion)
-	logger := log.Logger.With().Str("cluster_name", a.ClusterName).Logger()
-	logger.Info().Str("cluster_guid", a.ClusterGuid.String()).
+	a.CompatibilityMap = compat
+	a.Unlock()
+	logger := log.Logger.With().Str("cluster_name", responseData.Name).Logger()
+	logger.Info().Str("cluster_guid", responseData.Guid.String()).
 		Str("cluster_version", clusterVersion).Msg("Successfully connected to cluster")
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for filesystem as CSI volume: %t", a.SupportsFilesystemAsVolume()))
 	logger.Info().Msg(fmt.Sprintf("Cluster compatibility for quota directory as CSI volume: %t", a.SupportsQuotaDirectoryAsVolume()))
@@ -551,19 +559,22 @@ func (a *ApiClient) fetchUserRoleAndOrgId(ctx context.Context) {
 		return
 	}
 	if ret != nil {
+		a.Lock()
 		a.ApiUserRole = ret.Role
 		a.ApiOrgId = ret.OrgId
+		a.Unlock()
 	}
 }
 
 func (a *ApiClient) ensureSufficientPermissions(ctx context.Context) error {
 	logger := log.Ctx(ctx)
 	a.fetchUserRoleAndOrgId(ctx)
-	if a.ApiUserRole == "" {
+	role := a.userRole()
+	if role == "" {
 		logger.Error().Msg("Could not determine user role, assuming old version of WEKA cluster")
 	}
 	if !a.HasCSIPermissions() {
-		logger.Error().Str("username", a.Credentials.Username).Str("role", string(a.ApiUserRole)).Msg("User does not have necessary CSI permissions and cannot be used. Refer to WEKA CSI Plugin /documentation")
+		logger.Error().Str("username", a.Credentials.Username).Str("role", string(role)).Msg("User does not have necessary CSI permissions and cannot be used. Refer to WEKA CSI Plugin /documentation")
 		return errors.New(fmt.Sprintf("user %s does not have sufficient permissions for performing CSI operations", a.Credentials.Username))
 	}
 	return nil
