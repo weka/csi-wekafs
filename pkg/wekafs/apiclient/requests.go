@@ -205,14 +205,18 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	}
 }
 
-// request wraps do with retries and some more error handling
-func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) apiError {
+// request wraps do with retries and some more error handling. It returns the token of the next
+// page when the backend indicates the result was truncated, or an empty string when it was not.
+func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) (string, apiError) {
 	op := "ApiClientRequest"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
+	var nextToken string
 	f := func() apiError {
+		// Reset per attempt: a retry must not inherit the token of an attempt that later failed.
+		nextToken = ""
 		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
 		if a.handleTransientErrors(ctx, reqErr) != nil { // transient network errors
 			a.rotateEndpoint(ctx)
@@ -241,6 +245,7 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 		}
 		switch s {
 		case http.StatusOK:
+			nextToken = rawResponse.NextToken
 			return nil
 		case http.StatusUnauthorized:
 			logger.Warn().Msg("Got Authorization failure on request, trying to re-login")
@@ -260,22 +265,72 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 	}
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), f)
 	if err != nil {
-		return err.(apiError)
+		return "", err.(apiError)
 	}
-	return nil
+	return nextToken, nil
 }
 
-// Request makes sure that client is logged in and has a non-expired token
+// Request makes sure that client is logged in and has a non-expired token.
+//
+// When Response implements ApiObjectResponse the backend may return it across several pages, and
+// every page is fetched and folded into Response before returning.
 func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, Response interface{}) error {
 	if err := a.Init(ctx); err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to re-authenticate on repeating request")
 		return err
 	}
-	err := a.request(ctx, Method, Path, Payload, Query, Response)
-	if err != nil {
-		return err
+
+	accumulated, paginated := Response.(ApiObjectResponse)
+	if !paginated {
+		_, err := a.request(ctx, Method, Path, Payload, Query, Response)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-	return nil
+
+	responseType := reflect.TypeOf(Response)
+	if responseType.Kind() != reflect.Ptr {
+		return errors.New("a paginated response must be passed as a pointer")
+	}
+	// Work on a copy: Query belongs to the caller, and it is legitimately nil, which Set would
+	// panic on.
+	query := cloneQuery(Query)
+	logger := log.Ctx(ctx)
+
+	for page := 1; ; page++ {
+		// Every page is unmarshalled into a fresh object and then folded into the caller's
+		// Response. Unmarshalling straight into Response would let each page overwrite the last.
+		pageValue := reflect.New(responseType.Elem()).Interface()
+		nextToken, err := a.request(ctx, Method, Path, Payload, query, pageValue)
+		if err != nil {
+			return err
+		}
+		if err := accumulated.CombinePartialResponse(pageValue.(ApiObjectResponse)); err != nil {
+			logger.Error().Err(err).Msg("Failed to combine a partial response")
+			return err
+		}
+		if nextToken == "" {
+			if page > 1 {
+				logger.Debug().Int("pages", page).Msg("Fetched a paginated response")
+			}
+			return nil
+		}
+		if page >= ApiMaxPagesPerRequest {
+			return fmt.Errorf("paginated response exceeded %d pages, giving up", ApiMaxPagesPerRequest)
+		}
+		query.Set("next_token", nextToken)
+	}
+}
+
+// cloneQuery copies the caller's query parameters so pagination can add its own without mutating
+// what the caller passed, and so a nil map is usable.
+func cloneQuery(q url.Values) url.Values {
+	out := make(url.Values, len(q))
+	for k, v := range q {
+		out[k] = append([]string(nil), v...)
+	}
+	return out
 }
 
 // Get is shortcut for Request("GET" ...)

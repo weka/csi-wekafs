@@ -277,7 +277,7 @@ func TestApiClientRequest(t *testing.T) {
 			responseData := &LoginResponse{}
 
 			// Perform the request
-			err = apiClient.request(context.Background(), "GET", ApiPathClusterInfo, jb, nil, responseData)
+			_, err = apiClient.request(context.Background(), "GET", ApiPathClusterInfo, jb, nil, responseData)
 
 			// Assert the error type
 			if tt.expectedError != nil {
