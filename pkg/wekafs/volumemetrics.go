@@ -26,6 +26,15 @@ type VolumeMetric struct {
 	pvUID types.UID
 }
 
+// pvName is how an operator identifies this volume: errors and logs from the metrics server name
+// the PersistentVolume, not the internal volume id.
+func (vm *VolumeMetric) pvName() string {
+	if vm == nil || vm.persistentVolume == nil {
+		return ""
+	}
+	return vm.persistentVolume.Name
+}
+
 // volumeKey locates a volume on the cluster. Quotas are fetched per filesystem and keyed by inode,
 // so this is what a quota map entry has to be matched back to.
 type volumeKey struct {
