@@ -1,0 +1,90 @@
+# Default values for csi-metricsserver.
+
+# -- Name of the CSI driver whose PersistentVolumes to report on. Must match the csiDriverName of the
+#    csi-wekafsplugin release that provisioned them, or no volumes will be discovered.
+csiDriverName: "csi.weka.io"
+
+image:
+  # -- The metrics server ships inside the CSI plugin image, which carries both binaries
+  repository: quay.io/weka.io/csi-wekafs
+  pullPolicy: Always
+  # -- Image tag; defaults to the chart version when empty
+  tag: ""
+imagePullSecret: ""
+
+hostNetwork: false
+
+metricsServer:
+  # -- Number of replicas for metrics server. More than one is only useful with enableLeaderElection,
+  #    which keeps exactly one of them collecting while the rest stand by
+  replicas: 2
+  # -- optional nodeSelector for metrics server only
+  nodeSelector: {}
+  # -- optional affinity for metrics server only
+  affinity: {}
+  # -- optional labels to add to metrics server deployment
+  labels: {}
+  # -- optional labels to add to metrics server pods
+  podLabels: {}
+  # -- tolerations for metrics server only
+  tolerations: {}
+  # -- concurrent requests for WEKA API (excluding quota)
+  maxConcurrentRequests: 50
+  # -- metrics fetch interval in seconds, default is 60 seconds.
+  #    Only expired metrics will be updated, set by quotaCacheValiditySeconds
+  metricsFetchIntervalSeconds: 60
+  # -- termination grace period for metrics server pods
+  terminationGracePeriodSeconds: 10
+  # -- enable leader election for metrics server
+  enableLeaderElection: true
+  # -- number of concurrent requests for metrics server to update quotas
+  quotaUpdateConcurrentRequests: 25
+  # -- the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,
+  #    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.
+  #    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded
+  quotaCacheValiditySeconds: 300
+  # -- Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).
+  #    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.
+  #    This is disabled by default.
+  #    The drawback is that in such case, metrics will be reported less frequently, using cached values.
+  #    Report timestamp will be recorded for each metric, so you can see when the last update was.
+  #    This requires Prometheus server to honor timestamps.
+  #    When false, all quota values will be fetched instantaneously, during metrics collection.
+  #    Not recommended when having thousands of PVCs
+  enableBatchModeForQuotaUpdates: false
+  # -- Port serving both the /healthz liveness probe and the /readyz readiness probe
+  healthPort: 8081
+  # -- Resources for the metrics server container
+  resources:
+    limits:
+      cpu: 2
+      memory: 2Gi
+    requests:
+      cpu: 0.1
+      memory: 100Mi
+
+# -- Log level of CSI plugin
+logLevel: 6
+# -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
+useJsonLogging: false
+
+metrics:
+  # -- Enable Prometheus Metrics
+  enabled: true
+  # -- Metrics server metrics port
+  metricsServerPort: 9096
+  podMonitor:
+    # -- Create a PodMonitor, if the Prometheus Operator CRDs are installed
+    enabled: true
+    # -- Scrape interval
+    interval: 30s
+    # -- Additional labels, e.g. the release label your Prometheus selects PodMonitors by
+    additionalLabels: {}
+
+# @ignore
+tracingUrl: ""
+# @ignore
+tracingDeploymentIdentifier: ""
+
+pluginConfig:
+  allowInsecureHttps: false

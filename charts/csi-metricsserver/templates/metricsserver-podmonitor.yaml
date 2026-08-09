@@ -1,0 +1,44 @@
+{{- if and .Values.metrics.enabled .Values.metrics.podMonitor.enabled }}
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Release.Name }}-metrics-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-metrics-server
+    component: {{ .Release.Name }}-metrics-server
+    release: {{ .Release.Name }}
+    {{- with .Values.metrics.podMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-metrics-server
+      component: {{ .Release.Name }}-metrics-server
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  podMetricsEndpoints:
+    - port: ms-metrics
+      path: /metrics
+      interval: {{ .Values.metrics.podMonitor.interval }}
+      # Metrics carry the timestamp of the measurement they describe, not of the scrape - a quota read
+      # a few minutes ago is reported with that age rather than pretending to be fresh. Prometheus
+      # only keeps those timestamps if told to honor them.
+      honorTimestamps: true
+      metricRelabelings:
+        - action: labeldrop
+          regex: ^job$
+        - action: labeldrop
+          regex: ^instance$
+        - action: labeldrop
+          regex: ^namespace$
+        - action: labeldrop
+          regex: ^endpoint$
+        - action: labeldrop
+          regex: ^container$
+{{- end }}
+{{- end }}
