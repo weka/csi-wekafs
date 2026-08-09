@@ -59,11 +59,10 @@ spec:
       {{- end }}
       containers:
         - name: metrics-server
-          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
+          image: {{ .Values.images.csimetricsserver }}:v{{ .Values.images.csimetricsserverTag }}
           imagePullPolicy: Always
-          # The image carries both binaries. This runs the metrics server one directly rather than the
-          # plugin with --csimode=metricsserver; the mode still exists and behaves identically, but the
-          # dedicated binary is what this Deployment is built around.
+          # A separate image from the CSI driver's, carrying only the metrics server. Its entrypoint is
+          # already /metricsserver; naming it explicitly keeps the command visible in the pod spec.
           command:
             - /metricsserver
           args:
