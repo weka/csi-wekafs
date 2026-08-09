@@ -323,19 +323,31 @@ func (a *ApiClient) DeleteNfsPermission(ctx context.Context, r *NfsPermissionDel
 	}
 	apiResponse := &ApiResponse{}
 	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
-	if err != nil {
-		switch t := err.(type) {
-		case *ApiNotFoundError:
-			return ObjectNotFoundError
-		case *ApiBadRequestError:
-			for _, c := range t.ApiResponse.ErrorCodes {
-				if c == "PermissionDoesNotExistException" {
-					return ObjectNotFoundError
-				}
+	return classifyNfsPermissionDeleteError(err)
+}
+
+// classifyNfsPermissionDeleteError maps a delete failure onto ObjectNotFoundError when the cluster is
+// telling us the permission is already gone - the state the caller wanted - and returns everything
+// else unchanged.
+//
+// Unhandled errors used to fall out of the switch and be reported as a successful deletion, so a 500,
+// an authorization failure, or retries exhausted against an unreachable cluster left the permission
+// in place while telling the caller it had been removed.
+func classifyNfsPermissionDeleteError(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch t := err.(type) {
+	case *ApiNotFoundError:
+		return ObjectNotFoundError
+	case *ApiBadRequestError:
+		for _, c := range t.ApiResponse.ErrorCodes {
+			if c == "PermissionDoesNotExistException" {
+				return ObjectNotFoundError
 			}
 		}
 	}
-	return nil
+	return err
 }
 
 type NfsClientGroup struct {
