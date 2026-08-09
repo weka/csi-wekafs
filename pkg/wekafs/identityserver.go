@@ -85,12 +85,25 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 	logger.Trace().Dur("timeout", ids.config.healthProbeWekaTimeout).Msg("CSI Probe: checking Weka client status")
 	probeCtx, probeCancel := context.WithTimeout(ctx, ids.config.healthProbeWekaTimeout)
 	defer probeCancel()
-	isReady := ids.getConfig().isInDevMode() || isWekaRunning(probeCtx)
-	if !isReady {
-		if ids.getConfig().useNfs || ids.getConfig().allowNfsFailback {
-			logger.Trace().Msg("CSI Probe: Weka client not running but NFS transport available, reporting ready")
-			isReady = true
-		}
+	config := ids.getConfig()
+
+	// Each transport is judged separately, and the mounters follow. Probe is the only thing that runs
+	// repeatedly on a node, so it is where a Weka client appearing or disappearing under a live driver
+	// gets noticed: a node that failed back to NFS starts serving wekafs again once its client returns,
+	// without a restart. Mounts already made over the other transport are unaffected - they are
+	// unmounted through the mounter that made them, whatever is enabled now.
+	nfsReady := config.useNfs || config.allowNfsFailback
+	wekafsReady := !config.useNfs && (config.isInDevMode() || isWekaRunning(probeCtx))
+
+	if mounters := config.GetDriver().mounters; mounters != nil {
+		setMounterEnabled(mounters.nfs, nfsReady)
+		setMounterEnabled(mounters.wekafs, wekafsReady)
+	}
+
+	// Readiness is unchanged: the driver can serve as long as either transport can.
+	isReady := nfsReady || wekafsReady
+	if isReady && !wekafsReady {
+		logger.Trace().Msg("CSI Probe: Weka client not running but NFS transport available, reporting ready")
 	}
 	// manage node topology labels only if set by configuration
 	if ids.config.manageNodeTopologyLabels {

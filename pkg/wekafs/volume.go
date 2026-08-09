@@ -869,7 +869,14 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 
 func (v *Volume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
-		return v.server.getMounter().getGarbageCollector().triggerGcVolume(ctx, v)
+		// GetPreferredMounter returns nil once Probe has disabled every transport, and this is one
+		// of the paths that used to dereference it regardless - a panic rather than a failed
+		// request. MountUnderlyingFS already guarded for the same reason.
+		mounter := v.server.getMounter(ctx)
+		if mounter == nil {
+			return errors.New("cannot trash volume, no transport is currently available")
+		}
+		return mounter.getGarbageCollector().triggerGcVolume(ctx, v)
 	}
 	return v.Delete(ctx)
 }
@@ -1116,13 +1123,13 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	if v.server.getMounter() == nil {
+	if v.server.getMounter(ctx) == nil {
 		return errors.New("could not mount volume, mounter not in context"), NoOpUnmount
 	}
 
 	mountOpts := v.withUnsupportedMountOptionsPruned(ctx, v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions))
 
-	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	mount, err, unmountFunc := v.server.getMounter(ctx).mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := NoOpUnmount
 	if err == nil {
 		v.mountPath = mount
@@ -1853,13 +1860,19 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		return nil
 	}
 	if !fsObj.IsRemoving { // if filesystem is already removing, just wait
-		if v.server.getMounter().getTransport() == dataTransportNfs {
-			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
-			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
-			if err != nil {
-				logger.Error().Str("filesystem", v.FilesystemName).Err(err).Msg("Failed to remove NFS permissions, cannot delete filesystem")
-				return err
-			}
+		// Unconditional, rather than asked of the transport in use right now. The question is not
+		// which transport this process currently prefers, it is whether an NFS permission could
+		// exist for this filesystem - and one could have been created by any node, at any earlier
+		// point, including by this process before a failback moved it to wekafs. Gating on the
+		// current mounter meant those survived and the deletion then failed on them.
+		//
+		// Safe to always call: it lists the filesystem's NFS permissions and deletes what it finds,
+		// so with none it is a single read and no mutation. A filesystem deletion is rare enough
+		// that one extra call is not worth risking the leftovers over.
+		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
+		if err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name); err != nil {
+			logger.Error().Str("filesystem", v.FilesystemName).Err(err).Msg("Failed to remove NFS permissions, cannot delete filesystem")
+			return err
 		}
 		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")
 		fsd := &apiclient.FileSystemDeleteRequest{Uid: fsObj.Uid}
