@@ -98,6 +98,9 @@ spec:
           {{- if .Values.metricsServer.quotaCacheValiditySeconds }}
             - "--wekametricsquotacachevalidityseconds={{ .Values.metricsServer.quotaCacheValiditySeconds }}"
           {{- end }}
+          {{- if .Values.metricsServer.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.metricsServer.apiTimeoutSeconds }}"
+          {{- end }}
           {{- if .Values.metricsServer.enableBatchModeForQuotaUpdates }}
             - "--fetchquotasinbatchmode"
           {{- end }}
