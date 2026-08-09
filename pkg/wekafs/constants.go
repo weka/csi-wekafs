@@ -216,3 +216,8 @@ const (
 const (
 	inactiveMountGcPeriod = time.Minute * 10
 )
+
+// TransportPreference is the order GetPreferredMounter walks when the caller has no transport of its
+// own to honour. Native wekafs comes first: NFS exists as a fallback for hosts without a working
+// Weka client, not as an equal alternative.
+var TransportPreference = []DataTransport{dataTransportWekafs, dataTransportNfs}

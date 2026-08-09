@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -709,4 +710,22 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 	}
 
 	return minimal, nil
+}
+
+// getDataTransportFromMountPath recovers which transport a mount was made over from its path.
+// mountBaseDirForRole gives each transport its own directory, so the path is the record of what
+// mounted it - which is what unmounting needs, since the driver's preferred transport may have
+// changed since the mount was made.
+//
+// An unrecognised path falls back to wekafs, matching the transport the driver prefers and the only
+// one that existed before mounts were separated by directory.
+func getDataTransportFromMountPath(mountPoint string) DataTransport {
+	for _, transport := range TransportPreference {
+		// Match on the path segment, so a filesystem whose name merely starts with "nfs" cannot be
+		// mistaken for an NFS mount.
+		if slices.Contains(strings.Split(filepath.Clean(mountPoint), string(filepath.Separator)), string(transport)) {
+			return transport
+		}
+	}
+	return dataTransportWekafs
 }

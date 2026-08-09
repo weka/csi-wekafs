@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -19,8 +18,6 @@ type wekafsMount struct {
 	mounter                 *wekafsMounter
 	fsName                  string
 	mountPoint              string
-	refCount                int
-	lock                    sync.Mutex
 	kMounter                mount.Interface
 	debugPath               string
 	mountOptions            MountOptions
@@ -36,10 +33,6 @@ func (m *wekafsMount) getMountPoint() string {
 	return m.mountPoint
 }
 
-func (m *wekafsMount) getRefCount() int {
-	return m.refCount
-}
-
 func (m *wekafsMount) getMountOptions() MountOptions {
 	return m.mountOptions
 }
@@ -52,7 +45,7 @@ func (m *wekafsMount) isInDevMode() bool {
 }
 
 func (m *wekafsMount) isMounted(ctx context.Context) bool {
-	return PathExists(m.getMountPoint()) && PathIsWekaMount(ctx, m.getMountPoint())
+	return anyMountIsMounted(ctx, m)
 }
 
 func (m *wekafsMount) getRefcountIdx() string {
@@ -60,71 +53,19 @@ func (m *wekafsMount) getRefcountIdx() string {
 }
 
 func (m *wekafsMount) incRef(ctx context.Context, apiClient *apiclient.ApiClient) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	if m.mounter == nil {
-		logger.Error().Msg("Mounter is nil")
+		log.Ctx(ctx).Error().Msg("Mounter is nil")
 		return errors.New("mounter is nil")
 	}
-
-	m.mounter.lock.Lock()
-	defer m.mounter.lock.Unlock()
-	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
-	if !ok {
-		refCount = 0
-	}
-	if refCount == 0 {
-		logger.Debug().Strs("mount_options", m.getMountOptions().Strings()).Msg("No existing mount, mounting wekafs filesystem")
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
-	}
-	if refCount > 0 && !m.isMounted(ctx) {
-		logger.Warn().Int("refcount", refCount).Msg("Mount not found in /proc/mounts despite positive refcount, remounting")
-		if err := m.doMount(ctx, apiClient, m.getMountOptions()); err != nil {
-			return err
-		}
-	}
-	refCount++
-	m.mounter.mountMap[m.getRefcountIdx()] = refCount
-	logger.Debug().
-		Int("refcount", refCount).
-		Strs("mount_options", m.getMountOptions().Strings()).
-		Msg("Mount refcount incremented")
-	return nil
+	return anyMountIncRef(ctx, m, m.mounter.mountMap, apiClient)
 }
 
 func (m *wekafsMount) decRef(ctx context.Context) error {
-	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	if m.mounter == nil {
-		logger.Error().Msg("Mounter is nil")
+		log.Ctx(ctx).Error().Msg("Mounter is nil")
 		return errors.New("mounter is nil")
 	}
-	m.mounter.lock.Lock()
-	defer m.mounter.lock.Unlock()
-	refCount, ok := m.mounter.mountMap[m.getRefcountIdx()]
-	if !ok {
-		logger.Error().Int("refcount", refCount).Str("mount_options", m.getMountOptions().String()).Msg("Mount map entry not found during decRef")
-		refCount = 0
-	}
-	if refCount < 0 {
-		logger.Error().Int("refcount", refCount).Msg("Negative refcount during decRef")
-	}
-	if refCount == 1 {
-		if m.isMounted(ctx) {
-			logger.Debug().Msg("Last reference released, unmounting wekafs filesystem")
-			if err := m.doUnmount(ctx); err != nil {
-				return err
-			}
-		} else {
-			logger.Warn().Msg("Last reference released but mount not found in /proc/mounts, skipping unmount")
-		}
-	}
-	if refCount > 0 {
-		refCount--
-		m.mounter.mountMap[m.getRefcountIdx()] = refCount
-		logger.Debug().Int("refcount", refCount).Strs("mount_options", m.getMountOptions().Strings()).Msg("Mount refcount decremented")
-	}
-	return nil
+	return anyMountDecRef(ctx, m, m.mounter.mountMap)
 }
 
 func (m *wekafsMount) locateContainerName() error {
