@@ -49,6 +49,13 @@ the Weka cluster. Credentials are taken from the API secret referenced by the Pe
   older clusters cannot resolve a path to an inode over the API. On older clusters the volume
   condition is reported as unknown rather than abnormal, and capacity is taken from the PV
 
+## Monitoring
+The plugin exposes Prometheus metrics from every component, and optionally deploys a metrics server
+that reports per-volume capacity by querying the Weka cluster. Two Grafana dashboards and a set of
+alert rules ship in `dashboards/`.
+
+- [Monitoring, metrics server and Grafana dashboards](docs/monitoring.md)
+
 ## Additional Documentation
 - [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
 
