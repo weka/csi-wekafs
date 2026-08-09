@@ -1,0 +1,23 @@
+apiVersion: v2
+name: csi-metricsserver
+description: Helm chart for Deployment of the WekaIO CSI Metrics Server, exporting per-volume WekaFS capacity and performance metrics to Prometheus
+maintainers:
+  - name: WekaIO, Inc.
+    email: csi@weka.io
+    url: https://weka.io
+sources:
+  - https://github.com/weka/csi-wekafs/tree/v2.8.9
+home: https://github.com/weka/csi-wekafs
+icon: https://weka.github.io/csi-wekafs/logo.png
+type: application
+version: 2.8.9
+appVersion: v2.8.9
+keywords: [storage, filesystem, HPC, metrics, prometheus]
+annotations:
+  artifacthub.io/category: "storage"
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/signKey: |
+    fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
+    url: https://weka.github.io/csi-wekafs/csi-public.gpg
