@@ -1,4 +1,4 @@
-{{- if .Values.metrics.podMonitor.enabled }}
+{{- if and .Values.metricsServer.enabled .Values.metrics.podMonitor.enabled }}
 {{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }}
 ---
 apiVersion: monitoring.coreos.com/v1
