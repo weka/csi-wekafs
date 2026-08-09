@@ -238,7 +238,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[1m]) / rate(weka_csi_api_request_duration_seconds_count{pod=\"$pod\"}[1m]))",
+          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[$__rate_interval]) / rate(weka_csi_api_request_duration_seconds_count{pod=\"$pod\"}[$__rate_interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -364,7 +364,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by(url)(rate(weka_csi_api_request_count{pod=\"$pod\"}[1m]))",
+          "expr": "sum by(url)(rate(weka_csi_api_request_count{pod=\"$pod\"}[$__rate_interval]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -489,7 +489,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[1m]))",
+          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[$__rate_interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -503,7 +503,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[1m]))",
+          "expr": "sum (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[$__rate_interval]))",
           "hide": false,
           "instant": false,
           "legendFormat": "TOTAL",
