@@ -15,13 +15,14 @@
 CMDS=wekafsplugin
 all: build
 
-.PHONY: build-% build clean build-debug deploy-debug update-charts update-sidecars
+.PHONY: build-% build build-all build-metricsserver push-metricsserver clean build-debug deploy-debug update-charts update-sidecars
 
 # understand what is the version tag
 VERSION ?= $(shell cat charts/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
 TIMESTAMP := $(shell date +%Y%m%d-%H%M%S)
 DEBUG_VERSION ?= $(VERSION)-debug-$(TIMESTAMP)
 DOCKER_IMAGE_NAME?=csi-wekafs
+METRICSSERVER_IMAGE_NAME?=csi-metricsserver
 DEBUG_IMAGE_NAME?=csi-wekafs-debug
 QUAY_REGISTRY?=quay.io/weka.io
 DEBUG_IMAGE?=$(QUAY_REGISTRY)/$(DEBUG_IMAGE_NAME):$(DEBUG_VERSION)
@@ -31,8 +32,17 @@ $(CMDS:%=build-%): build-%:
 
 build: $(CMDS:%=build-%)
 
+# The metrics server ships as its own image, which is what both Helm charts deploy
+build-metricsserver:
+	docker buildx build --platform linux/amd64 --build-arg VERSION=$(VERSION) -t $(METRICSSERVER_IMAGE_NAME):$(VERSION) -f Dockerfile-metricsserver --label revision=$(VERSION) .
+
+build-all: build build-metricsserver
+
 push: build
 	docker push $(DOCKER_IMAGE_NAME):$(VERSION)
+
+push-metricsserver: build-metricsserver
+	docker push $(METRICSSERVER_IMAGE_NAME):$(VERSION)
 
 clean:
 	-rm -rf bin
