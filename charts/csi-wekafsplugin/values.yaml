@@ -216,7 +216,8 @@ metricsServer:
   #    both against one WEKA cluster doubles the quota API load for no extra data.
   enabled: false
   # -- Number of replicas for metrics server. More than one is only useful with enableLeaderElection,
-  #    which keeps exactly one of them collecting while the rest stand by.
+  #    which keeps exactly one of them collecting while the rest stand by. Standbys report Ready like
+  #    any other pod; which one holds leadership is visible in the Lease object, not in pod status.
   #    A standby is not free: controller-runtime starts its cache on every replica, so each standby
   #    holds a full PersistentVolume informer cache and a watch against the API server while idle
   replicas: 2
