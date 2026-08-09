@@ -51,11 +51,10 @@ spec:
       {{- end }}
       containers:
         - name: wekafs
-          image: "{{ .Values.image.repository }}:{{if not (empty .Values.image.tag)}}{{ .Values.image.tag }}{{else}}{{ .Chart.Version }}{{end}}"
+          image: "{{ .Values.image.repository }}:{{if not (empty .Values.image.tag)}}{{ .Values.image.tag }}{{else}}v{{ .Chart.Version }}{{end}}"
           imagePullPolicy: {{ .Values.image.pullPolicy | default "Always" }}
-          # The image carries both binaries. This chart runs the metrics server one directly rather
-          # than the plugin with --csimode=metricsserver; the mode still exists and behaves
-          # identically, but the dedicated binary is what this deployment is built around.
+          # This image's entrypoint is already /metricsserver; naming it explicitly keeps the command
+          # visible in the pod spec and identical to the in-plugin chart, which runs the same image.
           command:
             - /metricsserver
           args:

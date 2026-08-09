@@ -25,6 +25,11 @@ images:
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
   csidriverTag: *csiDriverVersion
+  # -- CSI metrics server image URL. Separate from the driver image: the metrics server ships as its
+  #    own image, built by Dockerfile-metricsserver
+  csimetricsserver: quay.io/weka.io/csi-metricsserver
+  # -- CSI metrics server image tag
+  csimetricsserverTag: *csiDriverVersion
 # -- image pull secret required for image download. Must have permissions to access all images above.
 #    Should be used in case of private registry that requires authentication
 imagePullSecret: ""

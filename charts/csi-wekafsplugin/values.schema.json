@@ -302,6 +302,12 @@
                 "csidriverTag": {
                     "type": "string"
                 },
+                "csimetricsserver": {
+                    "type": "string"
+                },
+                "csimetricsserverTag": {
+                    "type": "string"
+                },
                 "healthmonitorsidecar": {
                     "type": "string"
                 },
