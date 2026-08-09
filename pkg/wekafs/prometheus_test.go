@@ -37,18 +37,7 @@ func TestPrometheusMetricsCollectorsAreComplete(t *testing.T) {
 		if group.Kind() != reflect.Struct {
 			continue
 		}
-		for j := 0; j < group.NumField(); j++ {
-			f := group.Field(j)
-			if f.Kind() != reflect.Ptr && f.Kind() != reflect.Interface {
-				continue
-			}
-			if f.IsNil() {
-				t.Errorf("%s.%s is declared but never constructed",
-					v.Type().Field(i).Name, group.Type().Field(j).Name)
-				continue
-			}
-			declared++
-		}
+		declared += declaredMetricFields(t, group, v.Type().Field(i).Name)
 	}
 
 	if got := len(m.Collectors()); got != declared {
