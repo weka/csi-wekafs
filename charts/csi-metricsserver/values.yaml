@@ -45,6 +45,9 @@ metricsServer:
   #    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.
   #    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded
   quotaCacheValiditySeconds: 300
+  # -- Timeout for a single WEKA API request, in seconds. Higher than the plugin's default because a
+  #    quota map fetch pulls every quota on a filesystem in one request
+  apiTimeoutSeconds: 180
   # -- Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).
   #    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.
   #    This is disabled by default.

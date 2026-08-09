@@ -90,6 +90,9 @@ spec:
             {{- end }}
           {{- end }}
           {{- if .Values.node.grpcRequestTimeoutSeconds }}
+          {{- if .Values.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.apiTimeoutSeconds }}"
+          {{- end }}
             - "--grpcrequesttimeoutseconds={{ .Values.node.grpcRequestTimeoutSeconds | default "5" }}"
           {{- end }}
             - "--healthprobewekatimeoutseconds=5"
