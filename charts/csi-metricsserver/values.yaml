@@ -77,8 +77,8 @@ metricsServer:
       # the leader sits well above the 100Mi that looks sufficient when idle
       memory: 256Mi
 
-# -- Log level of CSI plugin
-logLevel: 6
+# -- Log level of the metrics server
+logLevel: 4
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
 useJsonLogging: false
 

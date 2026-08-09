@@ -139,7 +139,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by(url) (weka_csi_api_request_count{pod=\"$pod\"})",
+          "expr": "sum by(url) (weka_csi_api_request_count{pod=~\"$pod\"})",
           "hide": false,
           "legendFormat": "__auto",
           "range": true,
@@ -238,7 +238,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[$__rate_interval]) / rate(weka_csi_api_request_duration_seconds_count{pod=\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=~\"$pod\"}[$__rate_interval]) / rate(weka_csi_api_request_duration_seconds_count{pod=~\"$pod\"}[$__rate_interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -364,7 +364,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by(url)(rate(weka_csi_api_request_count{pod=\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by(url)(rate(weka_csi_api_request_count{pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -489,7 +489,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=~\"$pod\"}[$__rate_interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -503,7 +503,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[$__rate_interval]))",
+          "expr": "sum (rate(weka_csi_api_request_duration_seconds_sum{pod=~\"$pod\"}[$__rate_interval]))",
           "hide": false,
           "instant": false,
           "legendFormat": "TOTAL",
@@ -626,7 +626,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_pv_reported_capacity_bytes{pod=\"$pod\"}[$value_max_age]))\n",
+          "expr": "count(count_over_time(weka_csi_volume_pv_reported_capacity_bytes[$value_max_age]))\n",
           "hide": false,
           "legendFormat": "From PV spec",
           "range": true,
@@ -638,7 +638,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes{pod=\"$pod\"}[$value_max_age]))\n",
+          "expr": "count(count_over_time(weka_csi_volume_used_bytes[$value_max_age]))\n",
           "hide": false,
           "instant": false,
           "legendFormat": "From WEKA Stats ($value_max_age)",
@@ -651,10 +651,10 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes{pod=\"$pod\"}[30m]))\n",
+          "expr": "count(count_over_time(weka_csi_volume_used_bytes[30m]))\n",
           "hide": false,
           "instant": false,
-          "legendFormat": "From WEKA Stats (20m)",
+          "legendFormat": "From WEKA Stats (30m)",
           "range": true,
           "refId": "C"
         },
@@ -664,7 +664,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes{pod=\"$pod\"}[10m]))\n",
+          "expr": "count(count_over_time(weka_csi_volume_used_bytes[10m]))\n",
           "hide": false,
           "instant": false,
           "legendFormat": "From WEKA Stats (10m)",
@@ -672,8 +672,9 @@
           "refId": "D"
         }
       ],
-      "title": "Number of PV capacities reported in last 5 minutes",
-      "type": "timeseries"
+      "title": "PersistentVolumes reporting capacity",
+      "type": "timeseries",
+      "description": "How many volumes produced a fresh capacity reading inside the window. \"From PV spec\" comes from the Kubernetes PersistentVolume object and should equal the number of valid PVs at all times. The \"From WEKA Stats\" series come from the Weka API and carry the timestamp of their own measurement, so each volume yields roughly one sample per quotaCacheValiditySeconds - a window at or below that value undercounts, and the series appears to lose volumes periodically."
     },
     {
       "datasource": {
@@ -762,7 +763,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum without(pod) (weka_csi_metricsserver_pv_removals_count_total{pod=\"$pod\"})",
+          "expr": "sum without(pod) (weka_csi_metricsserver_pv_removals_count_total{pod=~\"$pod\"})",
           "hide": false,
           "legendFormat": "PVs removed",
           "range": true,
@@ -774,7 +775,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum without(pod) (weka_csi_metricsserver_pv_additions_count_total{pod=\"$pod\"})",
+          "expr": "sum without(pod) (weka_csi_metricsserver_pv_additions_count_total{pod=~\"$pod\"})",
           "hide": false,
           "legendFormat": "PVs added (Might lag)",
           "range": true,
@@ -795,29 +796,19 @@
         "auto_count": 30,
         "auto_min": "10s",
         "current": {
-          "text": "30m",
-          "value": "30m"
+          "text": "10m",
+          "value": "10m"
         },
         "label": "Max age of values",
         "name": "value_max_age",
         "options": [
           {
             "selected": false,
-            "text": "1m",
-            "value": "1m"
-          },
-          {
-            "selected": false,
-            "text": "3m",
-            "value": "3m"
-          },
-          {
-            "selected": false,
             "text": "5m",
             "value": "5m"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "10m",
             "value": "10m"
           },
@@ -837,18 +828,31 @@
             "value": "25m"
           },
           {
-            "selected": true,
+            "selected": false,
             "text": "30m",
             "value": "30m"
+          },
+          {
+            "selected": false,
+            "text": "1h",
+            "value": "1h"
           }
         ],
-        "query": "1m,3m,5m,10m,15m,20m,25m,30m",
+        "query": "5m,10m,15m,20m,25m,30m,1h",
         "refresh": 2,
-        "type": "interval"
+        "type": "interval",
+        "description": "Freshness window for capacity readings. Must be larger than the metrics server's quotaCacheValiditySeconds (chart default 300s), or volumes that have not been re-fetched yet drop out and the count sawtooths."
       },
       {
         "allowCustomValue": false,
-        "current": {},
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
         "definition": "label_values(weka_csi_metricsserver_quota_cache_validity_seconds,pod)",
         "label": "monitorserver pod",
         "name": "pod",
@@ -860,7 +864,12 @@
         },
         "refresh": 2,
         "regex": "",
-        "type": "query"
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "sort": 1,
+        "description": "Metrics server pods. Defaults to All on purpose: the collector is leader-elected, so a standby publishes no Weka API or fetch metrics and selecting one shows empty panels."
       }
     ]
   },
