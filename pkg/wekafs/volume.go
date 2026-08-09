@@ -869,7 +869,14 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 
 func (v *Volume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
-		return v.server.getMounter().getGarbageCollector().triggerGcVolume(ctx, v)
+		// GetPreferredMounter returns nil once Probe has disabled every transport, and this is one
+		// of the paths that used to dereference it regardless - a panic rather than a failed
+		// request. MountUnderlyingFS already guarded for the same reason.
+		mounter := v.server.getMounter(ctx)
+		if mounter == nil {
+			return errors.New("cannot trash volume, no transport is currently available")
+		}
+		return mounter.getGarbageCollector().triggerGcVolume(ctx, v)
 	}
 	return v.Delete(ctx)
 }
@@ -1116,13 +1123,19 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	if v.server.getMounter() == nil {
+	// Resolved once and used throughout. getMounter follows live Probe state, so checking it for
+	// nil and then calling getMounter again to use it are two different questions: every transport
+	// can be disabled in between, and the second call then returns nil to a line that dereferences
+	// it immediately. The guard was here already; what it did not do was hold on to what it had
+	// checked.
+	mounter := v.server.getMounter(ctx)
+	if mounter == nil {
 		return errors.New("could not mount volume, mounter not in context"), NoOpUnmount
 	}
 
 	mountOpts := v.withUnsupportedMountOptionsPruned(ctx, v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions))
 
-	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	mount, err, unmountFunc := mounter.mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := NoOpUnmount
 	if err == nil {
 		v.mountPath = mount
@@ -1834,6 +1847,29 @@ func (v *Volume) deleteDirectory(ctx context.Context) (retErr error) {
 	return nil
 }
 
+// filesystemAlreadyGone reports whether a deletion failure means the filesystem is not there any
+// more, which for an idempotent delete is success rather than an error.
+//
+// Extracted because the deletion is now attempted twice - once directly, and again after clearing
+// NFS permissions - and the retry must not be spent on a filesystem that is already gone.
+func filesystemAlreadyGone(err error) bool {
+	if errors.Is(err, apiclient.ObjectNotFoundError) {
+		return true
+	}
+	if _, ok := err.(*apiclient.ApiNotFoundError); ok {
+		return true
+	}
+	// A 400 usually does mean a repeat of a delete that already happened, but the status code alone
+	// cannot tell: the cluster also returns 400 for a task queue that is merely full, and for a
+	// filesystem that still has NFS permissions on it. Both are states a delete gets past, so
+	// reading either as "already gone" would report the volume removed to Kubernetes while leaving
+	// the filesystem in place. The exception class in the payload is what separates them.
+	if _, ok := err.(*apiclient.ApiBadRequestError); ok {
+		return !apiclient.IsTooManyTasksError(err) && !apiclient.IsFilesystemInUseByNfsError(err)
+	}
+	return false
+}
+
 func (v *Volume) deleteFilesystem(ctx context.Context) error {
 	op := "deleteFilesystem"
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
@@ -1853,29 +1889,38 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		return nil
 	}
 	if !fsObj.IsRemoving { // if filesystem is already removing, just wait
-		if v.server.getMounter().getTransport() == dataTransportNfs {
-			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
-			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
-			if err != nil {
-				logger.Error().Str("filesystem", v.FilesystemName).Err(err).Msg("Failed to remove NFS permissions, cannot delete filesystem")
-				return err
-			}
-		}
 		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")
 		fsd := &apiclient.FileSystemDeleteRequest{Uid: fsObj.Uid}
 		v.fileSystemObject = nil
 		err = v.apiClient.DeleteFileSystem(ctx, fsd)
+
+		// An NFS permission on the filesystem blocks its deletion, so it has to be cleared - but
+		// only ever gets created when a node actually mounts over NFS, which on a wekafs-only
+		// cluster never happens. Clearing it up front therefore charged every deletion a list call
+		// to fix a case most clusters never reach; asking for it here costs nothing until a
+		// deletion has already failed.
+		//
+		// The transport in use is deliberately not consulted. A permission could have been created
+		// by any node, at any earlier point, including by this process before a failback moved it
+		// to wekafs - so "am I on NFS now" is the wrong question. "Did the delete just fail" is the
+		// one worth paying for.
+		// Keyed on the exception class the cluster actually raises, not on "any failure". The
+		// cleanup is a list plus a delete per permission, and a wekafs-only cluster never has one,
+		// so it should not be spent on unrelated failures.
+		if apiclient.IsFilesystemInUseByNfsError(err) {
+			logger.Debug().Str("filesystem", v.FilesystemName).Err(err).
+				Msg("Filesystem still has NFS permissions, clearing them and retrying once")
+			if nfsErr := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name); nfsErr != nil {
+				logger.Error().Str("filesystem", v.FilesystemName).Err(nfsErr).Msg("Failed to remove NFS permissions, cannot delete filesystem")
+				return nfsErr
+			}
+			err = v.apiClient.DeleteFileSystem(ctx, fsd)
+		}
+
 		if err != nil {
-			if err == apiclient.ObjectNotFoundError {
-				logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
-				return nil
-			}
-			if _, ok := err.(*apiclient.ApiNotFoundError); ok {
-				logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found, assuming repeating request")
-				return nil
-			}
-			if _, ok := err.(*apiclient.ApiBadRequestError); ok {
-				logger.Trace().Err(err).Msg("Bad request during filesystem deletion, probably already removed")
+			if filesystemAlreadyGone(err) {
+				logger.Debug().Str("filesystem", v.FilesystemName).Err(err).
+					Msg("Filesystem not found, assuming repeating request")
 				return nil
 			}
 			logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")

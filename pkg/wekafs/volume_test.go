@@ -2,7 +2,9 @@ package wekafs
 
 import (
 	"context"
+	"errors"
 	"flag"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -323,5 +325,92 @@ func TestWithUnsupportedMountOptionsPruned_KeepsReadonlyAttachment(t *testing.T)
 	pruned := v.withUnsupportedMountOptionsPruned(ctx, merged)
 	if !pruned.hasOption(MountOptionReadOnly) {
 		t.Errorf("Expected '%s' from a readonly attachment to survive the mount-time prune, got '%s'", MountOptionReadOnly, pruned.String())
+	}
+}
+
+// A filesystem deletion that has already happened must not spend the retry, since the retry exists
+// only to clear NFS permissions that could be blocking a deletion which can still succeed.
+//
+// The NFS sweep used to run before every deletion, which charged a wekafs-only cluster - most of
+// them - a list call per delete to fix a case it never reaches. It now runs only after a deletion
+// has actually failed, and these are the errors that mean "already gone" rather than "blocked".
+func TestFilesystemAlreadyGone(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "the sentinel not-found", err: apiclient.ObjectNotFoundError, want: true},
+		{name: "wrapped sentinel", err: fmt.Errorf("deleting: %w", apiclient.ObjectNotFoundError), want: true},
+		{name: "API not found", err: &apiclient.ApiNotFoundError{}, want: true},
+		{name: "API bad request, i.e. not in a deletable state", err: &apiclient.ApiBadRequestError{}, want: true},
+		// The case the retry exists for: something blocked it, and it may well succeed once the
+		// NFS permissions are cleared.
+		{name: "an internal error, which may be the NFS block", err: &apiclient.ApiInternalError{}, want: false},
+		{name: "a plain error", err: errors.New("boom"), want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := filesystemAlreadyGone(tc.err); got != tc.want {
+				t.Errorf("expected %v, got %v", tc.want, got)
+			}
+		})
+	}
+}
+
+// The cluster returns HTTP 400 for several unrelated things, so the status code alone cannot mean
+// "the filesystem is already gone". It returns one when the task queue is full - transient - and
+// one when the filesystem still has NFS permissions, which is precisely the case the retry exists
+// to clear. Reading either as success would report the volume deleted to Kubernetes while leaving
+// the filesystem in place, and would skip the cleanup that would have let the delete through.
+//
+// The exception class in the payload is what separates them, and is how the cluster itself
+// distinguishes the two conditions.
+func TestFilesystemAlreadyGoneReadsTheExceptionClass(t *testing.T) {
+	badRequestWith := func(classes ...string) error {
+		return &apiclient.ApiBadRequestError{
+			ApiResponse: &apiclient.ApiResponse{ErrorCodes: classes},
+		}
+	}
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "a bare 400 still reads as already removed, as before",
+			err:  badRequestWith(),
+			want: true,
+		},
+		{
+			name: "NFS permissions still attached - the retry must run, not be skipped",
+			err:  badRequestWith(apiclient.ExceptionClassFilesystemInUseByNfs, "OperationFailedException"),
+			want: false,
+		},
+		{
+			name: "task queue full - transient, and not a completed deletion",
+			err:  badRequestWith(apiclient.ExceptionClassTooManyTasks, "BadStateException"),
+			want: false,
+		},
+		{
+			name: "an unrelated 400 class",
+			err:  badRequestWith("SomeOtherException"),
+			want: true,
+		},
+		{
+			// A different class with a confusingly similar name: this filesystem is the cluster's
+			// own internal NFS configuration filesystem, and no amount of deleting permissions
+			// will release it. Matching it would spend a round trip on a deletion that cannot
+			// succeed, so the match has to be exact rather than a prefix.
+			name: "the internal NFS config filesystem, which the retry cannot help",
+			err:  badRequestWith("FilesystemInUseByConfigNFSException", "OperationFailedException"),
+			want: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := filesystemAlreadyGone(tc.err); got != tc.want {
+				t.Errorf("expected %v, got %v", tc.want, got)
+			}
+		})
 	}
 }

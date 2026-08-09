@@ -43,7 +43,7 @@ type ControllerServer struct {
 	csi.UnimplementedControllerServer
 	caps            []*csi.ControllerServiceCapability
 	nodeID          string
-	mounter         AnyMounter
+	mounters        *MounterGroup
 	api             *ApiStore
 	config          *DriverConfig
 	semaphores      map[string]*semaphore.Weighted
@@ -73,8 +73,20 @@ func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }
 
-func (cs *ControllerServer) getMounter() AnyMounter {
-	return cs.mounter
+// getMounter is nil-safe: Run constructs a bare ControllerServer for the modes that do not serve the
+// controller service, and that instance has no mounters at all.
+func (cs *ControllerServer) getMounter(ctx context.Context) AnyMounter {
+	if cs.mounters == nil {
+		return nil
+	}
+	return cs.mounters.GetPreferredMounter(ctx)
+}
+
+func (cs *ControllerServer) getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter {
+	if cs.mounters == nil {
+		return nil
+	}
+	return cs.mounters.GetMounterByTransport(ctx, transport)
 }
 
 func (cs *ControllerServer) getApiStore() *ApiStore {
@@ -101,7 +113,7 @@ func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.Control
 	return nil, status.Error(codes.Unimplemented, "ControllerModifyVolume is not supported: the driver does not advertise MODIFY_VOLUME")
 }
 
-func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig, manager ctrl.Manager) *ControllerServer {
+func NewControllerServer(nodeID string, api *ApiStore, mounters *MounterGroup, config *DriverConfig, manager ctrl.Manager) *ControllerServer {
 	exposedCapabilities := []csi.ControllerServiceCapability_RPC_Type{
 		csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 		csi.ControllerServiceCapability_RPC_EXPAND_VOLUME,
@@ -129,7 +141,7 @@ func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, confi
 	cs := &ControllerServer{
 		caps:        capabilities,
 		nodeID:      nodeID,
-		mounter:     mounter,
+		mounters:    mounters,
 		api:         api,
 		config:      config,
 		semaphores:  make(map[string]*semaphore.Weighted),
