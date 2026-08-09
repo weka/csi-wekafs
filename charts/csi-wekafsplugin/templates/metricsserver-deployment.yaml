@@ -121,16 +121,12 @@ spec:
             initialDelaySeconds: 10
             timeoutSeconds: 3
             periodSeconds: 2
-          # With leader election on, /readyz reports leadership, so exactly one replica shows Ready
-          # and the standbys are visibly standing by rather than looking identical to the leader.
-          readinessProbe:
-            failureThreshold: 3
-            httpGet:
-              path: /readyz
-              port: healthz
-            initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 10
+          # No readinessProbe on purpose. /readyz is served and reports leadership, but wiring it to a
+          # probe would hold every non-leader replica NotReady for its whole life - which restarts
+          # nothing, since only liveness restarts, but does raise KubePodNotReady and
+          # KubeDeploymentReplicasMismatch permanently on any cluster running the kube-prometheus
+          # stack. It would buy endpoint gating, and nothing fronts these pods with a Service. Add the
+          # probe back together with that Service, not before.
           env:
             - name: CSI_DRIVER_NAME
               value: {{ required "Provide CSI Driver Name" .Values.csiDriverName }}
