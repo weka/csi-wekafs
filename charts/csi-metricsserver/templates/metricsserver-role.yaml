@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-metrics-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-metrics-server
+    component: {{ .Release.Name }}-metrics-server
+    release: {{ .Release.Name }}
+# Leases and events are what controller-runtime's leader election needs; both are namespaced.
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch", "update"]
