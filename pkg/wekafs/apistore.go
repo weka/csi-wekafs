@@ -186,6 +186,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 		AllowInsecureHttps: api.config.allowInsecureHttps,
 		Hostname:           hostname,
 		DriverName:         api.driverName,
+		ApiTimeout:         api.config.wekaApiTimeout,
 	})
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
