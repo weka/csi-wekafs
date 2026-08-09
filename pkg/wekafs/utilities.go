@@ -597,30 +597,44 @@ func isWekaRunning(ctx context.Context) bool {
 	return true
 }
 
+// getSelinuxStatus reports whether the host kernel has SELinux active, enforcing or permissive.
+//
+// It reads the kernel's own state through selinuxfs rather than /etc/selinux/config, which describes
+// what the system was configured to do, not what it is doing - and which, read from inside a
+// container, describes the image rather than the host. The plugin image installs container-selinux
+// and so ships its own /etc/selinux/config saying SELINUX=enforcing, which meant every node on a
+// cluster without SELinux was told SELinux was enforcing and had a context added to every mount.
+//
+// Permissive counts as active on purpose: the labels are still applied by the kernel, so a mount
+// made without a context there would be labelled wrong and start failing the moment the host is
+// switched to enforcing.
+//
+// The chart only mounts /sys/fs/selinux into the container for OpenShift or selinuxSupport=enforced,
+// which is also when -selinux-support is passed - so an absent path means SELinux was not asked for,
+// and reporting false is right.
 func getSelinuxStatus(ctx context.Context) bool {
-	logger := log.Ctx(ctx)
-	// check if we have /etc/selinux/config
-	// if it exists, we can check if selinux is enforced or not
-	selinuxConf := "/etc/selinux/config"
-	file, err := os.Open(selinuxConf)
+	return selinuxEnabledAt(ctx, "/sys/fs/selinux/enforce")
+}
+
+// selinuxEnabledAt is getSelinuxStatus with the selinuxfs path injected, so the states can be tested
+// without a host that has SELinux.
+func selinuxEnabledAt(ctx context.Context, enforcePath string) bool {
+	data, err := os.ReadFile(enforcePath)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Ctx(ctx).Error().Err(err).Str("filename", enforcePath).Msg("Failed to read SELinux state")
+		}
 		return false
 	}
-	defer func() { _ = file.Close() }()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, "SELINUX=enforcing") {
-			// no need to repeat each time, just set the selinuxSupport to true
-			return true
-		}
+	switch strings.TrimSpace(string(data)) {
+	case "1": // enforcing
+		return true
+	case "0": // permissive
+		return true
+	default:
+		return false
 	}
-
-	if err := scanner.Err(); err != nil {
-		logger.Error().Err(err).Str("filename", selinuxConf).Msg("Failed to read SELinux config file")
-	}
-	return false
 }
 
 // Die used to intentionally panic and exit, while updating termination log
