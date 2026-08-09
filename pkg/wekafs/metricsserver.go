@@ -875,6 +875,16 @@ func (ms *MetricsServer) MetricsReportStreamer(ctx context.Context) {
 }
 
 // createPrometheusLabelsForMetric builds the LabelsForCsiVolumes label values for one volume.
+// organizationLabel names the Weka tenant a volume belongs to. Credentials leave Organization empty
+// to mean the root organization, so that is spelled out rather than exported as a blank label, which
+// would be indistinguishable from "not known" in a query.
+func organizationLabel(client *apiclient.ApiClient) string {
+	if client == nil || client.Credentials.Organization == "" {
+		return apiclient.RootOrganizationName
+	}
+	return client.Credentials.Organization
+}
+
 func (ms *MetricsServer) createPrometheusLabelsForMetric(metric *VolumeMetric) []string {
 	labelValues := []string{
 		ms.driver.name,
@@ -883,6 +893,7 @@ func (ms *MetricsServer) createPrometheusLabelsForMetric(metric *VolumeMetric) [
 		metric.persistentVolume.Spec.StorageClassName,
 		metric.volume.FilesystemName,
 		string(metric.volume.GetBackingType()),
+		organizationLabel(metric.apiClient),
 	}
 	if metric.persistentVolume.Spec.ClaimRef != nil {
 		labelValues = append(labelValues,
