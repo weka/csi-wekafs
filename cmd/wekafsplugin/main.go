@@ -69,6 +69,7 @@ var (
 	maxConcurrentNodePublishVolumeReqs   = flag.Int64("concurrency.nodePublishVolume", 1, "Maximum concurrent NodePublishVolume requests")
 	maxConcurrentNodeUnpublishVolumeReqs = flag.Int64("concurrency.nodeUnpublishVolume", 5, "Maximum concurrent NodeUnpublishVolume requests")
 	grpcRequestTimeoutSeconds            = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
+	wekaApiTimeoutSeconds                = flag.Int("wekaapitimeoutseconds", 60, "Timeout for a single Weka API request in seconds")
 	healthProbeWekaTimeoutSeconds        = flag.Int("healthprobewekatimeoutseconds", 2, "Timeout in seconds for WekaFS health check in liveness probe")
 	allowProtocolContainers              = flag.Bool("allowprotocolcontainers", false, "Allow protocol containers to be used for mounting filesystems")
 	allowNfsFailback                     = flag.Bool("allownfsfailback", false, "Allow NFS failback")
@@ -173,6 +174,7 @@ func handle(ctx context.Context) {
 		MaxNodeUnpublishVolumeReqs: *maxConcurrentNodeUnpublishVolumeReqs,
 
 		GrpcRequestTimeoutSeconds:     *grpcRequestTimeoutSeconds,
+		WekaApiTimeoutSeconds:         *wekaApiTimeoutSeconds,
 		HealthProbeWekaTimeoutSeconds: *healthProbeWekaTimeoutSeconds,
 
 		AllowNfsFailback:   *allowNfsFailback,

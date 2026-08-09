@@ -183,6 +183,8 @@ node:
       requests:
         cpu: 8m
         memory: 52Mi
+# -- Timeout for a single WEKA API request, in seconds
+apiTimeoutSeconds: 60
 # -- Log level of CSI plugin
 logLevel: 5
 # -- Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser)
@@ -250,6 +252,9 @@ metricsServer:
   #    When false, all quota values will be fetched instantaneously, during metrics collection.
   #    Not recommended when having thousands of PVCs
   enableBatchModeForQuotaUpdates: false
+  # -- Timeout for a single WEKA API request, in seconds. Higher than the plugin-wide default because
+  #    a quota map fetch pulls every quota on a filesystem in one request
+  apiTimeoutSeconds: 180
   # -- Scrape interval for the metrics server. Defaults to the fetch interval rather than the
   #    chart-wide metrics.podMonitor.interval: the gauges only move once per
   #    metricsFetchIntervalSeconds, and with honorTimestamps a repeat scrape carries the same

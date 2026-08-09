@@ -87,6 +87,18 @@ type ApiClientOptions struct {
 	// DriverName labels the metrics this client records, so several drivers scraped together stay
 	// distinguishable.
 	DriverName string
+	// ApiTimeout bounds a single Weka API request. Left at zero it falls back to
+	// ApiHttpTimeOutSeconds rather than to http.Client's own zero value, which means no timeout at
+	// all - a caller that forgot to set it would hang forever instead of failing.
+	ApiTimeout time.Duration
+}
+
+// apiTimeoutOrDefault keeps an unset or nonsensical timeout from disabling timeouts entirely.
+func apiTimeoutOrDefault(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return ApiHttpTimeOutSeconds * time.Second
+	}
+	return timeout
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOptions) (*ApiClient, error) {
@@ -111,7 +123,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 			Transport:     tr,
 			CheckRedirect: nil,
 			Jar:           nil,
-			Timeout:       ApiHttpTimeOutSeconds * time.Second,
+			Timeout:       apiTimeoutOrDefault(opts.ApiTimeout),
 		},
 		ClusterGuid:        uuid.UUID{},
 		Credentials:        credentials,
