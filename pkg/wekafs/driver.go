@@ -228,6 +228,24 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	}
 }
 
+// leaderElectionIDForMode names the lease a mode competes for. The metrics server gets its own,
+// because it elects a leader for an unrelated reason: one replica should collect metrics, which says
+// nothing about which replica should serve the CSI controller service.
+//
+// Sharing one lease made them compete. With the metrics server enabled inside the plugin release,
+// its pods could win the controller's lease, leaving both controller pods waiting for a leadership
+// they would never get: the gRPC server never started, wait-for-leader gated every sidecar forever,
+// and provisioning stopped while every pod still reported healthy.
+//
+// The controller's lease name is deliberately unchanged. Renaming it would have old and new pods
+// electing separate leaders from the same release during a rolling upgrade.
+func leaderElectionIDForMode(driverName string, mode CsiPluginMode) string {
+	if mode == CsiModeMetricsServer {
+		return fmt.Sprintf("%s-metricsserver-leader", driverName)
+	}
+	return fmt.Sprintf("%s-controller-leader", driverName)
+}
+
 // initManager initializes the controller-runtime manager.
 // Pass leaderElection=true for controller mode (acquires a lease before serving).
 // Pass leaderElection=false for node mode (client-only, no lease required).
@@ -299,7 +317,7 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 		}
 		mgrOpts.LeaderElection = true
 		mgrOpts.LeaderElectionNamespace = namespace
-		mgrOpts.LeaderElectionID = fmt.Sprintf("%s-controller-leader", d.name)
+		mgrOpts.LeaderElectionID = leaderElectionIDForMode(d.name, d.csiMode)
 		mgrOpts.LeaderElectionReleaseOnCancel = true
 	}
 
