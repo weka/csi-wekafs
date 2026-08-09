@@ -124,25 +124,23 @@ spec:
           {{- if .Values.pluginConfig.allowMountOptionOverrides }}
             - "--allowmountoptionoverrides"
           {{- end }}
-          {{- if or .Values.node.livenessProbeEnabled .Values.metrics.enabled }}
-          ports:
-          {{- if .Values.node.livenessProbeEnabled }}
-            - containerPort: 9899
-              name: ns-healthz
-              protocol: TCP
-          {{- end }}
           {{- if .Values.metrics.enabled }}
+          ports:
             - containerPort: {{ .Values.metrics.nodePort }}
               name: metrics
               protocol: TCP
           {{- end }}
-          {{- end }}
           {{- if .Values.node.livenessProbeEnabled }}
+          # Probes the liveness-probe sidecar, which is what actually serves /healthz - it translates
+          # the request into a CSI Probe RPC against this container. The port is given by number
+          # rather than by name because a named port only resolves against the ports its own
+          # container declares, and this one belongs to the sidecar. Restarting on failure is the
+          # point, and it must restart the driver rather than the sidecar reporting on it.
           livenessProbe:
             failureThreshold: 10
             httpGet:
               path: /healthz
-              port: ns-healthz
+              port: {{ .Values.node.healthPort | default 9899 }}
             initialDelaySeconds: 10
             timeoutSeconds: 10
             periodSeconds: 10
@@ -211,11 +209,15 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--health-port=$(HEALTH_PORT)"
             - "--probe-timeout=6s"
+          ports:
+            - containerPort: {{ .Values.node.healthPort | default 9899 }}
+              name: ns-healthz
+              protocol: TCP
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
             - name: HEALTH_PORT
-              value: "9899"
+              value: "{{ .Values.node.healthPort | default 9899 }}"
           {{- if .Values.node.resources.livenessProbe }}
           resources:
             {{- toYaml .Values.node.resources.livenessProbe | nindent 12 }}
@@ -228,9 +230,9 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--kubelet-registration-path=$(KUBELET_REGISTRATION_PATH)"
             - "--timeout=60s"
-            - "--health-port=9809"
+            - "--health-port={{ .Values.node.registrarPort | default 9809 }}"
           ports:
-            - containerPort: 9809
+            - containerPort: {{ .Values.node.registrarPort | default 9809 }}
               name: reg-healthz
           livenessProbe:
             httpGet:

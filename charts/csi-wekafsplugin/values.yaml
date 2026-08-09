@@ -158,6 +158,10 @@ node:
   podLabels: {}
   # -- Enable liveness probe on node pods. Set to false to disable health checks for debugging pod restart issues
   livenessProbeEnabled: true
+  # -- Port the liveness-probe sidecar serves /healthz on, probed by the node driver container
+  healthPort: 9899
+  # -- Port the node registrar sidecar serves its own /healthz on
+  registrarPort: 9809
   # -- termination grace period for node pods
   terminationGracePeriodSeconds: 10
   # -- resource requests and limits for node containers
