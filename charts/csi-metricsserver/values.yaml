@@ -16,7 +16,9 @@ hostNetwork: false
 
 metricsServer:
   # -- Number of replicas for metrics server. More than one is only useful with enableLeaderElection,
-  #    which keeps exactly one of them collecting while the rest stand by
+  #    which keeps exactly one of them collecting while the rest stand by.
+  #    A standby is not free: controller-runtime starts its cache on every replica, so each standby
+  #    holds a full PersistentVolume informer cache and a watch against the API server while idle
   replicas: 2
   # -- optional nodeSelector for metrics server only
   nodeSelector: {}
@@ -52,8 +54,14 @@ metricsServer:
   #    When false, all quota values will be fetched instantaneously, during metrics collection.
   #    Not recommended when having thousands of PVCs
   enableBatchModeForQuotaUpdates: false
-  # -- Port serving both the /healthz liveness probe and the /readyz readiness probe
-  healthPort: 8081
+  # -- Scrape interval for the metrics server. Defaults to the fetch interval rather than the
+  #    chart-wide 30s: the gauges only move once per metricsFetchIntervalSeconds, and with
+  #    honorTimestamps a repeat scrape carries the same timestamp and is discarded as a duplicate
+  scrapeInterval: 60s
+  # -- Port serving both the /healthz liveness probe and the /readyz readiness probe.
+  #    Deliberately not the controller's 8081: under hostNetwork the two share a node's network
+  #    namespace, and whichever bound second would fail
+  healthPort: 9196
   # -- Resources for the metrics server container
   resources:
     limits:
@@ -61,7 +69,9 @@ metricsServer:
       memory: 2Gi
     requests:
       cpu: 0.1
-      memory: 100Mi
+      # Sized for the PersistentVolume informer cache plus in-flight quota fetches; at ~10k volumes
+      # the leader sits well above the 100Mi that looks sufficient when idle
+      memory: 256Mi
 
 # -- Log level of CSI plugin
 logLevel: 6
@@ -69,14 +79,13 @@ logLevel: 6
 useJsonLogging: false
 
 metrics:
-  # -- Enable Prometheus Metrics
-  enabled: true
-  # -- Metrics server metrics port
+  # -- Metrics server metrics port. The metrics server always exports; exporting is its only job,
+  #    so there is no switch to turn it off
   metricsServerPort: 9096
   podMonitor:
     # -- Create a PodMonitor, if the Prometheus Operator CRDs are installed
     enabled: true
-    # -- Scrape interval
+    # -- Scrape interval for charts that do not override it
     interval: 30s
     # -- Additional labels, e.g. the release label your Prometheus selects PodMonitors by
     additionalLabels: {}

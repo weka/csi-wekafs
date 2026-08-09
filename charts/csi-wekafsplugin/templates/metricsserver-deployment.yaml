@@ -1,3 +1,4 @@
+{{- if .Values.metricsServer.enabled }}
 kind: Deployment
 apiVersion: apps/v1
 metadata:
@@ -33,39 +34,48 @@ spec:
         prometheus.io/port: '{{ .Values.metrics.metricsServerPort | default 9096 }}'
     {{- end }}
     spec:
-      {{- if .Values.metricsServer.affinity }}
+      {{- if or .Values.metricsServer.affinity .Values.affinity }}
+      {{- $metricsServerAffinity := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $metricsServerAffinity .Values.metricsServer.affinity .Values.affinity) }}
       affinity:
-        {{- toYaml .Values.metricsServer.affinity | nindent 8 }}
+        {{- toYaml $metricsServerAffinity | nindent 8 }}
       {{- end }}
-      {{- if .Values.metricsServer.nodeSelector }}
+      {{- if or .Values.nodeSelector .Values.metricsServer.nodeSelector }}
+      {{- $nodeSelector := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeSelector .Values.metricsServer.nodeSelector .Values.nodeSelector) }}
       nodeSelector:
-        {{- toYaml .Values.metricsServer.nodeSelector | nindent 8 }}
+        {{- toYaml $nodeSelector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-metrics-server
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       {{- if .Values.hostNetwork }}
       hostNetwork: true
       {{- end }}
       containers:
-        - name: wekafs
-          image: "{{ .Values.image.repository }}:{{if not (empty .Values.image.tag)}}{{ .Values.image.tag }}{{else}}{{ .Chart.Version }}{{end}}"
-          imagePullPolicy: {{ .Values.image.pullPolicy | default "Always" }}
-          # The image carries both binaries. This chart runs the metrics server one directly rather
-          # than the plugin with --csimode=metricsserver; the mode still exists and behaves
-          # identically, but the dedicated binary is what this deployment is built around.
+        - name: metrics-server
+          image: {{ .Values.images.csidriver }}:v{{ .Values.images.csidriverTag }}
+          imagePullPolicy: Always
+          # The image carries both binaries. This runs the metrics server one directly rather than the
+          # plugin with --csimode=metricsserver; the mode still exists and behaves identically, but the
+          # dedicated binary is what this Deployment is built around.
           command:
             - /metricsserver
           args:
             - "--drivername=$(CSI_DRIVER_NAME)"
             - "--nodeid=$(KUBE_NODE_NAME)"
-            - "--v={{ .Values.logLevel | default 5 }}"
+            - "--v={{ .Values.metricsServer.logLevel | default .Values.logLevel }}"
           {{- if .Values.tracingUrl }}
             - "--tracingurl={{ .Values.tracingUrl }}"
           {{- end }}
-            {{/* Not optional: exporting metrics is this pod's only job. */}}
+            {{/* Deliberately not gated on .Values.metrics.enabled, which turns off metrics for the
+                 CSI sidecars. Exporting metrics is this pod's only job, so a metrics server that
+                 emitted nothing would be a pod with nothing to do. */}}
             - "--enablemetrics"
             - "--metricsport={{ .Values.metrics.metricsServerPort | default 9096 }}"
           {{- if .Values.pluginConfig.allowInsecureHttps }}
@@ -147,3 +157,4 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       terminationGracePeriodSeconds: {{ .Values.metricsServer.terminationGracePeriodSeconds | default 30 }}
+{{- end }}
