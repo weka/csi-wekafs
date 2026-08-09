@@ -61,7 +61,7 @@ var (
 	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
 	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
 	wekaMetricsQuotaCacheValiditySeconds     = flag.Int("wekametricsquotacachevalidityseconds", 60, "Duration in seconds for which the quota map is considered valid")
-	fetchQuotasInBatchMode                   = flag.Bool("fetchquotasinbatchmode", false, "Use batch mode for metrics server, fetch all filesystem quotas in one go")
+	fetchQuotasInBatchMode                   = flag.Bool("fetchquotasinbatchmode", true, "Fetch all quotas of a filesystem in one request instead of one request per volume")
 
 	// Set by the build process
 	version = ""

@@ -91,9 +91,9 @@ spec:
           {{- if .Values.metricsServer.apiTimeoutSeconds }}
             - "--wekaapitimeoutseconds={{ .Values.metricsServer.apiTimeoutSeconds }}"
           {{- end }}
-          {{- if .Values.metricsServer.enableBatchModeForQuotaUpdates }}
-            - "--fetchquotasinbatchmode"
-          {{- end }}
+            {{/* Rendered with its value rather than gated on it: the flag defaults to true, so a
+                 presence-only argument could only ever turn batch mode on, never off. */}}
+            - "--fetchquotasinbatchmode={{ .Values.metricsServer.enableBatchModeForQuotaUpdates }}"
           ports:
             # controller-runtime serves /healthz and /readyz on one bind address, so liveness and
             # readiness share a single port rather than each having their own.
