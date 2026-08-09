@@ -5,10 +5,10 @@
 csiDriverName: "csi.weka.io"
 
 image:
-  # -- The metrics server ships inside the CSI plugin image, which carries both binaries
-  repository: quay.io/weka.io/csi-wekafs
+  # -- The metrics server has its own image, built by Dockerfile-metricsserver
+  repository: quay.io/weka.io/csi-metricsserver
   pullPolicy: Always
-  # -- Image tag; defaults to the chart version when empty
+  # -- Image tag; defaults to v<chart version> when empty
   tag: ""
 imagePullSecret: ""
 
