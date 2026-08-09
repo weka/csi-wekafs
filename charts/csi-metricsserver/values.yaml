@@ -49,15 +49,15 @@ metricsServer:
   # -- Timeout for a single WEKA API request, in seconds. Higher than the plugin's default because a
   #    quota map fetch pulls every quota on a filesystem in one request
   apiTimeoutSeconds: 180
-  # -- Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).
-  #    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.
-  #    This is disabled by default.
-  #    The drawback is that in such case, metrics will be reported less frequently, using cached values.
-  #    Report timestamp will be recorded for each metric, so you can see when the last update was.
-  #    This requires Prometheus server to honor timestamps.
-  #    When false, all quota values will be fetched instantaneously, during metrics collection.
-  #    Not recommended when having thousands of PVCs
-  enableBatchModeForQuotaUpdates: false
+  # -- Fetch all quotas of a filesystem in one request instead of one request per volume.
+  #    On by default, because directory-backed volumes share a filesystem: a fleet of 5800 of them
+  #    spread over 5 filesystems costs 5 requests per cycle this way and roughly 5800 without.
+  #    Filesystem-backed volumes hold one volume per filesystem, so batching is no worse for them.
+  #    The trade-off is freshness. Quotas come from a cache kept for quotaCacheValiditySeconds, so a
+  #    value can be that old; each metric carries the timestamp of its own measurement rather than of
+  #    the scrape, which needs honorTimestamps on the Prometheus side (the PodMonitor sets it).
+  #    Set false to fetch every quota during collection instead, at one API request per volume.
+  enableBatchModeForQuotaUpdates: true
   # -- Scrape interval for the metrics server. Defaults to the fetch interval rather than the
   #    chart-wide 30s: the gauges only move once per metricsFetchIntervalSeconds, and with
   #    honorTimestamps a repeat scrape carries the same timestamp and is discarded as a duplicate
