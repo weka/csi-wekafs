@@ -311,32 +311,7 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 	}
 	apiResponse := &ApiResponse{}
 	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
-	return classifyFilesystemDeleteError(err)
-}
-
-// classifyFilesystemDeleteError maps a delete failure onto ObjectNotFoundError when the cluster is
-// saying the filesystem is already gone - which for an idempotent delete is the state the caller
-// wanted - and returns every other failure unchanged.
-//
-// Returning the rest is the point. They used to fall out of the type switch into a bare return nil,
-// so the caller could not tell a completed deletion from a refused one. A filesystem still carrying
-// NFS permissions is refused exactly this way, and its caller now clears the permissions and retries
-// on seeing that error - which it can only do if the error reaches it.
-func classifyFilesystemDeleteError(err error) error {
-	if err == nil {
-		return nil
-	}
-	switch t := err.(type) {
-	case *ApiNotFoundError:
-		return ObjectNotFoundError
-	case *ApiBadRequestError:
-		for _, c := range t.ApiResponse.ErrorCodes {
-			if c == "FilesystemDoesNotExistException" {
-				return ObjectNotFoundError
-			}
-		}
-	}
-	return err
+	return classifyDeleteError(err, "FilesystemDoesNotExistException")
 }
 
 func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsName string) error {
