@@ -81,7 +81,7 @@ func (ns *NodeServer) getMounter() AnyMounter {
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeExpandVolume(ctx context.Context, request *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
-	panic("implement me")
+	return nil, status.Error(codes.Unimplemented, "NodeExpandVolume is not supported: the driver does not advertise the node EXPAND_VOLUME capability")
 }
 
 func (ns *NodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
@@ -606,12 +606,12 @@ FORCEUMOUNT:
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "NodeStageVolume is not supported")
+	return nil, status.Error(codes.Unimplemented, "NodeStageVolume is not supported: the driver does not advertise STAGE_UNSTAGE_VOLUME")
 }
 
 //goland:noinspection GoUnusedParameter
 func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "NodeUnstageVolume is not supported")
+	return nil, status.Error(codes.Unimplemented, "NodeUnstageVolume is not supported: the driver does not advertise STAGE_UNSTAGE_VOLUME")
 }
 
 //goland:noinspection GoUnusedParameter
