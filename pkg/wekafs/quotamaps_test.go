@@ -85,7 +85,7 @@ func TestQuotaMapsPerFilesystem(t *testing.T) {
 
 	quotaMap := &apiclient.QuotaMap{
 		FileSystemUid: uid,
-		Quotas:        map[uint64]*apiclient.Quota{42: {InodeId: 42, TotalBytes: 1024}},
+		Quotas:        map[uint64]*apiclient.Quota{42: {InodeId: 42, UsedBytes: 1024}},
 	}
 	qms.SetQuotaMap(uid, quotaMap)
 
@@ -93,7 +93,7 @@ func TestQuotaMapsPerFilesystem(t *testing.T) {
 	if got != quotaMap {
 		t.Fatalf("GetQuotaMap returned %v, want the map that was set", got)
 	}
-	if q := got.GetQuotaForInodeId(42); q == nil || q.TotalBytes != 1024 {
+	if q := got.GetQuotaForInodeId(42); q == nil || q.UsedBytes != 1024 {
 		t.Fatalf("GetQuotaForInodeId(42) = %v, want the quota with 1024 bytes", q)
 	}
 	if q := got.GetQuotaForInodeId(43); q != nil {
