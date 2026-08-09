@@ -218,6 +218,13 @@ confirm the pod is an `up` scrape target.
 PodMonitor relabeling is missing or because the metrics are scraped some other way. Aggregate `pod`
 away, or add the relabeling.
 
+**Snapshot-backed volumes.** A snapshot-backed volume's quota lives in the snapshot's view, and
+Weka does not return it when listing a filesystem's quotas - only a direct per-inode lookup finds it.
+The metrics server detects this and falls back to a per-volume fetch for exactly those volumes, which
+is counted by `weka_csi_metricsserver_quota_map_miss_count_total`. A non-zero value there is normal
+if you provision volumes from snapshots; a value that tracks your whole fleet means the quota map is
+not being built at all.
+
 **A volume is monitored but never reports.** Compare
 `weka_csi_metricsserver_monitored_persistent_volumes_gauge` against
 `count(weka_csi_volume_capacity_bytes)`. A gap means the volume was discovered but its quota could
