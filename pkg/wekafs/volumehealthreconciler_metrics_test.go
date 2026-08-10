@@ -115,7 +115,7 @@ func newHealthReconcilerTestServer(t *testing.T, objs ...runtimeclient.Object) (
 		UseNfs:           false,
 	})
 
-	driver, err := NewWekaFsDriver("csi.weka.io", "localhost", "unix://tmp/csi.sock", 10, "v1.0", "", CsiModeAll, false, driverConfig)
+	driver, err := NewWekaFsDriver("csi.weka.io", "localhost", "unix://tmp/csi.sock", 10, "v1.0", "", CsiModeController, false, driverConfig)
 	if err != nil {
 		t.Fatalf("failed to create driver: %v", err)
 	}

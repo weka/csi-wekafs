@@ -56,8 +56,8 @@ type DriverConfig struct {
 	keepThinProvisioningRatioOnExpand bool
 
 	// Metrics server settings. Whether a MetricsServer is constructed at all in NewWekaFsDriver is
-	// gated on csiMode (CsiModeMetricsServer or CsiModeAll), not on any of these; the settings below
-	// only matter to the metrics server lifecycle (see metricsserver.go) once it is running.
+	// gated on csiMode (CsiModeMetricsServer), not on any of these; the settings below only matter to
+	// the metrics server lifecycle (see metricsserver.go) once it is running.
 	metricsFetchInterval              time.Duration // how often the PV streamer refreshes its list and re-polls Weka for stats
 	metricsFetchConcurrentRequests    int           // concurrency cap for both PV processing and single-metric fetches
 	enableMetricsServerLeaderElection bool          // gate the metrics server's readiness on holding leadership

@@ -40,7 +40,6 @@ const (
 
 	CsiModeNode          CsiPluginMode = "node"
 	CsiModeController    CsiPluginMode = "controller"
-	CsiModeAll           CsiPluginMode = "all"
 	CsiModeMetricsServer CsiPluginMode = "metricsserver"
 )
 

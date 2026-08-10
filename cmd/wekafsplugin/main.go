@@ -33,7 +33,7 @@ import (
 
 var (
 	mutuallyExclusiveMountOptionsStrings wekafs.MutuallyExclusiveMountOptsStrings
-	csiMode                              = wekafs.CsiPluginMode("all")
+	csiMode                              = wekafs.CsiPluginMode("")
 	endpoint                             = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
 	driverName                           = flag.String("drivername", "csi.weka.io", "name of the driver")
 	debugPath                            = flag.String("debugpath", "",
@@ -44,7 +44,7 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csimodetext                          = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default), or \"metricsserver\"")
+	csimodetext                          = flag.String("csimode", "", "Mode of CSI plugin, either \"controller\", \"node\", or \"metricsserver\" (required, no default)")
 	selinuxSupport                       = flag.Bool("selinux-support", false, "Enable support for SELinux")
 	newVolumePrefix                      = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
 	newSnapshotPrefix                    = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
@@ -88,8 +88,8 @@ var (
 	keepThinProvisioningRatioOnExpand    = flag.Bool("keepthinprovisioningratioonexpand", true, "On filesystem expansion, scale thin-provisioning min-SSD and max-SSD to preserve their ratios to total capacity")
 	advertiseVolumeHealthSupport         = flag.Bool("advertisevolumehealthsupport", true, "Expose GET_VOLUME and VOLUME_CONDITION, allowing the CSI health monitor to report volume condition and capacity")
 
-	// Metrics server settings. These only take effect when csimode is "metricsserver" or "all" -
-	// the metrics server itself is only ever constructed for those modes (see NewWekaFsDriver).
+	// Metrics server settings. These only take effect when csimode is "metricsserver" -
+	// the metrics server itself is only ever constructed for that mode (see NewWekaFsDriver).
 	wekaMetricsFetchIntervalSeconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
 	wekaMetricsFetchConcurrentRequests       = flag.Int("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
 	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
@@ -113,8 +113,9 @@ func main() {
 		fmt.Println(baseName, version)
 		return
 	}
-	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode && csiMode != wekafs.CsiModeMetricsServer {
-		log.Panic().Str("requestedCsiMode", string(csiMode)).Msg("Invalid mode specified for CSI driver")
+	if csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode && csiMode != wekafs.CsiModeMetricsServer {
+		log.Panic().Str("requestedCsiMode", string(csiMode)).
+			Msg(`Invalid mode specified for CSI driver: must be one of "controller", "node", or "metricsserver" - the "all" mode has been removed, run controller and node as separate deployments`)
 	}
 	log.Info().Str("csi_mode", string(csiMode)).Bool("selinux_mode", *selinuxSupport).Msg("Started CSI driver")
 
@@ -124,10 +125,10 @@ func main() {
 		// role this process serves - a node pod exporting a permanently-zero set of controller
 		// series would be misleading.
 		prometheus.MustRegister(apiclient.Collectors()...)
-		if csiMode == wekafs.CsiModeController || csiMode == wekafs.CsiModeAll {
+		if csiMode == wekafs.CsiModeController {
 			prometheus.MustRegister(wekafs.ControllerCollectors()...)
 		}
-		if csiMode == wekafs.CsiModeNode || csiMode == wekafs.CsiModeAll {
+		if csiMode == wekafs.CsiModeNode {
 			prometheus.MustRegister(wekafs.NodeCollectors()...)
 		}
 		bootstrap.ServeMetrics(*metricsPort)
@@ -207,7 +208,7 @@ func handle(ctx context.Context) {
 	config.SetDriver(driver)
 
 	// Register the metrics server's own collectors, but only if metrics export is on in the first
-	// place and a metrics server was actually constructed (csimode "metricsserver" or "all" - see
+	// place and a metrics server was actually constructed (csimode "metricsserver" - see
 	// NewWekaFsDriver) - a driver running in another mode must export nothing. This has to happen
 	// here rather than alongside the other collectors above: those are
 	// registered before the driver exists, and the metrics server (if any) is only built once

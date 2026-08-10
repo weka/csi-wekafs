@@ -663,18 +663,11 @@ func trimValue(value string) string {
 	return strings.TrimSpace(strings.TrimSuffix(value, "\n"))
 }
 
+// GetCsiPluginMode converts the raw --csimode flag value to a CsiPluginMode. It does not validate:
+// the caller (main) owns that, so it can name the accepted modes and explain a rejected one (e.g. the
+// removed "all" mode) in a single place rather than duplicating the check here.
 func GetCsiPluginMode(mode *string) CsiPluginMode {
-	ret := CsiPluginMode(*mode)
-	switch ret {
-	case CsiModeNode,
-		CsiModeController,
-		CsiModeAll,
-		CsiModeMetricsServer:
-		return ret
-	default:
-		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
-		return ""
-	}
+	return CsiPluginMode(*mode)
 }
 
 // stripUnnecessaryPVFields creates a minimal PV with only fields needed by the plugin features
