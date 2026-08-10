@@ -1,12 +1,10 @@
-# CSI WekaFS Driver
+# csi-wekafsplugin
+
+![Version: 2.9.0](https://img.shields.io/badge/Version-2.9.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.9.0](https://img.shields.io/badge/AppVersion-v2.9.0-informational?style=flat-square)
+
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-![Version: 2.8.9](https://img.shields.io/badge/Version-2.8.9-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.9](https://img.shields.io/badge/AppVersion-v2.8.9-informational?style=flat-square)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-
-## Homepage
-https://github.com/weka/csi-wekafs
+**Homepage:** <https://github.com/weka/csi-wekafs>
 
 ## Maintainers
 
@@ -14,52 +12,9 @@ https://github.com/weka/csi-wekafs
 | ---- | ------ | --- |
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
-## Pre-requisite
-- Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
-- Access to terminal with `kubectl` installed
-- Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
-- Starting with version 2.6.0 of WEKA CSI Plugin, both AMD64 and ARM64 platforms are supported.
-  > **NOTE**: For more information on WEKA client software support state of ARM64, please refer to the [WEKA documentation revision history](https://docs.weka.io/readme/documentation-revision-history).
-  >
-  > On platforms not currently supported by WEKA software, NFS failback mode can be used. For additional information on NFS transport configuration, please refer to the [NFS documentation](docs/NFS.md)
+## Source Code
 
-## Deployment
-- [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
-- [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
-
-## Usage
-- [Deploy an Example application](docs/usage.md)
-- [SELinux Support & Installation Notes](selinux/README.md)
-- [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
-
-## Volume Health Monitoring
-The CSI plugin reports the condition and actual capacity of provisioned volumes through the CSI
-`ControllerGetVolume` call, and the bundled `csi-external-health-monitor-controller` sidecar surfaces
-unhealthy volumes as warning events on the corresponding PersistentVolumeClaim.
-
-The condition is determined entirely through the Weka REST API - no volume is mounted for the check.
-A volume is reported abnormal when its filesystem, or the directory backing it, no longer exists on
-the Weka cluster. Credentials are taken from the API secret referenced by the PersistentVolume.
-
-- The check runs every `controller.healthMonitor.monitorInterval` (default `5m`)
-- While enabled, the controller keeps a watch on all PersistentVolumes in the cluster, holding only
-  the few fields it needs for each
-- `controller.healthMonitor.enabled=false` turns the feature off completely - the sidecar is not
-  deployed, the capability is not advertised, and the driver does not watch PersistentVolumes.
-  Outside Helm, the same is done with `--advertisevolumehealthsupport=false`
-- Reporting requires Weka 4.3 or later (4.4.7 or later when the API user has the `CSI` role), since
-  older clusters cannot resolve a path to an inode over the API. On older clusters the volume
-  condition is reported as unknown rather than abnormal, and capacity is taken from the PV
-
-## Additional Documentation
-- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
-
-## Building the binaries
-If you want to build the driver yourself, you can do so with the following command from the root directory:
-
-```console
-make build
-```
+* <https://github.com/weka/csi-wekafs/tree/v2.9.0>
 
 ## Values
 
@@ -67,7 +22,7 @@ make build
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.8.9"` | CSI driver version |
+| csiDriverVersion | string | `"2.9.0"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.18.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.11.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v6.2.0"` | CSI provisioner sidecar image URL |
@@ -76,7 +31,7 @@ make build
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.5.0"` | CSI snapshotter sidecar image URL |
 | images.healthmonitorsidecar | string | `"registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.17.0"` | CSI external health monitor sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.8.9"` | CSI driver tag |
+| images.csidriverTag | string | `"2.9.0"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -90,6 +45,9 @@ make build
 | controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
 | controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | controller.healthMonitor | object | `{"enabled":true,"monitorInterval":"5m","timeoutSeconds":300}` | Volume health monitoring: periodically checks volume condition via the Weka API and reports abnormal volumes as events on the PVC |
+| controller.healthMonitor.enabled | bool | `true` | Enable the external health monitor sidecar |
+| controller.healthMonitor.monitorInterval | string | `"5m"` | How often to check volume health |
+| controller.healthMonitor.timeoutSeconds | int | `300` | Time budget for one full sweep of every volume, in seconds. This is not a per-request    timeout: the sidecar walks all pages under a single deadline, so a fleet that takes longer    than this is cut off mid-sweep and restarted from the beginning, leaving later volumes    permanently unchecked. Measured at roughly 15 seconds per 1000 volumes; raise it for    larger fleets. |
 | controller.nodeSelector | object | `{}` | optional nodeSelector for controller components only |
 | controller.affinity | object | `{}` | optional affinity for controller components only |
 | controller.labels | object | `{}` | optional labels to add to controller deployment |

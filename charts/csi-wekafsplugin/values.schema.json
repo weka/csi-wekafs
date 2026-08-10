@@ -48,6 +48,9 @@
                         }
                     }
                 },
+                "healthPort": {
+                    "type": "integer"
+                },
                 "labels": {
                     "type": "object"
                 },
@@ -62,6 +65,173 @@
                 },
                 "replicas": {
                     "type": "integer"
+                },
+                "resources": {
+                    "type": "object",
+                    "properties": {
+                        "csiAttacher": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "csiHealthMonitor": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "csiProvisioner": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "csiResizer": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "csiSnapshotter": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "wekafs": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
                 "terminationGracePeriodSeconds": {
                     "type": "integer"
@@ -210,23 +380,103 @@
                 "grpcRequestTimeoutSeconds": {
                     "type": "integer"
                 },
-                "healthProbeWekaTimeoutSeconds": {
-                    "type": "integer"
-                },
                 "labels": {
                     "type": "object"
                 },
                 "livenessProbeEnabled": {
                     "type": "boolean"
                 },
-                "livenessProbeTimeout": {
-                    "type": "string"
-                },
                 "nodeSelector": {
                     "type": "object"
                 },
                 "podLabels": {
                     "type": "object"
+                },
+                "resources": {
+                    "type": "object",
+                    "properties": {
+                        "csiRegistrar": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "livenessProbe": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "wekafs": {
+                            "type": "object",
+                            "properties": {
+                                "limits": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "integer"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "requests": {
+                                    "type": "object",
+                                    "properties": {
+                                        "cpu": {
+                                            "type": "string"
+                                        },
+                                        "memory": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
                 "terminationGracePeriodSeconds": {
                     "type": "integer"
@@ -259,6 +509,9 @@
                 "allowInsecureHttps": {
                     "type": "boolean"
                 },
+                "allowMountOptionOverrides": {
+                    "type": "boolean"
+                },
                 "allowedOperations": {
                     "type": "object",
                     "properties": {
@@ -268,13 +521,16 @@
                         "autoExpandFilesystems": {
                             "type": "boolean"
                         },
+                        "enforceDirVolTotalCapacity": {
+                            "type": "boolean"
+                        },
+                        "keepThinProvisioningRatioOnExpand": {
+                            "type": "boolean"
+                        },
                         "snapshotDirectoryVolumes": {
                             "type": "boolean"
                         },
                         "snapshotVolumesWithoutQuotaEnforcement": {
-                            "type": "boolean"
-                        },
-                        "enforceDirVolTotalCapacity": {
                             "type": "boolean"
                         }
                     }
