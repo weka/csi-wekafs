@@ -27,6 +27,30 @@ spec:
     - port: metrics
       path: /metrics
       interval: {{ .Values.metrics.podMonitor.interval }}
+      metricRelabelings:
+        # A volume metric describes a volume, not the pod that happened to observe it. The volume
+        # health reconciler runs only on the leader, so leaving scrape labels on forks a fresh series
+        # for every volume on each rollout and each leader failover - 10k+ series on a large fleet,
+        # and anything summing across pods double-counts during a handover.
+        #
+        # Stripping all six also makes weka_csi_volume_* here label-identical to the same family
+        # published by the metrics server, whose PodMonitor labeldrops exactly these. That matters:
+        # with them left on, `weka_csi_volume_health_status and weka_csi_volume_capacity_bytes`
+        # matches nothing, because the health side carries four labels the capacity side does not.
+        # Only an explicit on(pv_name) join works. Dropping them lets the two families join
+        # naturally, which is the entire point of sharing LabelsForCsiVolumes between them.
+        #
+        # Setting a label to the empty string removes it, and unlike labeldrop it can be conditioned
+        # on the metric name - so these labels survive on the controller's own operation and
+        # concurrency metrics, where the pod is precisely what is being described, and which the
+        # plugin health dashboard filters on.
+        {{- range $label := list "pod" "instance" "namespace" "endpoint" "job" "container" }}
+        - action: replace
+          sourceLabels: [__name__]
+          regex: weka_csi_volume_.*
+          targetLabel: {{ $label }}
+          replacement: ""
+        {{- end }}
     - port: at-metrics
       path: /metrics
       interval: {{ .Values.metrics.podMonitor.interval }}
