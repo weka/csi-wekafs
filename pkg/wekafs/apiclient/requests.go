@@ -239,17 +239,23 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 				apiError: reqErr,
 			}
 		}
-		unmarshalErr := json.Unmarshal(rawResponse.Data, v)
-		if unmarshalErr != nil {
-			logger.Error().Err(unmarshalErr).Interface("object_type", reflect.TypeOf(v)).Msg("Failed to marshal JSON request into a valid interface")
+		// An absent data key is not a decode failure. Every DELETE passes &ApiResponse{} and gets
+		// back a body carrying no data at all, and a paginated fetch may legitimately return an
+		// empty page. Unmarshalling nil would fail with "unexpected end of JSON input", so
+		// distinguish "nothing to decode" from "present but malformed" before deciding.
+		var unmarshalErr error
+		if len(rawResponse.Data) > 0 {
+			unmarshalErr = json.Unmarshal(rawResponse.Data, v)
+			if unmarshalErr != nil {
+				logger.Error().Err(unmarshalErr).Interface("object_type", reflect.TypeOf(v)).Msg("Failed to marshal JSON request into a valid interface")
+			}
 		}
 		switch s {
 		case http.StatusOK:
 			if unmarshalErr != nil {
-				// A page whose data fails to decode must not be folded in as an empty page -
-				// that would silently truncate a paginated result. Only the success path can
-				// reach here relying on unmarshalErr; non-200 paths return their own reqErr
-				// below and never look at it.
+				// Data was present but did not decode. Folding it in as an empty page would
+				// silently truncate a paginated result. Only the success path relies on
+				// unmarshalErr; non-200 paths return their own reqErr below.
 				return ApiNonTransientError{apiError: ApiError{
 					Err:         unmarshalErr,
 					Text:        "Failed to unmarshal JSON response body",

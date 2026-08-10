@@ -331,3 +331,64 @@ func TestPaginationNilTypedPointerErrorsWithoutPanic(t *testing.T) {
 		t.Fatalf("expected the nil check to reject the call before any request went out, saw %d", len(seen))
 	}
 }
+
+// A 200 whose body carries no "data" key at all is not a decode failure: every DELETE passes
+// &ApiResponse{} and gets exactly that shape back, and a paginated fetch may legitimately return
+// an empty page. Unmarshalling a nil data field fails with "unexpected end of JSON input", so
+// without the len(rawResponse.Data) == 0 guard this turns every successful delete into a
+// permanent ApiNonTransientError - and the CSI sidecar retries a delete that already succeeded.
+// Remove that guard and this test fails.
+func TestBodylessSuccessIsNotAnUnmarshalFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "quotas") {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{"access_token": "t", "refresh_token": "r", "expires_in": 3600},
+			})
+			return
+		}
+		// Exactly what a Weka DELETE returns: a success envelope with no data key.
+		_, _ = w.Write([]byte(`{"status":"OK"}`))
+	}))
+	defer srv.Close()
+
+	resp := &ApiResponse{}
+	if err := testClient(t, srv).Delete(t.Context(), "/quotas/x", nil, nil, resp); err != nil {
+		t.Fatalf("a body-less 200 must not be reported as an unmarshal failure: %v", err)
+	}
+}
+
+// The same guard must not resurrect the truncation bug for paginated fetches: an empty page ends
+// the fetch cleanly rather than erroring, and the caller gets the pages that did arrive.
+func TestPaginationEmptyPageEndsFetchWithoutError(t *testing.T) {
+	var seen int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "quotas") {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{"access_token": "t", "refresh_token": "r", "expires_in": 3600},
+			})
+			return
+		}
+		seen++
+		if seen == 1 {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data":       []Quota{{InodeId: 1}},
+				"next_token": "page-2",
+			})
+			return
+		}
+		// Second page carries no data key and no token - a legitimate empty tail.
+		_, _ = w.Write([]byte(`{"status":"OK"}`))
+	}))
+	defer srv.Close()
+
+	got := &Quotas{}
+	if err := testClient(t, srv).Get(t.Context(), "/quotas", nil, got); err != nil {
+		t.Fatalf("an empty final page must end the fetch, not fail it: %v", err)
+	}
+	if len(*got) != 1 {
+		t.Fatalf("expected the 1 quota from page 1, got %d", len(*got))
+	}
+	if seen != 2 {
+		t.Fatalf("expected 2 requests (page 1 + empty tail), saw %d", seen)
+	}
+}
