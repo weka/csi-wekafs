@@ -194,7 +194,7 @@ jobs:
           options: -v ${{ github.workspace }}:/data
           run: |
             cd /data
-            helm-docs -s file -c charts/csi-wekafsplugin -o ../../README.md -t ../README.md.gotmpl
+            helm-docs -s file -c charts/csi-wekafsplugin -o ../../README.md -t ../../README.md.gotmpl
             helm-docs -s file -c charts/csi-wekafsplugin
 
       - name: Set up Helm
@@ -303,7 +303,7 @@ jobs:
           options: -v ${{ github.workspace }}:/data
           run: |
             cd /data
-            helm-docs -s file -c charts/csi-wekafsplugin -o ../../README.md -t ../README.md.gotmpl
+            helm-docs -s file -c charts/csi-wekafsplugin -o ../../README.md -t ../../README.md.gotmpl
             helm-docs -s file -c charts/csi-wekafsplugin
 
       - name: Set up Helm
