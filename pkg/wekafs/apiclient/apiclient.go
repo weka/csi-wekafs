@@ -35,15 +35,21 @@ type ApiClient struct {
 	sync.RWMutex
 	// loginMu serialises login attempts. Kept separate from RWMutex so a login, which makes several
 	// round-trips, never holds the state lock across I/O.
-	loginMu                    sync.Mutex
-	client                     *http.Client
-	Credentials                Credentials
-	ClusterGuid                uuid.UUID
-	ClusterName                string
-	MountEndpoints             []string
-	apiEndpoints               *ApiEndPoints
-	apiToken                   string
-	apiTokenExpiryDate         time.Time
+	loginMu            sync.Mutex
+	client             *http.Client
+	Credentials        Credentials
+	ClusterGuid        uuid.UUID
+	ClusterName        string
+	MountEndpoints     []string
+	apiEndpoints       *ApiEndPoints
+	apiToken           string
+	apiTokenExpiryDate time.Time
+	// loginComplete is true only once a login has published its token *and* finished the post-auth
+	// setup that follows (permission check, cluster info, endpoint discovery). Login clears it the
+	// moment it publishes a new token and sets it only on full success, so a goroutine that was
+	// blocked on loginMu while another goroutine's setup failed observes the failure - via
+	// loginSucceeded - instead of a token that merely exists.
+	loginComplete              bool
 	refreshToken               string
 	apiTokenExpiryInterval     int64
 	refreshTokenExpiryInterval int64
