@@ -153,7 +153,7 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 		return nil, err
 	}
 
-	volume, condition, err := cs.describeVolume(ctx, pv, nil)
+	volume, condition, _, err := cs.describeVolume(ctx, pv, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -165,30 +165,37 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 }
 
 // describeVolume resolves a PersistentVolume into the capacity and condition reported by both
-// ControllerGetVolume and ListVolumes. A nil condition with a nil error means the condition could
-// not be established, which callers must report as unknown rather than as abnormal.
-// The filesystems cache may be nil, in which case every lookup goes to the Weka API.
-func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (*csi.Volume, *csi.VolumeCondition, error) {
+// ControllerGetVolume and ListVolumes, plus the weka_csi_volume_health_status label values for the
+// volume (see csiVolumeLabelValues) - built here, rather than by the caller, because building them
+// needs the API client and *Volume this function already resolves at the cost of a Weka API call
+// apiece. labels is nil whenever this never got as far as resolving an API client, in which case the
+// caller has no way to label a series for the volume either.
+// A nil condition with a nil error means the condition could not be established, which callers must
+// report as unknown rather than as abnormal. The filesystems cache may be nil, in which case every
+// lookup goes to the Weka API.
+func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (volume *csi.Volume, condition *csi.VolumeCondition, labels []string, err error) {
 	volumeID := pv.Spec.CSI.VolumeHandle
 	logger := log.Ctx(ctx).With().Str("volume_id", volumeID).Logger()
 
 	// The PersistentVolume holds the requested size, which stands in whenever the backend cannot
 	// supply one of its own.
-	volume := &csi.Volume{VolumeId: volumeID, CapacityBytes: pvCapacityBytes(pv)}
+	volume = &csi.Volume{VolumeId: volumeID, CapacityBytes: pvCapacityBytes(pv)}
 
 	client, err := cs.apiClientFromPersistentVolume(ctx, pv)
 	if err != nil {
-		return volume, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
+		return volume, nil, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
 	}
 	if client == nil {
 		logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as unknown")
-		return volume, nil, nil
+		return volume, nil, nil, nil
 	}
 
 	vol, err := NewVolumeFromId(ctx, volumeID, client, cs)
 	if err != nil {
-		return volume, nil, err
+		return volume, nil, nil, err
 	}
+	labels = csiVolumeLabelValues(cs.getConfig().GetDriver().name, pv,
+		client.ClusterGuid.String(), vol.FilesystemName, string(vol.GetBackingType()), organizationLabel(client))
 	// Seed the volume with an already-resolved filesystem, and publish whatever it resolved so the
 	// next volume on the same filesystem can skip the lookup.
 	vol.fileSystemObject = filesystems.get(vol.FilesystemName)
@@ -198,9 +205,9 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 	if err != nil {
 		if errors.Is(err, ErrVolumeHealthUndetermined) {
 			logger.Warn().Err(err).Msg("Reporting volume condition as unknown")
-			return volume, nil, nil
+			return volume, nil, labels, nil
 		}
-		return volume, nil, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
+		return volume, nil, labels, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
 	}
 
 	if health.Capacity > 0 {
@@ -209,7 +216,7 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 	if health.Abnormal {
 		logger.Warn().Str("condition", health.Message).Msg("Volume is abnormal")
 	}
-	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, nil
+	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, labels, nil
 }
 
 func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {

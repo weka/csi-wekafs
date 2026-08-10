@@ -17,9 +17,27 @@ var (
 	CsiControllerQueryOperationMetricsLabels = []string{"status"}
 	CsiNodeConcurrencyMetricsLabels          = []string{"status"}
 	CsiNodeVolumeOperationMetricsLabels      = []string{"status"}
+	// CsiControllerVolumeHealthTallyMetricsLabels labels the per-sweep tally gauge, status being
+	// healthy/abnormal/unknown/failed.
+	CsiControllerVolumeHealthTallyMetricsLabels = []string{"status"}
 )
 
 const MetricsPrefix = "weka_csi"
+
+// volumeHealthSubsystem namespaces the metrics the volume health reconciler emits. It is separate
+// from "controller" (used by ControllerOperationMetrics/ControllerConcurrencyMetrics) so the metric
+// names read as weka_csi_volume_health_*, matching what the reconciler actually measures rather
+// than which server process happens to run it.
+const volumeHealthSubsystem = "volume_health"
+
+// Values the per-volume weka_csi_volume_health_status gauge is set to. -1 is deliberately outside
+// the [0,1] range a boolean-ish gauge would suggest, so "unknown" cannot be mistaken for a
+// weighted-average of healthy and abnormal by anyone graphing it.
+const (
+	volumeHealthStatusUnknown  = -1
+	volumeHealthStatusAbnormal = 0
+	volumeHealthStatusHealthy  = 1
+)
 
 // There is one controller server and one node server per process, so the metrics they record are
 // process-wide, exactly like the API client's. Constructing them has no side effect; nothing is
@@ -39,9 +57,12 @@ func newCounterVec(subsystem, name, help string, labels []string) *prometheus.Co
 	}, slices.Concat(CsiCommonLabels, labels))
 }
 
-func newHistogramVec(subsystem, name, help string, labels []string) *prometheus.HistogramVec {
+// buckets is optional: omitted, the histogram gets Prometheus's default buckets (up to 10s), which
+// is fine for the request-duration histograms every other caller of this function builds. A caller
+// measuring something that runs far longer - the volume health sweep - passes its own.
+func newHistogramVec(subsystem, name, help string, labels []string, buckets ...float64) *prometheus.HistogramVec {
 	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: MetricsPrefix, Subsystem: subsystem, Name: name, Help: help,
+		Namespace: MetricsPrefix, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets,
 	}, slices.Concat(CsiCommonLabels, labels))
 }
 
@@ -197,21 +218,72 @@ func (c *ControllerConcurrencyMetrics) Collectors() []prometheus.Collector {
 	}
 }
 
+// ControllerVolumeHealthMetrics are emitted by the volume health reconciler
+// (volumehealthreconciler.go), which only ever runs inside the controller process - so, unlike the
+// rest of this file, these are not built from CsiCommonLabels via newGaugeVec/newHistogramVec:
+// Status is labeled with LabelsForCsiVolumes, which already carries csi_driver_name, and
+// concatenating CsiCommonLabels in front of it would register the same label name twice.
+type ControllerVolumeHealthMetrics struct {
+	// Status is one series per volume - see LabelsForCsiVolumes - holding the last value the
+	// reconciler determined: volumeHealthStatusHealthy/Abnormal/Unknown. A volume whose credentials
+	// cannot be resolved gets no series at all, the same as the metrics server's per-volume metrics,
+	// since neither can build a label set without an API client.
+	Status *prometheus.GaugeVec
+	// Volumes is the per-sweep tally: one series per status among healthy/abnormal/unknown/failed,
+	// set once at the end of every completed sweep. "failed" counts probes that errored during the
+	// sweep, which is not one of the values Status ever takes - a failed probe leaves the previous
+	// Status value in place rather than overwriting it with a guess.
+	Volumes *prometheus.GaugeVec
+	// SweepDuration is observed once per completed sweep. A sweep over a fleet of ~10k volumes runs
+	// for minutes, so this reuses HistogramDurationBuckets (up to 1000s) rather than Prometheus's
+	// default buckets, which top out at 10s and would put every real observation in the +Inf bucket.
+	SweepDuration *prometheus.HistogramVec
+	// LastSweepTimestamp is the unix time the last sweep completed, so a stalled reconciler (e.g. it
+	// lost leadership, or a sweep is hanging) is alertable independent of whether any volume's status
+	// actually changed.
+	LastSweepTimestamp *prometheus.GaugeVec
+}
+
+func NewControllerVolumeHealthMetrics() *ControllerVolumeHealthMetrics {
+	return &ControllerVolumeHealthMetrics{
+		Status: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricsPrefix, Subsystem: volumeHealthSubsystem, Name: "status",
+			Help: "Health condition of the CSI volume as last observed by the volume health reconciler: 1 = healthy, 0 = abnormal, -1 = unknown (including a probe result older than the reconciler's max age)",
+		}, LabelsForCsiVolumes),
+		Volumes: newGaugeVec(volumeHealthSubsystem, "volumes", "Number of volumes in each health status as of the last completed reconciliation sweep", CsiControllerVolumeHealthTallyMetricsLabels),
+		SweepDuration: newHistogramVec(volumeHealthSubsystem, "sweep_duration_seconds",
+			"Duration of a complete volume health reconciliation sweep in seconds", nil, HistogramDurationBuckets...),
+		LastSweepTimestamp: newGaugeVec(volumeHealthSubsystem, "last_sweep_timestamp_seconds", "Unix timestamp when the volume health reconciler last completed a sweep", nil),
+	}
+}
+
+// Collectors returns the metrics for the caller to register.
+func (m *ControllerVolumeHealthMetrics) Collectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		m.Status,
+		m.Volumes,
+		m.SweepDuration,
+		m.LastSweepTimestamp,
+	}
+}
+
 type ControllerServerMetrics struct {
-	Concurrency *ControllerConcurrencyMetrics
-	Operations  *ControllerOperationMetrics
+	Concurrency  *ControllerConcurrencyMetrics
+	Operations   *ControllerOperationMetrics
+	VolumeHealth *ControllerVolumeHealthMetrics
 }
 
 func NewControllerServerMetrics() *ControllerServerMetrics {
 	return &ControllerServerMetrics{
-		Operations:  NewControllerOperationMetrics(CsiControllerVolumeOperationMetricsLabels, CsiControllerSnapshotOperationMetricsLabels, CsiControllerQueryOperationMetricsLabels),
-		Concurrency: NewControllerConcurrencyMetrics(CsiControllerConcurrencyMetricsLabels),
+		Operations:   NewControllerOperationMetrics(CsiControllerVolumeOperationMetricsLabels, CsiControllerSnapshotOperationMetricsLabels, CsiControllerQueryOperationMetricsLabels),
+		Concurrency:  NewControllerConcurrencyMetrics(CsiControllerConcurrencyMetricsLabels),
+		VolumeHealth: NewControllerVolumeHealthMetrics(),
 	}
 }
 
 // Collectors returns every controller metric for the caller to register.
 func (m *ControllerServerMetrics) Collectors() []prometheus.Collector {
-	return append(m.Operations.Collectors(), m.Concurrency.Collectors()...)
+	return slices.Concat(m.Operations.Collectors(), m.Concurrency.Collectors(), m.VolumeHealth.Collectors())
 }
 
 type NodeServerConcurrencyMetrics struct {

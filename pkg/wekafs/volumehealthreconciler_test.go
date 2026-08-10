@@ -59,7 +59,7 @@ func TestVolumeConditionCacheRetainOnlyDropsDeletedVolumes(t *testing.T) {
 		c.store(h, volumeConditionEntry{known: true, probedAt: time.Now()})
 	}
 
-	remaining := c.retainOnly(map[string]struct{}{"a": {}, "c": {}})
+	remaining, _, _ := c.retainOnly(map[string]struct{}{"a": {}, "c": {}})
 	if remaining != 2 {
 		t.Fatalf("expected 2 entries to remain, got %d", remaining)
 	}
@@ -72,7 +72,7 @@ func TestVolumeConditionCacheRetainOnlyDropsDeletedVolumes(t *testing.T) {
 		}
 	}
 
-	if c.retainOnly(map[string]struct{}{}) != 0 {
+	if remaining, _, _ := c.retainOnly(map[string]struct{}{}); remaining != 0 {
 		t.Fatal("expected an empty live set to clear the cache")
 	}
 }
