@@ -1,10 +1,12 @@
-# csi-wekafsplugin
-
-![Version: 2.9.0](https://img.shields.io/badge/Version-2.9.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.9.0](https://img.shields.io/badge/AppVersion-v2.9.0-informational?style=flat-square)
-
+# CSI WekaFS Driver
 Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for WekaFS - the world fastest filesystem
 
-**Homepage:** <https://github.com/weka/csi-wekafs>
+![Version: 2.9.0](https://img.shields.io/badge/Version-2.9.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.9.0](https://img.shields.io/badge/AppVersion-v2.9.0-informational?style=flat-square)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
+
+## Homepage
+https://github.com/weka/csi-wekafs
 
 ## Maintainers
 
@@ -12,9 +14,52 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 | ---- | ------ | --- |
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
-## Source Code
+## Pre-requisite
+- Kubernetes cluster of version 1.20 or later is recommended. Minimum version is 1.17
+- Access to terminal with `kubectl` installed
+- Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
+- Starting with version 2.6.0 of WEKA CSI Plugin, both AMD64 and ARM64 platforms are supported.
+  > **NOTE**: For more information on WEKA client software support state of ARM64, please refer to the [WEKA documentation revision history](https://docs.weka.io/readme/documentation-revision-history).
+  >
+  > On platforms not currently supported by WEKA software, NFS failback mode can be used. For additional information on NFS transport configuration, please refer to the [NFS documentation](docs/NFS.md)
 
-* <https://github.com/weka/csi-wekafs/tree/v2.9.0>
+## Deployment
+- [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
+- [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
+
+## Usage
+- [Deploy an Example application](docs/usage.md)
+- [SELinux Support & Installation Notes](selinux/README.md)
+- [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
+
+## Volume Health Monitoring
+The CSI plugin reports the condition and actual capacity of provisioned volumes through the CSI
+`ControllerGetVolume` call, and the bundled `csi-external-health-monitor-controller` sidecar surfaces
+unhealthy volumes as warning events on the corresponding PersistentVolumeClaim.
+
+The condition is determined entirely through the Weka REST API - no volume is mounted for the check.
+A volume is reported abnormal when its filesystem, or the directory backing it, no longer exists on
+the Weka cluster. Credentials are taken from the API secret referenced by the PersistentVolume.
+
+- The check runs every `controller.healthMonitor.monitorInterval` (default `5m`)
+- While enabled, the controller keeps a watch on all PersistentVolumes in the cluster, holding only
+  the few fields it needs for each
+- `controller.healthMonitor.enabled=false` turns the feature off completely - the sidecar is not
+  deployed, the capability is not advertised, and the driver does not watch PersistentVolumes.
+  Outside Helm, the same is done with `--advertisevolumehealthsupport=false`
+- Reporting requires Weka 4.3 or later (4.4.7 or later when the API user has the `CSI` role), since
+  older clusters cannot resolve a path to an inode over the API. On older clusters the volume
+  condition is reported as unknown rather than abnormal, and capacity is taken from the PV
+
+## Additional Documentation
+- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
+
+## Building the binaries
+If you want to build the driver yourself, you can do so with the following command from the root directory:
+
+```console
+make build
+```
 
 ## Values
 
