@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -20,11 +19,8 @@ import (
 // currently selected, and they are shared, not copied: an ApiEndPoint must always be passed by
 // pointer.
 type ApiEndPoint struct {
-	IpAddress string
-	MgmtPort  int
-	// lastActive records when the endpoint was first discovered. It is set at construction and never
-	// mutated afterwards, so a rediscovered endpoint keeps its original object and its stats.
-	lastActive           time.Time
+	IpAddress            string
+	MgmtPort             int
 	failCount            atomic.Int64
 	timeoutCount         atomic.Int64
 	http400ErrCount      atomic.Int64
@@ -108,19 +104,35 @@ func (eps *ApiEndPoints) Keys() []string {
 	return out
 }
 
-// Rotate picks a different endpoint at random. It is a no-op when none are known.
-func (eps *ApiEndPoints) Rotate() {
+// Rotate picks a different endpoint at random, excluding the current selection whenever more than
+// one endpoint is known - callers rotate specifically to move off an endpoint that just failed, so
+// re-selecting it defeats the purpose. It returns the endpoint it picked, or nil when none are
+// known, so a caller that rotates to escape a failure doesn't have to re-read the selection
+// afterwards (and risk logging one it never actually chose).
+func (eps *ApiEndPoints) Rotate() *ApiEndPoint {
 	eps.Lock()
 	defer eps.Unlock()
 	if len(eps.endpoints) == 0 {
 		eps.currentEndpoint = nil
-		return
+		return nil
 	}
 	keys := make([]string, 0, len(eps.endpoints))
-	for k := range eps.endpoints {
+	for k, v := range eps.endpoints {
+		if v == eps.currentEndpoint {
+			continue
+		}
 		keys = append(keys, k)
 	}
+	if len(keys) == 0 {
+		// Either there is only one endpoint, or (defensively) every entry aliases the current
+		// pointer. Either way, fall back to the full set rather than the current-exclusion leaving
+		// nothing to pick from.
+		for k := range eps.endpoints {
+			keys = append(keys, k)
+		}
+	}
 	eps.currentEndpoint = eps.endpoints[keys[rand.Intn(len(keys))]]
+	return eps.currentEndpoint
 }
 
 // Current returns the endpoint to use, selecting one if none is chosen yet. It returns nil when no
@@ -132,10 +144,7 @@ func (eps *ApiEndPoints) Current() *ApiEndPoint {
 	if current != nil {
 		return current
 	}
-	eps.Rotate()
-	eps.RLock()
-	defer eps.RUnlock()
-	return eps.currentEndpoint
+	return eps.Rotate()
 }
 
 func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
@@ -165,8 +174,13 @@ func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
 			log.Ctx(ctx).Error().Err(err).Str("port", port).Msg("Failed to parse port number, using default")
 			portNum = 14000
 		}
-		endPoint := &ApiEndPoint{IpAddress: ip, MgmtPort: portNum, lastActive: time.Now()}
-		actualEndPoints[e] = endPoint
+		endPoint := &ApiEndPoint{IpAddress: ip, MgmtPort: portNum}
+		// Key by the same "ip:port" form ApiEndPoint.String() and UpdateApiEndpoints use, not the
+		// raw credential string: the raw string may carry no port (or a hostname alias) and would
+		// then never match eps.currentEndpoint.String() in Replace, nor existingEndpoints[key] in
+		// UpdateApiEndpoints - silently dropping the current selection and the accumulated counters
+		// on every reset.
+		actualEndPoints[endPoint.String()] = endPoint
 	}
 	a.apiEndpoints.Replace(actualEndPoints)
 }
@@ -202,7 +216,6 @@ func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 	}
 
 	newEndpoints := make(map[string]*ApiEndPoint)
-	updateTime := time.Now()
 
 	existingEndpoints := a.apiEndpoints.Snapshot()
 
@@ -217,7 +230,7 @@ func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 					newEndpoints[endpointKey] = existingEndpoint
 				} else {
 					logger.Info().Str("endpoint", endpointKey).Msg("Adding new API endpoint")
-					endpoint := &ApiEndPoint{IpAddress: IpAddress, MgmtPort: n.MgmtPort, lastActive: updateTime}
+					endpoint := &ApiEndPoint{IpAddress: IpAddress, MgmtPort: n.MgmtPort}
 					newEndpoints[endpointKey] = endpoint
 				}
 			}
@@ -238,14 +251,13 @@ func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 	return nil
 }
 
-// rotateEndpoint returns a random endpoint of the configured ones
+// rotateEndpoint switches to a random endpoint other than the one currently in use.
 func (a *ApiClient) rotateEndpoint(ctx context.Context) {
 	logger := log.Ctx(ctx)
 	if a.apiEndpoints.Len() == 0 {
 		a.resetDefaultEndpoints(ctx)
 	}
-	a.apiEndpoints.Rotate()
-	current := a.apiEndpoints.Current()
+	current := a.apiEndpoints.Rotate()
 	if current == nil {
 		logger.Error().Msg("Failed to choose random endpoint, no endpoints exist")
 		return
@@ -253,11 +265,26 @@ func (a *ApiClient) rotateEndpoint(ctx context.Context) {
 	logger.Debug().Str("new_endpoint", current.String()).Msg("Switched to new API endpoint")
 }
 
-// getEndpoint returns last known endpoint to work against
+// getEndpoint returns last known endpoint to work against. It returns nil when the credentials
+// contain no endpoint that survived validation in resetDefaultEndpoints - callers that would
+// otherwise dereference the result directly should go through requireEndpoint instead.
 func (a *ApiClient) getEndpoint(ctx context.Context) *ApiEndPoint {
 	if current := a.apiEndpoints.Current(); current != nil {
 		return current
 	}
 	a.resetDefaultEndpoints(ctx)
 	return a.apiEndpoints.Current()
+}
+
+// requireEndpoint returns the endpoint to use, or ApiNoEndpointsError when none is known.
+// NewApiClient only rejects a raw endpoint list with zero entries; a secret whose entries all fail
+// isValidIPv4Address/isValidIPv6Address/isValidHostname still constructs a client, just with an
+// empty endpoint map, and getEndpoint reports that with nil rather than blocking for one to appear.
+// Every caller that would otherwise dereference getEndpoint's result directly must go through this.
+func (a *ApiClient) requireEndpoint(ctx context.Context) (*ApiEndPoint, apiError) {
+	endpoint := a.getEndpoint(ctx)
+	if endpoint == nil {
+		return nil, &ApiNoEndpointsError{Err: errors.New("no endpoints could be found for API client")}
+	}
+	return endpoint, nil
 }
