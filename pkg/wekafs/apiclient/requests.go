@@ -239,12 +239,24 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 				apiError: reqErr,
 			}
 		}
-		err := json.Unmarshal(rawResponse.Data, v)
-		if err != nil {
-			logger.Error().Err(err).Interface("object_type", reflect.TypeOf(v)).Msg("Failed to marshal JSON request into a valid interface")
+		unmarshalErr := json.Unmarshal(rawResponse.Data, v)
+		if unmarshalErr != nil {
+			logger.Error().Err(unmarshalErr).Interface("object_type", reflect.TypeOf(v)).Msg("Failed to marshal JSON request into a valid interface")
 		}
 		switch s {
 		case http.StatusOK:
+			if unmarshalErr != nil {
+				// A page whose data fails to decode must not be folded in as an empty page -
+				// that would silently truncate a paginated result. Only the success path can
+				// reach here relying on unmarshalErr; non-200 paths return their own reqErr
+				// below and never look at it.
+				return ApiNonTransientError{apiError: ApiError{
+					Err:         unmarshalErr,
+					Text:        "Failed to unmarshal JSON response body",
+					StatusCode:  s,
+					ApiResponse: rawResponse,
+				}}
+			}
 			nextToken = rawResponse.NextToken
 			return nil
 		case http.StatusUnauthorized:
@@ -280,7 +292,11 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 		return err
 	}
 
+	// Only a GET can safely be repeated per page: a POST/PUT/DELETE whose response type happens
+	// to implement ApiObjectResponse would otherwise re-send the same mutating payload once per
+	// page.
 	accumulated, paginated := Response.(ApiObjectResponse)
+	paginated = paginated && Method == http.MethodGet
 	if !paginated {
 		_, err := a.request(ctx, Method, Path, Payload, Query, Response)
 		if err != nil {
@@ -293,12 +309,45 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 	if responseType.Kind() != reflect.Ptr {
 		return errors.New("a paginated response must be passed as a pointer")
 	}
+	responseValue := reflect.ValueOf(Response)
+	if responseValue.IsNil() {
+		// accumulated wraps a nil *T here: the interface value itself is non-nil (it carries a
+		// type), so the type assertion above succeeds, but CombinePartialResponse would
+		// dereference a nil receiver and panic. Fail cleanly instead.
+		return fmt.Errorf("a paginated response must not be a nil %s pointer", responseType.Elem())
+	}
+	logger := log.Ctx(ctx)
+
+	if !a.SupportsUrlQueryParams() {
+		// The cluster can't accept next_token at all, so pagination cannot happen: every
+		// request would come back as page 1 again (see the non-advancing-token check below,
+		// which exists for exactly this shape of backend misbehaviour). Do a single request and
+		// return it, matching the pre-pagination behaviour, rather than looping or failing a
+		// call that used to succeed.
+		logger.Warn().Str("path", Path).Msg("Cluster does not support URL query parameters; fetching a single page, result may be truncated")
+		_, err := a.request(ctx, Method, Path, Payload, Query, Response)
+		return err
+	}
+
 	// Work on a copy: Query belongs to the caller, and it is legitimately nil, which Set would
 	// panic on.
 	query := cloneQuery(Query)
-	logger := log.Ctx(ctx)
+
+	// Zero the caller's accumulator before fetching the first page. CombinePartialResponse
+	// appends, so a caller that passes in a non-empty accumulator (or reuses one across calls)
+	// would otherwise get duplicates alongside the freshly fetched pages. This restores the
+	// replace-semantics of the pre-pagination code path, which unmarshalled straight into
+	// Response.
+	responseValue.Elem().Set(reflect.Zero(responseType.Elem()))
+
+	// currentToken is the next_token that produced the page just received - used to detect a
+	// backend that echoes the same token back forever instead of advancing it.
+	currentToken := ""
 
 	for page := 1; ; page++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		// Every page is unmarshalled into a fresh object and then folded into the caller's
 		// Response. Unmarshalling straight into Response would let each page overwrite the last.
 		pageValue := reflect.New(responseType.Elem()).Interface()
@@ -316,10 +365,14 @@ func (a *ApiClient) Request(ctx context.Context, Method string, Path string, Pay
 			}
 			return nil
 		}
+		if nextToken == currentToken {
+			return fmt.Errorf("backend returned pagination token %q unchanged after it was already used for %s; refusing to loop indefinitely since the backend is not advancing the token", nextToken, Path)
+		}
 		if page >= ApiMaxPagesPerRequest {
 			return fmt.Errorf("paginated response exceeded %d pages, giving up", ApiMaxPagesPerRequest)
 		}
 		query.Set("next_token", nextToken)
+		currentToken = nextToken
 	}
 }
 
