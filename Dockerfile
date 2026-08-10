@@ -48,6 +48,7 @@ LABEL summary="This image is used by WEKA CSI Plugin and incorporates both Contr
 LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data platform for AI"
 LABEL url="https://www.weka.io"
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
+COPY --from=go-builder --chmod=755 /bin/metricsserver /metricsserver
 COPY --from=go-builder /bin/wait-for-leader /wait-for-leader
 ARG binary=/bin/wekafsplugin
 EXPOSE 2049 111/tcp 111/udp

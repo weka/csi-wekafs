@@ -30,5 +30,6 @@ ARG TARGETOS
 RUN mkdir -p /licenses
 COPY LICENSE /licenses
 COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/wekafsplugin /wekafsplugin
+COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/metricsserver /metricsserver
 # The controller Deployment gates its sidecars on this, so the image is unusable without it.
 COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/wait-for-leader /wait-for-leader
