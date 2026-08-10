@@ -87,6 +87,22 @@ func (c *volumeConditionCache) store(handle string, entry volumeConditionEntry) 
 	c.entries[handle] = entry
 }
 
+// forget removes a volume's entry immediately, independent of retainOnly's sweep-driven eviction.
+// DeleteVolume calls this so a deleted volume's weka_csi_volume_health_status series doesn't have to
+// wait for the next reconciler sweep to be pruned. Returns the entry's labels so the caller can
+// delete the metric series, or nil if the handle was never cached or was cached without labels (a
+// probe that never resolved an API client for it, see volumeConditionEntry.labels).
+func (c *volumeConditionCache) forget(handle string) []string {
+	c.Lock()
+	defer c.Unlock()
+	entry, ok := c.entries[handle]
+	delete(c.entries, handle)
+	if !ok {
+		return nil
+	}
+	return entry.labels
+}
+
 // classifyVolumeHealth turns a probe outcome into the weka_csi_volume_health_status value. It is the
 // one place that decides what healthy/abnormal/unknown mean, so the per-sweep tally (computed from a
 // fresh probe's condition) and the per-volume gauge (re-derived from a cache entry, including its
