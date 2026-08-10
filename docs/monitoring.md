@@ -1,14 +1,14 @@
-# Monitoring the Weka CSI Plugin
+# Monitoring the WEKA CSI Plugin
 
 ## Overview
-The Weka CSI Plugin exposes Prometheus metrics from every component, and ships a **metrics server**
-that reports the capacity of each provisioned volume by asking the Weka cluster directly. Two Grafana
+The WEKA CSI Plugin exposes Prometheus metrics from every component, and ships a **metrics server**
+that reports the capacity of each provisioned volume by asking the WEKA cluster directly. Two Grafana
 dashboards and a set of alert rules are included for both.
 
 | Component | Exposes | Deployed by |
 |---|---|---|
-| Controller server | CSI gRPC operations, concurrency, Weka API calls | always |
-| Node server | CSI gRPC operations, concurrency, Weka API calls | always |
+| Controller server | CSI gRPC operations, concurrency, WEKA API calls | always |
+| Node server | CSI gRPC operations, concurrency, WEKA API calls | always |
 | Metrics server | Per-volume used / free / total capacity, and its own collection health | `metricsServer.enabled=true`, or the separate `csi-metricsserver` chart |
 
 The controller and node servers report only on work they perform. Volume capacity is not among that
@@ -21,14 +21,14 @@ reporting is a component of its own.
 
 ### What it does
 The metrics server watches every `PersistentVolume` provisioned by this driver, resolves each one to
-its Weka filesystem and directory, and reads its quota over the Weka REST API. From the quota it
+its WEKA filesystem and directory, and reads its quota over the WEKA REST API. From the quota it
 derives the volume's capacity (the quota's hard limit), its used bytes, and its free bytes, and
 publishes all three to Prometheus labelled with enough Kubernetes identity to be findable:
-PersistentVolume name, PersistentVolumeClaim name and namespace, StorageClass, Weka filesystem, Weka
+PersistentVolume name, PersistentVolumeClaim name and namespace, StorageClass, WEKA filesystem, WEKA
 organization, and cluster GUID.
 
 Credentials come from the API secret each PersistentVolume references, so a fleet spread across
-several Weka clusters or several organizations is handled without extra configuration.
+several WEKA clusters or several organizations is handled without extra configuration.
 
 ### Deployment
 Two options, and you should pick exactly one:
@@ -41,8 +41,8 @@ helm upgrade --install csi-wekafs charts/csi-wekafsplugin --set metricsServer.en
 helm upgrade --install csi-metricsserver charts/csi-metricsserver
 ```
 
-  > **NOTE**: do not run both against the same Weka cluster. Each collector polls every volume's
-  > quota independently, so a second one doubles the Weka API load without reporting any additional
+  > **NOTE**: do not run both against the same WEKA cluster. Each collector polls every volume's
+  > quota independently, so a second one doubles the WEKA API load without reporting any additional
   > data.
 
 ### Permissions
@@ -52,7 +52,7 @@ grants it cluster-wide read of two resources:
 | Resource | Verbs | Why |
 |---|---|---|
 | `persistentvolumes` | `get`, `list`, `watch` | to discover which volumes to report on |
-| `secrets` | `get`, `list` | to read the Weka API credentials each volume references |
+| `secrets` | `get`, `list` | to read the WEKA API credentials each volume references |
 
 No write verb is granted on either. Namespaced, it additionally needs `leases` (for leader election)
 and `events`. Read of Secrets cluster-wide is a real widening of what the release can see - it is the
@@ -85,7 +85,7 @@ Two modes, controlled by `metricsServer.enableBatchModeForQuotaUpdates`:
 
 Filesystem-backed volumes hold one volume per filesystem, so batching is no worse for them.
 
-Measured on a 10,000-volume fleet, switching to batch mode took the Weka API load from **~32
+Measured on a 10,000-volume fleet, switching to batch mode took the WEKA API load from **~32
 requests/second to effectively zero**.
 
 ### Freshness, and the one thing that trips people up
@@ -111,7 +111,7 @@ at once and recovers. Neither is a collection failure. Raise the window, or lowe
 `quotaCacheValiditySeconds` and accept the extra API load.
 
 `weka_csi_volume_pv_reported_capacity_bytes` is the exception: it comes from the Kubernetes
-PersistentVolume object rather than from Weka, needs no API call, and carries no measurement
+PersistentVolume object rather than from WEKA, needs no API call, and carries no measurement
 timestamp, so it behaves like an ordinary gauge.
 
 ### Tuning
@@ -120,7 +120,7 @@ timestamp, so it behaves like an ordinary gauge.
 | `metricsServer.metricsFetchIntervalSeconds` | `60` | How often a collection cycle runs. Only expired readings are refetched |
 | `metricsServer.quotaCacheValiditySeconds` | `300` | How long a reading stays fresh. Raise on large fleets to cut API load; every query window must stay larger than this |
 | `metricsServer.enableBatchModeForQuotaUpdates` | `true` | Whole-filesystem quota fetch instead of per-volume |
-| `metricsServer.maxConcurrentRequests` | `50` | Concurrent Weka API requests, excluding quota |
+| `metricsServer.maxConcurrentRequests` | `50` | Concurrent WEKA API requests, excluding quota |
 | `metricsServer.quotaUpdateConcurrentRequests` | `25` | Concurrent quota requests |
 | `metricsServer.apiTimeoutSeconds` | `180` | Per-request timeout. Higher than the plugin-wide default because a quota map pulls every quota on a filesystem in one request |
 | `metricsServer.scrapeInterval` | `60s` | PodMonitor interval. Defaults to the fetch interval, since the gauges do not move faster than that |
@@ -149,8 +149,10 @@ portable across installations.
 
 | File | Shows |
 |---|---|
-| `metricsserver-stats.json` | Metrics server health: Weka API request rate and latency, fetch cycles, quota cache behaviour, PersistentVolumes entering and leaving monitoring |
+| `metricsserver-health.json` | Metrics server health: WEKA API request rate and latency, fetch cycles, quota cache behaviour, PersistentVolumes entering and leaving monitoring |
 | `volume-capacity.json` | Per-volume used, free and total capacity, plus rankings of the largest volumes, the fullest volumes, and usage by filesystem and by tenant |
+| `plugin-health.json` | The CSI driver itself: controller and node RPC rates, error rates and latency, concurrency and semaphore waits, WEKA API load, plus Kubernetes workload health (replicas, DaemonSet coverage, restarts, CrashLoopBackOff, leader-election lease holders) |
+| `volume-health.json` | Per-volume health condition: how many volumes are healthy, abnormal or unknown, which ones they are, breakdowns by filesystem, storage class and tenant, and the reconciler's own sweep duration and staleness |
 
 Import through **Dashboards -> New -> Import**, which prompts for the Prometheus datasource.
 
@@ -171,11 +173,45 @@ against the default 300s cache; keep roughly that ratio if you change either.
 
 Utilisation panels mark 85% and 95%, matching the alert rules below.
 
-### metricsserver-stats.json
+### metricsserver-health.json
 Scoped to a single metrics-server pod through its `$pod` variable, which resolves only to
 metrics-server pods. The CSI controller and node servers are not visible in it, and on an idle
 cluster most provisioning counters are silent - a `CounterVec` with no observed labels exports
 nothing at all, so a panel reads as broken rather than as zero.
+
+### plugin-health.json
+Covers the driver rather than the metrics server. Two pod variables, `controller pod` and `node
+pod`, are scoped to metrics each role actually exports, so neither resolves to metrics-server pods.
+The first row is Kubernetes workload health from **kube-state-metrics**; if that is not installed
+those panels stay empty while the rest of the dashboard still works.
+
+Its `$namespace`, `$controller_deployment` and `$node_daemonset` variables deliberately carry **no
+`allValue`**, unlike the CSI-metric-backed variables elsewhere. They are built on generic
+kube-state-metrics series, so an `allValue` of `.*` would make "All" match every Deployment and
+DaemonSet in the cluster rather than only the CSI ones.
+
+The leader-election lease panel is intentionally **not** scoped to `$namespace`, so a lease held
+across namespaces stays visible - that is exactly the failure this panel exists to catch.
+
+### volume-health.json
+Companion to `volume-capacity.json`, about condition rather than capacity. Counts are derived from
+the per-volume `weka_csi_volume_health_status` series so they honour the Tenant, Filesystem, Storage
+class, Namespace and PersistentVolume filters.
+
+Two things to know about the numbers:
+
+- **`healthy + abnormal + unknown` partitions the fleet.** `Probe failures` does **not** add to
+  them - it counts probes that errored during the last sweep, and a failed probe leaves the volume's
+  previous status in place. A volume counted there is still counted as healthy, abnormal or unknown.
+  It is also the one tile that cannot honour the filters, since it comes from the fleet-wide tally
+  which carries no per-volume labels.
+- **Condition only refreshes once per reconciler sweep** (`volumeHealthReconcileInterval`, 5m by
+  default, plus the sweep's own duration). A newly created volume therefore appears one full cycle
+  after it is provisioned, and a deleted one disappears at the next sweep boundary - except on
+  delete, where `DeleteVolume` drops the series immediately.
+
+Entries older than `volumeHealthMaxAge` (30m) report as `unknown` (`-1`) rather than as a stale
+healthy reading.
 
 ---
 
@@ -219,7 +255,7 @@ PodMonitor relabeling is missing or because the metrics are scraped some other w
 away, or add the relabeling.
 
 **Snapshot-backed volumes.** A snapshot-backed volume's quota lives in the snapshot's view, and
-Weka does not return it when listing a filesystem's quotas - only a direct per-inode lookup finds it.
+WEKA does not return it when listing a filesystem's quotas - only a direct per-inode lookup finds it.
 The metrics server detects this and falls back to a per-volume fetch for exactly those volumes, which
 is counted by `weka_csi_metricsserver_quota_map_miss_count_total`. A non-zero value there is normal
 if you provision volumes from snapshots; a value that tracks your whole fleet means the quota map is
@@ -231,7 +267,7 @@ not being built at all.
 not be read - check `weka_csi_metricsserver_fetch_single_pv_metrics_failure_count_total` and the
 collector's logs for that PersistentVolume name.
 
-**High Weka API load.** Confirm `enableBatchModeForQuotaUpdates` is on by checking the pod's args for
+**High WEKA API load.** Confirm `enableBatchModeForQuotaUpdates` is on by checking the pod's args for
 `--fetchquotasinbatchmode=true`, and watch the split between the `filesystems/{guid}/quota` and
 `fileSystems/{guid}/quota/{id}` URLs in `weka_csi_api_request_count`. Traffic on the latter means
 per-volume fetching.
