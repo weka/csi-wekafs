@@ -200,7 +200,11 @@ func (a *ApiClient) userRole() ApiUserRole {
 func (a *ApiClient) HasCSIPermissions() bool {
 	role := a.userRole()
 	if role != "" {
-		return role == ApiUserRoleCSI || role == ApiUserRoleClusterAdmin || role == ApiUserRoleOrgAdmin
+		// TenantAdmin administers a single organization, the same scope OrgAdmin has, so it can do
+		// everything CSI needs within that organization. ReadOnly, S3 and Regular are deliberately
+		// absent: none of them can create or delete filesystems, quotas or snapshots.
+		return role == ApiUserRoleCSI || role == ApiUserRoleClusterAdmin ||
+			role == ApiUserRoleOrgAdmin || role == ApiUserRoleTenantAdmin
 	}
 	return false
 }
