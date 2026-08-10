@@ -19,6 +19,7 @@ package wekafs
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	v1 "k8s.io/api/core/v1"
@@ -217,6 +218,112 @@ func TestReconcileOnceReportsVolumeHealthMetrics(t *testing.T) {
 	}
 	if count := testutil.CollectAndCount(controllerMetrics.VolumeHealth.SweepDuration, MetricsPrefix+"_volume_health_sweep_duration_seconds"); count == 0 {
 		t.Error("expected the sweep duration histogram to have observed a sample")
+	}
+}
+
+// healthMetricLabels returns a distinct, well-formed LabelsForCsiVolumes value for handle, so tests
+// below don't need a real PersistentVolume or fake Weka cluster just to give the Status gauge
+// something to key on.
+func healthMetricLabels(handle string) []string {
+	return []string{"csi.weka.io", "pv-" + handle, "guid-" + handle, "wekafs-sc", "fs-" + handle, "dir", "default", "pvc-" + handle, "default", "uid-" + handle}
+}
+
+// TestDeleteVolumeForgetsHealthMetricsImmediately is the regression test for the fix this change
+// makes: without it, a deleted volume's weka_csi_volume_health_status series survives until the next
+// reconciler sweep evicts it via retainOnly, which can lag by a full volumeHealthReconcileInterval.
+// forgetVolumeHealthMetrics is the exact call DeleteVolume makes on its success paths (see
+// controllerserver.go), so exercising it here after a real sweep populated the cache proves the
+// series is gone immediately, and that an unrelated volume's series is untouched.
+func TestDeleteVolumeForgetsHealthMetricsImmediately(t *testing.T) {
+	stayingPV := healthReconcilerTestPV("pv-staying", "weka/v2/default", "wekafs-sc", healthReconcilerSecretRef())
+	deletedPV := healthReconcilerTestPV("pv-deleted", "weka/v2/doomed", "wekafs-sc", healthReconcilerSecretRef())
+
+	cs, cache, _ := newHealthReconcilerTestServer(t, healthReconcilerSecret(), stayingPV, deletedPV)
+	cs.conditionCache = cache
+	reconciler := newVolumeHealthReconciler(cs, cache)
+	reconciler.reconcileOnce(context.Background())
+
+	before := testutil.CollectAndCount(controllerMetrics.VolumeHealth.Status)
+	if before == 0 {
+		t.Fatal("expected the sweep to have produced at least one volume-health series")
+	}
+	stayingBefore := statusFor(t, cache, "weka/v2/default")
+
+	cs.forgetVolumeHealthMetrics(context.Background(), "weka/v2/doomed")
+
+	after := testutil.CollectAndCount(controllerMetrics.VolumeHealth.Status)
+	if after != before-1 {
+		t.Fatalf("expected exactly one series removed (from %d to %d), got %d remaining", before, before-1, after)
+	}
+	if _, ok := cache.lookup("weka/v2/doomed"); ok {
+		t.Fatal("expected the deleted volume's cache entry to be gone")
+	}
+	if got := statusFor(t, cache, "weka/v2/default"); got != stayingBefore {
+		t.Fatalf("expected the staying volume's series to be untouched, got %v want %v", got, stayingBefore)
+	}
+}
+
+// TestDeleteVolumeForgetsHealthMetricsIdempotently covers the "already gone" DeleteVolume path,
+// which calls forgetVolumeHealthMetrics too: deleting an already-absent volume must still remove its
+// series if one exists, must not error or panic, and calling it a second time (as a retried
+// DeleteVolume would) must be a harmless no-op.
+func TestDeleteVolumeForgetsHealthMetricsIdempotently(t *testing.T) {
+	cs, cache, _ := newHealthReconcilerTestServer(t)
+	cs.conditionCache = cache
+
+	const handle = "weka/v2/already-gone"
+	labels := healthMetricLabels(handle)
+	cache.store(handle, volumeConditionEntry{known: true, probedAt: time.Now(), labels: labels})
+	controllerMetrics.VolumeHealth.Status.WithLabelValues(labels...).Set(volumeHealthStatusHealthy)
+
+	before := testutil.CollectAndCount(controllerMetrics.VolumeHealth.Status)
+
+	cs.forgetVolumeHealthMetrics(context.Background(), handle)
+	if after := testutil.CollectAndCount(controllerMetrics.VolumeHealth.Status); after != before-1 {
+		t.Fatalf("expected the series to be removed (from %d to %d), got %d", before, before-1, after)
+	}
+	if _, ok := cache.lookup(handle); ok {
+		t.Fatal("expected the cache entry to be gone")
+	}
+
+	// Second call: nothing left to remove, must not error, panic, or change the series count.
+	afterFirst := testutil.CollectAndCount(controllerMetrics.VolumeHealth.Status)
+	cs.forgetVolumeHealthMetrics(context.Background(), handle)
+	if got := testutil.CollectAndCount(controllerMetrics.VolumeHealth.Status); got != afterFirst {
+		t.Fatalf("expected the repeat call to be a no-op, series count changed from %d to %d", afterFirst, got)
+	}
+}
+
+// TestDeleteVolumeForgetsHealthMetricsNilCache is the crash-risk test: DeleteVolume runs on every
+// successful delete regardless of whether volume health support is advertised, so conditionCache is
+// nil whenever it isn't (also true in dev mode, or when the k8s manager is nil - see
+// NewControllerServer). forgetVolumeHealthMetrics must guard that case rather than deref a nil
+// *volumeConditionCache's embedded mutex.
+func TestDeleteVolumeForgetsHealthMetricsNilCache(t *testing.T) {
+	cs := NewControllerServer("test-node", nil, nil, &DriverConfig{}, nil)
+	if cs.conditionCache != nil {
+		t.Fatal("test setup invalid: expected a nil conditionCache when no manager is supplied")
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("forgetVolumeHealthMetrics panicked with a nil conditionCache: %v", r)
+		}
+	}()
+	cs.forgetVolumeHealthMetrics(context.Background(), "weka/v2/whatever")
+}
+
+// TestDeleteVolumeForgetsHealthMetricsUnknownHandle covers a handle that was never in the cache at
+// all (e.g. a volume whose health was never probed before it was deleted): removal must be a
+// harmless no-op, not an error or a spurious metric mutation.
+func TestDeleteVolumeForgetsHealthMetricsUnknownHandle(t *testing.T) {
+	cs, cache, _ := newHealthReconcilerTestServer(t)
+	cs.conditionCache = cache
+
+	before := testutil.CollectAndCount(controllerMetrics.VolumeHealth.Status)
+	cs.forgetVolumeHealthMetrics(context.Background(), "weka/v2/never-seen")
+	if got := testutil.CollectAndCount(controllerMetrics.VolumeHealth.Status); got != before {
+		t.Fatalf("expected no series change for an unknown handle, before=%d got=%d", before, got)
 	}
 }
 
