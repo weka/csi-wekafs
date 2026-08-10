@@ -11,7 +11,7 @@ on:
         description: 'Branch to create release from'
         required: true
         type: string
-        default: dev
+        default: main
       release_version:
         description: 'Version for the release (e.g., v1.0.0)'
         required: true
@@ -52,7 +52,10 @@ jobs:
         run: |
           TARGET_BRANCH="${{ inputs.target_branch }}"
           if [[ -z "$TARGET_BRANCH" ]]; then
-            TARGET_BRANCH="dev"
+            # Only reachable on `push`, where the branch that triggered the run is the branch
+            # to draft. A hardcoded fallback drafts the wrong branch's notes for every other
+            # trigger branch.
+            TARGET_BRANCH="${{ github.ref_name }}"
           fi
           echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
 
@@ -63,9 +66,31 @@ jobs:
 
       - name: Fetch merged PRs into target branch
         run: |
-          gh pr list --state merged --base ${{ steps.target_branch.outputs.target_branch }} \
+          # Bound the notes by the previous release. Without `merged:>`, `gh pr list` returns
+          # the most recently merged PRs regardless of which release shipped them, so a draft
+          # repeats work that already went out. `--limit` has to be generous for the same
+          # reason: the default page of 30 is a count, not a boundary, and silently drops the
+          # oldest PRs of the cycle once more than that have merged.
+          #
+          # The boundary is the newest tag *reachable from the branch being released*, not the
+          # newest release by wall-clock, so a release cut from a side branch cannot pull the
+          # boundary forward and hide PRs that belong in this one.
+          TARGET="${{ steps.target_branch.outputs.target_branch }}"
+          REF="origin/$TARGET"
+          git rev-parse --verify -q "$REF" >/dev/null || REF=HEAD
+          TAG=$(git describe --tags --abbrev=0 "$REF" 2>/dev/null || true)
+          SEARCH="base:$TARGET is:merged"
+          if [[ -n "$TAG" ]]; then
+            SINCE=$(git log -1 --format=%cI "$TAG")
+            SEARCH="$SEARCH merged:>$SINCE"
+            echo "listing PRs merged after $TAG ($SINCE), the newest tag on $REF"
+          else
+            echo "no tag reachable from $REF - listing every merged PR"
+          fi
+          gh pr list --limit 500 --search "$SEARCH" \
             --json number,title,body,labels,author,url \
             > prs.json
+          echo "fetched $(jq length prs.json) PRs"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
