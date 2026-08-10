@@ -1,0 +1,11 @@
+# Values chart-testing installs with, on top of values.yaml.
+#
+# One replica, because ct runs `helm install --wait` and the readiness probe reports leadership:
+# with the default two replicas exactly one is elected, so the standby stays NotReady for as long
+# as the leader holds the lease and the install would sit there until it times out. That is the
+# intended behaviour in a real deployment - a standby is not ready to collect - but it makes the
+# chart look broken to a test that waits for every pod.
+metricsServer:
+  replicas: 1
+  # Nothing scrapes this in kind, and the shorter grace period lets the test tear down promptly
+  terminationGracePeriodSeconds: 5
