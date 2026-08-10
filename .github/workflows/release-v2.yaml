@@ -279,11 +279,18 @@ jobs:
           yq -i '.sources[0] = "'https://github.com/weka/csi-wekafs/tree/$VERSION'"' Chart.yaml
           yq -i '.annotations."artifacthub.io/prerelease" = "'${{ inputs.preRelease }}'"' Chart.yaml
           yq -i '.annotations."artifacthub.io/containsSecurityUpdates" = "'${{ inputs.containsSecurityUpdates }}'"' Chart.yaml
-          if [[ -f ../../artifacthub_changes.json ]]; then
+          # Helm types chart annotations as map[string]string, so the value has to be a YAML
+          # string that happens to contain a list - `load()` splices the file in as a node and
+          # Chart.yaml stops loading at all ("cannot unmarshal array into ... of type string").
+          # An empty list is the common case, since a change is only recorded for PRs whose
+          # title carries a ticket, so drop the annotation entirely rather than write "[]".
+          if [[ -s ../../artifacthub_changes.json ]] && [[ "$(jq 'length' ../../artifacthub_changes.json)" -gt 0 ]]; then
             echo "Updating artifacthub.io/changes annotation in Chart.yaml"
-            yq -i 'with(.; .annotations."artifacthub.io/changes" = load("../../artifacthub_changes.json") )' Chart.yaml
+            CHANGES="$(yq -o=yaml -P '.' ../../artifacthub_changes.json)" \
+              yq -i '.annotations."artifacthub.io/changes" = strenv(CHANGES)' Chart.yaml
           else
-            echo "artifacthub_changes.json not found, skipping update of artifacthub.io/changes annotation"
+            echo "no artifacthub changes to record, removing the artifacthub.io/changes annotation"
+            yq -i 'del(.annotations."artifacthub.io/changes")' Chart.yaml
           fi
 
           echo ------------------ values ------------------
@@ -340,6 +347,10 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: Release ${{ steps.set_version.outputs.version }}
+          # Commit only what the release actually rewrites. The default stages the whole
+          # workspace, which swept the downloaded artifacthub_changes.json and a scratch file
+          # left behind by the helm-docs container into the release commit.
+          file_pattern: README.md RELEASE.md charts/
 
       # https://colinwilson.uk/2022/01/27/how-to-sign-helm-charts-using-chart-releaser-action/
       - name: Prepare GPG key
