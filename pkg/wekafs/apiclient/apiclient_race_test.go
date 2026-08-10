@@ -34,19 +34,35 @@ func quietLogs(t *testing.T) {
 
 // wrapData marshals v and wraps it the way the real Weka API wraps every response: as the "data"
 // field of an envelope. ApiClient's do()/request() unwrap it the same way on the way back in.
-func wrapData(t *testing.T, v interface{}) []byte {
-	t.Helper()
+func wrapData(v interface{}) ([]byte, error) {
 	inner, err := json.Marshal(v)
 	if err != nil {
-		t.Fatalf("failed to marshal test fixture: %v", err)
+		return nil, fmt.Errorf("failed to marshal test fixture: %w", err)
 	}
 	out, err := json.Marshal(struct {
 		Data json.RawMessage `json:"data"`
 	}{Data: inner})
 	if err != nil {
-		t.Fatalf("failed to marshal test envelope: %v", err)
+		return nil, fmt.Errorf("failed to marshal test envelope: %w", err)
 	}
-	return out
+	return out, nil
+}
+
+// writeJSON wraps v via wrapData and writes it as the HTTP response body. It runs on the handler's
+// own goroutine (mux.HandleFunc), not the test goroutine, so a marshal failure must not call
+// t.Fatalf: that invokes runtime.Goexit on this goroutine, which aborts the response mid-flight and
+// surfaces to the client as an opaque EOF while the test can still report a pass. t.Errorf plus a
+// 500 response instead fails the test and gives the client a real error to react to.
+func writeJSON(t *testing.T, w http.ResponseWriter, v interface{}) {
+	t.Helper()
+	data, err := wrapData(v)
+	if err != nil {
+		t.Errorf("%v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 // newRaceTestServer stands up an httptest server that emulates just enough of the Weka REST API
@@ -65,36 +81,32 @@ func newRaceTestServer(t *testing.T) (hostPort string, mgmtPort int) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/api/v2/login", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(wrapData(t, LoginResponse{
+		writeJSON(t, w, LoginResponse{
 			AccessToken:  "access-token",
 			TokenType:    "bearer",
 			ExpiresIn:    3600,
 			RefreshToken: "refresh-token",
-		}))
+		})
 	})
 
 	mux.HandleFunc("/api/v2/login/refresh", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(wrapData(t, RefreshResponse{
+		writeJSON(t, w, RefreshResponse{
 			AccessToken:  "access-token-2",
 			TokenType:    "bearer",
 			ExpiresIn:    3600,
 			RefreshToken: "refresh-token-2",
-		}))
+		})
 	})
 
 	mux.HandleFunc("/api/v2/security/defaultTokensExpiry", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(wrapData(t, TokenExpiryResponse{
+		writeJSON(t, w, TokenExpiryResponse{
 			AccessTokenExpiry:  3600,
 			RefreshTokenExpiry: 86400,
-		}))
+		})
 	})
 
 	mux.HandleFunc("/api/v2/cluster", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(wrapData(t, ClusterInfoResponse{
+		writeJSON(t, w, ClusterInfoResponse{
 			Name:    "race-test-cluster",
 			Release: "4.2.0",
 			Guid:    uuid.New(),
@@ -102,20 +114,26 @@ func newRaceTestServer(t *testing.T) (hostPort string, mgmtPort int) {
 				TotalBytes:         1 << 40,
 				UnprovisionedBytes: 1 << 39,
 			},
-		}))
+		})
 	})
 
 	mux.HandleFunc("/api/v2/users/whoami", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
 		// Role must satisfy HasCSIPermissions(), or Login() fails permission checks.
-		_, _ = w.Write(wrapData(t, WhoamiResponse{
+		writeJSON(t, w, WhoamiResponse{
 			OrgId:    1,
 			Username: "admin",
 			Source:   "local",
 			Uid:      uuid.New(),
 			Role:     ApiUserRoleClusterAdmin,
 			OrgName:  "Root",
-		}))
+		})
+	})
+
+	// Backs GetNfsInterfaceGroup/GetNfsMountIp for TestGetNfsInterfaceGroup_ConcurrentAccess.
+	mux.HandleFunc("/api/v2/interfaceGroups", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, []InterfaceGroup{
+			{Name: "default", Type: InterfaceGroupTypeNFS, Ips: []string{"127.0.0.1"}},
+		})
 	})
 
 	// Registered under both paths: the mock cluster reports a version recent enough that
@@ -148,8 +166,7 @@ func newRaceTestServer(t *testing.T) (hostPort string, mgmtPort int) {
 				Status:   "UP",
 			})
 		}
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(wrapData(t, nodes))
+		writeJSON(t, w, nodes)
 	}
 	mux.HandleFunc("/api/v2/nodes", nodesHandler)
 	mux.HandleFunc("/api/v2/processes", nodesHandler)
@@ -240,8 +257,8 @@ func TestApiClientConcurrentUse(t *testing.T) {
 					_ = c.SupportsFilesystemAsVolume()
 					_ = c.SupportsDirectoryAsVolume()
 					_ = c.SupportsMultipleClusters()
-					_ = c.ClusterName
-					_ = c.ApiUserRole
+					_ = c.GetClusterName()
+					_ = c.userRole()
 					_ = c.HasCSIPermissions()
 				}
 			}
@@ -289,6 +306,46 @@ func TestApiClientConcurrentEndpointRotation(t *testing.T) {
 					if ep := c.getEndpoint(ctx); ep != nil {
 						_ = ep.String()
 					}
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+}
+
+// TestGetNfsInterfaceGroup_ConcurrentAccess covers fix 6: nfsInterfaceGroups was a plain map with no
+// lock at all, read from GetNfsInterfaceGroup and written from fetchNfsInterfaceGroup. Two goroutines
+// reaching it with a cold cache - as two simultaneous NFS publishes on a shared per-cluster client
+// would - raced a map write against map reads/writes on other goroutines, which Go turns into an
+// unrecoverable "fatal error: concurrent map read and map write" that recover() cannot catch. This
+// drives many goroutines through GetNfsMountIp (which resolves the "default" interface group) from a
+// cold cache simultaneously; -race must report nothing, and the process must not crash.
+func TestGetNfsInterfaceGroup_ConcurrentAccess(t *testing.T) {
+	quietLogs(t)
+	serverAddr, _ := newRaceTestServer(t)
+	c := newRaceTestClient(t, serverAddr)
+	ctx := context.Background()
+
+	if err := c.Login(ctx); err != nil {
+		t.Fatalf("initial login failed: %v", err)
+	}
+
+	const goroutines = 30
+	const iterations = 20
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func(id int) {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("goroutine %d panicked: %v", id, r)
+				}
+			}()
+			for i := 0; i < iterations; i++ {
+				if _, err := c.GetNfsMountIp(ctx); err != nil {
+					t.Logf("goroutine %d: GetNfsMountIp: %v", id, err)
 				}
 			}
 		}(g)
