@@ -1,6 +1,11 @@
 name: pull-request-v2
 on:
   pull_request:
+    # ready_for_review is NOT in the default type set (opened, synchronize, reopened), so without it
+    # taking a PR out of draft fires no workflow at all - and build-sanity-image is gated on
+    # draft == false, with test-sanity depending on it. The sanity suite would therefore never run
+    # for a PR opened as a draft and later marked ready, which is how this repo's stacks are built.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - '.github/**'
       - '!.github/workflows/**'
