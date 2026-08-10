@@ -32,7 +32,14 @@ func mountBaseDirForRole(mode CsiPluginMode, transport DataTransport) string {
 		base = "/run/weka-fs-mounts-node"
 	case CsiModeController:
 		base = "/run/weka-fs-mounts-controller"
+	case CsiModeMetricsServer:
+		// Mounters are only ever built when csiMode.servesCsiGrpc() is true (see driver.go), which
+		// excludes CsiModeMetricsServer, so this base is never actually used in production - listed
+		// explicitly so the switch stays exhaustive over every CsiPluginMode rather than relying on a
+		// silent catch-all.
+		base = "/run/weka-fs-mounts"
 	default:
+		log.Warn().Str("mode", string(mode)).Msg("mountBaseDirForRole: unrecognized CSI plugin mode, using generic mount base dir")
 		base = "/run/weka-fs-mounts"
 	}
 	return path.Join(base, string(transport))
