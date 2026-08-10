@@ -7,5 +7,5 @@ ADD tests/csi-sanity/wekafs-dirv1.yaml /test/wekafs-dirv1.yaml
 ADD tests/csi-sanity/wekafs-fs.yaml /test/wekafs-fs.yaml
 ADD tests/csi-sanity/wekafs-snapvol.yaml /test/wekafs-snapvol.yaml
 ADD tests/csi-sanity/wekafs-api-secret.yaml /test/wekafs-api-secret.yaml
-ADD tests/csi-sanity/run_sanity.sh /usr/bin/run_sanity
+ADD --chmod=755 tests/csi-sanity/run_sanity.sh /usr/bin/run_sanity
 ADD --chmod=755 ./build/linux-amd64/wekafsplugin /usr/local/bin/wekafsplugin
