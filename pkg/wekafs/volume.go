@@ -455,7 +455,7 @@ func (v *Volume) getFreeSpaceOnStorage(ctx context.Context) (int64, error) {
 	}
 	maxCapacity, err := v.apiClient.GetFreeCapacity(ctx)
 	if err != nil {
-		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity for filesystem %s on cluster %s: %s", v.GetId(), v.apiClient.ClusterName, err.Error())
+		return -1, status.Errorf(codes.FailedPrecondition, "Could not obtain free capacity for filesystem %s on cluster %s: %s", v.GetId(), v.apiClient.GetClusterName(), err.Error())
 	}
 
 	logger.Debug().Uint64("max_capacity", maxCapacity).Msg("Resolved free capacity")

@@ -62,7 +62,7 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 	api.RLock()
 	defer api.RUnlock()
 	for _, val := range api.apis {
-		if val.ClusterGuid == guid {
+		if val.GetClusterGuid() == guid {
 			return val, nil
 		}
 	}
@@ -184,7 +184,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 		return nil, errors.New(fmt.Sprintf(
 			"Using Organization %s is not supported on Weka cluster \"%s\".\n"+
 				"To support organization other than Root please upgrade to version %s or higher",
-			credentials.Organization, newClient.ClusterName, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
+			credentials.Organization, newClient.GetClusterName(), apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
 	}
 	if (api.config.allowNfsFailback || api.config.useNfs) && !api.config.isInDevMode() {
 		newClient.NfsInterfaceGroupName = api.config.interfaceGroupName
