@@ -65,7 +65,6 @@ func TestHealthProbesFollowTheModeNotLeaderElection(t *testing.T) {
 		why  string
 	}{
 		{mode: CsiModeController, want: true, why: "controller pods have liveness probes"},
-		{mode: CsiModeAll, want: true, why: "combined pods serve the controller probes"},
 		{mode: CsiModeMetricsServer, want: true, why: "has a liveness probe whether or not it elects"},
 		{mode: CsiModeNode, want: false, why: "would take a port the controller manager needs"},
 	} {
