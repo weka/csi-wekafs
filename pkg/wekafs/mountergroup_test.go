@@ -26,8 +26,8 @@ func TestGetDataTransportFromMountPath(t *testing.T) {
 		"nfs mount under the controller base": {
 			mountBaseDirForRole(CsiModeController, dataTransportNfs) + "/default-abc123", dataTransportNfs,
 		},
-		"wekafs mount under the default base": {
-			mountBaseDirForRole(CsiModeAll, dataTransportWekafs) + "/default-abc123", dataTransportWekafs,
+		"wekafs mount under the metrics-server (default) base": {
+			mountBaseDirForRole(CsiModeMetricsServer, dataTransportWekafs) + "/default-abc123", dataTransportWekafs,
 		},
 		// A filesystem may legitimately be called "nfs"; only the path segment decides.
 		"filesystem named nfs on a wekafs mount": {
@@ -50,7 +50,7 @@ func TestGetDataTransportFromMountPath(t *testing.T) {
 // both mounters name a mount {fsName}-{sha1(fsName:options)}, so identical option strings would
 // otherwise produce identical paths and unmounting one would tear down the other.
 func TestMountBaseDirsAreDisjointPerTransport(t *testing.T) {
-	for _, mode := range []CsiPluginMode{CsiModeNode, CsiModeController, CsiModeAll} {
+	for _, mode := range []CsiPluginMode{CsiModeNode, CsiModeController} {
 		nfs := mountBaseDirForRole(mode, dataTransportNfs)
 		wekafs := mountBaseDirForRole(mode, dataTransportWekafs)
 		if nfs == wekafs {
