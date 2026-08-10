@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -165,11 +166,45 @@ func (a *ApiClient) fetchNfsInterfaceGroup(ctx context.Context, name string) err
 				}
 				return errors.New("no IP addresses found for nfs interface group \"" + name + "\"")
 			}
-			a.NfsInterfaceGroups[igname] = &ig
+			a.nfsInterfaceGroups.set(igname, &ig)
 			return nil
 		}
 	}
 	return errors.New(fmt.Sprintf("no nfs interface group named '%s' found", name))
+}
+
+// interfaceGroups caches NFS interface groups by name. It owns its lock rather than borrowing the
+// ApiClient's, mirroring ApiEndPoints: the cache is filled from fetchNfsInterfaceGroup, which makes
+// an HTTP round trip through Request - and Request takes the client's own lock - so sharing that
+// lock here would deadlock the moment a fetch happened while it was held.
+type interfaceGroups struct {
+	sync.RWMutex
+	groups map[string]*InterfaceGroup
+}
+
+func newInterfaceGroups() *interfaceGroups {
+	return &interfaceGroups{groups: make(map[string]*InterfaceGroup)}
+}
+
+// get returns the cached group for name, if it has been fetched.
+func (i *interfaceGroups) get(name string) (*InterfaceGroup, bool) {
+	i.RLock()
+	defer i.RUnlock()
+	ig, ok := i.groups[name]
+	return ig, ok
+}
+
+// set caches a group under name.
+func (i *interfaceGroups) set(name string, ig *InterfaceGroup) {
+	i.Lock()
+	defer i.Unlock()
+	i.groups[name] = ig
+}
+
+// has reports whether a group is cached under name.
+func (i *interfaceGroups) has(name string) bool {
+	_, ok := i.get(name)
+	return ok
 }
 
 func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context, name string) *InterfaceGroup {
@@ -177,14 +212,14 @@ func (a *ApiClient) GetNfsInterfaceGroup(ctx context.Context, name string) *Inte
 	if name == "" {
 		igName = "default"
 	}
-	_, ok := a.NfsInterfaceGroups[igName]
+	ig, ok := a.nfsInterfaceGroups.get(igName)
 	if !ok {
-		err := a.fetchNfsInterfaceGroup(ctx, name)
-		if err != nil {
+		if err := a.fetchNfsInterfaceGroup(ctx, name); err != nil {
 			return nil
 		}
+		ig, _ = a.nfsInterfaceGroups.get(igName)
 	}
-	return a.NfsInterfaceGroups[igName]
+	return ig
 }
 
 // GetNfsMountIp returns the IP address of the NFS interface group to be used for NFS mount
