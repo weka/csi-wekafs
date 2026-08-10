@@ -171,9 +171,9 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 		return errors.New("no API client for mount, cannot do NFS mount")
 	}
 	// to validate that the organization is root, otherwise cannot mount NFS volumes
-	if apiClient.ApiOrgId != 0 {
+	if orgId := apiClient.GetApiOrgId(); orgId != 0 {
 		err := errors.New("cannot mount NFS volumes with non-Root organization")
-		logger.Error().Err(err).Int("organization_id", apiClient.ApiOrgId).Msg("Cannot mount NFS volumes with non-Root organization")
+		logger.Error().Err(err).Int("organization_id", orgId).Msg("Cannot mount NFS volumes with non-Root organization")
 		return err
 	}
 

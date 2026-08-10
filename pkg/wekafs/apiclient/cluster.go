@@ -83,6 +83,33 @@ func (a *ApiClient) fetchClusterInfo(ctx context.Context) error {
 	return nil
 }
 
+// GetClusterName returns the cluster name established at the last successful login. Reads go
+// through here, mirroring compatibility()/userRole(), because fetchClusterInfo overwrites the field
+// under the state lock on every re-login while readers outside this package have no lock of their
+// own to take.
+func (a *ApiClient) GetClusterName() string {
+	a.RLock()
+	defer a.RUnlock()
+	return a.ClusterName
+}
+
+// GetClusterGuid returns the cluster GUID established at the last successful login, for the same
+// reason as GetClusterName. Going through the lock also avoids handing back a torn uuid.UUID, which
+// is a plain byte array a concurrent write could update non-atomically.
+func (a *ApiClient) GetClusterGuid() uuid.UUID {
+	a.RLock()
+	defer a.RUnlock()
+	return a.ClusterGuid
+}
+
+// GetApiOrgId returns the organization ID established at the last successful login.
+// fetchUserRoleAndOrgId overwrites it under the state lock on every re-login.
+func (a *ApiClient) GetApiOrgId() int {
+	a.RLock()
+	defer a.RUnlock()
+	return a.ApiOrgId
+}
+
 func (a *ApiClient) GetFreeCapacity(ctx context.Context) (uint64, error) {
 	responseData := &ClusterInfoResponse{}
 	if err := a.Get(ctx, ApiPathClusterInfo, nil, responseData); err != nil {
