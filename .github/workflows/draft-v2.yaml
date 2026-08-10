@@ -23,14 +23,14 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
           fetch-depth: 0                # fetch the whole repo history
 
       - name: Git Version
         id: auto_version
-        uses: codacy/git-version@2.8.2
+        uses: codacy/git-version@2.8.7
         with:
           prefix: v
           minor-identifier: /feat(ure)*:/
@@ -57,7 +57,7 @@ jobs:
           echo "target_branch=$TARGET_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -188,13 +188,13 @@ jobs:
           node generate-notes.mjs
 
       - name: Upload release notes artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: RELEASE_NOTES.md
 
       - name: Upload skipped PRs artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: skipped-prs
           path: SKIPPED_PRS.md
