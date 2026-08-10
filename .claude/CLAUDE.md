@@ -90,6 +90,44 @@ Key components deployed:
 - **Keep CLAUDE.md up to date** when repo structure, conventions, or key patterns change
 - **Keep README.md up to date** when user-facing behavior, configuration, or deployment instructions change
 
+## PR Descriptions
+
+PR descriptions are **copied into the release notes as they are**, so write them for
+whoever reads those — an operator or a customer, not the person who reviewed the diff.
+See PR #409 for the house example.
+
+Use exactly these headers, at this level and in this order:
+
+```markdown
+### TL;DR
+### What changed?
+### How to test?
+### Why make this change?
+```
+
+- **Short.** #409's whole body is about 660 characters. That is the target.
+- `### TL;DR` — one line: the user-visible outcome.
+- `### What changed?` — a short bullet list.
+- `### How to test?` — numbered steps someone can actually follow: deploy, create a PVC,
+  check a value. If only automated tests can show it, say so plainly.
+- `### Why make this change?` — one short paragraph on the problem it solves.
+- Plain language, for a reader who does not know the codebase. Describe behaviour and
+  impact, not implementation.
+- That audience rule follows the change. A PR with no user-visible effect - a refactor,
+  a CI or test-infrastructure change - has developers as its only readers, so write it
+  for them and be as technical as it needs to be. Say plainly that nothing changes for
+  someone running the driver, rather than inventing user impact to fill the section.
+- Naming concrete user-facing identifiers is fine and encouraged — config keys, volume
+  context parameters, metric names, CLI flags, role names, values. What stays out: file
+  paths, line numbers, commit hashes, internal type names, and lock, goroutine or
+  race-condition analysis.
+
+**Anything long or technical belongs in a PR comment instead** — review responses,
+finding-by-finding breakdowns, design trade-offs, verification evidence, notes on what
+was deliberately left unfixed. Comments are not copied into release notes, so there is
+no length limit there. When shortening an existing description, move the old text into a
+comment rather than deleting it.
+
 ## Agentic Flow
 
 The main agent is an orchestrator. It should delegate work via Task tool and minimize direct tool use. Direct tool use is acceptable only for 1-2 quick checks to orient. Model should always be set explicitly on tasks/subagents.
