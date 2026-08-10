@@ -12,6 +12,7 @@ const (
 	TracerName                                = "weka-csi"
 	ApiUserRoleClusterAdmin       ApiUserRole = "ClusterAdmin"
 	ApiUserRoleOrgAdmin           ApiUserRole = "OrgAdmin"
+	ApiUserRoleTenantAdmin        ApiUserRole = "TenantAdmin"
 	ApiUserRoleReadOnly           ApiUserRole = "ReadOnly"
 	ApiUserRoleCSI                ApiUserRole = "CSI"
 	ApiUserRoleS3                 ApiUserRole = "S3"
