@@ -122,8 +122,10 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 	return a, nil
 }
 
-// getBaseUrl returns the full HTTP URL of the API endpoint including schema, chosen endpoint and API prefix
-func (a *ApiClient) getBaseUrl(ctx context.Context) string {
+// getBaseUrl returns the full HTTP URL of the API endpoint including schema, chosen endpoint and API
+// prefix. It reports ApiNoEndpointsError, via requireEndpoint, rather than dereferencing a nil
+// endpoint when none is known.
+func (a *ApiClient) getBaseUrl(ctx context.Context) (string, apiError) {
 	scheme := ""
 	switch strings.ToUpper(a.Credentials.HttpScheme) {
 
@@ -134,8 +136,11 @@ func (a *ApiClient) getBaseUrl(ctx context.Context) string {
 	default:
 		scheme = "http"
 	}
-	endpoint := a.getEndpoint(ctx)
-	return fmt.Sprintf("%s://%s:%d/api/v2", scheme, endpoint.IpAddress, endpoint.MgmtPort)
+	endpoint, err := a.requireEndpoint(ctx)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s://%s:%d/api/v2", scheme, endpoint.IpAddress, endpoint.MgmtPort), nil
 }
 
 // handleTransientErrors checks if the error returned by endpoint is a network error (transient by definition)
@@ -174,9 +179,13 @@ func (a *ApiClient) handleTransientErrors(ctx context.Context, err error) error 
 }
 
 // getUrl returns a URL which consists of baseUrl + path
-func (a *ApiClient) getUrl(ctx context.Context, path string) string {
-	u, _ := url.JoinPath(a.getBaseUrl(ctx), path)
-	return u
+func (a *ApiClient) getUrl(ctx context.Context, path string) (string, apiError) {
+	base, err := a.getBaseUrl(ctx)
+	if err != nil {
+		return "", err
+	}
+	u, _ := url.JoinPath(base, path)
+	return u, nil
 }
 
 // generateHash used for storing multiple clients in hash table. Hash() is created once as connection params might change

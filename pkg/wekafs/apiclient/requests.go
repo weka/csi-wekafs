@@ -24,7 +24,10 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			Err: errors.New("no endpoints could be found for API client"),
 		}
 	}
-	u := a.getUrl(ctx, Path)
+	u, uErr := a.getUrl(ctx, Path)
+	if uErr != nil {
+		return &ApiResponse{}, uErr
+	}
 
 	//construct base request and add auth if exists
 	var body *bytes.Reader
@@ -62,7 +65,10 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
 
 	//perform the request and update endpoint with stats
-	endpoint := a.getEndpoint(ctx)
+	endpoint, epErr := a.requireEndpoint(ctx)
+	if epErr != nil {
+		return &ApiResponse{}, epErr
+	}
 	endpoint.requestCount.Add(1)
 	start := time.Now()
 	response, err := a.client.Do(r)
