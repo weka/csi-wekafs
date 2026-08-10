@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"strconv"
 	"strings"
 	"syscall"
@@ -44,6 +45,10 @@ const (
 )
 
 var errLeadershipLost = errors.New("leadership lost")
+
+// Set by the build process, as for the other cmd binaries: one
+// -X main.version stamps every main package in a single go build.
+var version = ""
 
 func parseEnvInt(name string, defaultValue int) int {
 	raw := strings.TrimSpace(os.Getenv(name))
@@ -137,6 +142,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Checked before os.Args[1] is taken as the command to gate. No flag package here: everything
+	// after the binary name belongs to the child, so only this exact single argument is intercepted.
+	if len(os.Args) == 2 && (os.Args[1] == "--version" || os.Args[1] == "-version") {
+		fmt.Println(path.Base(os.Args[0]), version)
+		return
+	}
+
 	termCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
@@ -159,7 +171,8 @@ func main() {
 	args := os.Args[2:]
 
 	fmt.Printf(
-		"wait-for-leader: gating %s (leader file: %s, poll: %s, socket: %s, leader-loss debounce: %s)\n",
+		"wait-for-leader: version %s, gating %s (leader file: %s, poll: %s, socket: %s, leader-loss debounce: %s)\n",
+		version,
 		binary,
 		leaderFile,
 		pollInterval.String(),

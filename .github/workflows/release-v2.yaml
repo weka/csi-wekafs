@@ -64,8 +64,13 @@ jobs:
               exit 2
           fi
 
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install gh jq -y
+
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 0                # fetch the whole repo history
 
@@ -78,7 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
           fetch-depth: 0                # fetch the whole repo history
@@ -123,7 +128,9 @@ jobs:
           for GOARCH in amd64 arm64; do
             mkdir -p build/$GOOS-$GOARCH
             echo "Building for GOOS=$GOOS GOARCH=$GOARCH"
-            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -o build/$GOOS-$GOARCH ./cmd/**
+            CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build \
+              -ldflags "-X main.version=${{ steps.version.outputs.version }}" \
+              -o build/$GOOS-$GOARCH ./cmd/...
           done
 
       - name: Upload binaries
@@ -140,7 +147,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
           fetch-depth: 0                # fetch the whole repo history
@@ -167,7 +174,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Download binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: ./build
           name: wekafsplugin-binaries-${{ github.sha }}
@@ -200,7 +207,6 @@ jobs:
             type=gha,mode=max,key=wekacsiplugin-arm64
           labels: |
             revision=${{ steps.version.outputs.version }}
-            quay.expires-after=14d
             version=${{ steps.version.outputs.version }}
             release=${{ steps.version.outputs.version }}
           provenance: false
@@ -213,9 +219,13 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
+      - name: Install GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install gh jq -y
 
       - name: Checkout Code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           token: ${{ secrets.PAT }} # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
           fetch-depth: 0
@@ -333,6 +343,7 @@ jobs:
 
       # https://colinwilson.uk/2022/01/27/how-to-sign-helm-charts-using-chart-releaser-action/
       - name: Prepare GPG key
+        if: ${{ !inputs.performDryRun }}
         run: |
           gpg_dir=.cr-gpg
           mkdir "$gpg_dir"

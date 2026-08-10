@@ -26,10 +26,10 @@ RUN true
 
 
 RUN echo Building package
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/wekafsplugin" /src/cmd/wekafsplugin
-
-RUN echo Building wait-for-leader utility
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-extldflags '-static'" -o "/bin/wait-for-leader" /src/cmd/wait-for-leader
+# Every cmd package in one invocation: a single -X main.version stamps all of them, so wait-for-leader
+# and the metrics server report the same version as the plugin instead of an empty one, and the shared
+# dependency graph is compiled once rather than once per binary.
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/" /src/cmd/...
 
 FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH}
 LABEL maintainers="WekaIO, LTD"
