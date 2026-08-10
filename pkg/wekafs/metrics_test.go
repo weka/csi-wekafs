@@ -45,8 +45,9 @@ func TestControllerAndNodeCollectorsAreComplete(t *testing.T) {
 			name:       "controller",
 			collectors: controller.Collectors(),
 			groups: map[string]any{
-				"ControllerOperationMetrics":   controller.Operations,
-				"ControllerConcurrencyMetrics": controller.Concurrency,
+				"ControllerOperationMetrics":    controller.Operations,
+				"ControllerConcurrencyMetrics":  controller.Concurrency,
+				"ControllerVolumeHealthMetrics": controller.VolumeHealth,
 			},
 		},
 		{

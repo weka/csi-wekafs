@@ -485,7 +485,7 @@ func TestDescribeVolumeReportsNoApiClientPerSetting(t *testing.T) {
 				secretCache: newSecretCache(time.Minute),
 			}
 
-			volume, condition, vol, health, err := cs.describeVolume(context.Background(), pv, nil)
+			volume, condition, vol, health, _, err := cs.describeVolume(context.Background(), pv, nil)
 			assert.NoError(t, err)
 			assert.Nil(t, vol, "no volume can be built without an API client")
 			assert.Nil(t, health)
