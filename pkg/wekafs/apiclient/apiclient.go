@@ -51,12 +51,13 @@ type ApiClient struct {
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
 	hostname                   string
-	NfsInterfaceGroups         map[string]*InterfaceGroup
-	ApiUserRole                ApiUserRole
-	ApiOrgId                   int
-	containerName              string
-	NfsInterfaceGroupName      string
-	NfsClientGroupName         string
+	// nfsInterfaceGroups caches interface groups by name. It carries its own lock - see the type.
+	nfsInterfaceGroups    *interfaceGroups
+	ApiUserRole           ApiUserRole
+	ApiOrgId              int
+	containerName         string
+	NfsInterfaceGroupName string
+	NfsClientGroupName    string
 
 	containers           *ContainersResponse
 	containersUpdateTime time.Time
@@ -107,7 +108,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 		CompatibilityMap:   &WekaCompatibilityMap{},
 		hostname:           opts.Hostname,
 		apiEndpoints:       NewApiEndPoints(),
-		NfsInterfaceGroups: make(map[string]*InterfaceGroup),
+		nfsInterfaceGroups: newInterfaceGroups(),
 	}
 	a.resetDefaultEndpoints(ctx)
 	if len(a.Credentials.Endpoints) < 1 {

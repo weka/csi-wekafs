@@ -14,7 +14,7 @@ func TestGetNfsInterfaceGroup(t *testing.T) {
 	// Test case: Valid interface group
 	ig := apiClient.GetNfsInterfaceGroup(context.Background(), "")
 	assert.NotNil(t, ig)
-	assert.Contains(t, apiClient.NfsInterfaceGroups, "default")
+	assert.True(t, apiClient.nfsInterfaceGroups.has("default"))
 
 	// Test case: Invalid interface group
 	ig = apiClient.GetNfsInterfaceGroup(context.Background(), "NFS")
@@ -23,7 +23,7 @@ func TestGetNfsInterfaceGroup(t *testing.T) {
 	// Test case: Invalid interface group
 	ig = apiClient.GetNfsInterfaceGroup(context.Background(), "Data")
 	assert.NotNil(t, ig)
-	assert.Contains(t, apiClient.NfsInterfaceGroups, "Data")
+	assert.True(t, apiClient.nfsInterfaceGroups.has("Data"))
 
 }
 
