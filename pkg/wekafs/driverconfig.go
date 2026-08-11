@@ -18,27 +18,30 @@ func (i *MutuallyExclusiveMountOptsStrings) Set(value string) error {
 }
 
 type DriverConfig struct {
-	DynamicVolPath                    string
-	VolumePrefix                      string
-	SnapshotPrefix                    string
-	SeedSnapshotPrefix                string
-	allowAutoFsCreation               bool
-	allowAutoFsExpansion              bool
-	allowSnapshotsOfDirectoryVolumes  bool
-	advertiseSnapshotSupport          bool
-	advertiseVolumeCloneSupport       bool
-	advertiseVolumeHealthSupport      bool
-	backfillMissingQuotas             bool
-	setQuotaOnStaticVolumes           bool
-	reportNoQuotaAsAbnormal           bool
-	reportNoApiClientAsAbnormal       bool
-	reportQuotaMismatchAsAbnormal     bool
-	debugPath                         string
-	allowInsecureHttps                bool
-	alwaysAllowSnapshotVolumes        bool
-	mutuallyExclusiveOptions          []mutuallyExclusiveMountOptionSet
-	maxConcurrencyPerOp               map[string]int64
-	wekaApiTimeout                    time.Duration // bounds a single Weka API request
+	DynamicVolPath                   string
+	VolumePrefix                     string
+	SnapshotPrefix                   string
+	SeedSnapshotPrefix               string
+	allowAutoFsCreation              bool
+	allowAutoFsExpansion             bool
+	allowSnapshotsOfDirectoryVolumes bool
+	advertiseSnapshotSupport         bool
+	advertiseVolumeCloneSupport      bool
+	advertiseVolumeHealthSupport     bool
+	backfillMissingQuotas            bool
+	setQuotaOnStaticVolumes          bool
+	reportNoQuotaAsAbnormal          bool
+	reportNoApiClientAsAbnormal      bool
+	reportQuotaMismatchAsAbnormal    bool
+	debugPath                        string
+	allowInsecureHttps               bool
+	alwaysAllowSnapshotVolumes       bool
+	mutuallyExclusiveOptions         []mutuallyExclusiveMountOptionSet
+	maxConcurrencyPerOp              map[string]int64
+	wekaApiTimeout                   time.Duration // bounds a single Weka API request
+	// rotateApiEndpointOnEachRequest spreads Weka API calls across the cluster's management nodes.
+	// On for the metrics server, which polls continuously; off for the plugin.
+	rotateApiEndpointOnEachRequest    bool
 	grpcRequestTimeout                time.Duration
 	healthProbeWekaTimeout            time.Duration
 	allowProtocolContainers           bool
@@ -93,6 +96,7 @@ func (dc *DriverConfig) Log() {
 		Int64("max_node_unpublish_volume_reqs", dc.maxConcurrencyPerOp["NodeUnpublishVolume"]).
 		Int("grpc_request_timeout_seconds", int(dc.grpcRequestTimeout.Seconds())).
 		Dur("weka_api_timeout", dc.wekaApiTimeout).
+		Bool("rotate_api_endpoint_on_each_request", dc.rotateApiEndpointOnEachRequest).
 		Int("health_probe_weka_timeout_seconds", int(dc.healthProbeWekaTimeout.Seconds())).
 		Bool("allow_protocol_containers", dc.allowProtocolContainers).
 		Bool("allow_nfs_failback", dc.allowNfsFailback).
@@ -165,8 +169,11 @@ type DriverConfigOptions struct {
 	GrpcRequestTimeoutSeconds int
 	// WekaApiTimeoutSeconds bounds a single Weka API request. Zero falls back to the API client's own
 	// default, so a caller that does not care keeps today's behaviour.
-	WekaApiTimeoutSeconds         int
-	HealthProbeWekaTimeoutSeconds int
+	WekaApiTimeoutSeconds int
+	// RotateApiEndpointOnEachRequest spreads Weka API calls across management nodes instead of
+	// staying on one until it fails.
+	RotateApiEndpointOnEachRequest bool
+	HealthProbeWekaTimeoutSeconds  int
 
 	AllowNfsFailback   bool
 	UseNfs             bool
@@ -261,6 +268,7 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		maxConcurrencyPerOp:               concurrency,
 		grpcRequestTimeout:                time.Duration(opts.GrpcRequestTimeoutSeconds) * time.Second,
 		wekaApiTimeout:                    time.Duration(opts.WekaApiTimeoutSeconds) * time.Second,
+		rotateApiEndpointOnEachRequest:    opts.RotateApiEndpointOnEachRequest,
 		healthProbeWekaTimeout:            time.Duration(opts.HealthProbeWekaTimeoutSeconds) * time.Second,
 		allowProtocolContainers:           opts.AllowProtocolContainers,
 		allowNfsFailback:                  opts.AllowNfsFailback,
