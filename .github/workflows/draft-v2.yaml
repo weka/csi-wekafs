@@ -22,6 +22,11 @@ on:
 jobs:
   generate-release:
     runs-on: ubuntu-latest
+    # The release workflow stamps the chart and docs and commits the result back to main. That
+    # push lands here as an ordinary push to main and drafts notes for a release that has just
+    # gone out - and because the window starts at the tag the release just created, the draft is
+    # always empty. Only that one commit is skipped; every other push to main still drafts.
+    if: ${{ !startsWith(github.event.head_commit.message, 'Release v') }}
 
     steps:
       - name: Checkout Code
@@ -144,20 +149,26 @@ jobs:
             return '';
           }
           
+          // ArtifactHub shows these as the chart's changelog. The mapping is by label alone: it
+          // used to require a ticket reference in the title, but titles here are conventional
+          // commits, so nothing ever matched and every release published an empty changelog.
+          // ci and tests changes are left out - they change nothing for anyone installing the chart.
           function getArtifactHubKind(pr){
             const labels = pr.labels.map(l => l.name.toLowerCase());
-            const title = pr.title.toLowerCase();
-            if (!title.includes('(csi-')) {
-              return '';
+            if (labels.includes('security')) {
+              return 'security';
             };
             if (labels.includes('feature')) {
               return 'added';
             };
             if (labels.includes('enhancement')) {
               return 'changed';
-            }; 
+            };
             if (labels.includes('fix') || labels.includes('bug')) {
               return 'fixed';
+            };
+            if (labels.includes('documentation') || labels.includes('dependencies')) {
+              return 'changed';
             };
             return '';
           }
@@ -216,9 +227,24 @@ jobs:
             }
           }
 
-          rnLines.push('---\n## PR Details\n');
-          rnLines.push(...details);
-          fs.writeFileSync('RELEASE_NOTES.md', rnLines.join('\n'));
+          // Everything above this point is the summary - the one screen a reader wants when
+          // scanning the releases list or a Slack notification. The per-PR bodies below it are
+          // long enough to bury it several times over, so they go behind a collapsed block and
+          // the summary is also written out on its own for the notification to use. The blank
+          // line after </summary> is what makes GitHub render the markdown inside the block.
+          const summary = rnLines.join('\n');
+          fs.writeFileSync('RELEASE_NOTES_SUMMARY.md', summary);
+
+          fs.writeFileSync('RELEASE_NOTES.md', [
+            summary,
+            '---',
+            '<details>',
+            '<summary><b>PR Details</b></summary>',
+            '',
+            ...details,
+            '</details>',
+            ''
+          ].join('\n'));
 
           // Write skipped PRs
           const skippedLines = ['# Skipped PRs', ''];
@@ -271,7 +297,10 @@ jobs:
       - name: Read Markdown file
         id: read_md
         run: |
-          content="$(head -10 RELEASE_NOTES.md)"
+          # The summary, not the first ten lines of the full notes: that cut fell in the middle of
+          # the section list and dropped most of the release. Slack rejects an attachment over
+          # roughly 4000 characters, so a very large release is still capped, below the sections.
+          content="$(head -c 3500 RELEASE_NOTES_SUMMARY.md)"
           echo "content<<EOF" >> $GITHUB_OUTPUT
           echo "$content" >> $GITHUB_OUTPUT
           echo "" >> $GITHUB_OUTPUT
