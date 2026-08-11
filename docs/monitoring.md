@@ -15,6 +15,10 @@ The controller and node servers report only on work they perform. Volume capacit
 work - the CSI specification has no "tell me how full every volume is" call - which is why capacity
 reporting is a component of its own.
 
+This page is the operational guide: how to deploy the metrics server, what to tune, and how to read
+the dashboards. For the exhaustive list of every metric, its type and its labels, see
+[Prometheus metrics](prometheus-metrics.md).
+
 ---
 
 ## The Metrics Server
