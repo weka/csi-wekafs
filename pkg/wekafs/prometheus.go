@@ -20,7 +20,11 @@ var (
 	// organization is the Weka tenant a volume belongs to, taken from the credentials its API client
 	// authenticated with. Every volume has exactly one, so it adds no series - it only makes the
 	// existing ones groupable by tenant.
-	LabelsForCsiVolumes    = []string{"csi_driver_name", "pv_name", "cluster_guid", "storage_class_name", "filesystem_name", "volume_type", "organization", "pvc_name", "pvc_namespace", "pvc_uid"}
+	// secret_name is the API Secret a volume authenticates with, as "namespace/name". A tenant is
+	// expected to use one Secret, so like organization it adds no series to a per-volume metric - it
+	// makes API load and capacity attributable to the credentials that produced them. Where that
+	// expectation is broken and one tenant spans several Secrets, the tenant's series split.
+	LabelsForCsiVolumes    = []string{"csi_driver_name", "pv_name", "cluster_guid", "storage_class_name", "filesystem_name", "volume_type", "organization", "pvc_name", "pvc_namespace", "pvc_uid", "secret_name"}
 	LabelsForFilesystemOps = []string{"csi_driver_name", "cluster_guid", "filesystem_name"}
 
 	HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000}
@@ -54,7 +58,21 @@ func csiVolumeLabelValues(driverName string, pv *v1.PersistentVolume, clusterGui
 	} else {
 		labelValues = append(labelValues, "", "", "")
 	}
-	return labelValues
+	// Taken from the PersistentVolume rather than passed in: CSI hands the driver a Secret's
+	// contents and never its name, so the object is the only place the name survives. Both callers
+	// resolve credentials through preferredSecretRef, so labelling with the same ref keeps the
+	// per-volume capacity and volume-health series attributable to the same Secret.
+	return append(labelValues, secretRefLabel(pv))
+}
+
+// secretRefLabel renders a volume's API Secret as "namespace/name", or blank when the volume
+// carries no usable ref - a statically provisioned volume need not reference one at all.
+func secretRefLabel(pv *v1.PersistentVolume) string {
+	ref := preferredSecretRef(pv)
+	if ref == nil {
+		return ""
+	}
+	return ref.Namespace + "/" + ref.Name
 }
 
 type PrometheusMetrics struct {
