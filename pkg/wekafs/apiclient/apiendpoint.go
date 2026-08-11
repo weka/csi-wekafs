@@ -147,34 +147,49 @@ func (eps *ApiEndPoints) Current() *ApiEndPoint {
 	return eps.Rotate()
 }
 
-func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
+// constructEndpointFromAddress parses a single raw credential endpoint (e.g. "1.2.3.4",
+// "1.2.3.4:1234", "[::1]:1234" or a hostname) into an ApiEndPoint. It returns an error rather than a
+// nil endpoint so callers can log and skip the specific offending value instead of silently ending up
+// with fewer endpoints than the credentials listed.
+func constructEndpointFromAddress(ctx context.Context, e string) (*ApiEndPoint, error) {
+	if strings.Contains(e, "://") {
+		return nil, fmt.Errorf("endpoint must not include a URL scheme: %s", e)
+	}
+
+	split := strings.Split(e, ":")
+	ip := ""
+	port := "14000" // default port
+
+	// if there is a port number in the endpoint, use it
+	if len(split) > 1 {
+		port = split[len(split)-1]
+		ip = strings.Join(split[:len(split)-1], ":")
+	} else {
+		ip = split[0]
+	}
+
+	if !isValidIPv4Address(ip) && !isValidIPv6Address(ip) && !isValidHostname(ip) {
+		log.Ctx(ctx).Error().Str("ip", ip).Str("port", port).Str("raw_endpoint", e).
+			Msg("Cannot determine a valid hostname, IPv4 or IPv6 address, skipping endpoint")
+		return nil, fmt.Errorf("cannot determine a valid hostname, IPv4 or IPv6 address for endpoint: %s", e)
+	}
+
+	portNum, err := strconv.Atoi(port)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Str("port", port).Msg("Failed to parse port number, using default")
+		portNum = 14000
+	}
+	return &ApiEndPoint{IpAddress: ip, MgmtPort: portNum}, nil
+}
+
+func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) error {
 	actualEndPoints := make(map[string]*ApiEndPoint)
 	for _, e := range a.Credentials.Endpoints {
-
-		split := strings.Split(e, ":")
-		ip := ""
-		port := "14000" // default port
-
-		// if there is a port number in the endpoint, use it
-		if len(split) > 1 {
-			port = split[len(split)-1]
-			ip = strings.Join(split[:len(split)-1], ":")
-		} else {
-			ip = split[0]
-		}
-
-		if !isValidIPv4Address(ip) && !isValidIPv6Address(ip) && !isValidHostname(ip) {
-			log.Ctx(ctx).Error().Str("ip", ip).Str("port", port).Str("raw_endpoint", e).
-				Msg("Cannot determine a valid hostname, IPv4 or IPv6 address, skipping endpoint")
+		endPoint, err := constructEndpointFromAddress(ctx, e)
+		if err != nil {
+			log.Ctx(ctx).Warn().Str("raw_endpoint", e).Err(err).Msg("Skipping invalid API endpoint")
 			continue
 		}
-
-		portNum, err := strconv.Atoi(port)
-		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Str("port", port).Msg("Failed to parse port number, using default")
-			portNum = 14000
-		}
-		endPoint := &ApiEndPoint{IpAddress: ip, MgmtPort: portNum}
 		// Key by the same "ip:port" form ApiEndPoint.String() and UpdateApiEndpoints use, not the
 		// raw credential string: the raw string may carry no port (or a hostname alias) and would
 		// then never match eps.currentEndpoint.String() in Replace, nor existingEndpoints[key] in
@@ -182,7 +197,13 @@ func (a *ApiClient) resetDefaultEndpoints(ctx context.Context) {
 		// on every reset.
 		actualEndPoints[endPoint.String()] = endPoint
 	}
+	// Report the failure before replacing, so a caller holding a working endpoint set is not left
+	// with an empty one because the credentials it was re-reading turned out to be malformed.
+	if len(actualEndPoints) == 0 {
+		return errors.New("no valid API endpoints found")
+	}
 	a.apiEndpoints.Replace(actualEndPoints)
+	return nil
 }
 
 // fetchMountEndpoints used to obtain actual data plane IP addresses
@@ -244,6 +265,10 @@ func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 		}
 	}
 
+	if len(newEndpoints) == 0 {
+		return errors.New("no valid API endpoints found, keeping the existing endpoint set")
+	}
+
 	a.apiEndpoints.Replace(newEndpoints)
 
 	// always rotate endpoint to make sure we distribute load between different Weka Nodes
@@ -255,7 +280,9 @@ func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 func (a *ApiClient) rotateEndpoint(ctx context.Context) {
 	logger := log.Ctx(ctx)
 	if a.apiEndpoints.Len() == 0 {
-		a.resetDefaultEndpoints(ctx)
+		// Only reachable once the set is already empty, so a failure here leaves nothing worse
+		// behind - Rotate below reports it as no endpoint to switch to.
+		_ = a.resetDefaultEndpoints(ctx)
 	}
 	current := a.apiEndpoints.Rotate()
 	if current == nil {
@@ -272,15 +299,17 @@ func (a *ApiClient) getEndpoint(ctx context.Context) *ApiEndPoint {
 	if current := a.apiEndpoints.Current(); current != nil {
 		return current
 	}
-	a.resetDefaultEndpoints(ctx)
+	// Same as in rotateEndpoint: the set is already empty, so a failure changes nothing and the
+	// nil return below is the signal callers act on.
+	_ = a.resetDefaultEndpoints(ctx)
 	return a.apiEndpoints.Current()
 }
 
 // requireEndpoint returns the endpoint to use, or ApiNoEndpointsError when none is known.
-// NewApiClient only rejects a raw endpoint list with zero entries; a secret whose entries all fail
-// isValidIPv4Address/isValidIPv6Address/isValidHostname still constructs a client, just with an
-// empty endpoint map, and getEndpoint reports that with nil rather than blocking for one to appear.
-// Every caller that would otherwise dereference getEndpoint's result directly must go through this.
+// NewApiClient now rejects credentials whose entries all fail validation, so a live client should
+// always hold at least one endpoint; this stays as the guard for the case where the set is emptied
+// later - every caller that would otherwise dereference getEndpoint's result directly goes
+// through it rather than risking a nil dereference.
 func (a *ApiClient) requireEndpoint(ctx context.Context) (*ApiEndPoint, apiError) {
 	endpoint := a.getEndpoint(ctx)
 	if endpoint == nil {

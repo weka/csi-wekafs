@@ -26,6 +26,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
@@ -72,28 +74,34 @@ func (api *ApiStore) getByClusterGuid(guid uuid.UUID) (*apiclient.ApiClient, err
 
 // fromSecrets returns a pointer to API by secret contents
 func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string, hostname string) (*apiclient.ApiClient, error) {
-	endpointsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["endpoints"], "\n"), "\n", ","))
-	if endpointsRaw == "" {
-		return nil, errors.New("no valid endpoints defined in secret, cannot create API client")
+	endpointsRawValue, ok := secrets["endpoints"]
+	if !ok {
+		return nil, errors.New("no endpoints found in secret")
 	}
-	endpoints := func() []string {
-		var ret []string
-		for _, s := range strings.Split(endpointsRaw, ",") {
-			ret = append(ret, strings.TrimSpace(strings.TrimSuffix(s, "\n")))
+	endpointsRaw := strings.ReplaceAll(trimValue(endpointsRawValue), "\n", ",")
+	if endpointsRaw == "" {
+		return nil, status.Errorf(codes.NotFound, "no valid endpoints defined in secret, cannot create API client")
+	}
+	var endpoints []string
+	for _, s := range strings.Split(endpointsRaw, ",") {
+		if endpoint := trimValue(s); endpoint != "" {
+			endpoints = append(endpoints, endpoint)
 		}
-		return ret
-	}()
+	}
+	if len(endpoints) == 0 {
+		return nil, status.Errorf(codes.NotFound, "invalid endpoints defined in secret: %s", endpointsRawValue)
+	}
 
 	var nfsTargetIps []string
 	if _, ok := secrets["nfsTargetIps"]; ok {
-		nfsTargetIpsRaw := strings.TrimSpace(strings.ReplaceAll(strings.TrimSuffix(secrets["nfsTargetIps"], "\n"), "\n", ","))
+		nfsTargetIpsRaw := strings.ReplaceAll(trimValue(secrets["nfsTargetIps"]), "\n", ",")
 		nfsTargetIps = func() []string {
 			var ret []string
 			if nfsTargetIpsRaw == "" {
 				return ret
 			}
 			for _, s := range strings.Split(nfsTargetIpsRaw, ",") {
-				ret = append(ret, strings.TrimSpace(strings.TrimSuffix(s, "\n")))
+				ret = append(ret, trimValue(s))
 			}
 			return ret
 		}()
@@ -101,14 +109,14 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 
 	localContainerName, ok := secrets["localContainerName"]
 	if ok {
-		localContainerName = strings.TrimSpace(strings.TrimSuffix(localContainerName, "\n"))
+		localContainerName = trimValue(localContainerName)
 	} else {
 		localContainerName = ""
 	}
 	autoUpdateEndpoints := false
 	autoUpdateEndpointsStr, ok := secrets["autoUpdateEndpoints"]
 	if ok {
-		autoUpdateEndpoints = strings.TrimSpace(strings.TrimSuffix(autoUpdateEndpointsStr, "\n")) == "true"
+		autoUpdateEndpoints = trimValue(autoUpdateEndpointsStr) == "true"
 	}
 	caCertificate, ok := secrets["caCertificate"]
 	if !ok {
@@ -119,30 +127,43 @@ func (api *ApiStore) fromSecrets(ctx context.Context, secrets map[string]string,
 
 	kmsVaultNamespaceForFilesystemEncryption, ok := secrets["kmsVaultNamespaceForFilesystemEncryption"]
 	if ok {
-		preexistingVaultCreds.Namespace = strings.TrimSpace(strings.TrimSuffix(kmsVaultNamespaceForFilesystemEncryption, "\n"))
+		preexistingVaultCreds.Namespace = trimValue(kmsVaultNamespaceForFilesystemEncryption)
 	}
 
 	kmsVaultKeyIdentifierForFilesystemEncryption, ok := secrets["kmsVaultKeyIdentifierForFilesystemEncryption"]
 	if ok {
-		preexistingVaultCreds.KeyIdentifier = strings.TrimSpace(strings.TrimSuffix(kmsVaultKeyIdentifierForFilesystemEncryption, "\n"))
+		preexistingVaultCreds.KeyIdentifier = trimValue(kmsVaultKeyIdentifierForFilesystemEncryption)
 	}
 
 	kmsVaultRoleIdForFilesystemEncryption, ok := secrets["kmsVaultRoleIdForFilesystemEncryption"]
 	if ok {
-		preexistingVaultCreds.RoleId = strings.TrimSpace(strings.TrimSuffix(kmsVaultRoleIdForFilesystemEncryption, "\n"))
+		preexistingVaultCreds.RoleId = trimValue(kmsVaultRoleIdForFilesystemEncryption)
 	}
 
 	kmsVaultSecretIdForFilesystemEncryption, ok := secrets["kmsVaultSecretIdForFilesystemEncryption"]
 	if ok {
-		preexistingVaultCreds.SecretId = strings.TrimSpace(strings.TrimSuffix(kmsVaultSecretIdForFilesystemEncryption, "\n"))
+		preexistingVaultCreds.SecretId = trimValue(kmsVaultSecretIdForFilesystemEncryption)
+	}
+
+	username, ok := secrets["username"]
+	if !ok {
+		return nil, errors.New("no username found in secret")
+	}
+	password, ok := secrets["password"]
+	if !ok {
+		return nil, errors.New("no password found in secret")
+	}
+	organization, ok := secrets["organization"]
+	if !ok {
+		return nil, errors.New("no organization found in secret")
 	}
 
 	credentials := apiclient.Credentials{
-		Username:            strings.TrimSpace(strings.TrimSuffix(secrets["username"], "\n")),
-		Password:            strings.TrimSuffix(secrets["password"], "\n"),
-		Organization:        strings.TrimSpace(strings.TrimSuffix(secrets["organization"], "\n")),
+		Username:            trimValue(username),
+		Password:            strings.TrimSuffix(password, "\n"),
+		Organization:        trimValue(organization),
 		Endpoints:           endpoints,
-		HttpScheme:          strings.TrimSpace(strings.TrimSuffix(secrets["scheme"], "\n")),
+		HttpScheme:          trimValue(secrets["scheme"]),
 		LocalContainerName:  localContainerName,
 		AutoUpdateEndpoints: autoUpdateEndpoints,
 		CaCertificate:       caCertificate,
