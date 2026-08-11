@@ -93,6 +93,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | controller.healthMonitor.timeoutSeconds | int | `300` | Time budget for one full sweep of every volume, in seconds. This is not a per-request    timeout: the sidecar walks all pages under a single deadline, so a fleet that takes longer    than this is cut off mid-sweep and restarted from the beginning, leaving later volumes    permanently unchecked. Measured at roughly 15 seconds per 1000 volumes; raise it for    larger fleets. |
 | controller.nodeSelector | object | `{}` | optional nodeSelector for controller components only |
 | controller.affinity | object | `{}` | optional affinity for controller components only |
+| controller.priorityClassName | string | `""` | optional priorityClassName for controller pods only, overriding the global `priorityClassName` |
 | controller.labels | object | `{}` | optional labels to add to controller deployment |
 | controller.podLabels | object | `{}` | optional labels to add to controller pods |
 | controller.terminationGracePeriodSeconds | int | `10` | termination grace period for controller pods |
@@ -101,6 +102,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
 | node.nodeSelector | object | `{}` | optional nodeSelector for node components only |
 | node.affinity | object | `{}` | optional affinity for node components only |
+| node.priorityClassName | string | `""` | optional priorityClassName for node pods only, overriding the global `priorityClassName` |
 | node.labels | object | `{}` | optional labels to add to node daemonset |
 | node.podLabels | object | `{}` | optional labels to add to node pods |
 | node.livenessProbeEnabled | bool | `true` | Enable liveness probe on node pods. Set to false to disable health checks for debugging pod restart issues |
@@ -109,7 +111,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
 | legacyVolumeSecretName | string | `""` | for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin |
-| priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |
+| priorityClassName | string | `""` | Optional CSI Plugin priorityClassName for both components, overridable per component with `controller.priorityClassName` and `node.priorityClassName` |
 | selinuxSupport | string | `"off"` | Support SELinux labeling for Persistent Volumes, may be either `off`, `mixed`, `enforced` (default off)    In `enforced` mode, CSI node components will only start on nodes having a label `selinuxNodeLabel` below    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!    NOTE: SELinux support is enabled automatically on clusters recognized as RedHat OpenShift Container Platform |
 | selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
 | selinuxOcpRetainMachineConfig | bool | `false` | If true, the SELinux policy machine configuration will not be removed when uninstalling the plugin.    This is useful for OpenShift Container Platform clusters, to not cause machine config pool update on plugin reinstall |

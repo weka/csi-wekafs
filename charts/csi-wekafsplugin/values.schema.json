@@ -63,6 +63,9 @@
                 "podLabels": {
                     "type": "object"
                 },
+                "priorityClassName": {
+                    "type": "string"
+                },
                 "replicas": {
                     "type": "integer"
                 },
@@ -391,6 +394,9 @@
                 },
                 "podLabels": {
                     "type": "object"
+                },
+                "priorityClassName": {
+                    "type": "string"
                 },
                 "resources": {
                     "type": "object",
