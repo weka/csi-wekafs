@@ -1,9 +1,8 @@
 # Prometheus metrics
 
 This is a complete reference for every Prometheus metric the WEKA CSI plugin and its metrics
-server expose, verified against branch `fix-ported-3.0-rebase-fixes`. All metric names are
-`namespace_subsystem_name`, where the namespace is always `weka_csi` (`MetricsPrefix` in
-`pkg/wekafs/metrics.go`).
+server expose. All metric names are `namespace_subsystem_name`, where the namespace is always
+`weka_csi` (`MetricsPrefix` in `pkg/wekafs/metrics.go`).
 
 Two binaries produce these metrics:
 
@@ -14,147 +13,47 @@ Two binaries produce these metrics:
   separate process that polls the WEKA REST API for per-volume capacity, independent of the CSI
   gRPC surface.
 
-Both expose Prometheus text format on `GET /metrics`, on the port set by `-metricsport` (default
-`9090`), started by `bootstrap.ServeMetrics` (`pkg/bootstrap/bootstrap.go`). Nothing is exposed
-unless `-enablemetrics` is set.
+Both expose Prometheus text format on `GET /metrics`, on the port set by `-metricsport`, started by
+`bootstrap.ServeMetrics` (`pkg/bootstrap/bootstrap.go`). Nothing is exposed unless `-enablemetrics`
+is set. The Helm charts set that port per component — see [Ports](#ports) below.
 
-There are **104 metrics** in total, in five families:
+There are **98 metrics** in total, in five families:
 
 | # | Family | Component | Count |
 |---|---|---|---|
-| 1 | Metrics server — server operation | Metrics server | 48 |
-| 2 | API client — WEKA REST API calls | Metrics server and CSI plugin (controller + node) | 2 |
-| 3 | CSI plugin — controller and node operations | CSI plugin (controller + node) | 40 |
-| 4 | Metrics server — per-volume capacity | Metrics server | 10 |
-| 5 | CSI plugin — volume health | CSI plugin (controller only) | 4 |
+| 1 | API client — WEKA REST API calls | Metrics server and CSI plugin (controller + node) | 2 |
+| 2 | CSI plugin — service health | CSI plugin (controller + node) | 40 |
+| 3 | CSI plugin — object metrics (volume health) | CSI plugin (controller only) | 4 |
+| 4 | Metrics server — service health | Metrics server | 48 |
+| 5 | Metrics server — object metrics (per-volume capacity) | Metrics server | 10 |
 
-The previous version of this document put the read-only controller RPCs and volume health under
-the metrics server. They are not: both are produced entirely inside the CSI controller process
-(`ControllerServer`), and are exposed on the controller's own `/metrics`, not the metrics server's.
+## Ports
 
----
+Metric ports are set by the Helm charts, not hardcoded — the values below are the chart defaults.
+Each is independently configurable, so change the value key rather than assuming a fixed port.
 
-## 1. Metrics server — server operation
+From `charts/csi-wekafsplugin/values.yaml` (`metrics.*`, gated by `metrics.enabled: true`):
 
-**Exposed by:** the metrics server only, on its `/metrics`. Namespace/subsystem:
-`weka_csi_metricsserver_*`. Defined in `pkg/wekafs/prometheus.go` (`PrometheusMetrics.server`),
-populated from `pkg/wekafs/metricsserver.go`.
+| Value | Default | Serves |
+|---|---|---|
+| `metrics.controllerPort` | `9090` | Controller server (families 1–3, controller side) |
+| `metrics.nodePort` | `9094` | Node server (families 1–2, node side) |
+| `metrics.metricsServerPort` | `9096` | Metrics server, when deployed inside this chart via `metricsServer.enabled=true` (families 1, 4, 5) |
+| `metrics.provisionerPort` | `9091` | provisioner sidecar |
+| `metrics.resizerPort` | `9092` | resizer sidecar |
+| `metrics.snapshotterPort` | `9093` | snapshotter sidecar |
+| `metrics.attacherPort` | `9095` | attacher sidecar |
 
-These describe the metrics server's own pipeline: listing PersistentVolumes, resolving each one to
-a WEKA filesystem/inode, fetching quotas (per-volume or batched per filesystem), and reporting the
-result to Prometheus. None of them carry per-volume labels — they describe the collector, not a
-volume. The `quota_map_*` metrics are the exception: they are labeled per filesystem
-(`LabelsForFilesystemOps` = `csi_driver_name`, `cluster_guid`, `filesystem_name`).
+From `charts/csi-metricsserver/values.yaml` (standalone chart):
 
-### Fetching PersistentVolumes from the Kubernetes API
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_fetch_pv_batch_operations_invoke_count` | Counter | none | Number of List calls made to fetch PersistentVolumes |
-| `weka_csi_metricsserver_fetch_pv_batch_operations_success_count_total` | Counter | none | List calls that succeeded |
-| `weka_csi_metricsserver_fetch_pv_batch_operations_failure_count_total` | Counter | none | List calls that failed |
-| `weka_csi_metricsserver_fetch_pv_batch_operations_duration_seconds` | Counter | none | Cumulative time spent in List calls |
-| `weka_csi_metricsserver_fetch_pv_batch_operations_duration_seconds_histogram` | Histogram | none | Distribution of List call durations |
-| `weka_csi_metricsserver_fetch_pv_batch_size` | Gauge | none | Number of eligible PVs in the most recent fetch, after the volume-count limit is applied |
-
-### Streaming PersistentVolumes for processing
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_stream_pv_operations_count_total` | Counter | none | PersistentVolumes handed off to the processor |
-| `weka_csi_metricsserver_stream_pv_batch_size` | Gauge | none | Size of the raw PV list before the eligibility/limit filter, i.e. total PVs returned by the last fetch |
-
-### Processing individual PersistentVolumes
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_process_pv_operations_count_total` | Counter | none | PersistentVolumes processed (secret read, API client built, filesystem/inode resolved) |
-| `weka_csi_metricsserver_process_pv_operations_duration_seconds` | Counter | none | Cumulative processing time |
-| `weka_csi_metricsserver_process_pv_operations_duration_seconds_histogram` | Histogram | none | Distribution of per-PV processing time |
-
-### Fetching metrics from WEKA — batch cycle (`FetchMetricsOneByOne`)
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_fetch_metrics_batch_operations_invoke_count_total` | Counter | none | Fetch cycles started |
-| `weka_csi_metricsserver_fetch_metrics_batch_operations_success_count_total` | Counter | none | Fetch cycles where every volume succeeded |
-| `weka_csi_metricsserver_fetch_metrics_batch_operations_failure_count_total` | Counter | none | Fetch cycles where at least one volume failed |
-| `weka_csi_metricsserver_fetch_metrics_batch_operations_duration_seconds` | Counter | none | Cumulative cycle duration |
-| `weka_csi_metricsserver_fetch_metrics_batch_operations_duration_seconds_histogram` | Histogram | none | Distribution of cycle durations |
-| `weka_csi_metricsserver_fetch_metrics_batch_size` | Gauge | none | Number of tracked volumes at the start of the last cycle |
-| `weka_csi_metricsserver_fetch_metrics_frequency_seconds` | Gauge | none | Configured `metricsFetchInterval`, as a constant series for reference in queries |
-
-### Fetching a single volume's metrics
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_fetch_single_pv_metrics_invoke_count_total` | Counter | none | Per-volume fetches attempted |
-| `weka_csi_metricsserver_fetch_single_pv_metrics_success_count_total` | Counter | none | Per-volume fetches that succeeded |
-| `weka_csi_metricsserver_fetch_single_pv_metrics_failure_count_total` | Counter | none | Per-volume fetches that failed |
-| `weka_csi_metricsserver_fetch_single_pv_metrics_operations_duration_seconds` | Counter | none | Cumulative per-volume fetch time |
-| `weka_csi_metricsserver_fetch_single_pv_metrics_operations_duration_seconds_histogram` | Histogram | none | Distribution of per-volume fetch time |
-
-### PersistentVolumes entering/leaving monitoring
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_pv_additions_count_total` | Counter | none | PersistentVolumes newly tracked |
-| `weka_csi_metricsserver_pv_removals_count_total` | Counter | none | PersistentVolumes pruned (no longer in the PV list) |
-| `weka_csi_metricsserver_monitored_persistent_volumes_gauge` | Gauge | none | Currently tracked PersistentVolume count |
-
-### Pruning stale volumes
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_prune_volumes_batch_invoke_count_total` | Counter | none | Prune passes run |
-| `weka_csi_metricsserver_prune_volumes_batch_duration_seconds` | Counter | none | Cumulative prune-pass duration |
-| `weka_csi_metricsserver_prune_volumes_batch_duration_seconds_histogram` | Histogram | none | Distribution of prune-pass duration |
-| `weka_csi_metricsserver_prune_volumes_batch_size` | Gauge | none | Volumes removed in the last prune pass |
-
-### Periodic fetch scheduler
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_periodic_fetch_metrics_invoke_count_total` | Counter | none | Ticks of the 30s scheduler that drives per-volume fetching (only runs when `useQuotaMapsForMetrics=false`) |
-| `weka_csi_metricsserver_periodic_fetch_metrics_skip_count_total` | Counter | none | Ticks skipped because the previous cycle was still running |
-| `weka_csi_metricsserver_periodic_fetch_metrics_success_count_total` | Counter | none | Cycles that completed without error |
-| `weka_csi_metricsserver_periodic_fetch_metrics_failure_count_total` | Counter | none | Cycles that returned an error |
-
-### Quota map refresh, per filesystem
-
-Only relevant when `useQuotaMapsForMetrics=true` (the `enableBatchModeForQuotaUpdates` Helm value,
-default on).
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_quota_map_refresh_invoke_count_total` | CounterVec | `csi_driver_name`, `cluster_guid`, `filesystem_name` | Refreshes attempted for this filesystem |
-| `weka_csi_metricsserver_quota_map_refresh_success_count_total` | CounterVec | same | Refreshes that succeeded |
-| `weka_csi_metricsserver_quota_map_refresh_failure_count_total` | CounterVec | same | Refreshes that failed |
-| `weka_csi_metricsserver_quota_map_refresh_duration_seconds` | CounterVec | same | Cumulative refresh duration |
-| `weka_csi_metricsserver_quota_map_refresh_duration_seconds_histogram` | HistogramVec | same | Distribution of refresh duration |
-| `weka_csi_metricsserver_quota_map_miss_count_total` | CounterVec | same | Volume readings that were absent from the filesystem-wide quota map and had to fall back to a per-volume request. Non-zero only for snapshot-backed volumes, whose quota lives in the snapshot's view and is not returned when listing a filesystem's quotas |
-
-### Quota update batch (across all filesystems)
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_quota_update_batch_invoke_count_total` | Counter | none | Batch refresh cycles run |
-| `weka_csi_metricsserver_quota_update_batch_success_count_total` | Counter | none | Batch cycles completed |
-| `weka_csi_metricsserver_quota_update_batch_duration_seconds` | Counter | none | Cumulative batch duration |
-| `weka_csi_metricsserver_quota_update_batch_duration_seconds_histogram` | Histogram | none | Distribution of batch duration |
-| `weka_csi_metricsserver_quota_update_batch_size` | Gauge | none | Distinct filesystems refreshed in the last batch |
-| `weka_csi_metricsserver_quota_cache_validity_seconds` | Gauge | none | Configured `quotaCacheValiditySeconds`, as a constant series for reference in queries |
-
-### Reporting to Prometheus
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_metricsserver_reported_metrics_success_count_total` | Counter | none | Volume readings successfully written to the family-4 gauges/counters |
-| `weka_csi_metricsserver_reported_metrics_failure_count_total` | Counter | none | Readings that arrived with neither usage nor performance data to report |
+| Value | Default | Serves |
+|---|---|---|
+| `metrics.metricsServerPort` | `9096` | Metrics server (families 1, 4, 5) |
+| `metricsServer.healthPort` | `9196` | `/healthz` and `/readyz` only — **not** a metrics port |
 
 ---
 
-## 2. API client — WEKA REST API calls
+## 1. API client — WEKA REST API calls
 
 **Exposed by:** both components — whichever process makes the request labels it with its own
 `csi_driver_name` and `cluster_guid`, on that process's own `/metrics`. Namespace/subsystem:
@@ -169,9 +68,20 @@ series per filesystem/snapshot/inode.
 | `weka_csi_api_request_count` | CounterVec | `csi_driver_name`, `cluster_guid`, `endpoint`, `method`, `url`, `status` | Total requests to the WEKA API |
 | `weka_csi_api_request_duration_seconds` | HistogramVec | same | Request duration, buckets `0.1, 0.25, 0.5, 1, 2.5, 5, 7.5, 10, 15, 30, 60, 120, 300` seconds |
 
+Only two metric *names* are exported here, but each carries six labels, so in practice they expand
+into one series per distinct combination of driver, cluster, endpoint, method, URL shape and status
+— not a bare two series.
+
+The client additionally tracks **15 per-endpoint counters internally**, one set per WEKA management
+IP (`ApiEndPoint` in `pkg/wekafs/apiclient/apiendpoint.go`): failure count, timeout count, a general
+error count, per-status HTTP error counts (400/401/403/404/409/500/503), transport error count,
+parse error count, no-response count, request count, and cumulative request duration. These drive
+endpoint health tracking and rotation between a cluster's management nodes, but they are **not
+exported to Prometheus** — they exist purely to decide which endpoint to use next.
+
 ---
 
-## 3. CSI plugin — controller and node operations
+## 2. CSI plugin — service health
 
 **Exposed by:** the CSI plugin — controller metrics only in `-csimode=controller`, node metrics
 only in `-csimode=node` — on that process's own `/metrics`. Defined in `pkg/wekafs/metrics.go`.
@@ -255,10 +165,156 @@ Labels: `csi_driver_name`, `status` (`CsiNodeConcurrencyMetricsLabels`).
 
 ---
 
-## 4. Metrics server — per-volume capacity metrics
+## 3. CSI plugin — object metrics (volume health)
+
+**Exposed by:** the CSI plugin, controller mode only (`ControllerCollectors()`), on the
+controller's own `/metrics`. Namespace/subsystem: `weka_csi_volume_health_*`. Defined in
+`pkg/wekafs/metrics.go` (`ControllerVolumeHealthMetrics`), populated by the background reconciler
+in `pkg/wekafs/volumehealthreconciler.go`.
+
+This family is deliberately not part of the metrics server: it runs entirely inside the controller
+process, on a leader-elected background loop (`volumeHealthReconciler.Start`) that sweeps every
+PersistentVolume belonging to this driver every `volumeHealthReconcileInterval` (5 minutes),
+probing up to `volumeHealthProbeConcurrency` (10) volumes at once. `ControllerGetVolume` and
+`ControllerListVolumes` serve their condition/capacity answers from this reconciler's cache rather
+than probing WEKA inline, which is what keeps those RPCs cheap (see family 2).
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_volume_health_status` | GaugeVec | `LabelsForCsiVolumes` (the same 10 labels as family 5 — this metric does **not** add `csi_driver_name` on top, since that label is already part of the set) | Last health condition the reconciler determined for this volume: `1` = healthy, `0` = abnormal, `-1` = unknown, including a cached result older than `volumeHealthMaxAge` (30 minutes) |
+| `weka_csi_volume_health_volumes` | GaugeVec | `csi_driver_name`, `status` (`healthy`/`abnormal`/`unknown`/`failed`) | Fleet-wide tally as of the last completed sweep. `failed` counts probes that errored during the sweep — it is not one of the values `status` on the per-volume gauge takes, and a failed probe leaves that volume's previous status in place rather than overwriting it |
+| `weka_csi_volume_health_sweep_duration_seconds` | HistogramVec | `csi_driver_name` | Duration of one complete reconciliation sweep. Uses the wide `HistogramDurationBuckets` (up to 1000s), not Prometheus's 10s-capped defaults, since a sweep over a large fleet runs for minutes |
+| `weka_csi_volume_health_last_sweep_timestamp_seconds` | GaugeVec | `csi_driver_name` | Unix time the last sweep completed. Lets a stalled reconciler (lost leadership, or a hung sweep) be alerted on independent of whether any volume's status changed |
+
+`healthy + abnormal + unknown` (from `weka_csi_volume_health_status`) partitions the fleet;
+`failed`, from the tally metric only, does not add to that partition.
+
+---
+
+## 4. Metrics server — service health
+
+**Exposed by:** the metrics server only, on its `/metrics`. Namespace/subsystem:
+`weka_csi_metricsserver_*`. Defined in `pkg/wekafs/prometheus.go` (`PrometheusMetrics.server`),
+populated from `pkg/wekafs/metricsserver.go`.
+
+These describe the metrics server's own pipeline: listing PersistentVolumes, resolving each one to
+a WEKA filesystem/inode, fetching quotas (per-volume or batched per filesystem), and reporting the
+result to Prometheus. None of them carry per-volume labels — they describe the collector, not a
+volume. The `quota_map_*` metrics are the exception: they are labeled per filesystem
+(`LabelsForFilesystemOps` = `csi_driver_name`, `cluster_guid`, `filesystem_name`).
+
+### Fetching PersistentVolumes from the Kubernetes API
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_fetch_pv_batch_operations_invoke_count` | Counter | none | Number of List calls made to fetch PersistentVolumes |
+| `weka_csi_metricsserver_fetch_pv_batch_operations_success_count_total` | Counter | none | List calls that succeeded |
+| `weka_csi_metricsserver_fetch_pv_batch_operations_failure_count_total` | Counter | none | List calls that failed |
+| `weka_csi_metricsserver_fetch_pv_batch_operations_duration_seconds_total` | Counter | none | Cumulative time spent in List calls |
+| `weka_csi_metricsserver_fetch_pv_batch_operations_duration_seconds` | Histogram | none | Distribution of List call durations |
+| `weka_csi_metricsserver_fetch_pv_batch_size` | Gauge | none | Number of eligible PVs in the most recent fetch, after the volume-count limit is applied |
+
+### Streaming PersistentVolumes for processing
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_stream_pv_operations_count_total` | Counter | none | PersistentVolumes handed off to the processor |
+| `weka_csi_metricsserver_stream_pv_batch_size` | Gauge | none | Size of the raw PV list before the eligibility/limit filter, i.e. total PVs returned by the last fetch |
+
+### Processing individual PersistentVolumes
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_process_pv_operations_count_total` | Counter | none | PersistentVolumes processed (secret read, API client built, filesystem/inode resolved) |
+| `weka_csi_metricsserver_process_pv_operations_duration_seconds_total` | Counter | none | Cumulative processing time |
+| `weka_csi_metricsserver_process_pv_operations_duration_seconds` | Histogram | none | Distribution of per-PV processing time |
+
+### Fetching metrics from WEKA — batch cycle (`FetchMetricsOneByOne`)
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_fetch_metrics_batch_operations_invoke_count_total` | Counter | none | Fetch cycles started |
+| `weka_csi_metricsserver_fetch_metrics_batch_operations_success_count_total` | Counter | none | Fetch cycles where every volume succeeded |
+| `weka_csi_metricsserver_fetch_metrics_batch_operations_failure_count_total` | Counter | none | Fetch cycles where at least one volume failed |
+| `weka_csi_metricsserver_fetch_metrics_batch_operations_duration_seconds_total` | Counter | none | Cumulative cycle duration |
+| `weka_csi_metricsserver_fetch_metrics_batch_operations_duration_seconds` | Histogram | none | Distribution of cycle durations |
+| `weka_csi_metricsserver_fetch_metrics_batch_size` | Gauge | none | Number of tracked volumes at the start of the last cycle |
+| `weka_csi_metricsserver_fetch_metrics_frequency_seconds` | Gauge | none | Configured `metricsFetchInterval`, as a constant series for reference in queries |
+
+### Fetching a single volume's metrics
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_fetch_single_pv_metrics_operations_invoke_count_total` | Counter | none | Per-volume fetches attempted |
+| `weka_csi_metricsserver_fetch_single_pv_metrics_operations_success_count_total` | Counter | none | Per-volume fetches that succeeded |
+| `weka_csi_metricsserver_fetch_single_pv_metrics_operations_failure_count_total` | Counter | none | Per-volume fetches that failed |
+| `weka_csi_metricsserver_fetch_single_pv_metrics_operations_duration_seconds_total` | Counter | none | Cumulative per-volume fetch time |
+| `weka_csi_metricsserver_fetch_single_pv_metrics_operations_duration_seconds` | Histogram | none | Distribution of per-volume fetch time |
+
+### PersistentVolumes entering/leaving monitoring
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_pv_additions_count_total` | Counter | none | PersistentVolumes newly tracked |
+| `weka_csi_metricsserver_pv_removals_count_total` | Counter | none | PersistentVolumes pruned (no longer in the PV list) |
+| `weka_csi_metricsserver_monitored_persistent_volumes_gauge` | Gauge | none | Currently tracked PersistentVolume count |
+
+### Pruning stale volumes
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_prune_volumes_batch_invoke_count_total` | Counter | none | Prune passes run |
+| `weka_csi_metricsserver_prune_volumes_batch_duration_seconds_total` | Counter | none | Cumulative prune-pass duration |
+| `weka_csi_metricsserver_prune_volumes_batch_duration_seconds` | Histogram | none | Distribution of prune-pass duration |
+| `weka_csi_metricsserver_prune_volumes_batch_size` | Gauge | none | Volumes removed in the last prune pass |
+
+### Periodic fetch scheduler
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_periodic_fetch_metrics_invoke_count_total` | Counter | none | Ticks of the 30s scheduler that drives per-volume fetching (only runs when `useQuotaMapsForMetrics=false`) |
+| `weka_csi_metricsserver_periodic_fetch_metrics_skip_count_total` | Counter | none | Ticks skipped because the previous cycle was still running |
+| `weka_csi_metricsserver_periodic_fetch_metrics_success_count_total` | Counter | none | Cycles that completed without error |
+| `weka_csi_metricsserver_periodic_fetch_metrics_failure_count_total` | Counter | none | Cycles that returned an error |
+
+### Quota map refresh, per filesystem
+
+Only relevant when `useQuotaMapsForMetrics=true` (the `enableBatchModeForQuotaUpdates` Helm value,
+default on).
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_quota_map_refresh_invoke_count_total` | CounterVec | `csi_driver_name`, `cluster_guid`, `filesystem_name` | Refreshes attempted for this filesystem |
+| `weka_csi_metricsserver_quota_map_refresh_success_count_total` | CounterVec | same | Refreshes that succeeded |
+| `weka_csi_metricsserver_quota_map_refresh_failure_count_total` | CounterVec | same | Refreshes that failed |
+| `weka_csi_metricsserver_quota_map_refresh_duration_seconds_total` | CounterVec | same | Cumulative refresh duration |
+| `weka_csi_metricsserver_quota_map_refresh_duration_seconds` | HistogramVec | same | Distribution of refresh duration |
+| `weka_csi_metricsserver_quota_map_miss_count_total` | CounterVec | same | Volume readings that were absent from the filesystem-wide quota map and had to fall back to a per-volume request. Non-zero only for snapshot-backed volumes, whose quota lives in the snapshot's view and is not returned when listing a filesystem's quotas |
+
+### Quota update batch (across all filesystems)
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_quota_update_batch_invoke_count_total` | Counter | none | Batch refresh cycles run |
+| `weka_csi_metricsserver_quota_update_batch_success_count_total` | Counter | none | Batch cycles completed |
+| `weka_csi_metricsserver_quota_update_batch_duration_seconds_total` | Counter | none | Cumulative batch duration |
+| `weka_csi_metricsserver_quota_update_batch_duration_seconds` | Histogram | none | Distribution of batch duration |
+| `weka_csi_metricsserver_quota_update_batch_size` | Gauge | none | Distinct filesystems refreshed in the last batch |
+| `weka_csi_metricsserver_quota_cache_validity_seconds` | Gauge | none | Configured `quotaCacheValiditySeconds`, as a constant series for reference in queries |
+
+### Reporting to Prometheus
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `weka_csi_metricsserver_reported_metrics_success_count_total` | Counter | none | Volume readings successfully written to the family-5 gauges/counters |
+| `weka_csi_metricsserver_reported_metrics_failure_count_total` | Counter | none | Readings that arrived with neither usage nor performance data to report |
+
+---
+
+## 5. Metrics server — object metrics (per-volume capacity)
 
 **Exposed by:** the metrics server only, on its `/metrics`. Namespace/subsystem: `weka_csi_volume_*`
-(note: `volume`, singular — distinct from the plugin's `volume_health` subsystem in family 5).
+(note: `volume`, singular — distinct from the plugin's `volume_health` subsystem in family 3).
 Defined in `pkg/wekafs/prometheus.go` (`PrometheusMetrics.volumes`), populated from
 `pkg/wekafs/metricsserver.go`.
 
@@ -283,22 +339,14 @@ labels:
 | `pvc_namespace` | PersistentVolumeClaim namespace (blank if unbound) |
 | `pvc_uid` | PersistentVolumeClaim UID (blank if unbound) |
 
-The previous version of this table was missing `organization`.
-
 ### Metrics
 
 | Metric | Type | Meaning |
 |---|---|---|
 | `weka_csi_volume_capacity_bytes` | TimedGaugeVec | Volume's quota hard limit, in bytes |
 | `weka_csi_volume_used_bytes` | TimedGaugeVec | Bytes used against the quota |
-| `weka_csi_volume_free_bytes` | TimedGaugeVec | `capacity - used` |
+| `weka_csi_volume_free_bytes` | TimedGaugeVec | Bytes still available within the volume's quota. Derived by the driver, not reported by WEKA: a quota describes a hard limit, not a used/free split. This is headroom against the quota, **not** free space on the underlying WEKA filesystem, which can be exhausted independently |
 | `weka_csi_volume_pv_reported_capacity_bytes` | TimedGaugeVec | Capacity from the Kubernetes PersistentVolume spec, not from WEKA. Updated once a minute independent of WEKA API reachability, as a fallback so capacity is reported even when the cluster cannot be reached |
-| `weka_csi_volume_reads_total` | TimedCounterVec | Cumulative read operations, mirrored from the WEKA cluster's own counter |
-| `weka_csi_volume_read_bytes_total` | TimedCounterVec | Cumulative bytes read |
-| `weka_csi_volume_read_duration_us` | TimedCounterVec | Cumulative read duration, microseconds |
-| `weka_csi_volume_writes_total` | TimedCounterVec | Cumulative write operations |
-| `weka_csi_volume_write_bytes_total` | TimedCounterVec | Cumulative bytes written |
-| `weka_csi_volume_write_duration_us` | TimedCounterVec | Cumulative write duration, microseconds |
 
 ### The freshness trap
 
@@ -320,41 +368,12 @@ comfortably larger than `quotaCacheValiditySeconds`.**
 plain `Set()` (which internally stamps "now"), sourced from the Kubernetes object rather than a
 WEKA quota read, so it behaves like an ordinary, always-fresh gauge.
 
-The performance counters (`reads_total`, `writes_total`, and their byte/duration counterparts) are
-likewise timed with the fetch's own timestamp and are subject to the same caveat.
-
----
-
-## 5. CSI plugin — volume health
-
-**Exposed by:** the CSI plugin, controller mode only (`ControllerCollectors()`), on the
-controller's own `/metrics`. Namespace/subsystem: `weka_csi_volume_health_*`. Defined in
-`pkg/wekafs/metrics.go` (`ControllerVolumeHealthMetrics`), populated by the background reconciler
-in `pkg/wekafs/volumehealthreconciler.go`.
-
-This family is deliberately not part of the metrics server: it runs entirely inside the controller
-process, on a leader-elected background loop (`volumeHealthReconciler.Start`) that sweeps every
-PersistentVolume belonging to this driver every `volumeHealthReconcileInterval` (5 minutes),
-probing up to `volumeHealthProbeConcurrency` (10) volumes at once. `ControllerGetVolume` and
-`ControllerListVolumes` serve their condition/capacity answers from this reconciler's cache rather
-than probing WEKA inline, which is what keeps those RPCs cheap (see family 3).
-
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `weka_csi_volume_health_status` | GaugeVec | `LabelsForCsiVolumes` (the same 10 labels as family 4 — this metric does **not** add `csi_driver_name` on top, since that label is already part of the set) | Last health condition the reconciler determined for this volume: `1` = healthy, `0` = abnormal, `-1` = unknown, including a cached result older than `volumeHealthMaxAge` (30 minutes) |
-| `weka_csi_volume_health_volumes` | GaugeVec | `csi_driver_name`, `status` (`healthy`/`abnormal`/`unknown`/`failed`) | Fleet-wide tally as of the last completed sweep. `failed` counts probes that errored during the sweep — it is not one of the values `status` on the per-volume gauge takes, and a failed probe leaves that volume's previous status in place rather than overwriting it |
-| `weka_csi_volume_health_sweep_duration_seconds` | HistogramVec | `csi_driver_name` | Duration of one complete reconciliation sweep. Uses the wide `HistogramDurationBuckets` (up to 1000s), not Prometheus's 10s-capped defaults, since a sweep over a large fleet runs for minutes |
-| `weka_csi_volume_health_last_sweep_timestamp_seconds` | GaugeVec | `csi_driver_name` | Unix time the last sweep completed. Lets a stalled reconciler (lost leadership, or a hung sweep) be alerted on independent of whether any volume's status changed |
-
-`healthy + abnormal + unknown` (from `weka_csi_volume_health_status`) partitions the fleet;
-`failed`, from the tally metric only, does not add to that partition.
-
 ---
 
 ## Custom timed collectors
 
 `pkg/wekafs/timedmetrics.go` defines `TimedGauge`, `TimedCounter` and `TimedHistogram` (plus their
-`*Vec` forms), used throughout family 4. A timed metric carries the timestamp of when its value was
+`*Vec` forms), used throughout family 5. A timed metric carries the timestamp of when its value was
 actually measured, rather than the moment Prometheus happens to scrape it — necessary because the
 metrics server reads most of what it reports from the WEKA API on its own schedule and serves it
 from a cache in between.
@@ -384,14 +403,14 @@ success but leaves the datasource unresolved and every panel renders empty.
 
 | Dashboard | Reads | Shows |
 |---|---|---|
-| `plugin-health.json` | Family 2 (API client) + family 3 (controller/node operations, concurrency) | The CSI driver itself: controller and node RPC rates, error rates and latency (including the read-only `get_volume`/`list_volumes`/`validate_volume_capabilities`/`get_info` RPCs), concurrency and semaphore waits, WEKA API load. A first row of Kubernetes workload health (replicas, DaemonSet coverage, restarts, leader-election lease) comes from kube-state-metrics and stays empty if that isn't installed |
-| `volume-health.json` | Family 5 (volume health) | Per-volume health condition: healthy/abnormal/unknown counts, breakdowns by filesystem/storage class/tenant, and the reconciler's own sweep duration and staleness |
-| `volume-capacity.json` | Family 4 (per-volume capacity) | Per-volume used/free/total capacity and utilisation (top 100 series, narrowed by Tenant/Filesystem/Storage class/Namespace/PersistentVolume variables), plus rankings of the largest and fullest volumes and usage by filesystem/tenant. Its "Value max age" variable sets the query window described in the freshness trap above and must stay larger than `quotaCacheValiditySeconds` |
-| `metricsserver-health.json` | Family 1 (metrics server operation) + family 2 (API client) + some of family 4 (`pv_reported_capacity_bytes`, `used_bytes`, for a monitored-vs-reporting comparison) | Metrics server health: WEKA API request rate and latency, fetch cycles, quota cache behaviour, PersistentVolumes entering/leaving monitoring. Scoped to a single metrics-server pod via a `$pod` variable |
+| `plugin-health.json` | Family 1 (API client) + family 2 (controller/node service health, concurrency) | The CSI driver itself: controller and node RPC rates, error rates and latency (including the read-only `get_volume`/`list_volumes`/`validate_volume_capabilities`/`get_info` RPCs), concurrency and semaphore waits, WEKA API load. A first row of Kubernetes workload health (replicas, DaemonSet coverage, restarts, leader-election lease) comes from kube-state-metrics and stays empty if that isn't installed |
+| `volume-health.json` | Family 3 (volume health object metrics) | Per-volume health condition: healthy/abnormal/unknown counts, breakdowns by filesystem/storage class/tenant, and the reconciler's own sweep duration and staleness |
+| `metricsserver-health.json` | Family 4 (metrics server service health) + family 1 (API client) + some of family 5 (`pv_reported_capacity_bytes`, `used_bytes`, for a monitored-vs-reporting comparison) | Metrics server health: WEKA API request rate and latency, fetch cycles, quota cache behaviour, PersistentVolumes entering and leaving monitoring. Scoped to a single metrics-server pod via a `$pod` variable |
+| `volume-capacity.json` | Family 5 (per-volume capacity object metrics) | Per-volume used/free/total capacity and utilisation (top 100 series, narrowed by Tenant/Filesystem/Storage class/Namespace/PersistentVolume variables), plus rankings of the largest and fullest volumes and usage by filesystem/tenant. Its "Value max age" variable sets the query window described in the freshness trap above and must stay larger than `quotaCacheValiditySeconds` |
 
 `dashboards/volume-capacity-alerts.yaml` is a `PrometheusRule` (apply with `kubectl apply -f` on a
 cluster running the Prometheus Operator; for plain Prometheus, lift its `groups:` block into your
-own rule file) built entirely on family 4:
+own rule file) built entirely on family 5:
 
 | Rule | Severity | Fires when |
 |---|---|---|
@@ -404,7 +423,7 @@ default for `quotaCacheValiditySeconds` — raise them if you raise that setting
 flap.
 
 See `docs/monitoring.md` for a full operational walkthrough (deployment modes, high availability,
-troubleshooting) of the metrics server and these dashboards.
+PodMonitor configuration, troubleshooting) of the metrics server and these dashboards.
 
 ---
 
@@ -412,12 +431,9 @@ troubleshooting) of the metrics server and these dashboards.
 
 | Family | Count |
 |---|---|
-| 1. Metrics server — server operation | 48 |
-| 2. API client | 2 |
-| 3. CSI plugin — controller + node operations | 40 (18 controller ops + 10 controller concurrency + 8 node ops + 4 node concurrency) |
-| 4. Metrics server — per-volume capacity | 10 |
-| 5. CSI plugin — volume health | 4 |
-| **Total** | **104** |
-
-The previous version of this document stated "90 metrics"; that count is superseded by the above,
-verified directly against each family's `Collectors()` method in the code.
+| 1. API client | 2 |
+| 2. CSI plugin — service health (controller + node) | 40 (18 controller ops + 10 controller concurrency + 8 node ops + 4 node concurrency) |
+| 3. CSI plugin — object metrics (volume health) | 4 |
+| 4. Metrics server — service health | 48 |
+| 5. Metrics server — object metrics (per-volume capacity) | 4 |
+| **Total** | **98** |
