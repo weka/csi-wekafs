@@ -8,19 +8,19 @@ csiDriverName: "csi.weka.io"
 csiDriverVersion: &csiDriverVersion 2.9.0
 images:
   # -- CSI liveness probe sidecar image URL
-  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.18.0
+  livenessprobesidecar: registry.k8s.io/sig-storage/livenessprobe:v2.19.0
   # -- CSI attacher sidecar image URL
-  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.11.0
+  attachersidecar: registry.k8s.io/sig-storage/csi-attacher:v4.12.0
   # -- CSI provisioner sidecar image URL
-  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v6.2.0
+  provisionersidecar: registry.k8s.io/sig-storage/csi-provisioner:v6.3.0
   # -- CSI registrar sidercar
-  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.16.0
+  registrarsidecar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.17.0
   # -- CSI resizer sidecar image URL
-  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v2.1.0
+  resizersidecar: registry.k8s.io/sig-storage/csi-resizer:v2.2.1
   # -- CSI snapshotter sidecar image URL
-  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.5.0
+  snapshottersidecar: registry.k8s.io/sig-storage/csi-snapshotter:v8.6.0
   # -- CSI external health monitor sidecar image URL
-  healthmonitorsidecar: registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.17.0
+  healthmonitorsidecar: registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.18.0
   # -- CSI driver main image URL
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
