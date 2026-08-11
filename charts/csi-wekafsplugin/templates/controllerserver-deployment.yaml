@@ -353,7 +353,7 @@ spec:
           command: ["/shared/wait-for-leader"]
           args:
             - "/csi-snapshotter"
-            - "--v=5"
+            - "--v={{ .Values.logLevel | default 5 }}"
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
