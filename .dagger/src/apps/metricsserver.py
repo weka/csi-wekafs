@@ -48,6 +48,11 @@ async def publish_metricsserver_helm_chart(
     from containers.builders import helm_builder_container
 
     version = await _calc_metricsserver_version(src, version)
+    # A Helm chart version must be bare SemVer. This repo follows that too: csi-metricsserver's
+    # Chart.yaml carries `version: 2.8.9` against `appVersion: v2.8.9`, and the image tag values in
+    # values.yaml are bare with the templates prepending the v. Passing one v-prefixed string to
+    # both --version and --app-version got the appVersion right and the chart version wrong.
+    chart_version = version.removeprefix("v")
 
     builder = await (
         (await helm_builder_container(sock, gh_token))
@@ -62,7 +67,7 @@ async def publish_metricsserver_helm_chart(
     base_repository = base_repository.rpartition("/")[0] # cutting out helm, then cutting out namespace. very bound to OCI atm and broken for others
     await (
         builder.with_exec(["sh", "-ec", f"""
-    helm package charts/csi-metricsserver --version {version} --app-version {version} --destination charts/
+    helm package charts/csi-metricsserver --version {chart_version} --app-version {version} --destination charts/
         """])
         .with_exec(["sh", "-ec", f"""
         if [ -f /registry-secret ]; then
@@ -77,7 +82,7 @@ async def publish_metricsserver_helm_chart(
 """])
         .stdout()
     )
-    return f"{repository}/csi-metricsserver:{version}"
+    return f"{repository}/csi-metricsserver:{chart_version}"
 
 
 async def install_helm_chart(
