@@ -3,7 +3,7 @@
 # build-binaries job, so this only packages them - which is what lets the image jobs for both
 # architectures and the sanity image start in parallel instead of each recompiling the tree.
 # Dockerfile stays self-contained for local builds.
-ARG UBI_HASH=9.8-1785339117
+ARG UBI_HASH=9.8-1786380870
 FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS base
 
 LABEL maintainers="WekaIO, LTD"
