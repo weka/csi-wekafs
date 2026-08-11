@@ -43,6 +43,10 @@ type innerPathVolGc struct {
 	isRunning  map[gcKey]bool
 	isDeferred map[gcKey]bool
 	sync.Mutex
+	// trashMu serialises the check-then-rename in moveVolumeToTrash. It is deliberately not the
+	// embedded Mutex above, which initiateGarbageCollection holds - moveVolumeToTrash defers a
+	// call to it, so sharing the lock would make the two deadlock-prone by ordering alone.
+	trashMu sync.Mutex
 	mounter AnyMounter
 	config  *DriverConfig
 }
@@ -86,22 +90,9 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 		return err
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
-	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
-		if !os.IsExist(err) {
-			logger.Error().Str("garbage_collection_path", volumeTrashLoc).Err(err).Msg("Failed to create garbage collector directory")
-			return err
-		}
-	}
 	fullPath := filepath.Join(path, volume.GetFullPath(ctx))
 	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Moving volume contents to trash")
-	newPath := filepath.Join(volumeTrashLoc, filepath.Base(fullPath))
-	if !fileExists(fullPath) {
-		logger.Debug().Str("full_path", fullPath).Msg("Volume contents not found, maybe already moved to trash, skipping")
-		return nil
-	}
-	if err := os.Rename(fullPath, newPath); err != nil {
-		logger.Error().Err(err).Str("full_path", fullPath).
-			Str("volume_trash_location", volumeTrashLoc).Msg("Failed to move volume contents to volumeTrashLoc")
+	if err := gc.renameIntoTrash(ctx, fullPath, volumeTrashLoc); err != nil {
 		return err
 	}
 	// NOTE: there is a problem of directory leaks here. If the volume innerPath is deeper than /csi-volumes/vol-name,
@@ -112,6 +103,39 @@ func (gc *innerPathVolGc) moveVolumeToTrash(ctx context.Context, volume *Volume)
 	// 2024-07-29: apparently seems this is not a real problem since static volumes are not deleted this way
 	//             and dynamic volumes are always created inside the /csi-volumes
 	logger.Debug().Str("full_path", fullPath).Str("volume_trash_location", volumeTrashLoc).Msg("Volume contents moved to trash")
+	return nil
+}
+
+// renameIntoTrash moves fullPath into volumeTrashLoc, creating the trash directory if needed, and
+// does nothing when the source is already gone.
+//
+// The whole sequence is serialised: two concurrent attempts on the same volume - a retried
+// DeleteVolume being the ordinary case - could both observe the source present, and the loser would
+// then fail renaming a path the winner had already moved, leaving the volume stuck in Deleting
+// (CSI-380). The critical section covers only these local filesystem calls, never the mount that
+// precedes them, so it costs nothing measurable on the delete path.
+func (gc *innerPathVolGc) renameIntoTrash(ctx context.Context, fullPath, volumeTrashLoc string) error {
+	logger := log.Ctx(ctx)
+
+	gc.trashMu.Lock()
+	defer gc.trashMu.Unlock()
+
+	if err := os.MkdirAll(volumeTrashLoc, DefaultVolumePermissions); err != nil {
+		if !os.IsExist(err) {
+			logger.Error().Str("garbage_collection_path", volumeTrashLoc).Err(err).Msg("Failed to create garbage collector directory")
+			return err
+		}
+	}
+	if !fileExists(fullPath) {
+		logger.Debug().Str("full_path", fullPath).Msg("Volume contents not found, maybe already moved to trash, skipping")
+		return nil
+	}
+	newPath := filepath.Join(volumeTrashLoc, filepath.Base(fullPath))
+	if err := os.Rename(fullPath, newPath); err != nil {
+		logger.Error().Err(err).Str("full_path", fullPath).
+			Str("volume_trash_location", volumeTrashLoc).Msg("Failed to move volume contents to volumeTrashLoc")
+		return err
+	}
 	return nil
 }
 
