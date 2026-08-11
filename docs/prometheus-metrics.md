@@ -181,7 +181,7 @@ than probing WEKA inline, which is what keeps those RPCs cheap (see family 2).
 
 | Metric | Type | Labels | Meaning |
 |---|---|---|---|
-| `weka_csi_volume_health_status` | GaugeVec | `LabelsForCsiVolumes` (the same 10 labels as family 5 — this metric does **not** add `csi_driver_name` on top, since that label is already part of the set) | Last health condition the reconciler determined for this volume: `1` = healthy, `0` = abnormal, `-1` = unknown, including a cached result older than `volumeHealthMaxAge` (30 minutes) |
+| `weka_csi_volume_health_status` | GaugeVec | `LabelsForCsiVolumes` (the same 11 labels as family 5 — this metric does **not** add `csi_driver_name` on top, since that label is already part of the set) | Last health condition the reconciler determined for this volume: `1` = healthy, `0` = abnormal, `-1` = unknown, including a cached result older than `volumeHealthMaxAge` (30 minutes) |
 | `weka_csi_volume_health_volumes` | GaugeVec | `csi_driver_name`, `status` (`healthy`/`abnormal`/`unknown`/`failed`) | Fleet-wide tally as of the last completed sweep. `failed` counts probes that errored during the sweep — it is not one of the values `status` on the per-volume gauge takes, and a failed probe leaves that volume's previous status in place rather than overwriting it |
 | `weka_csi_volume_health_sweep_duration_seconds` | HistogramVec | `csi_driver_name` | Duration of one complete reconciliation sweep. Uses the wide `HistogramDurationBuckets` (up to 1000s), not Prometheus's 10s-capped defaults, since a sweep over a large fleet runs for minutes |
 | `weka_csi_volume_health_last_sweep_timestamp_seconds` | GaugeVec | `csi_driver_name` | Unix time the last sweep completed. Lets a stalled reconciler (lost leadership, or a hung sweep) be alerted on independent of whether any volume's status changed |
@@ -323,7 +323,7 @@ values come from a WEKA API read on the collector's own schedule, not from the s
 
 ### Labels
 
-One series per PersistentVolume, identified by `LabelsForCsiVolumes` in `volumemetrics.go` — 10
+One series per PersistentVolume, identified by `LabelsForCsiVolumes` in `prometheus.go` — 11
 labels:
 
 | Label | Meaning |
@@ -338,6 +338,7 @@ labels:
 | `pvc_name` | PersistentVolumeClaim name (blank if the PV has no claim ref) |
 | `pvc_namespace` | PersistentVolumeClaim namespace (blank if unbound) |
 | `pvc_uid` | PersistentVolumeClaim UID (blank if unbound) |
+| `secret_name` | The WEKA API Secret the volume authenticates with, as `namespace/name`. Blank when the volume carries no secret reference, which a statically provisioned volume need not |
 
 ### Metrics
 
