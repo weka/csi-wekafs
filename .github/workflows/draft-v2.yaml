@@ -2,8 +2,10 @@ name: draft-v2
 
 on:
   push:
+    # main only. Development lands on dev continuously, and a draft release per merge there is
+    # noise - a draft is wanted when dev is merged into main, which is what a release is cut from.
+    # Drafting for any other branch is still possible on demand through workflow_dispatch.
     branches:
-      - dev
       - main
   workflow_dispatch:
     inputs:
@@ -79,17 +81,34 @@ jobs:
           REF="origin/$TARGET"
           git rev-parse --verify -q "$REF" >/dev/null || REF=HEAD
           TAG=$(git describe --tags --abbrev=0 "$REF" 2>/dev/null || true)
-          SEARCH="base:$TARGET is:merged"
+          WINDOW=""
           if [[ -n "$TAG" ]]; then
             SINCE=$(git log -1 --format=%cI "$TAG")
-            SEARCH="$SEARCH merged:>$SINCE"
+            WINDOW="merged:>$SINCE"
             echo "listing PRs merged after $TAG ($SINCE), the newest tag on $REF"
           else
             echo "no tag reachable from $REF - listing every merged PR"
           fi
-          gh pr list --limit 500 --search "$SEARCH" \
-            --json number,title,body,labels,author,url \
-            > prs.json
+
+          # Search the integration branch as well as the release branch. Development lands on dev
+          # and reaches main as a single dev -> main pull request, so searching only the release
+          # branch would find that one merge and none of the work inside it - a release note listing
+          # "merge dev into main" and nothing else. Searching the merge timestamp rather than commits
+          # is what makes this survive rebase-and-merge, which rewrites the SHAs on the way.
+          BASES="$TARGET"
+          [[ "$TARGET" != "dev" ]] && BASES="$BASES dev"
+          : > prs.raw.json
+          for BASE in $BASES; do
+            echo "  searching base:$BASE"
+            gh pr list --limit 500 --search "base:$BASE is:merged $WINDOW" \
+              --json number,title,body,labels,author,url,headRefName >> prs.raw.json
+          done
+
+          # Drop the dev -> main pull request itself: it carries no change of its own, and listing it
+          # beside the work it delivered reads as a duplicate. Then de-duplicate, since a PR can be
+          # found under both bases.
+          jq -s 'add | map(select(.headRefName != "dev")) | unique_by(.number)' prs.raw.json > prs.json
+          rm -f prs.raw.json
           echo "fetched $(jq length prs.json) PRs"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
