@@ -15,7 +15,7 @@
 CMDS=wekafsplugin
 all: build
 
-.PHONY: build-% build clean build-debug deploy-debug update-charts
+.PHONY: build-% build clean build-debug deploy-debug update-charts update-sidecars
 
 # understand what is the version tag
 VERSION ?= $(shell cat charts/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
@@ -42,6 +42,12 @@ clean:
 # why the committed charts carry the last released version.
 update-charts:
 	@./hack/update-charts.sh
+
+# Report which CSI sidecars are behind their latest upstream release, and with APPLY=1 update
+# charts/csi-wekafsplugin/values.yaml in place. Renovate watches only some of them, so this
+# checks all seven. Exits non-zero when something is behind, so CI can use it as a check.
+update-sidecars:
+	@./hack/update-sidecars.sh
 
 # Build debug binaries locally (fast on native arch)
 .PHONY: build-debug-binaries
