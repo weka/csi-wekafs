@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 RUN go install -v github.com/kubernetes-csi/csi-test/v5/cmd/csi-sanity@v5.3.1
 
 FROM alpine

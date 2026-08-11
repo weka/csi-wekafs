@@ -5,7 +5,7 @@
 Kubernetes CSI (Container Storage Interface) driver for WekaFS, a high-performance distributed filesystem. Supports native Weka protocol and NFS transport, snapshots, encryption, dynamic/static provisioning, and observability via Prometheus metrics and OpenTelemetry tracing.
 
 **Current version**: 2.8.3
-**Language**: Go 1.24
+**Language**: Go 1.26
 **Registry**: `quay.io/weka.io/csi-wekafs`
 **GitHub**: `github.com/weka/csi-wekafs`
 
@@ -40,7 +40,7 @@ csi-wekafs/
 ├── .github/workflows/           # CI/CD (sanity tests, release, dev builds, PR lint)
 ├── docs/                        # Additional documentation
 ├── selinux/                     # SELinux policy & config
-├── Dockerfile                   # Production multi-stage build (golang:1.24-alpine -> ubi9-minimal)
+├── Dockerfile                   # Production multi-stage build (golang:1.26-alpine -> ubi9-minimal)
 ├── debug.Dockerfile             # Debug build with Delve
 ├── Makefile                     # Build targets (build, push, build-debug, deploy-debug)
 ├── go.mod / go.sum

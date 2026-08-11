@@ -1,5 +1,5 @@
 ARG UBI_HASH=9.8-1785339117
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.26-alpine AS go-builder
 ARG TARGETARCH
 ARG TARGETOS
 # https://stackoverflow.com/questions/36279253/go-compiled-binary-wont-run-in-an-alpine-docker-container-on-ubuntu-host
