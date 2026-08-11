@@ -643,6 +643,11 @@ func getOwnNamespace() (string, error) {
 	return string(nsBytes), nil
 }
 
+// trimValue trims whitespace and trailing newlines from secret values
+func trimValue(value string) string {
+	return strings.TrimSpace(strings.TrimSuffix(value, "\n"))
+}
+
 func GetCsiPluginMode(mode *string) CsiPluginMode {
 	ret := CsiPluginMode(*mode)
 	switch ret {

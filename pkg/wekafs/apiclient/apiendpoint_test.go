@@ -139,12 +139,13 @@ func TestApiEndPoints_RotateSingleEndpointIsStable(t *testing.T) {
 	}
 }
 
-// TestNewApiClient_AllInvalidEndpoints_ReturnsErrorInsteadOfPanicking covers fix 8. NewApiClient only
-// rejects a raw endpoint list with zero entries; a secret whose entries all fail
-// isValidIPv4Address/isValidIPv6Address/isValidHostname still constructs a client, just with an
-// empty endpoint map. Before the fix, the first request dereferenced that nil endpoint directly in
-// getBaseUrl and in do()'s stats bookkeeping and panicked.
-func TestNewApiClient_AllInvalidEndpoints_ReturnsErrorInsteadOfPanicking(t *testing.T) {
+// TestNewApiClient_AllInvalidEndpoints_ReturnsError documents the current contract: NewApiClient used
+// to succeed even when every credential endpoint failed validation, silently constructing a client
+// with an empty endpoint map that only failed later - obscurely - at request time (a nil endpoint
+// dereferenced in getBaseUrl and in do()'s stats bookkeeping, which used to panic before that was
+// fixed separately). Failing loudly at construction time is more useful: there is no plausible way
+// to recover a working client from a credential list where nothing parsed.
+func TestNewApiClient_AllInvalidEndpoints_ReturnsError(t *testing.T) {
 	quietLogs(t)
 	creds := Credentials{
 		Username:     "admin",
@@ -154,24 +155,89 @@ func TestNewApiClient_AllInvalidEndpoints_ReturnsErrorInsteadOfPanicking(t *test
 		Endpoints:    []string{"not a valid host!!"},
 	}
 	c, err := NewApiClient(context.Background(), creds, ApiClientOptions{Hostname: "no-endpoints-test"})
-	if err != nil {
-		t.Fatalf("NewApiClient should succeed here - validation failure only empties the endpoint map, it doesn't reject the raw list: %v", err)
+	if err == nil {
+		t.Fatal("expected NewApiClient to return an error when every endpoint fails validation")
+	}
+	if c != nil {
+		t.Fatalf("expected a nil client alongside the error, got %v", c)
+	}
+	if _, ok := err.(*ApiNoEndpointsError); !ok {
+		t.Fatalf("expected *ApiNoEndpointsError, got %T: %v", err, err)
+	}
+}
+
+// TestConstructEndpointFromAddress covers the parsing rules constructEndpointFromAddress applies to a
+// single raw credential endpoint: rejecting a URL scheme, defaulting the port, rejoining IPv6
+// addresses split on ":", and rejecting anything that isn't a valid IPv4/IPv6 address or hostname.
+func TestConstructEndpointFromAddress(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantIP   string
+		wantPort int
+		wantErr  bool
+	}{
+		{name: "ipv4 without port", input: "192.168.1.1", wantIP: "192.168.1.1", wantPort: 14000},
+		{name: "ipv4 with port", input: "192.168.1.1:1234", wantIP: "192.168.1.1", wantPort: 1234},
+		{name: "ipv6 with port", input: "::1:1234", wantIP: "::1", wantPort: 1234},
+		{name: "hostname", input: "weka.example.com", wantIP: "weka.example.com", wantPort: 14000},
+		{name: "https scheme rejected", input: "https://192.168.1.1:1234", wantErr: true},
+		// Without the explicit scheme check this one slips through: splitting on ":" leaves "https"
+		// as the host - which passes isValidHostname - and "//weka.example.com" as the port, which
+		// fails to parse and falls back to the default. The result is a bogus "https:14000"
+		// endpoint accepted in silence, so this case is what makes the scheme check load-bearing.
+		{name: "scheme without port rejected", input: "https://weka.example.com", wantErr: true},
+		{name: "garbage rejected", input: "not a valid host!!", wantErr: true},
 	}
 
-	var gotErr error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				t.Fatalf("Get panicked instead of returning an error: %v", r)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			quietLogs(t)
+			ep, err := constructEndpointFromAddress(context.Background(), tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error for input %q, got endpoint %v", tt.input, ep)
+				}
+				return
 			}
-		}()
-		gotErr = c.Get(context.Background(), "cluster", nil, &ClusterInfoResponse{})
-	}()
-
-	if gotErr == nil {
-		t.Fatal("expected an error when the client has no valid endpoints")
+			if err != nil {
+				t.Fatalf("unexpected error for input %q: %v", tt.input, err)
+			}
+			if ep.IpAddress != tt.wantIP || ep.MgmtPort != tt.wantPort {
+				t.Fatalf("input %q: expected %s:%d, got %s:%d", tt.input, tt.wantIP, tt.wantPort, ep.IpAddress, ep.MgmtPort)
+			}
+		})
 	}
-	if _, ok := gotErr.(*ApiNoEndpointsError); !ok {
-		t.Fatalf("expected *ApiNoEndpointsError, got %T: %v", gotErr, gotErr)
+}
+
+// TestResetDefaultEndpoints_AllInvalid_ReturnsError covers the new contract: a credential list where
+// every endpoint fails to parse must not silently produce an empty-but-successful endpoint set.
+func TestResetDefaultEndpoints_AllInvalid_ReturnsError(t *testing.T) {
+	quietLogs(t)
+	a := &ApiClient{
+		Credentials:  Credentials{Endpoints: []string{"not a valid host!!", "https://also-bad:1234"}},
+		apiEndpoints: NewApiEndPoints(),
+	}
+	if err := a.resetDefaultEndpoints(context.Background()); err == nil {
+		t.Fatal("expected an error when every endpoint fails to parse")
+	}
+	if got := a.apiEndpoints.Len(); got != 0 {
+		t.Fatalf("expected no endpoints to be kept, got %d", got)
+	}
+}
+
+// TestResetDefaultEndpoints_MixedValidity_KeepsOnlyTheGoodOnes covers the same contract on a mixed
+// list: the bad entry is skipped and logged, not fatal, as long as at least one entry parses.
+func TestResetDefaultEndpoints_MixedValidity_KeepsOnlyTheGoodOnes(t *testing.T) {
+	quietLogs(t)
+	a := &ApiClient{
+		Credentials:  Credentials{Endpoints: []string{"not a valid host!!", "192.168.1.1:1234"}},
+		apiEndpoints: NewApiEndPoints(),
+	}
+	if err := a.resetDefaultEndpoints(context.Background()); err != nil {
+		t.Fatalf("expected no error when at least one endpoint parses, got %v", err)
+	}
+	if got := a.apiEndpoints.Len(); got != 1 {
+		t.Fatalf("expected exactly the one valid endpoint to be kept, got %d", got)
 	}
 }
