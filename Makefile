@@ -15,7 +15,7 @@
 CMDS=wekafsplugin
 all: build
 
-.PHONY: build-% build clean build-debug deploy-debug
+.PHONY: build-% build clean build-debug deploy-debug update-charts
 
 # understand what is the version tag
 VERSION ?= $(shell cat charts/csi-wekafsplugin/Chart.yaml | grep appVersion | awk '{print $$2}' | tr -d '"')
@@ -36,6 +36,12 @@ push: build
 
 clean:
 	-rm -rf bin
+
+# Stamp the charts in the working tree so a chart built from it installs the images that tree
+# produces. For local use only - CI stamps its own workspace and never commits the result, which is
+# why the committed charts carry the last released version.
+update-charts:
+	@./hack/update-charts.sh
 
 # Build debug binaries locally (fast on native arch)
 .PHONY: build-debug-binaries

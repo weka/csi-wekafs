@@ -180,7 +180,7 @@ jobs:
             APP_VERSION="${{ steps.version.outputs.version }}"
             yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
-            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
+            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v'$CHART_VERSION'/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
             yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
             echo ------------------ values ------------------
             cat $BASEDIR/values.yaml
@@ -289,7 +289,7 @@ jobs:
             APP_VERSION="${{ steps.version.outputs.version }}"
             yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
-            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
+            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v'$CHART_VERSION'/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
             yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
             echo ------------------ values ------------------
             cat $BASEDIR/values.yaml
@@ -344,12 +344,4 @@ jobs:
         run: |
           ct install --print-config --charts charts/csi-wekafsplugin --debug --helm-extra-args "--timeout 60s"
 
-      # PUSH CHANGES BACK TO BRANCH
-      - name: Commit & Push changes
-        uses: actions-js/push@master
-        with:
-          author_name: Weka CSI Bot
-          author_email: botty@weka.io
-          github_token: ${{ secrets.BOTTY_GH_TOKEN }}
-          branch: dev
 
