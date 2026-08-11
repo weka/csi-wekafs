@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "prHourlyLimit": 10,
-  "baseBranches": [
+  "baseBranchPatterns": [
     "dev"
   ],
   "reviewers": [
@@ -12,83 +12,62 @@
     "dependencies"
   ],
   "extends": [
-    "config:base"
+    "config:recommended"
   ],
-  "regexManagers": [
+  "customManagers": [
     {
-      "fileMatch": [
-        "^charts\\/csi-wekafsplugin\\/values\\.yaml$"
-      ],
-      "matchStrings": [
-        "\\s\\slivenessprobesidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/livenessprobe:(?<currentValue>.*?)\\n"
-      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^charts\\/csi-wekafsplugin\\/values\\.yaml$/"],
+      "matchStrings": ["\\s\\slivenessprobesidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/livenessprobe:(?<currentValue>.*?)\\n"],
       "depNameTemplate": "registry.k8s.io/sig-storage/livenessprobe",
       "datasourceTemplate": "docker"
     },
     {
-      "fileMatch": [
-        "^charts\\/csi-wekafsplugin\\/values\\.yaml$"
-      ],
-      "matchStrings": [
-        "\\s\\sprovisionersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-provisioner:(?<currentValue>.*?)\\n"
-      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^charts\\/csi-wekafsplugin\\/values\\.yaml$/"],
+      "matchStrings": ["\\s\\sprovisionersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-provisioner:(?<currentValue>.*?)\\n"],
       "depNameTemplate": "registry.k8s.io/sig-storage/csi-provisioner",
       "datasourceTemplate": "docker"
     },
     {
-      "fileMatch": [
-        "^charts\\/csi-wekafsplugin\\/values\\.yaml$"
-      ],
-      "matchStrings": [
-        "\\s\\sregistrarsidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-node-driver-registrar:(?<currentValue>.*?)\\n"
-      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^charts\\/csi-wekafsplugin\\/values\\.yaml$/"],
+      "matchStrings": ["\\s\\sregistrarsidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-node-driver-registrar:(?<currentValue>.*?)\\n"],
       "depNameTemplate": "registry.k8s.io/sig-storage/csi-node-driver-registrar",
       "datasourceTemplate": "docker"
     },
     {
-      "fileMatch": [
-        "^charts\\/csi-wekafsplugin\\/values\\.yaml$"
-      ],
-      "matchStrings": [
-        "\\s\\sresizersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-resizer:(?<currentValue>.*?)\\n"
-      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^charts\\/csi-wekafsplugin\\/values\\.yaml$/"],
+      "matchStrings": ["\\s\\sresizersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-resizer:(?<currentValue>.*?)\\n"],
       "depNameTemplate": "registry.k8s.io/sig-storage/csi-resizer",
       "datasourceTemplate": "docker"
     },
     {
-      "fileMatch": [
-        "^charts\\/csi-wekafsplugin\\/values\\.yaml$"
-      ],
-      "matchStrings": [
-        "\\s\\ssnapshottersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-snapshotter:(?<currentValue>.*?)\\n"
-      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^charts\\/csi-wekafsplugin\\/values\\.yaml$/"],
+      "matchStrings": ["\\s\\ssnapshottersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-snapshotter:(?<currentValue>.*?)\\n"],
       "depNameTemplate": "registry.k8s.io/sig-storage/csi-snapshotter",
       "datasourceTemplate": "docker"
     },
     {
-      "fileMatch": [
-        "^charts\\/csi-wekafsplugin\\/values\\.yaml$"
-      ],
-      "matchStrings": [
-        "\\s\\sattachersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-attacher:(?<currentValue>.*?)\\n"
-      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^charts\\/csi-wekafsplugin\\/values\\.yaml$/"],
+      "matchStrings": ["\\s\\sattachersidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-attacher:(?<currentValue>.*?)\\n"],
       "depNameTemplate": "registry.k8s.io/sig-storage/csi-attacher",
       "datasourceTemplate": "docker"
     },
     {
-      "fileMatch": [
-        "^charts\\/csi-wekafsplugin\\/values\\.yaml$"
-      ],
-      "matchStrings": [
-        "\\s\\shealthmonitorsidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-external-health-monitor-controller:(?<currentValue>.*?)\\n"
-      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^charts\\/csi-wekafsplugin\\/values\\.yaml$/"],
+      "matchStrings": ["\\s\\shealthmonitorsidecar:\\sregistry\\.k8s\\.io\\/sig-storage\\/csi-external-health-monitor-controller:(?<currentValue>.*?)\\n"],
       "depNameTemplate": "registry.k8s.io/sig-storage/csi-external-health-monitor-controller",
       "datasourceTemplate": "docker"
     }
   ],
   "packageRules": [
     {
-      "datasources": [
+      "matchDatasources": [
         "docker"
       ],
       "addLabels": [
@@ -97,7 +76,7 @@
       "commitMessageTopic": "{{{depName}}}"
     },
     {
-      "datasources": [
+      "matchDatasources": [
         "go"
       ],
       "addLabels": [
@@ -105,11 +84,11 @@
       ]
     },
     {
-      "matchPackagePatterns": [
-        ".*sig-storage.*"
-      ],
       "addLabels": [
         "sidecar"
+      ],
+      "matchPackageNames": [
+        "/.*sig-storage.*/"
       ]
     }
   ]
