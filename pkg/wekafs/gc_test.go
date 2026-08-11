@@ -2,6 +2,9 @@ package wekafs
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -65,5 +68,61 @@ func TestGcKeyWithoutApiClient(t *testing.T) {
 	}
 	if newGcKey("default", testApiClient(t, "tenant-a")) == key {
 		t.Fatal("API-bound and API-unbound volumes must not share GC state")
+	}
+}
+
+// TestRenameIntoTrash_ConcurrentAttemptsOnTheSameVolume covers CSI-380. The check-then-rename in
+// renameIntoTrash is not atomic on its own: two attempts on the same volume - which is what a
+// retried DeleteVolume produces - could both see the source present, and whichever lost the race
+// would then fail renaming a path the other had already moved, leaving the volume stuck in
+// Deleting. Every attempt must report success, and the contents must land in the trash exactly once.
+func TestRenameIntoTrash_ConcurrentAttemptsOnTheSameVolume(t *testing.T) {
+	const attempts = 16
+
+	root := t.TempDir()
+	trash := filepath.Join(root, garbagePath)
+	volume := filepath.Join(root, "csi-volumes", "pvc-stuck-in-deleting")
+	if err := os.MkdirAll(volume, DefaultVolumePermissions); err != nil {
+		t.Fatalf("failed to seed the volume directory: %v", err)
+	}
+	marker := filepath.Join(volume, "payload")
+	if err := os.WriteFile(marker, []byte("data"), 0600); err != nil {
+		t.Fatalf("failed to seed volume contents: %v", err)
+	}
+
+	gc := &innerPathVolGc{}
+	errs := make(chan error, attempts)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < attempts; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- gc.renameIntoTrash(context.Background(), volume, trash)
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("a concurrent attempt failed instead of treating the move as already done: %v", err)
+		}
+	}
+
+	if _, err := os.Stat(volume); !os.IsNotExist(err) {
+		t.Fatalf("expected the volume directory to be gone from its original location, stat returned %v", err)
+	}
+	moved, err := os.ReadDir(trash)
+	if err != nil {
+		t.Fatalf("failed to read the trash directory: %v", err)
+	}
+	if len(moved) != 1 || moved[0].Name() != "pvc-stuck-in-deleting" {
+		t.Fatalf("expected exactly one directory in the trash, got %d entries", len(moved))
+	}
+	if _, err := os.Stat(filepath.Join(trash, "pvc-stuck-in-deleting", "payload")); err != nil {
+		t.Fatalf("expected the volume contents to survive the move: %v", err)
 	}
 }
