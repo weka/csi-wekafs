@@ -54,9 +54,36 @@ csi-wekafs/
 
 ## Key Dependencies
 
-- CSI spec v1.11.0, gRPC, Kubernetes client-go v0.34.1, controller-runtime v0.22.4
+- CSI spec v1.11.0, gRPC, Kubernetes client-go v0.36.3, controller-runtime v0.24.1
 - Prometheus (metrics), OpenTelemetry (tracing), Zerolog (logging)
 - k8s.io/mount-utils for mount operations
+
+### Do not raise the CSI spec above v1.12
+
+`github.com/container-storage-interface/spec` must stay at **v1.12 or below** until the
+`csi-external-health-monitor-controller` sidecar ships a release that supports the replacement API.
+This is not a preference to weigh against keeping dependencies current - raising it breaks volume
+health reporting outright, so treat a proposed bump to v1.13+ as a blocked change and say so.
+
+v1.13.0 removed `VolumeCondition`; `csi.proto` records it as "an alpha API that has been removed".
+The driver's volume health reporting is built on it - `ControllerGetVolume`, `NodeGetVolumeStats`,
+and the `VOLUME_CONDITION` capabilities on both the controller and node services. The capability
+enum lost `RPC_VOLUME_CONDITION` and gained `RPC_GET_VOLUME_HEALTH` / `RPC_LIST_VOLUME_HEALTH`, so
+this is a replacement API (KEP-1432: `ControllerGetVolumeHealth`, `ControllerListVolumeHealth`,
+`NodeGetVolumeHealth`, reporting into a PersistentVolumeClaim status field rather than events), not
+a rename.
+
+The sidecar that consumes it, `csi-external-health-monitor-controller`, is at v0.18.0 and still
+builds against spec v1.12.0 and reads `VolumeCondition`. Its `master` has the KEP-1432 rewrite
+merged but untagged. So today **both** directions lose external health monitoring: dropping
+`VolumeCondition` leaves the released sidecar reading an empty field, and implementing the new RPCs
+leaves nothing released calling them.
+
+Bumping the spec is unblocked only when that sidecar tags a release implementing KEP-1432. At that
+point the spec, the driver's health RPCs and the sidecar pin all move together, in one change.
+
+Note the Prometheus volume health metrics (`weka_csi_volume_health_*`) come from the driver's own
+reconciler, not from the CSI API, and are unaffected by any of this.
 
 ## Build & Test
 
