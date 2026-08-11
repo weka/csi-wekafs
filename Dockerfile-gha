@@ -1,4 +1,4 @@
-#syntax=docker/dockerfile:1.17
+#syntax=docker/dockerfile:1.26
 # CI counterpart to Dockerfile. The binaries are built once, for every architecture, by the
 # build-binaries job, so this only packages them - which is what lets the image jobs for both
 # architectures and the sanity image start in parallel instead of each recompiling the tree.
