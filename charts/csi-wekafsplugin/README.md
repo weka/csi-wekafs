@@ -79,6 +79,8 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | images.healthmonitorsidecar | string | `"registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.18.0"` | CSI external health monitor sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
 | images.csidriverTag | string | `"2.9.2"` | CSI driver tag |
+| images.csimetricsserver | string | `"quay.io/weka.io/csi-metricsserver"` | CSI metrics server image URL. Separate from the driver image: the metrics server ships as its    own image, built by Dockerfile-metricsserver |
+| images.csimetricsserverTag | string | `"2.9.2"` | CSI metrics server image tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -110,14 +112,37 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | node.labels | object | `{}` | optional labels to add to node daemonset |
 | node.podLabels | object | `{}` | optional labels to add to node pods |
 | node.livenessProbeEnabled | bool | `true` | Enable liveness probe on node pods. Set to false to disable health checks for debugging pod restart issues |
+| node.healthPort | int | `9899` | Port the liveness-probe sidecar serves /healthz on, probed by the node driver container |
+| node.registrarPort | int | `9809` | Port the node registrar sidecar serves its own /healthz on |
 | node.terminationGracePeriodSeconds | int | `10` | termination grace period for node pods |
 | node.resources | object | `{"csiRegistrar":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"8m","memory":"52Mi"}},"livenessProbe":{"limits":{"cpu":1,"memory":"1Gi"},"requests":{"cpu":"12m","memory":"44Mi"}},"wekafs":{"limits":{"cpu":1,"memory":"2Gi"},"requests":{"cpu":"128m","memory":"128Mi"}}}` | resource requests and limits for node containers |
+| apiTimeoutSeconds | int | `60` | Timeout for a single WEKA API request, in seconds |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
 | legacyVolumeSecretName | string | `""` | for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin |
 | priorityClassName | string | `""` | Optional CSI Plugin priorityClassName for both components, overridable per component with `controller.priorityClassName` and `node.priorityClassName` |
 | selinuxSupport | string | `"off"` | Support SELinux labeling for Persistent Volumes, may be either `off`, `mixed`, `enforced` (default off)    In `enforced` mode, CSI node components will only start on nodes having a label `selinuxNodeLabel` below    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!    NOTE: SELinux support is enabled automatically on clusters recognized as RedHat OpenShift Container Platform |
-| selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
+| metricsServer | object | `{"affinity":{},"apiTimeoutSeconds":180,"enableBatchModeForQuotaUpdates":true,"enableLeaderElection":true,"enabled":false,"healthPort":9196,"labels":{},"logLevel":null,"maxConcurrentRequests":50,"metricsFetchIntervalSeconds":60,"nodeSelector":{},"podLabels":{},"quotaCacheValiditySeconds":300,"quotaUpdateConcurrentRequests":25,"replicas":2,"resources":{"limits":{"cpu":2,"memory":"2Gi"},"requests":{"cpu":0.1,"memory":"256Mi"}},"scrapeInterval":"60s","terminationGracePeriodSeconds":10,"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
+| metricsServer.enabled | bool | `false` | Deploy the WEKA metrics server alongside the CSI plugin, reporting per-volume capacity and    performance to Prometheus.    NOTE: this grants a separate ServiceAccount cluster-wide read of PersistentVolumes and of the    Secrets they reference, so that it can query the WEKA cluster for those metrics.    Off by default: the metrics server also ships as its own csi-metricsserver chart, and running    both against one WEKA cluster doubles the quota API load for no extra data. |
+| metricsServer.replicas | int | `2` | Number of replicas for metrics server. More than one is only useful with enableLeaderElection,    which keeps exactly one of them collecting while the rest stand by. Standbys report Ready like    any other pod; which one holds leadership is visible in the Lease object, not in pod status.    A standby is not free: controller-runtime starts its cache on every replica, so each standby    holds a full PersistentVolume informer cache and a watch against the API server while idle |
+| metricsServer.logLevel | string | `nil` | log level for the metrics server only. Defaults to 4 rather than inheriting the    chart-wide logLevel: at 5 the collector logs a line per PersistentVolume per cycle,    which on a fleet of thousands is tens of thousands of lines a minute |
+| metricsServer.nodeSelector | object | `{}` | optional nodeSelector for metrics server only (merged over the chart-wide nodeSelector) |
+| metricsServer.affinity | object | `{}` | optional affinity for metrics server only (merged over the chart-wide affinity) |
+| metricsServer.labels | object | `{}` | optional labels to add to metrics server deployment |
+| metricsServer.podLabels | object | `{}` | optional labels to add to metrics server pods |
+| metricsServer.tolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | tolerations for metrics server only (by default same as global) |
+| metricsServer.maxConcurrentRequests | int | `50` | concurrent requests for WEKA API (excluding quota) |
+| metricsServer.metricsFetchIntervalSeconds | int | `60` | metrics fetch interval in seconds, default is 60 seconds.    Only expired metrics will be updated, set by quotaCacheValiditySeconds |
+| metricsServer.terminationGracePeriodSeconds | int | `10` | termination grace period for metrics server pods |
+| metricsServer.enableLeaderElection | bool | `true` | enable leader election for metrics server |
+| metricsServer.quotaUpdateConcurrentRequests | int | `25` | number of concurrent requests for metrics server to update quotas |
+| metricsServer.quotaCacheValiditySeconds | int | `300` | the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded |
+| metricsServer.enableBatchModeForQuotaUpdates | bool | `true` | Fetch all quotas of a filesystem in one request instead of one request per volume.    On by default, because directory-backed volumes share a filesystem: a fleet of 5800 of them    spread over 5 filesystems costs 5 requests per cycle this way and roughly 5800 without.    Filesystem-backed volumes hold one volume per filesystem, so batching is no worse for them.    The trade-off is freshness. Quotas come from a cache kept for quotaCacheValiditySeconds, so a    value can be that old; each metric carries the timestamp of its own measurement rather than of    the scrape, which needs honorTimestamps on the Prometheus side (the PodMonitor sets it).    Set false to fetch every quota during collection instead, at one API request per volume. |
+| metricsServer.apiTimeoutSeconds | int | `180` | Timeout for a single WEKA API request, in seconds. Higher than the plugin-wide default because    a quota map fetch pulls every quota on a filesystem in one request |
+| metricsServer.scrapeInterval | string | `"60s"` | Scrape interval for the metrics server. Defaults to the fetch interval rather than the    chart-wide metrics.podMonitor.interval: the gauges only move once per    metricsFetchIntervalSeconds, and with honorTimestamps a repeat scrape carries the same    timestamp and is discarded as a duplicate |
+| metricsServer.healthPort | int | `9196` | Port serving both the /healthz liveness probe and the /readyz readiness probe.    Deliberately not the controller's 8081: under hostNetwork the two share a node's network    namespace, and whichever bound second would fail |
+| metricsServer.resources | object | `{"limits":{"cpu":2,"memory":"2Gi"},"requests":{"cpu":0.1,"memory":"256Mi"}}` | Resources for the metrics server container |
+| selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` |  |
 | selinuxOcpRetainMachineConfig | bool | `false` | If true, the SELinux policy machine configuration will not be removed when uninstalling the plugin.    This is useful for OpenShift Container Platform clusters, to not cause machine config pool update on plugin reinstall |
 | kubeletPath | string | `"/var/lib/kubelet"` | kubelet path, in cases Kubernetes is installed not in default folder |
 | metrics.enabled | bool | `true` | Enable Prometheus Metrics |
@@ -126,10 +151,12 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | metrics.resizerPort | int | `9092` | Resizer metrics port |
 | metrics.snapshotterPort | int | `9093` | Snapshotter metrics port |
 | metrics.nodePort | int | `9094` | Metrics port for Node Serer |
-| metrics.attacherPort | int | `9095` | Attacher metrics port |
+| metrics.metricsServerPort | int | `9096` | Metrics port for Metrics Server |
+| metrics.podMonitor | object | `{"additionalLabels":{},"enabled":true,"interval":"30s"}` | PodMonitor resources for the Prometheus Operator. Only rendered when the    monitoring.coreos.com/v1 CRDs are present in the cluster. |
 | metrics.podMonitor.enabled | bool | `true` | Create PodMonitors for the controller and node pods |
 | metrics.podMonitor.interval | string | `"30s"` | Scrape interval |
-| metrics.podMonitor.additionalLabels | object | `{}` | Extra labels for the PodMonitor objects. Set this when your Prometheus selects PodMonitors by label, e.g. `release: kube-prometheus-stack`, or the metrics will not be scraped. |
+| metrics.podMonitor.additionalLabels | object | `{}` | Extra labels for the PodMonitor objects. Set this when your Prometheus selects PodMonitors    by label, e.g. `release: kube-prometheus-stack`, or the metrics will not be scraped. |
+| metrics.attacherPort | int | `9095` | Attacher metrics port |
 | hostNetwork | bool | `false` | Set to true to use host networking. Will be always set to true when using NFS mount protocol |
 | pluginConfig.fsGroupPolicy | string | `"File"` | WARNING: Changing this value might require uninstall and re-install of the plugin |
 | pluginConfig.allowInsecureHttps | bool | `false` | Allow insecure HTTPS (skip TLS certificate verification) |
