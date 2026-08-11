@@ -1,260 +1,167 @@
 ## What's Changed
 
-### New Features
-* feat: implement external volume health monitoring via WEKA REST API by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/708 [(more details)](#pr-708)
-
-### Improvements
-* feat: add TTL-based filesystem name cache to API client by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/717 [(more details)](#pr-717)
-* feat: add paginated API response support for quota fetching by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/715 [(more details)](#pr-715)
-
 ### Bug Fixes
-* fix: accept the TenantAdmin API role for CSI operations by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/751 [(more details)](#pr-751)
-* fix: correct NFS sync/async option translation in AsNfs mount option conversion by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/719 [(more details)](#pr-719)
-* fix: make ApiClient safe for concurrent use, and fix what review found by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/718 [(more details)](#pr-718)
-* fix: invalidate filesystem cache before deletion to prevent stale UID snapshot listing by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/714 [(more details)](#pr-714)
-* fix: default semaphore weight to 1 for ops absent from maxConcurrencyPerOp by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/713 [(more details)](#pr-713)
-* fix: replace Mutex with RWMutex in ApiStore to prevent concurrent map access races by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/712 [(more details)](#pr-712)
-* fix: optimize gc resource consumption and support tenants with same filesystem name  by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/710 [(more details)](#pr-710)
+* fix: reject malformed API endpoints and secrets instead of failing later by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/758 [(more details)](#pr-758)
 
 ### Documentation
-* ci: adopt the v2 workflows and the new sanity harness by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/750 [(more details)](#pr-750)
+* fix(ci): point helm-docs at the root README template by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/754 [(more details)](#pr-754)
 
 ### Miscellaneous
-* fix(ci): write artifacthub changes as a string, and stop committing scratch by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/753 [(more details)](#pr-753)
-* fix(ci): draft the release notes for the right branch, bounded by the last tag by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/752 [(more details)](#pr-752)
+* ci: draft release notes on main only by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/757 [(more details)](#pr-757)
+* chore(deps): update to Go 1.26 and current external libraries by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/759 [(more details)](#pr-759)
+* chore(deps): update the UBI base image by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/760 [(more details)](#pr-760)
+* chore(deps): update the CSI sidecars to their current releases by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/761 [(more details)](#pr-761)
+* ci: add make update-sidecars and repair the Renovate config by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/762 [(more details)](#pr-762)
+* ci: run the Go unit tests on every pull request by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/763 [(more details)](#pr-763)
 
 ---
 ## PR Details
 
-### <a name="pr-753"></a>PR #753 - fix(ci): write artifacthub changes as a string, and stop committing scratch
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/753
+### <a name="pr-754"></a>PR #754 - fix(ci): point helm-docs at the root README template
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/754
 
 > ### TL;DR
-> Fixes the release job, which produced an unloadable Helm chart and so never published v2.9.0.
+> Restores the project README, which the v2.9.0 release overwrote with generated boilerplate.
 > 
 > ### What changed?
-> - The `artifacthub.io/changes` chart annotation is written as text, and left out entirely when there is nothing to record
-> - The release commit now includes only the files the release rewrites, instead of everything left lying in the build workspace
-> - Removed a stray build scratch file that had been committed to the repository
+> - Restored the README sections the release removed: pre-requisites, deployment, usage, volume health monitoring, additional documentation and build instructions
+> - Corrected the documentation-generator template path in the release, pull-request and push-dev workflows, so this cannot happen again
 > 
 > ### How to test?
-> 1. Run the release workflow.
-> 2. Confirm it completes, and that a version tag, a GitHub release and a published Helm chart all appear.
-> 3. Run `helm show chart charts/csi-wekafsplugin` and confirm it loads.
+> 1. Open the README on this branch and confirm every section is present, with the 2.9.0 version badges and value table.
+> 2. On the next release, confirm the README changes only where the version and values changed.
 > 
 > ### Why make this change?
-> The release job wrote a list where Helm requires text, which made `Chart.yaml` impossible to load. Chart publishing failed on it, and that single failure also cost the version tag and the GitHub release, so v2.9.0 never went out even though the release commit had already landed. Nothing changes for anyone running the driver.
+> The documentation generator was pointed at a template path that does not exist in this repository. Rather than failing, it fell back to its own default template and wrote that over the README, deleting 54 lines of hand-written documentation. The v2.9.0 release was the first to run this workflow to completion, so this is the first time it happened. Nothing was permanently lost — the source template still held every section. Nothing changes for anyone running the driver.
 
-### <a name="pr-752"></a>PR #752 - fix(ci): draft the release notes for the right branch, bounded by the last tag
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/752
+### <a name="pr-757"></a>PR #757 - ci: draft release notes on main only
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/757
 
 > ### TL;DR
-> Release note drafts now cover only the release being cut, instead of repeating work that already shipped.
+> Release note drafts are now produced for the release branch only, instead of once per merged change.
 > 
 > ### What changed?
-> - The draft job lists only pull requests merged since the newest tag reachable from the branch being released
-> - Removed a 30-item cap that silently dropped the oldest pull requests of a cycle
-> - The release branch now defaults to `main`, and a push drafts notes for the branch that was pushed
+> - A draft release is generated when something lands on `main`, and no longer when something lands on `dev`
+> - Drafting any branch on demand still works, by running the workflow manually and naming the branch
 > 
 > ### How to test?
-> 1. Run the `draft-v2` workflow against `main`.
-> 2. Open the draft release it creates.
-> 3. Confirm it lists only pull requests merged after the previous release tag — for `main` today, that is 15.
+> 1. Merge a pull request into `dev` and confirm no draft release appears.
+> 2. Merge `dev` into `main` and confirm a draft release is created.
+> 3. Run the draft workflow manually against any branch and confirm it still produces a draft.
 > 
 > ### Why make this change?
-> The job asked for merged pull requests with no cut-off date at all, so it returned whichever 30 had merged most recently regardless of the release they belonged to. The v2.9.0 draft consequently repeated work released in 2.8.4 through 2.8.9, and would have started losing genuine 2.9.0 entries off the bottom once more than 30 pull requests merged in the cycle. Nothing changes for anyone running the driver.
+> Development lands on `dev` continuously and is merged into `main` only when there is enough for a release. Drafting on every push to `dev` would create a draft release per merged pull request, burying the one that matters. Nothing changes for anyone running the driver.
 
-### <a name="pr-751"></a>PR #751 - fix: accept the TenantAdmin API role for CSI operations
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/751
+### <a name="pr-758"></a>PR #758 - fix: reject malformed API endpoints and secrets instead of failing later
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/758
 
 > ### TL;DR
-> Fixed a bug that made the driver unusable for customers whose storage API user has the TenantAdmin role.
+> A malformed or incomplete API secret is now rejected with a message naming the problem, instead of failing later with a generic error.
 > 
 > ### What changed?
-> - The driver now accepts the `TenantAdmin` role for its storage API user, alongside the already-supported `CSI`, `ClusterAdmin`, and `OrgAdmin` roles
+> - An endpoint that includes a URL scheme, or that is not a valid address, is rejected rather than quietly skipped
+> - If no endpoint in a secret is usable, creating the API client fails immediately instead of producing a client with nothing to talk to
+> - `username`, `password` and `organization` are now required in the secret, and a missing one is named in the error
+> - Refreshing the endpoint list from the cluster will no longer replace a working set with an empty one
 > 
 > ### How to test?
-> 1. Configure the driver's storage API credentials with a user that has the `TenantAdmin` role
-> 2. Create a PVC
-> 3. Confirm the volume provisions successfully instead of failing with a permissions error
+> 1. Create an API secret whose `endpoints` value includes a scheme, for example `https://1.2.3.4:14000`.
+> 2. Create a PVC using it, and confirm provisioning fails with an error naming the endpoint rather than a generic "no endpoints" message.
+> 3. Repeat with `username` omitted from the secret and confirm the error names the missing key.
 > 
 > ### Why make this change?
-> TenantAdmin grants full administrative control within its organization — the same scope OrgAdmin has — but it was missing from the driver's accepted-role list, blocking those customers entirely.
+> Endpoints that failed validation were skipped one by one, so a secret where every entry was malformed still produced an API client — just one with an empty endpoint list, which then failed at the first request, far from the secret that caused it. Missing credentials behaved the same way, defaulting to empty and surfacing later as an authentication failure. The error now arrives when the volume is created, and says which part of the secret is wrong.
+> 
+> 
+> This is a rework of the fixes originally made in #615 and #617, reimplemented against the endpoint
+> handling as it stands now, which was rewritten in the meantime. Neither of those pull requests
+> recorded a ticket.
 
-### <a name="pr-750"></a>PR #750 - ci: adopt the v2 workflows and the new sanity harness
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/750
+### <a name="pr-759"></a>PR #759 - chore(deps): update to Go 1.26 and current external libraries
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/759
 
 > ### TL;DR
-> No user-visible change — a faster internal build and test pipeline for developers.
+> Updates the driver to Go 1.26 and refreshes every third-party library it depends on.
 > 
 > ### What changed?
-> - Adopted a faster continuous integration pipeline for building and testing the driver
-> - Fixed a gap where automated storage tests never ran on pull requests opened as drafts
+> - Built with Go 1.26, in both the driver image and the test harness image
+> - Kubernetes client libraries, controller-runtime, gRPC, Prometheus and OpenTelemetry all moved to their current releases
+> - One Kubernetes library was a version behind the others and now matches them
 > 
 > ### How to test?
-> 1. Not applicable to users of the driver
-> 2. Nothing changes in how the driver runs, is built, or is deployed
+> 1. Deploy the chart and confirm the driver starts and reports ready.
+> 2. Create a PVC, confirm it binds, then delete it.
+> 3. Take a snapshot and restore from it.
 > 
 > ### Why make this change?
-> The previous pipeline was slow, and a trigger gap meant draft pull requests silently skipped storage test coverage, letting issues slip through unnoticed.
+> Routine currency: newer releases carry security and bug fixes, and staying close to upstream keeps each future update small. The CSI specification itself is deliberately not updated here — the newest version removes an interface the volume health reporting depends on, which is a decision of its own rather than a dependency bump.
 
-### <a name="pr-719"></a>PR #719 - fix: correct NFS sync/async option translation in AsNfs mount option conversion
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/719
+### <a name="pr-760"></a>PR #760 - chore(deps): update the UBI base image
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/760
 
 > ### TL;DR
-> Fixed an NFS mount bug that could apply the opposite write-caching behavior to what was requested.
+> Rebuilds the driver images on the current Red Hat base image.
 > 
 > ### What changed?
-> - Corrected the `coherent` and `force_direct` NFS mount options so they now correctly set synchronous ("sync") writes instead of buffered ("async") writes
+> - The UBI 9 minimal base image moves to its latest build, in both the released image and the one used by CI
 > 
 > ### How to test?
-> 1. Mount a volume over NFS using the `coherent` or `force_direct` mount option
-> 2. Check the effective mount options on the client (for example, via `mount` or `/proc/mounts`)
-> 3. Confirm `sync` is applied instead of `async`
+> 1. Pull the resulting image and confirm the driver runs.
+> 2. Confirm the base image build number in the image labels matches the one in the Dockerfile.
 > 
 > ### Why make this change?
-> The incorrect translation caused writes to be buffered instead of written through immediately, silently weakening the durability guarantee these options are meant to provide.
+> The pinned base image had fallen behind the current build, so images were being produced on an older base carrying older system packages. Both Dockerfiles pin it separately and have to move together, or the image CI tests differs from the image that ships.
 
-### <a name="pr-718"></a>PR #718 - fix: make ApiClient safe for concurrent use, and fix what review found
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/718
+### <a name="pr-761"></a>PR #761 - chore(deps): update the CSI sidecars to their current releases
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/761
 
 > ### TL;DR
-> Fixed bugs that could crash the driver, or make it misjudge storage cluster features, when many volume operations ran at once.
+> Updates the Kubernetes CSI sidecar containers deployed alongside the driver.
 > 
 > ### What changed?
-> - Made the driver's storage API client safe for many volume operations running at once
-> - Fixed a partly-failed login being treated as successful, which left the driver with wrong assumptions about cluster capabilities for up to an hour (refusing valid volumes, skipping quota enforcement, or rejecting valid organizations)
+> - liveness probe, attacher, provisioner, node driver registrar, resizer, snapshotter and external health monitor all move to their current releases
+> - No configuration change is required: every option the chart passes still exists, and no new permissions are needed
 > 
 > ### How to test?
-> Only reliably shown by automated tests, since the failures depend on timing under concurrent load:
-> 1. Run the automated concurrency test suite added in this change
-> 2. It reproduces the crashes and wrong behavior on the old code, and passes cleanly after the fix
+> 1. Upgrade the chart and confirm all controller and node pods reach Running.
+> 2. Create a PVC, expand it, snapshot it, and delete it.
+> 3. Confirm no sidecar container restarts.
 > 
 > ### Why make this change?
-> Under concurrent load — normal in production, since Kubernetes creates and deletes many volumes in parallel — the driver could crash or silently run on wrong assumptions, causing hard-to-diagnose failures.
+> Routine currency, and these had drifted further behind than intended. Two things worth watching after upgrading: the provisioner now runs a periodic clean-up pass over snapshots in the cluster, which is new steady-state activity; and the external health monitor is at the last release that supports the volume health interface the driver implements today.
 
-### <a name="pr-717"></a>PR #717 - feat: add TTL-based filesystem name cache to API client
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/717
+### <a name="pr-762"></a>PR #762 - ci: add make update-sidecars and repair the Renovate config
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/762
 
 > ### TL;DR
-> Filesystem lookups are now cached briefly, cutting repeated calls to the storage system.
+> Adds a command that reports which CSI sidecars are out of date, and repairs the automation that was supposed to be doing it.
 > 
 > ### What changed?
-> - Filesystem lookups reuse a recent result for a short time instead of querying the storage system every time.
-> - Operations that need guaranteed fresh data are unaffected and always fetch live data.
+> - `make update-sidecars` reports which sidecars are behind their latest release; `make update-sidecars APPLY=1` updates the chart
+> - Fixed the automatic dependency configuration, which pointed at a directory that no longer exists and so had stopped updating anything
+> - Added the two sidecars that were never covered by it
 > 
 > ### How to test?
-> 1. This is an internal performance optimization, verified by automated tests included in this change.
-> 2. Operators may notice fewer repeated filesystem lookup calls to the storage cluster when the same filesystems are used repeatedly.
+> 1. Run `make update-sidecars` and confirm it reports every sidecar as current.
+> 2. Edit one sidecar version in the chart to an older release and run it again; confirm it reports that one as behind and exits non-zero.
 > 
 > ### Why make this change?
-> Workloads that resolve many filesystems in quick succession were generating a burst of repeated, identical requests to the storage cluster.
+> The sidecars had fallen several releases behind with nothing flagging it. The cause was that the automatic updater was watching a path left over from before the chart moved, so it silently matched no files. This repairs that and adds a check that does not depend on that configuration being correct.
 
-### <a name="pr-715"></a>PR #715 - feat: add paginated API response support for quota fetching
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/715
+### <a name="pr-763"></a>PR #763 - ci: run the Go unit tests on every pull request
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/763
 
 > ### TL;DR
-> Quota lists are no longer silently truncated when a filesystem has more quotas than fit in one page of results.
+> The Go unit tests now run automatically on every pull request.
 > 
 > ### What changed?
-> - The API client now follows the storage system's pagination and combines all pages into the full result.
-> - Hardened handling for older clusters without pagination support, and for empty or malformed pages.
+> - A new job runs the unit tests and the Go static checks on each pull request
+> - It starts at the same time as the build rather than waiting for it, so a test failure is reported early
+> - Tests run with the race detector enabled
 > 
 > ### How to test?
-> 1. Query quotas on a filesystem with more quota entries than fit in a single page.
-> 2. Verify the full list is returned, not just the first page.
-> 3. Also covered extensively by automated tests.
+> 1. Open a pull request and confirm a `test-go` check appears alongside the build.
+> 2. Push a commit that breaks a unit test and confirm the check fails.
 > 
 > ### Why make this change?
-> The client wasn't following the "next page" pointer the storage system returns for long lists, so any sufficiently long list - most noticeably quotas - was silently incomplete.
-
-### <a name="pr-714"></a>PR #714 - fix: invalidate filesystem cache before deletion to prevent stale UID snapshot listing
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/714
-
-> ### TL;DR
-> Deleting a filesystem could use stale cached data, letting deletion proceed even if the filesystem still had snapshots.
-> 
-> ### What changed?
-> - The snapshot check performed before deleting a filesystem now always reads current data instead of a cached copy.
-> - The cached record for a filesystem is cleared immediately once its deletion begins.
-> 
-> ### How to test?
-> 1. This depends on an internal timing window that isn't practical to reproduce manually.
-> 2. Covered by automated tests added in this change.
-> 
-> ### Why make this change?
-> A cache used to avoid extra lookups wasn't cleared at the right time, so a delete could occasionally act on outdated filesystem information.
-
-### <a name="pr-713"></a>PR #713 - fix: default semaphore weight to 1 for ops absent from maxConcurrencyPerOp
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/713
-
-> ### TL;DR
-> Operations without an explicit concurrency limit were being blocked entirely instead of allowed to run.
-> 
-> ### What changed?
-> - Operations missing a configured concurrency limit now default to allowing 1 at a time, instead of 0.
-> - Operations explicitly configured with a limit of 0 still remain blocked, as intended.
-> 
-> ### How to test?
-> 1. Deploy the CSI driver.
-> 2. Trigger an operation that has no explicit concurrency limit configured.
-> 3. Verify it completes normally instead of hanging until it times out.
-> 
-> ### Why make this change?
-> An operation without a configured limit defaulted to a concurrency of zero, which can never be acquired, so it would hang until its request timed out rather than running or failing clearly.
-
-### <a name="pr-712"></a>PR #712 - fix: replace Mutex with RWMutex in ApiStore to prevent concurrent map access races
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/712
-
-> ### TL;DR
-> Fixes a bug that could crash the CSI controller under concurrent use
-> 
-> ### What changed?
-> - Fixed unsafe concurrent access to the driver's internal cache of Weka cluster connections
-> - Prevents a crash when many requests need cluster credentials at the same time
-> 
-> ### How to test?
-> 1. Covered by automated concurrency tests included in this change
-> 2. Before the fix, the symptom was occasional controller pod restarts under heavy simultaneous volume operations; this should no longer occur
-> 
-> ### Why make this change?
-> The controller could crash outright when multiple requests needing storage-cluster credentials were handled at the same time — more likely at scale or with many simultaneous volume operations.
-
-### <a name="pr-710"></a>PR #710 - fix: optimize gc resource consumption and support tenants with same filesystem name 
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/710
-
-> ### TL;DR
-> Fixes deleted-volume cleanup colliding across tenants sharing a filesystem name
-> 
-> ### What changed?
-> - Cleanup of deleted volumes is now tracked per tenant, not just by filesystem name
-> - Fixes trash left behind indefinitely when two tenants both use a name like `default`
-> - Upgraded the deletion tool, lowering cleanup CPU/time cost
-> 
-> ### How to test?
-> 1. Create identically-named filesystems under two different tenants
-> 2. Provision and delete volumes on each
-> 3. Confirm both tenants' deleted data is fully cleaned up, without one blocking the other
-> 
-> ### Why make this change?
-> A tenant's deleted volume data could previously be left behind indefinitely if another tenant used the same filesystem name — a real risk in shared, multi-tenant clusters.
-
-### <a name="pr-708"></a>PR #708 - feat: implement external volume health monitoring via WEKA REST API
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/708
-
-> ### TL;DR
-> Kubernetes can now detect and report when a volume's storage becomes unhealthy
-> 
-> ### What changed?
-> - Periodic health checks for each volume against the Weka cluster
-> - Unhealthy volumes surface as abnormal conditions on the PVC
-> - Reports actual used capacity alongside health status
-> - On by default, checks every 5 minutes; requires Weka 4.3+
-> 
-> ### How to test?
-> 1. Deploy the CSI driver and create a PVC
-> 2. Remove the volume's backing filesystem on the Weka cluster
-> 3. Run `kubectl describe pvc <name>` and confirm an abnormal condition appears within 5 minutes
-> 
-> ### Why make this change?
-> Previously Kubernetes couldn't tell if a volume's storage was still intact; problems went unnoticed until an application failed. This gives ongoing visibility into real volume health.
+> Only the end-to-end storage tests ran automatically; the unit tests covering volume identifiers, the WEKA API client, quota handling and mount reference counting were run by hand, so a broken one could reach the branch unnoticed. The race detector matters here because most of those tests guard concurrent access, and without it a data race passes silently. The tests need no WEKA cluster and take about ninety seconds. Nothing changes for anyone running the driver.
