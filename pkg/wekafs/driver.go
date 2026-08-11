@@ -203,7 +203,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	// the metrics server has no Kubernetes access, so it would discover no PersistentVolumes and export
 	// nothing at all. Fail rather than idle.
 	if driver.csiMode == CsiModeMetricsServer {
-		if err := driver.initManager(ctx, true); err != nil {
+		if err := driver.initManager(ctx, metricsServerElectsLeader(driver.config)); err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize Kubernetes manager, metrics server cannot run")
 		}
 	}
@@ -223,9 +223,31 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	}
 }
 
+// metricsServerElectsLeader reports whether a dedicated metrics-server pod should hold a lease, so
+// that exactly one replica collects.
+//
+// The configured value has to reach the manager and not only the readiness check. The collection
+// loops are registered as ordinary controller-runtime runnables, which start only on the elected
+// replica, so a manager left electing keeps every standby idle whatever the value says. With the
+// value off that was the worst of both: standbys reported Ready while collecting nothing.
+//
+// It governs a dedicated metrics-server process alone. A manager that also serves the CSI controller
+// service elects for that reason, which is not this value's decision - and the charts only ever run
+// the metrics server as its own deployment, so there is no configuration where that overlaps.
+func metricsServerElectsLeader(cfg *DriverConfig) bool {
+	if cfg == nil {
+		// No configuration to consult: elect, which is both the chart default and the safe side -
+		// one collector rather than every replica hammering the Weka API.
+		return true
+	}
+	return cfg.enableMetricsServerLeaderElection
+}
+
 // initManager initializes the controller-runtime manager.
 // Pass leaderElection=true for controller mode (acquires a lease before serving).
-// Pass leaderElection=false for node mode (client-only, no lease required).
+// Pass leaderElection=false for node mode (client-only, no lease required) and for a metrics server
+// configured not to elect. Whether the health-probe server is bound follows the csiMode, not this
+// argument - see servesHealthProbes.
 func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) error {
 	logger := log.Ctx(ctx).With().Str("component", "manager-init").Logger()
 
@@ -278,15 +300,17 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 		HealthProbeBindAddress: "",
 	}
 
-	if leaderElection {
-		// Controller mode: bind health probe so Kubernetes liveness probes work.
-		// Override the node-mode defaults set above.
+	if d.csiMode.servesHealthProbes() {
+		// Bind the health probe so Kubernetes liveness and readiness probes have something to talk
+		// to. Overrides the node-mode default set above.
 		healthPort := os.Getenv("HEALTH_PORT")
 		if healthPort == "" {
 			healthPort = HealthProbePort
 		}
 		mgrOpts.HealthProbeBindAddress = ":" + healthPort
+	}
 
+	if leaderElection {
 		// Get namespace for leader election lease
 		namespace, err := getOwnNamespace()
 		if err != nil {

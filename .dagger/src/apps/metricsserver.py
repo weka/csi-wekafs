@@ -20,11 +20,19 @@ async def metricsserver_ubi(src: Directory, sock: Socket, gh_token: Optional[Sec
 
 
 async def _calc_metricsserver_version(src: Directory, version: str = "") -> str:
+    """Bare SemVer, with no leading v.
+
+    A Helm chart version must be bare, and this value reaches `helm package --version` from more
+    than one caller, so the prefix is stripped here rather than at each of them - which is how one
+    call site ended up fixed and another left returning `v999.0.0-...` to a command that rejects it.
+    The v is added back at the two places that genuinely want it: the container image tag and the
+    chart's appVersion.
+    """
     if not version:
         digest = await src.digest()
         sha = digest.split(":")[-1]
-        version = f"v999.0.0-{sha[:12]}"
-    return version
+        version = f"999.0.0-{sha[:12]}"
+    return version.removeprefix("v")
 
 
 async def publish_metricsserver(src: Directory, sock: Socket, repository: str, version: str = "",
@@ -34,7 +42,8 @@ async def publish_metricsserver(src: Directory, sock: Socket, repository: str, v
     # Compute a compact version by hashing combined digests
     version = await _calc_metricsserver_version(src, version)
 
-    return await metricsserver.publish(f"{repository}:{version}")
+    # The v belongs on the image tag, which is how this image has always been published.
+    return await metricsserver.publish(f"{repository}:v{version}")
 
 
 async def publish_metricsserver_helm_chart(
@@ -58,11 +67,14 @@ async def publish_metricsserver_helm_chart(
     if registry_secret is not None:
         builder = builder.with_mounted_secret("/registry-secret", registry_secret)
 
-    base_repository = repository.rpartition("/")[0]
-    base_repository = base_repository.rpartition("/")[0] # cutting out helm, then cutting out namespace. very bound to OCI atm and broken for others
+    # helm registry login wants the registry host, which is everything before the first slash.
+    # Stripping two trailing path segments instead assumed a host/namespace/helm shape: it works for
+    # quay.io/weka.io/helm but returns an empty string for a single-segment path such as
+    # images.scalar.dev.weka.io:5002/helm, and the login then fails with no host at all.
+    base_repository = repository.split("/")[0]
     await (
         builder.with_exec(["sh", "-ec", f"""
-    helm package charts/csi-metricsserver --version {version} --app-version {version} --destination charts/
+    helm package charts/csi-metricsserver --version {version} --app-version v{version} --destination charts/
         """])
         .with_exec(["sh", "-ec", f"""
         if [ -f /registry-secret ]; then
