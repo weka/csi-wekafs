@@ -15,15 +15,14 @@ import (
 )
 
 type wekafsMount struct {
-	mounter                 *wekafsMounter
-	fsName                  string
-	mountPoint              string
-	kMounter                mount.Interface
-	debugPath               string
-	mountOptions            MountOptions
-	lastUsed                time.Time
-	allowProtocolContainers bool
-	containerName           string
+	mounter       *wekafsMounter
+	fsName        string
+	mountPoint    string
+	kMounter      mount.Interface
+	debugPath     string
+	mountOptions  MountOptions
+	lastUsed      time.Time
+	containerName string
 }
 
 func (m *wekafsMount) getMountPoint() string {
@@ -125,10 +124,15 @@ func (m *wekafsMount) ensureLocalContainerName(ctx context.Context, apiClient *a
 	}
 	var err error
 	configuredContainerName := ""
+	allowProtocolContainers := false
+	// Read both straight off the driver config. Copying allowProtocolContainers down through the
+	// mounter and the mount is what made --allowprotocolcontainers inert: the intermediate field
+	// was never assigned, so the flag silently never reached EnsureLocalContainer.
 	if m.mounter.config != nil {
 		configuredContainerName = m.mounter.config.wekafsContainerName
+		allowProtocolContainers = m.mounter.config.allowProtocolContainers
 	}
-	if m.containerName, err = apiClient.EnsureLocalContainer(ctx, m.allowProtocolContainers, configuredContainerName); err != nil {
+	if m.containerName, err = apiClient.EnsureLocalContainer(ctx, allowProtocolContainers, configuredContainerName); err != nil {
 		logger.Error().Err(err).Msg("Failed to ensure local container")
 	}
 	return nil
