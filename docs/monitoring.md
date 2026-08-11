@@ -134,16 +134,97 @@ timestamp, so it behaves like an ordinary gauge.
 Volume metrics carry `csi_driver_name`, `pv_name`, `cluster_guid`, `storage_class_name`,
 `filesystem_name`, `volume_type`, `organization`, `pvc_name`, `pvc_namespace`, `pvc_uid`.
 
-The PodMonitor deliberately strips `pod` (and `instance`, `job`, `namespace`, `endpoint`,
-`container`) from `weka_csi_volume_*`. A volume metric describes a volume, not the replica that
-happened to observe it, and because the collector is leader-elected, leaving `pod` on would fork a
-new series for every volume on each rollout and each failover - graphs would draw one line per pod a
-volume had ever been reported by, and any query summing across pods would double-count during a
-handover. `pod` is preserved on `weka_csi_metricsserver_*`, where the pod is precisely what is being
-described.
+The shipped PodMonitor relabels away the scrape-identity labels that would otherwise fork a series
+per pod for this family - see [PodMonitors](#podmonitors) below for exactly which labels, on which
+target, and why. If you scrape these metrics some other way, apply the same relabeling yourself, or
+aggregate `pod` away in your queries.
 
-If you scrape these metrics some other way, apply the same rule, or aggregate `pod` away in your
-queries.
+---
+
+## PodMonitors
+
+Four `PodMonitor` templates exist, one per scraped role:
+
+| Template | Chart | Renders when |
+|---|---|---|
+| `templates/controllerserver-podmonitor.yaml` | `csi-wekafsplugin` | `metrics.enabled` and `metrics.podMonitor.enabled` are both true |
+| `templates/nodeserver-podmonitor.yaml` | `csi-wekafsplugin` | `metrics.enabled` and `metrics.podMonitor.enabled` are both true |
+| `templates/metricsserver-podmonitor.yaml` | `csi-wekafsplugin` | `metricsServer.enabled` and `metrics.podMonitor.enabled` are both true - note this one does **not** check `metrics.enabled`, so it can render even if the controller/node PodMonitors are switched off |
+| `templates/metricsserver-podmonitor.yaml` | `csi-metricsserver` | `metrics.podMonitor.enabled` is true (this chart has no separate "enabled" switch - deploying it *is* deploying the metrics server) |
+
+All four additionally require the `monitoring.coreos.com/v1` CRDs to already be registered in the
+cluster at install/upgrade time (`.Capabilities.APIVersions.Has "monitoring.coreos.com/v1"`). Helm
+evaluates this once, at render time - installing the Prometheus Operator afterwards does not
+retroactively create the PodMonitor; you need a `helm upgrade` (even a no-op one) once the CRDs
+exist.
+
+### Values
+
+| Chart | Value | Default | Effect |
+|---|---|---|---|
+| `csi-wekafsplugin` | `metrics.podMonitor.enabled` | `true` | create the controller, node and metrics-server PodMonitors |
+| `csi-wekafsplugin` | `metrics.podMonitor.interval` | `30s` | scrape interval for the controller and node PodMonitors; also the fallback interval for the metrics-server PodMonitor if `metricsServer.scrapeInterval` is unset |
+| `csi-wekafsplugin` | `metrics.podMonitor.additionalLabels` | `{}` | extra labels merged onto every PodMonitor object this chart creates |
+| `csi-wekafsplugin` | `metricsServer.scrapeInterval` | `60s` | scrape interval actually used by the metrics-server PodMonitor |
+| `csi-metricsserver` | `metrics.podMonitor.enabled` | `true` | create the metrics-server PodMonitor |
+| `csi-metricsserver` | `metrics.podMonitor.interval` | `30s` | fallback interval if `metricsServer.scrapeInterval` is unset |
+| `csi-metricsserver` | `metrics.podMonitor.additionalLabels` | `{}` | extra labels merged onto the PodMonitor object |
+| `csi-metricsserver` | `metricsServer.scrapeInterval` | `60s` | scrape interval actually used by the metrics-server PodMonitor |
+
+### The `additionalLabels` trap
+
+Many Prometheus installs (the kube-prometheus-stack chart, for one) only select PodMonitors that
+carry a specific label, commonly `release: kube-prometheus-stack`. `additionalLabels` is how you add
+it. Leave it empty against such a Prometheus and the PodMonitor is still created, Helm reports
+success, and `kubectl get podmonitor` shows it - but Prometheus's `PodMonitorSelector` never matches
+it, so it is never scraped. Nothing errors anywhere. **This is the single most common reason for a
+dashboard with every panel empty**, and it looks identical to a real collection failure from the
+Kubernetes side. Check your Prometheus (or PrometheusOperator's) `podMonitorSelector` /
+`podMonitorNamespaceSelector` and set `metrics.podMonitor.additionalLabels` to match before assuming
+anything else is wrong.
+
+### Relabeling
+
+Two different relabeling rules are in play across the four templates, and they are not identical:
+
+- **Controller PodMonitor**, on its own `metrics` port only (not the four sidecar ports it also
+  scrapes for the provisioner/attacher/resizer/snapshotter): for any metric matching
+  `weka_csi_volume_.*` - i.e. the `weka_csi_volume_health_*` family - it blanks `pod`, `instance`,
+  `namespace`, `endpoint`, `job` and `container`. This is conditioned on the metric name, via
+  `metricRelabelings` matched against `__name__`, so those six labels are left untouched on the
+  controller's own operation and concurrency metrics, where the pod is exactly what's being
+  described.
+- **Metrics-server PodMonitor** (identical template in both charts): blanks `pod` only for
+  `weka_csi_volume_.*` metrics, the same way - but drops `job`, `instance`, `namespace`, `endpoint`
+  and `container` unconditionally, via `labeldrop`, from every metric it scrapes, including its own
+  `weka_csi_metricsserver_*` health metrics. `pod` is the one label preserved there, because for this
+  target the pod is what's being described.
+- **Node PodMonitor** has no per-volume metrics to relabel, so it carries no `metricRelabelings` at
+  all.
+
+The reason to strip any of this: a per-volume series describes the volume, not the pod that happened
+to observe it. Both the volume-health reconciler (controller-side) and the capacity collector
+(metrics-server-side) are leader-elected, so leaving scrape identity on the series would fork a new
+series per volume on every rollout and every leader failover, and a query summing across pods would
+double-count during the handover window.
+
+### `honorTimestamps`
+
+Both metrics-server `PodMonitor` templates set `honorTimestamps: true` explicitly on their
+`podMetricsEndpoints` entry. That happens to be Prometheus's own default, but it is set explicitly
+here because it is load-bearing: the per-volume capacity metrics are timed collectors carrying the
+timestamp of their own measurement (see *Freshness* above, and "Custom timed collectors" in
+[Prometheus metrics](prometheus-metrics.md)). Without `honorTimestamps`, every scrape would be
+recorded as "now" instead, silently hiding how old a reading actually is. The controller and node
+PodMonitors carry no timed metrics and don't set the field, relying on the Prometheus default.
+
+### Without the Prometheus Operator
+
+If your cluster has no `monitoring.coreos.com/v1` CRDs, none of the four PodMonitors render, and the
+rest of the chart deploys normally. Point your own Prometheus (or another scraper) at the metrics
+ports directly instead - see the [Ports](prometheus-metrics.md#ports) table for the default port per
+component. Apply the same relabeling described above yourself (or aggregate `pod` away in your
+queries), and make sure `honorTimestamps` is enabled wherever you scrape `weka_csi_volume_*`.
 
 ---
 
@@ -250,6 +331,11 @@ cache. **Raise them if you raise `quotaCacheValiditySeconds`**, or the alerts wi
 PodMonitor was created - the chart only renders one if the `monitoring.coreos.com/v1` CRD is present
 at install time, so installing the Prometheus Operator afterwards requires a `helm upgrade`. Then
 confirm the pod is an `up` scrape target.
+
+**PodMonitor exists (`kubectl get podmonitor` shows it), but the target never shows up in
+Prometheus at all.** Almost always the `additionalLabels` trap: your Prometheus only watches
+PodMonitors carrying a specific label (e.g. `release: kube-prometheus-stack`), and
+`metrics.podMonitor.additionalLabels` was left empty. See [PodMonitors](#podmonitors) above.
 
 **Volumes appear and disappear from a panel.** The query window is at or below
 `quotaCacheValiditySeconds`. See *Freshness* above.
