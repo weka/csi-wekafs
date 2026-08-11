@@ -66,7 +66,7 @@ class CsiWekafs:
             .with_directory("/src", csi)
             .with_workdir("/src")
             .with_exec(["sh", "-ec", f"""
-        helm package charts/csi-metricsserver --version {version} --destination charts/
+        helm package charts/csi-metricsserver --version {version} --app-version v{version} --destination charts/
             """])
             .directory("/src/charts")
         )

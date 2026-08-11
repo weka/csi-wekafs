@@ -53,6 +53,20 @@ func (mode CsiPluginMode) servesCsiGrpc() bool {
 	return mode != CsiModeMetricsServer
 }
 
+// servesHealthProbes reports whether the manager should bind its HTTP health-probe server, which is
+// what answers /healthz and /readyz.
+//
+// Node pods must not bind it: they share the host network namespace with the controller, so any port
+// the node manager took would block the controller manager from using it. Every other mode has
+// probes pointed at it.
+//
+// This deliberately follows the mode rather than leader election, which it merely correlated with
+// until a metrics server could run without a lease - at which point tying the two together left that
+// pod with a liveness probe and nothing listening to answer it.
+func (mode CsiPluginMode) servesHealthProbes() bool {
+	return mode != CsiModeNode
+}
+
 var DefaultVolumePermissions fs.FileMode = 0750
 
 var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeUnified}

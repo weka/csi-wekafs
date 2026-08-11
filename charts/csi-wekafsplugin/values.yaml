@@ -289,7 +289,9 @@ metricsServer:
   metricsFetchIntervalSeconds: 60
   # -- termination grace period for metrics server pods
   terminationGracePeriodSeconds: 10
-  # -- enable leader election for metrics server
+  # -- run leader election so exactly one replica collects metrics while the rest stand by.
+  #    Set to false to have every replica collect, which only makes sense at replicas: 1 - each
+  #    replica then polls the WEKA API independently.
   enableLeaderElection: true
   # -- number of concurrent requests for metrics server to update quotas
   quotaUpdateConcurrentRequests: 25
