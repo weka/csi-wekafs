@@ -73,8 +73,41 @@ jobs:
           path: build
           retention-days: 1
 
+  # Deliberately has no `needs:` - it starts at the same time as build-binaries rather than after
+  # it, so the unit tests are not waiting on an image build they do not use.
+  test-go:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }} # checkout the correct branch name
+
+      # Same cache as build-binaries. It also covers the Go toolchain itself, which lands in the
+      # module cache when the version in go.mod is newer than the runner's.
+      - name: Cache Go modules
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: go vet
+        run: go vet ./...
+
+      # -race, not a plain run: most of what these tests are guarding is concurrent access to the
+      # API client and the mount refcounts, and without the detector a data race there simply
+      # passes. The suite is hermetic - it stands up an in-memory Weka API - so this needs no
+      # cluster and takes about a minute and a half.
+      - name: go test
+        run: go test -race ./...
+
+
   publish-docker-image-csi:
-    needs: build-binaries
+    needs: [build-binaries, test-go]
     name: build-docker-csi
     runs-on: ubuntu-latest
 
@@ -146,7 +179,7 @@ jobs:
 
   build-sanity-image:
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-tests') && github.event.pull_request.draft == false }}
-    needs: build-binaries
+    needs: [build-binaries, test-go]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -257,7 +290,7 @@ jobs:
           OTEL_DEPLOYMENT_IDENTIFIER: csi-sanity-${{ steps.create_project_name.outputs.COMPOSE_PROJECT_NAME }}
 
   publish-helm-csi:
-    needs: build-binaries
+    needs: [build-binaries, test-go]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
