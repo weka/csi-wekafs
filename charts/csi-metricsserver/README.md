@@ -36,9 +36,11 @@ https://github.com/weka/csi-wekafs
 | image.tag | string | `""` | Image tag; defaults to v<chart version> when empty |
 | imagePullSecret | string | `""` |  |
 | hostNetwork | bool | `false` |  |
+| priorityClassName | string | `""` | Optional priorityClassName for the metrics server, overridable with `metricsServer.priorityClassName` |
 | metricsServer.replicas | int | `2` | Number of replicas for metrics server. More than one is only useful with enableLeaderElection,    which keeps exactly one of them collecting while the rest stand by. Standbys report Ready like    any other pod; which one holds leadership is visible in the Lease object, not in pod status.    A standby is not free: controller-runtime starts its cache on every replica, so each standby    holds a full PersistentVolume informer cache and a watch against the API server while idle |
 | metricsServer.nodeSelector | object | `{}` | optional nodeSelector for metrics server only |
 | metricsServer.affinity | object | `{}` | optional affinity for metrics server only |
+| metricsServer.priorityClassName | string | `""` | optional priorityClassName for metrics server pods only, overriding the global `priorityClassName` |
 | metricsServer.labels | object | `{}` | optional labels to add to metrics server deployment |
 | metricsServer.podLabels | object | `{}` | optional labels to add to metrics server pods |
 | metricsServer.tolerations | object | `{}` | tolerations for metrics server only |

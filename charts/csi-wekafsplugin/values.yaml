@@ -229,6 +229,8 @@ metricsServer:
   nodeSelector: {}
   # -- optional affinity for metrics server only (merged over the chart-wide affinity)
   affinity: {}
+  # -- optional priorityClassName for metrics server pods only, overriding the global `priorityClassName`
+  priorityClassName: ""
   # -- optional labels to add to metrics server deployment
   labels: {}
   # -- optional labels to add to metrics server pods
