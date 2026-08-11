@@ -3,7 +3,7 @@ module github.com/wekafs/csi-wekafs
 go 1.25.0
 
 require (
-	github.com/container-storage-interface/spec v1.11.0
+	github.com/container-storage-interface/spec v1.13.0
 	github.com/google/go-querystring v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.7.0
