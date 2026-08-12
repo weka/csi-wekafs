@@ -340,9 +340,6 @@
         "kubeletPath": {
             "type": "string"
         },
-        "legacyVolumeSecretName": {
-            "type": "string"
-        },
         "logLevel": {
             "type": "integer"
         },
