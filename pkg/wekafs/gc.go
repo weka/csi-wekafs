@@ -29,7 +29,7 @@ type gcKey struct {
 	filesystem    string
 }
 
-// newGcKey scopes a filesystem to its API client. A nil client is legacy, API-unbound mode, where
+// newGcKey scopes a filesystem to its API client. A nil client means no API binding, where
 // there is only one cluster in play and a zero hash is the right shared scope.
 func newGcKey(fs string, apiClient *apiclient.ApiClient) gcKey {
 	key := gcKey{filesystem: fs}

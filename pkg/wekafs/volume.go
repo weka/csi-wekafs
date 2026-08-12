@@ -177,7 +177,7 @@ func (v *Volume) isOnSnapshot() bool {
 	return false
 }
 
-// hasInnerPath returns true for volumes having innerPath (basically either legacy directory OR directory on snapshot)
+// hasInnerPath returns true for volumes having innerPath (either a directory-backed volume OR a directory on snapshot)
 func (v *Volume) hasInnerPath() bool {
 	return v.getInnerPath() != ""
 }
@@ -785,7 +785,7 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 
 	logger.Trace().Int64("desired_capacity", capacityLimit).Msg("Updating xattrs on volume")
 	if enforceCapacity != nil && *enforceCapacity {
-		logger.Warn().Msg("Legacy volume does not support enforce capacity")
+		logger.Warn().Msg("Capacity enforcement is unavailable when capacity is tracked via extended attributes")
 	}
 	err := setVolumeProperties(v.GetFullPath(ctx), capacityLimit, v.innerPath)
 	if err != nil {
