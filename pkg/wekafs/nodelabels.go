@@ -113,11 +113,8 @@ func (r cacheThenLive) List(ctx context.Context, list runtimeclient.ObjectList, 
 // SetNodeLabels applies this node's topology/transport labels through the controller-runtime
 // manager. It is a no-op - logged, not panicking - if the manager was never initialized (e.g.
 // initManager failed and only logged a warning; see Run() in driver.go).
+// SetNodeLabels records this node's topology labels, including the transport this node serves.
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
-		return
-	}
-
 	if d.csiMode != CsiModeNode {
 		return
 	}
@@ -163,10 +160,6 @@ func managedNodeLabelKeys(driverName string) []string {
 // CleanupNodeLabels removes this driver's managed node-topology labels via the controller-runtime
 // manager's cached client. It is a no-op - logged, not panicking - if the manager was never initialized.
 func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
-		return
-	}
-
 	if d.manager == nil {
 		log.Ctx(ctx).Warn().Msg("Kubernetes manager not initialized, skipping node label cleanup")
 		return
