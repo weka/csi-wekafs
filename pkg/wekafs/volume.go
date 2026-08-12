@@ -559,14 +559,14 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (capacity int64, retE
 		return 0, err
 	}
 
-	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && !v.server.isInDevMode() {
+	if v.apiClient.SupportsQuotaDirectoryAsVolume() {
 		size, err := v.getSizeFromQuota(ctx)
 		if err == nil {
 			logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
 			return int64(size), nil
 		}
 	}
-	logger.Trace().Msg("Volume appears to be a legacy volume, failing back to Xattr")
+	logger.Trace().Msg("Weka cluster does not support directory quotas as volumes, failing back to Xattr")
 	size, err := v.getSizeFromXattr(ctx)
 	if err != nil {
 		return 0, err
@@ -711,20 +711,12 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 	primaryFunc := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
 	fallbackFunc := func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
 	capacityEntity := "quota"
-	if v.server.isInDevMode() {
-		logger.Trace().Msg("Updating quota via API is not possible since running in DEV mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if v.apiClient == nil {
-		logger.Trace().Msg("Volume has no API client bound, updating capacity in legacy mode")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		logger.Warn().Msg("Updating quota via API not supported by Weka cluster, updating capacity in legacy mode")
+	if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
+		logger.Warn().Msg("Updating quota via API not supported by Weka cluster, falling back to extended attributes")
 		primaryFunc = fallbackFunc
 		capacityEntity = "xattr"
 	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
-		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, updating capacity in legacy mode. Upgrade to latest version of Weka software to enable quota enforcement")
+		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, falling back to extended attributes. Upgrade to latest version of Weka software to enable quota enforcement")
 		primaryFunc = fallbackFunc
 		capacityEntity = "xattr"
 	} else if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
@@ -1136,16 +1128,6 @@ func (v *Volume) Exists(ctx context.Context) (exists bool, retErr error) {
 			logger.Trace().Str("snapshot", v.SnapshotName).Msg("Snapshot does not exist on storage")
 			return false, nil
 		}
-		if v.server.isInDevMode() {
-			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-			// no actual data is copied, only directory structure is created as if it was a real snapshot.
-			// happens only if the real snapshot indeed exists
-			err := v.mimicDirectoryStructureForDebugMode(ctx)
-			if err != nil {
-				return false, err
-			}
-		}
-
 	}
 	if v.hasInnerPath() {
 		err, unmount := v.MountUnderlyingFS(ctx)
@@ -1347,7 +1329,7 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 			logger.Error().Err(err).Msg("Failed to check if filesystem is empty")
 			return nil, err
 		}
-		if !empty && !v.server.isInDevMode() {
+		if !empty {
 			logger.Error().Err(err).Msg("Cannot create a seed snapshot, filesystem is not empty")
 			return nil, errors.New("cannot create seed snapshot on non-empty filesystem")
 		}
@@ -1357,29 +1339,6 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 		}
 	}
 
-	// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-	// no actual data is copied, only directory structure is created as if it was a real snapshot.
-	// happens only if the real snapshot indeed exists
-	if v.server.isInDevMode() {
-		logger.Warn().Bool("debug_mode", true).Msg("Creating directory inside the .snapshots to mimic Weka snapshot behavior")
-
-		err, unmount := v.MountUnderlyingFS(ctx)
-		defer func() {
-			if uErr := unmount(); uErr != nil {
-				log.Ctx(ctx).Error().Err(uErr).Msg("Failed to release filesystem mount after seed snapshot debug setup")
-			}
-		}()
-		if err != nil {
-			return snap, err
-		}
-		seedPath := filepath.Join(v.getMountPath(), SnapshotsSubDirectory, v.getSeedSnapshotAccessPoint())
-
-		if err := os.MkdirAll(seedPath, DefaultVolumePermissions); err != nil {
-			logger.Error().Err(err).Str("seed_path", seedPath).Msg("Failed to create seed snapshot debug directory")
-			return snap, err
-		}
-		logger.Debug().Str("full_path", v.GetFullPath(ctx)).Msg("Successully created seed snapshot debug directory")
-	}
 	return snap, nil
 }
 
@@ -1474,19 +1433,7 @@ func (v *Volume) Create(ctx context.Context, capacity int64) (retErr error) {
 		if err := v.apiClient.CreateSnapshot(ctx, sr, snapObj); err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-		if v.server.isInDevMode() {
-			// here comes a workaround to enable running CSI sanity in detached mode, by mimicking the directory structure
-			// no actual data is copied, only directory structure is created as if it was a real snapshot.
-			// happens only if the real snapshot indeed exists
-			err := v.mimicDirectoryStructureForDebugMode(ctx)
-			if err != nil {
-				logger.Error().Err(err).Msg("Error happened during snapshot mimicking. Cleaning snapshot up")
-				_ = v.deleteSnapshot(ctx)
-				return err
-			}
-		}
-
-	} else if v.hasInnerPath() { // the last condition is needed for being able to run CSI sanity in docker
+	} else if v.hasInnerPath() {
 
 		// if it was a snapshot and had inner path, it anyway should already exist.
 		// So creating inner path only in such case
@@ -1656,25 +1603,6 @@ func (v *Volume) enrichWithEncryptionParams(ctx context.Context) {
 			}()).
 			Msg("Enriched volume with encryption parameters")
 	}
-}
-
-func (v *Volume) mimicDirectoryStructureForDebugMode(ctx context.Context) (retErr error) {
-	logger := log.Ctx(ctx)
-	logger.Warn().Bool("debug_mode", true).Msg("Creating directory path inside filesystem .fsnapshots to mimic Weka snapshot behavior")
-
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer deferUmount(unmount, &retErr)
-	if err != nil {
-		return err
-	}
-	volPath := v.GetFullPath(ctx)
-
-	if err := os.MkdirAll(volPath, DefaultVolumePermissions); err != nil {
-		logger.Error().Err(err).Str("volume_path", volPath).Msg("Failed to create volume debug directory")
-		return err
-	}
-	logger.Debug().Str("full_path", v.GetFullPath(ctx)).Msg("Successully created debug directory")
-	return nil
 }
 
 func (v *Volume) getUidOfSourceSnap(ctx context.Context) (*uuid.UUID, error) {
@@ -2047,11 +1975,11 @@ func (v *Volume) CreateSnapshot(ctx context.Context, name string) (*Snapshot, er
 	return s, nil
 }
 
-// CanBeOperated returns true if the object can be CRUDed (either a legacy stateless volume or volume with API client bound
+// CanBeOperated returns nil if the volume can be CRUDed, and an error describing why not otherwise.
 func (v *Volume) CanBeOperated() error {
 	if v.isOnSnapshot() || v.isFilesystem() {
-		if v.apiClient == nil && !v.server.isInDevMode() {
-			return errors.New("Could not obtain a valid API secret configuration for operation")
+		if v.apiClient == nil {
+			return errors.New("could not obtain a valid API secret configuration for operation")
 		}
 
 		if !v.apiClient.SupportsFilesystemAsVolume() {

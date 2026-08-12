@@ -87,14 +87,9 @@ func removeNodeLabels(ctx context.Context, client runtimeclient.Client, nodeName
 // SetNodeLabels records this node's topology labels. wekafsAvailable is passed in rather than
 // determined here: the only caller is Probe, which has just established it as wekafsReady, and
 // asking again meant reading and parsing the driver's frontend list twice per probe on every node,
-// forever. On the path that reaches the transport decision below - not dev mode, since this returns
-// early there, and not forced to NFS, which is checked first - wekafsReady means exactly what this
-// needs: the Weka client is up.
+// forever. On the path that reaches the transport decision below - not forced to NFS, which is
+// checked first - wekafsReady means exactly what this needs: the Weka client is up.
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context, wekafsAvailable bool) {
-	if d.config.isInDevMode() {
-		return
-	}
-
 	if d.csiMode != CsiModeNode {
 		return
 	}
@@ -142,10 +137,6 @@ func managedNodeLabelKeys(driverName string) []string {
 // CleanupNodeLabels removes this driver's managed node-topology labels via the controller-runtime
 // manager's cached client. It is a no-op - logged, not panicking - if the manager was never initialized.
 func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
-		return
-	}
-
 	if d.manager == nil {
 		log.Ctx(ctx).Warn().Msg("Kubernetes manager not initialized, skipping node label cleanup")
 		return

@@ -13,7 +13,6 @@ import (
 type nfsMounter struct {
 	mountMap              *mountMap
 	kMounter              mount.Interface
-	debugPath             string
 	gc                    *innerPathVolGc
 	clientGroupName       string
 	nfsProtocolVersion    string
@@ -27,7 +26,7 @@ func (m *nfsMounter) getGarbageCollector() *innerPathVolGc {
 }
 
 func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
-	mounter := &nfsMounter{mountMap: newMountMap(), debugPath: driver.debugPath, exclusiveMountOptions: driver.config.mutuallyExclusiveOptions, mountBaseDir: mountBaseDirForRole(driver.csiMode, dataTransportNfs)}
+	mounter := &nfsMounter{mountMap: newMountMap(), exclusiveMountOptions: driver.config.mutuallyExclusiveOptions, mountBaseDir: mountBaseDirForRole(driver.csiMode, dataTransportNfs)}
 	if driver.selinuxSupport {
 		log.Ctx(ctx).Debug().Msg("SELinux support is forced")
 		mounter.forceSelinux()
@@ -50,7 +49,6 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		mounter:         m,
 		kMounter:        m.kMounter,
 		fsName:          fsName,
-		debugPath:       m.debugPath,
 		mountPoint:      m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
 		mountOptions:    options,
 		clientGroupName: m.clientGroupName,

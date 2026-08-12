@@ -50,7 +50,7 @@ func NewMounterGroup(ctx context.Context, driver *WekaFsDriver) *MounterGroup {
 		logger.Warn().Msg("Enforcing NFS transport due to configuration")
 		mg.nfs.Enable()
 		mg.wekafs.Disable()
-	case driver.config.allowNfsFailback && !isWekaRunning(ctx) && !driver.config.isInDevMode():
+	case driver.config.allowNfsFailback && !isWekaRunning(ctx):
 		logger.Warn().Msg("Weka driver not found, failing back to NFS transport")
 		mg.nfs.Enable()
 		mg.wekafs.Disable()

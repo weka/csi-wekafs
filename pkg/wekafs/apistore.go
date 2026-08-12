@@ -213,7 +213,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 				"To support organization other than Root please upgrade to version %s or higher",
 			credentials.Organization, newClient.GetClusterName(), apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken))
 	}
-	if (api.config.allowNfsFailback || api.config.useNfs) && !api.config.isInDevMode() {
+	if api.config.allowNfsFailback || api.config.useNfs {
 		newClient.NfsInterfaceGroupName = api.config.interfaceGroupName
 		newClient.NfsClientGroupName = api.config.clientGroupName
 		err := newClient.RegisterNfsClientGroup(ctx)

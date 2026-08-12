@@ -63,7 +63,6 @@ type WekaFsDriver struct {
 	// and goes on the host.
 	mounters       *MounterGroup
 	api            *ApiStore
-	debugPath      string
 	csiMode        CsiPluginMode
 	selinuxSupport bool
 	config         *DriverConfig
@@ -72,7 +71,7 @@ type WekaFsDriver struct {
 }
 
 func NewWekaFsDriver(
-	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version, debugPath string,
+	driverName, nodeID, endpoint string, maxVolumesPerNode int64, version string,
 	csiMode CsiPluginMode, selinuxSupport bool, config *DriverConfig) (*WekaFsDriver, error) {
 	if driverName == "" {
 		return nil, errors.New("no driver name provided")
@@ -104,7 +103,6 @@ func NewWekaFsDriver(
 		endpoint:          endpoint,
 		maxVolumesPerNode: maxVolumesPerNode,
 		api:               NewApiStore(config, nodeID, driverName),
-		debugPath:         debugPath,
 		csiMode:           csiMode, // either "controller", "node", or "metricsserver"
 		selinuxSupport:    selinuxSupport,
 		config:            config,
@@ -371,7 +369,7 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 				}
 				_ = conn.Close()
 
-				if !d.config.useNfs && !d.config.allowNfsFailback && !d.config.isInDevMode() {
+				if !d.config.useNfs && !d.config.allowNfsFailback {
 					wekaCtx, wekaCancel := context.WithTimeout(r.Context(), d.config.healthProbeWekaTimeout)
 					defer wekaCancel()
 					if !isWekaRunning(wekaCtx) {

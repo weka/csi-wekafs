@@ -16,7 +16,6 @@ type AnyServer interface {
 	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
-	isInDevMode() bool
 	getDefaultMountOptions() MountOptions
 	getNodeId() string
 }
@@ -54,7 +53,6 @@ func deferUmount(fn UnmountFunc, retErr *error) {
 }
 
 type AnyMount interface {
-	isInDevMode() bool
 	isMounted(ctx context.Context) bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error

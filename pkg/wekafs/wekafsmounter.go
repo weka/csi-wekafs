@@ -13,7 +13,6 @@ import (
 type wekafsMounter struct {
 	mountMap     *mountMap
 	kMounter     mount.Interface
-	debugPath    string
 	gc           *innerPathVolGc
 	config       *DriverConfig
 	mountBaseDir string
@@ -49,7 +48,7 @@ func (m *wekafsMounter) getGarbageCollector() *innerPathVolGc {
 }
 
 func newWekafsMounter(ctx context.Context, driver *WekaFsDriver) *wekafsMounter {
-	mounter := &wekafsMounter{mountMap: newMountMap(), debugPath: driver.debugPath, config: driver.config, mountBaseDir: mountBaseDirForRole(driver.csiMode, dataTransportWekafs)}
+	mounter := &wekafsMounter{mountMap: newMountMap(), config: driver.config, mountBaseDir: mountBaseDirForRole(driver.csiMode, dataTransportWekafs)}
 	if driver.selinuxSupport {
 		log.Ctx(ctx).Debug().Msg("SELinux support is forced")
 		mounter.forceSelinux()
@@ -70,7 +69,6 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 		mounter:      m,
 		kMounter:     m.kMounter,
 		fsName:       fsName,
-		debugPath:    m.debugPath,
 		mountPoint:   m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
 		mountOptions: options,
 	}

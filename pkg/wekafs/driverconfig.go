@@ -28,7 +28,6 @@ type DriverConfig struct {
 	advertiseSnapshotSupport         bool
 	advertiseVolumeCloneSupport      bool
 	advertiseVolumeHealthSupport     bool
-	debugPath                        string
 	allowInsecureHttps               bool
 	alwaysAllowSnapshotVolumes       bool
 	mutuallyExclusiveOptions         []mutuallyExclusiveMountOptionSet
@@ -121,7 +120,6 @@ type DriverConfigOptions struct {
 	VolumePrefix       string
 	SnapshotPrefix     string
 	SeedSnapshotPrefix string
-	DebugPath          string
 	Version            string
 
 	AllowAutoFsCreation              bool
@@ -241,7 +239,6 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		advertiseSnapshotSupport:          !opts.SuppressSnapshotSupport,
 		advertiseVolumeCloneSupport:       !opts.SuppressVolumeCloneSupport,
 		advertiseVolumeHealthSupport:      opts.AdvertiseVolumeHealthSupport,
-		debugPath:                         opts.DebugPath,
 		allowInsecureHttps:                opts.AllowInsecureHttps,
 		alwaysAllowSnapshotVolumes:        opts.AlwaysAllowSnapshotVolumes,
 		mutuallyExclusiveOptions:          MutuallyExclusiveMountOptions,
@@ -275,10 +272,6 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		quotaCacheValidityDuration:        time.Duration(quotaCacheValiditySeconds) * time.Second,
 		useQuotaMapsForMetrics:            opts.UseQuotaMapsForMetrics,
 	}
-}
-
-func (dc *DriverConfig) isInDevMode() bool {
-	return dc.debugPath != ""
 }
 
 // requiresPvCaching reports whether any enabled feature reads PersistentVolumes, and hence whether
