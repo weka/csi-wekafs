@@ -2,6 +2,7 @@ package wekafs
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -279,4 +280,102 @@ func TestQuotaTypeRoundTripsForRetain(t *testing.T) {
 	assert.Equal(t, apiclient.QuotaTypeSoft, soft.GetQuotaType())
 	assert.False(t, soft.GetQuotaType() == apiclient.QuotaTypeHard,
 		"a soft quota must be retained as unenforced, not promoted to hard")
+}
+
+// A soft quota is only as useful as its grace period. It comes from the same persisted StorageClass
+// parameters as the enforcement mode, and a volume built from an ID never had those applied - so
+// without reading it here a volume asking for "block after 168h" would get "never block".
+func TestQuotaGracePeriodComesFromTheVolumeContext(t *testing.T) {
+	withAttrs := func(attrs map[string]string) *v1.PersistentVolume {
+		return &v1.PersistentVolume{Spec: v1.PersistentVolumeSpec{
+			PersistentVolumeSource: v1.PersistentVolumeSource{
+				CSI: &v1.CSIPersistentVolumeSource{Driver: "csi.weka.io", VolumeAttributes: attrs},
+			},
+		}}
+	}
+
+	testCases := []struct {
+		name      string
+		attrs     map[string]string
+		expect    uint64
+		expectErr bool
+	}{
+		{
+			name:   "a week, as a Go duration",
+			attrs:  map[string]string{"capacityEnforcement": "SOFT", "quotaGracePeriod": "168h"},
+			expect: 168 * 60 * 60,
+		},
+		{name: "minutes", attrs: map[string]string{"quotaGracePeriod": "30m"}, expect: 1800},
+		{name: "compound", attrs: map[string]string{"quotaGracePeriod": "1h30m"}, expect: 5400},
+		// Absent means advisory-only, which is what provisioning does with an unset parameter.
+		{name: "absent is zero", attrs: map[string]string{"capacityEnforcement": "SOFT"}, expect: 0},
+		{
+			name:      "an unparseable duration is an error, not a guess",
+			attrs:     map[string]string{"quotaGracePeriod": "one week"},
+			expectErr: true,
+		},
+		{
+			name:      "a negative duration is rejected",
+			attrs:     map[string]string{"quotaGracePeriod": "-1h"},
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := quotaGracePeriodFromPv(withAttrs(tc.attrs))
+			if tc.expectErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expect, got)
+		})
+	}
+
+	got, err := quotaGracePeriodFromPv(&v1.PersistentVolume{})
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), got)
+}
+
+// The grace period is carried on the Volume, because that is where setQuota reads it. Proving the
+// backfill sets it before creating the quota is what stops a soft quota being created with 0.
+func TestBackfillCarriesTheGracePeriodOntoTheVolume(t *testing.T) {
+	r := newBackfillReconciler(true)
+	vol := &Volume{id: "weka/v2/testfs/soft-vol"}
+	pv := &v1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{provisionedByAnnotation: "csi.weka.io"}},
+		Spec: v1.PersistentVolumeSpec{
+			Capacity: v1.ResourceList{v1.ResourceStorage: resource.MustParse("1Gi")},
+			PersistentVolumeSource: v1.PersistentVolumeSource{CSI: &v1.CSIPersistentVolumeSource{
+				Driver: "csi.weka.io",
+				VolumeAttributes: map[string]string{
+					"capacityEnforcement": "SOFT",
+					"quotaGracePeriod":    "168h",
+				},
+			}},
+		},
+	}
+
+	// The volume has no API client, so quota creation itself fails - but the grace period is set on
+	// the volume before that point, which is what this asserts.
+	_, err := r.backfillMissingQuota(context.Background(), vol, pv, quotaMissingHealth())
+	assert.Error(t, err, "expected the unbound API client to stop it at the creation step")
+	assert.Equal(t, uint64(168*60*60), vol.quotaGracePeriodSeconds,
+		"the grace period must reach the volume before the quota is created")
+}
+
+// The cluster reports grace_seconds as null for a hard quota. That must unmarshal as 0 rather than
+// failing the whole quota read, which would make every hard-quota volume look unreadable.
+func TestQuotaParsesNullGraceSeconds(t *testing.T) {
+	var q apiclient.Quota
+	err := json.Unmarshal([]byte(`{"inode_id":42,"hard_limit_bytes":1073741824,"soft_limit_bytes":1073741824,"grace_seconds":null,"status":"ACTIVE"}`), &q)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), q.GraceSeconds)
+	assert.Equal(t, apiclient.QuotaTypeHard, q.GetQuotaType())
+
+	err = json.Unmarshal([]byte(`{"inode_id":42,"hard_limit_bytes":9223372036854775807,"soft_limit_bytes":1073741824,"grace_seconds":604800,"status":"ACTIVE"}`), &q)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(604800), q.GraceSeconds)
+	assert.Equal(t, apiclient.QuotaTypeSoft, q.GetQuotaType())
 }

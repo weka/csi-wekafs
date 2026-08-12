@@ -44,7 +44,11 @@ type Quota struct {
 	TotalBytes     uint64    `json:"total_bytes,omitempty"`
 	HardLimitBytes uint64    `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64    `json:"soft_limit_bytes,omitempty"`
-	Status         string    `json:"status,omitempty"`
+	// GraceSeconds is how long a soft-limit breach is tolerated before the soft limit starts
+	// behaving as a hard one. Only meaningful for a soft quota; the cluster reports it as null for a
+	// hard one, which unmarshals as 0 rather than failing.
+	GraceSeconds uint64 `json:"grace_seconds,omitempty"`
+	Status       string `json:"status,omitempty"`
 }
 
 func (q *Quota) String() string {
