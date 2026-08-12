@@ -56,6 +56,14 @@ controller:
   healthPort: 8081
   # -- Maximum concurrent requests from sidecars (global)
   maxConcurrentRequests: 5
+  # -- Rate limit for Kubernetes API calls made by the CSI sidecars, in queries per second.
+  #    Each volume create or delete costs roughly 3 API calls, so this value divided by 3 is the
+  #    ceiling on volumes provisioned or deleted per second. The upstream sidecar default is 5,
+  #    which caps throughput at under 2 volumes/sec regardless of maxConcurrentRequests
+  kubeApiQps: 150
+  # -- Burst size for Kubernetes API calls made by the CSI sidecars, allowing short spikes above
+  #    kubeApiQps. The upstream sidecar default is 10
+  kubeApiBurst: 300
   # -- maximum concurrent operations per operation type
   concurrency:
     createVolume: 5
