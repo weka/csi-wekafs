@@ -83,8 +83,38 @@ have no quota by design, marking every one abnormal raises a warning event on ev
 PersistentVolumeClaim at once — burying the genuinely broken volumes the abnormal flag exists to
 surface.
 
-Set `reportVolumesWithoutQuotaAsAbnormal: true` when you want those events, for instance while
-driving a repair to completion.
+### What "abnormal" actually means, and whether the volume can still be used
+
+**The volume is fully usable.** A volume with no quota mounts, reads, writes and expands exactly like
+any other. The only difference is that it can grow past its declared size without being stopped.
+
+`Abnormal` is advisory. The only thing that consumes it is the
+`csi-external-health-monitor-controller` sidecar, which turns it into warning Events on the
+PersistentVolumeClaim. Nothing in Kubernetes acts on it: no unmounting, no effect on scheduling, no
+blocked writes, no change to the PersistentVolume's phase. A pod using an abnormal volume keeps
+running.
+
+That is worth knowing before turning the setting on, because of what else this driver reports as
+abnormal:
+
+| Reported condition | Is the volume usable? |
+| --- | --- |
+| `filesystem <name> does not exist on the Weka cluster` | **No** — the data is gone |
+| `filesystem <name> is being removed` | **No** — it is going right now |
+| `path <path> does not exist on filesystem <name>` | **No** — the volume's directory is gone |
+| `has no quota, so its capacity is not enforced` (only with this setting on) | **Yes** — it works, it is simply not enforced |
+
+The first three all mean the data is gone or going. Turning this setting on adds a fourth meaning to
+the same signal: a volume that is perfectly healthy. They are distinguishable only by reading the
+message.
+
+So if anything in your monitoring alerts on abnormal volume events, that alert currently means "a
+volume's data has disappeared" and warrants immediate attention. With this setting on it will also
+fire for "capacity is not being enforced", which needs a different response and no urgency.
+
+Set `reportVolumesWithoutQuotaAsAbnormal: true` when you want those events — for instance while
+driving a repair to completion, where seeing which claims are still affected is the point. It is a
+poorer choice as a permanent setting if anyone alerts on those events.
 
 ## Seeing the scale of it
 
