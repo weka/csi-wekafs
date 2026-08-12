@@ -27,7 +27,9 @@ Adhere to the following:
 * Authenticated mounts for filesystems set with `auth-required=true`, and filesystems in the non-root organization, require WEKA cluster version **3.14.0** and higher.
 
 >**Note**:
->The legacy communication model is deprecated and will be removed in the next release. If you are using the legacy communication model, replacing it with the API-based one is recommended.
+>The legacy communication model has been **removed in WEKA CSI Plugin 3.0**. Every volume must reference an API secret; there is no unauthenticated fallback. If you are still using the legacy communication model, migrate off it before upgrading — see [Breaking changes in WEKA CSI Plugin 3.0](breaking-changes-3.0.md).
+>
+>This does not affect directory-backed (`dir/v1`) volumes, which remain fully supported.
 
 
 ## Prerequisites
