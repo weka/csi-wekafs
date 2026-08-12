@@ -397,6 +397,18 @@ func (s *Server) handleQuotaPut(w http.ResponseWriter, r *http.Request) {
 	writeData(w, q.toWire())
 }
 
+// SetQuotaStatus overrides the status of an already-created quota, so a test can drive the states a
+// real cluster passes through - ADDING while QUOTA_COLORING walks the tree, or ERROR - which the
+// PUT handler alone never produces.
+func (s *Server) SetQuotaStatus(fsUid string, inodeId uint64, status string) {
+	key := s.quotaKey(fsUid, strconv.FormatUint(inodeId, 10))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if q, ok := s.quotas[key]; ok {
+		q.Status = status
+	}
+}
+
 func (s *Server) handleQuotaDelete(w http.ResponseWriter, r *http.Request) {
 	key := s.quotaKey(r.PathValue("uid"), r.PathValue("inode"))
 	s.mu.Lock()
