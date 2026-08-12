@@ -269,7 +269,13 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 // internal endpoint map with - the condition the concurrency race tests need.
 func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 	if !s.cfg.rotating {
-		writeData(w, []map[string]any{s.nodeWire("node-0", []string{"127.0.0.1"})})
+		nodes := []map[string]any{s.nodeWire("node-0", []string{"127.0.0.1"})}
+		if s.cfg.dataServices {
+			ds := s.nodeWire("node-dataserv", []string{"127.0.0.1"})
+			ds["roles"] = []string{"DATASERV"}
+			nodes = append(nodes, ds)
+		}
+		writeData(w, nodes)
 		return
 	}
 
@@ -286,9 +292,14 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 	default:
 		ips = aliases
 	}
-	nodes := make([]map[string]any, 0, len(ips))
+	nodes := make([]map[string]any, 0, len(ips)+1)
 	for _, ip := range ips {
 		nodes = append(nodes, s.nodeWire(fmt.Sprintf("node-%d", gen), []string{ip}))
+	}
+	if s.cfg.dataServices {
+		ds := s.nodeWire("node-dataserv", aliases[:1])
+		ds["roles"] = []string{"DATASERV"}
+		nodes = append(nodes, ds)
 	}
 	writeData(w, nodes)
 }

@@ -1,6 +1,8 @@
 package apiclient
 
 import (
+	"context"
+
 	"github.com/hashicorp/go-version"
 	"github.com/rs/zerolog/log"
 )
@@ -24,6 +26,7 @@ type WekaCompatibilityRequiredVersions struct {
 	ResolvePathToInode               string
 	ResolvePathToInodeCsiRole        string
 	SetSelfAsFilesystemOwnerOnCreate string
+	DataServicesContainer            string
 }
 
 var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
@@ -44,6 +47,7 @@ var MinimumSupportedWekaVersions = &WekaCompatibilityRequiredVersions{
 	ResolvePathToInode:               "v4.3",   // can resolve a path to an inode instead of doing it via mount
 	ResolvePathToInodeCsiRole:        "v4.4.7", // can resolve a path to an inode via API with CSI role
 	SetSelfAsFilesystemOwnerOnCreate: "v5.1",   // CSI can create filesystems while setting itself as explicit filesystem owner
+	DataServicesContainer:            "v4.3",   // cluster can run a data services container, which offloads the QUOTA_COLORING task
 }
 
 type WekaCompatibilityMap struct {
@@ -64,6 +68,7 @@ type WekaCompatibilityMap struct {
 	ResolvePathToInode               bool
 	ResolvePathToInodeCsiRole        bool
 	SetSelfAsFilesystemOwnerOnCreate bool
+	DataServicesContainer            bool
 }
 
 func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
@@ -87,6 +92,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 		cm.ResolvePathToInode = false
 		cm.ResolvePathToInodeCsiRole = false
 		cm.SetSelfAsFilesystemOwnerOnCreate = false
+		cm.DataServicesContainer = false
 
 		return
 	}
@@ -107,6 +113,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	rp, _ := version.NewVersion(MinimumSupportedWekaVersions.ResolvePathToInode)
 	rpc, _ := version.NewVersion(MinimumSupportedWekaVersions.ResolvePathToInodeCsiRole)
 	sfo, _ := version.NewVersion(MinimumSupportedWekaVersions.SetSelfAsFilesystemOwnerOnCreate)
+	dsc, _ := version.NewVersion(MinimumSupportedWekaVersions.DataServicesContainer)
 
 	cm.DirectoryAsCSIVolume = v.GreaterThanOrEqual(d)
 	cm.FilesystemAsCSIVolume = v.GreaterThanOrEqual(f)
@@ -125,6 +132,7 @@ func (cm *WekaCompatibilityMap) fillIn(versionStr string) {
 	cm.ResolvePathToInode = v.GreaterThanOrEqual(rp)
 	cm.ResolvePathToInodeCsiRole = v.GreaterThanOrEqual(rpc)
 	cm.SetSelfAsFilesystemOwnerOnCreate = v.GreaterThanOrEqual(sfo)
+	cm.DataServicesContainer = v.GreaterThanOrEqual(dsc)
 }
 
 // compatibility returns the compatibility map established at login. Reads go through here because
@@ -137,6 +145,48 @@ func (a *ApiClient) compatibility() *WekaCompatibilityMap {
 
 func (a *ApiClient) SupportsQuotaDirectoryAsVolume() bool {
 	return a.compatibility().QuotaOnDirectoryVolume
+}
+
+// SupportsDataServicesContainer reports whether the cluster is new enough for the data services role
+// to exist at all. It says nothing about whether one is actually deployed - see
+// HasDataServicesContainer for that.
+func (a *ApiClient) SupportsDataServicesContainer() bool {
+	return a.compatibility().DataServicesContainer
+}
+
+// QuotaOnNonEmptyDirectorySupport describes whether a quota can be created on a directory that
+// already holds data, and if not, why not. The reason matters more than the boolean: each case has a
+// different remedy, and the caller has to be able to tell an operator which one applies.
+type QuotaOnNonEmptyDirectorySupport int
+
+const (
+	// QuotaOnNonEmptyDirectoryUnknown means the cluster could not be interrogated.
+	QuotaOnNonEmptyDirectoryUnknown QuotaOnNonEmptyDirectorySupport = iota
+	// QuotaOnNonEmptyDirectorySupported means a data services container is present and will run the
+	// QUOTA_COLORING walk in the background.
+	QuotaOnNonEmptyDirectorySupported
+	// QuotaOnNonEmptyDirectoryNoContainer means the cluster is new enough but has no data services
+	// container deployed. The remedy is to deploy one.
+	QuotaOnNonEmptyDirectoryNoContainer
+	// QuotaOnNonEmptyDirectoryVersionTooOld means the cluster predates the data services role. The
+	// remedies are to upgrade, or to set the quota externally through the WEKA CLI.
+	QuotaOnNonEmptyDirectoryVersionTooOld
+)
+
+// SupportsQuotaOnNonEmptyDirectory reports whether this cluster can be asked to create a quota on a
+// directory that already holds data, and if not, which remedy applies.
+func (a *ApiClient) SupportsQuotaOnNonEmptyDirectory(ctx context.Context) (QuotaOnNonEmptyDirectorySupport, error) {
+	if !a.SupportsDataServicesContainer() {
+		return QuotaOnNonEmptyDirectoryVersionTooOld, nil
+	}
+	present, err := a.HasDataServicesProcess(ctx)
+	if err != nil {
+		return QuotaOnNonEmptyDirectoryUnknown, err
+	}
+	if !present {
+		return QuotaOnNonEmptyDirectoryNoContainer, nil
+	}
+	return QuotaOnNonEmptyDirectorySupported, nil
 }
 
 func (a *ApiClient) SupportsQuotaOnSnapshots() bool {
