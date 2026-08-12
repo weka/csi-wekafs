@@ -115,8 +115,17 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 		if errors.Is(err, apiclient.ObjectNotFoundError) {
 			// A volume without a quota is not broken - legacy volumes never had one. The inode
 			// resolved, so the volume is there; its size just cannot come from the API.
+			// Abnormal only when asked for. Such a volume works - what it lacks is enforcement - and
+			// on a fleet mid-repair, or one with statically provisioned volumes that have no quota
+			// by design, reporting every one as abnormal would bury the genuinely broken volumes the
+			// flag exists to surface.
 			logger.Debug().Str("path", relativePath).Msg("Volume has no quota, capacity is not known from API")
-			return &VolumeHealth{Message: volumeNoQuotaMessage, QuotaMissing: true, InodeId: inodeId}, nil
+			return &VolumeHealth{
+				Message:      volumeNoQuotaMessage,
+				Abnormal:     v.server.getConfig().reportNoQuotaAsAbnormal,
+				QuotaMissing: true,
+				InodeId:      inodeId,
+			}, nil
 		}
 		return nil, err
 	}

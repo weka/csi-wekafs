@@ -342,25 +342,19 @@ func (r *volumeHealthReconciler) backfillMissingQuota(ctx context.Context, vol *
 		return false, err
 	}
 
-	// Whether the cluster can do this cheaply. Creating a quota over a directory that already holds
-	// data makes the cluster walk the whole tree stamping the quota ID onto every file; a data
-	// services container runs that walk in the background, and without one it runs inline. Refusing
-	// here keeps a fleet-wide sweep from issuing walks that block on the cluster's management path.
-	support, err := vol.apiClient.SupportsQuotaOnNonEmptyDirectory(ctx)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Could not determine whether the cluster can quota a non-empty directory")
-		return false, err
-	}
-	if support != apiclient.QuotaOnNonEmptyDirectorySupported {
-		err := errors.New(quotaBackfillRemedy(support, vol.FilesystemName, capacity))
-		logger.Warn().Err(err).Msg("Cannot create quota for volume")
-		return false, err
-	}
-
+	// Attempt it rather than predicting whether it can succeed.
+	//
+	// Creating a quota over a directory that already holds data makes the cluster walk the whole
+	// tree stamping the quota ID onto every file - the colouring task - which a data services
+	// container runs in the background. An EMPTY directory needs no colouring at all and succeeds on
+	// any cluster, and whether this directory is empty is something only the cluster knows: finding
+	// out here would mean mounting the volume, which this reconciler never does. So the request goes
+	// out, and the cluster reports what it could not do.
 	logger.Info().Int64("capacity", capacity).Bool("enforce_capacity", enforceCapacity).
 		Uint64("grace_seconds", graceSeconds).
 		Msg("Volume has no quota, creating one from its PersistentVolume")
 	if _, err := vol.setQuota(ctx, &enforceCapacity, uint64(capacity)); err != nil {
+		err = fmt.Errorf("%w. %s", err, r.quotaFailureRemedy(ctx, vol, capacity))
 		logger.Error().Err(err).Msg("Failed to create quota for volume")
 		return false, err
 	}
@@ -369,21 +363,38 @@ func (r *volumeHealthReconciler) backfillMissingQuota(ctx context.Context, vol *
 	return true, nil
 }
 
+// quotaFailureRemedy explains what to do about a quota that could not be created, based on what the
+// cluster is able to do. It is only ever called after a failure, so the cost of asking is paid once
+// per unrepairable volume rather than once per volume.
+//
+// The likeliest cause is a directory that already holds data on a cluster that cannot colour it in
+// the background, and each version of that has a different fix - saying only "failed" would send an
+// operator looking in the wrong place.
+func (r *volumeHealthReconciler) quotaFailureRemedy(ctx context.Context, vol *Volume, capacity int64) string {
+	support, err := vol.apiClient.SupportsQuotaOnNonEmptyDirectory(ctx)
+	if err != nil {
+		return "The Weka cluster could not be asked whether it can set a quota on a directory that already holds data"
+	}
+	return quotaBackfillRemedy(support, vol.FilesystemName, capacity)
+}
+
 // quotaBackfillRemedy turns the reason a backfill cannot happen into something an operator can act
 // on. Each case has a different fix, and saying only "unsupported" would send them looking in the
 // wrong place.
 func quotaBackfillRemedy(support apiclient.QuotaOnNonEmptyDirectorySupport, filesystemName string, capacity int64) string {
 	switch support {
 	case apiclient.QuotaOnNonEmptyDirectoryNoContainer:
-		return "the Weka cluster has no data services container, which is required to set a quota on a " +
-			"directory that already holds data - deploy one to let quotas be backfilled automatically"
+		return "If the directory already holds data, this needs a data services container on the Weka " +
+			"cluster to colour the existing files, and the cluster has none - deploy one and the quota " +
+			"will be created on a later sweep"
 	case apiclient.QuotaOnNonEmptyDirectoryVersionTooOld:
-		return fmt.Sprintf("the Weka cluster is older than %s and cannot set a quota on a directory that "+
-			"already holds data - either upgrade it, or set the quota externally from a host with the Weka "+
-			"client, with the filesystem mounted: weka fs quota set <path> --filesystem %s --type directory "+
-			"--hard %d", apiclient.MinimumSupportedWekaVersions.DataServicesContainer,
-			filesystemName, capacity)
+		return fmt.Sprintf("If the directory already holds data, this needs a data services container to "+
+			"colour the existing files, and the Weka cluster is older than %s so it cannot run one. Either "+
+			"upgrade it, or set the quota externally from a host with the Weka client and the filesystem "+
+			"mounted: weka fs quota set <path> --filesystem %s --type directory --hard %d",
+			apiclient.MinimumSupportedWekaVersions.DataServicesContainer, filesystemName, capacity)
 	default:
-		return "could not determine whether the Weka cluster can set a quota on a directory that already holds data"
+		return "The Weka cluster reports that it can colour an existing directory, so this is not a " +
+			"data services problem"
 	}
 }
