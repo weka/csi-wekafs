@@ -18,12 +18,18 @@ package wekafs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/errgroup"
+
+	v1 "k8s.io/api/core/v1"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 // volumeConditionEntry is one volume's last probe result, in domain terms rather than CSI protos so
@@ -146,7 +152,7 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 	filesystems := newFilesystemCache()
 	live := make(map[string]struct{}, len(pvs))
 
-	var abnormal, unknown, failed int64
+	var abnormal, unknown, failed, backfilled, backfillSkipped int64
 	var counters sync.Mutex
 
 	var probes errgroup.Group
@@ -158,7 +164,11 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 			if ctx.Err() != nil {
 				return nil
 			}
-			volume, condition, err := r.cs.describeVolume(ctx, pv, filesystems)
+			volume, condition, vol, err := r.cs.describeVolume(ctx, pv, filesystems)
+
+			// Deliberately before the counters lock: this can issue Weka API calls, and holding the
+			// lock across them would serialise the whole sweep behind one volume.
+			created, backfillErr := r.backfillMissingQuota(ctx, vol, pv)
 
 			counters.Lock()
 			defer counters.Unlock()
@@ -170,6 +180,13 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 				failed++
 				return nil
 			}
+			switch {
+			case created:
+				backfilled++
+			case backfillErr != nil:
+				backfillSkipped++
+			}
+
 			entry := volumeConditionEntry{capacity: volume.CapacityBytes, probedAt: time.Now()}
 			if condition != nil {
 				entry.known = true
@@ -194,6 +211,118 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 		Int64("abnormal", abnormal).
 		Int64("unknown", unknown).
 		Int64("failed", failed).
+		Int64("quotas_backfilled", backfilled).
+		Int64("quotas_not_backfilled", backfillSkipped).
 		Dur("duration", time.Since(started)).
 		Msg("Volume health reconciliation completed")
+}
+
+// provisionedByAnnotation marks a PersistentVolume that a CSI provisioner created. Kubernetes sets
+// it on dynamic provisioning and never on a PersistentVolume an administrator wrote by hand, which
+// is what separates the two cases here.
+const provisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
+
+// isStaticallyProvisioned reports whether this PersistentVolume was written by an administrator
+// rather than created by the provisioner.
+func isStaticallyProvisioned(pv *v1.PersistentVolume) bool {
+	if pv == nil {
+		return false
+	}
+	_, ok := pv.Annotations[provisionedByAnnotation]
+	return !ok
+}
+
+// backfillMissingQuota gives a volume a quota sized from its PersistentVolume, when it has none.
+//
+// Some volumes have no quota on the Weka cluster, and so no capacity enforcement at all: their
+// declared size is recorded only in an extended attribute, which nothing checks, and the volume can
+// grow past it unnoticed. Giving them a quota is what eventually allows the extended-attribute path
+// to be removed altogether.
+//
+// Statically provisioned volumes are a separate case behind their own setting. They never had a
+// quota by design - the driver did not create them, and their documented behaviour is that an
+// administrator sets any quota themselves - so giving them one changes state somebody else owns,
+// and silently starts enforcing a limit that was not being enforced before.
+//
+// The PersistentVolume is the source of truth for the capacity, not the extended attribute. The
+// attribute is at best a copy of the same number and at worst stale, and reading it would mean
+// mounting the volume - which this reconciler otherwise never does.
+//
+// Returns whether a quota was created. An error means the volume needs a quota but did not get one;
+// it is reported by the caller and never aborts the sweep, since one volume that cannot be given a
+// quota must not stop the rest from getting theirs.
+func (r *volumeHealthReconciler) backfillMissingQuota(ctx context.Context, vol *Volume, pv *v1.PersistentVolume) (bool, error) {
+	config := r.cs.getConfig()
+	if !config.backfillMissingQuotas || vol == nil {
+		return false, nil
+	}
+	logger := log.Ctx(ctx).With().Str("volume_id", vol.GetId()).Logger()
+
+	if isStaticallyProvisioned(pv) && !config.setQuotaOnStaticVolumes {
+		logger.Trace().Msg("Volume is statically provisioned and setQuotaOnStaticVolumes is off, not setting a quota")
+		return false, nil
+	}
+
+	quota, err := vol.getQuota(ctx)
+	if err != nil && !errors.Is(err, apiclient.ObjectNotFoundError) {
+		logger.Warn().Err(err).Msg("Could not determine whether volume has a quota, not backfilling")
+		return false, err
+	}
+	if quota != nil {
+		return false, nil
+	}
+
+	// The capacity declared on the PersistentVolume, which is what the quota has to match. Note this
+	// is deliberately not the capacity the probe reported: that can come from the backend, and on a
+	// volume with no quota the backend has no limit to report. A PersistentVolume carrying no
+	// capacity at all gives nothing to size a quota from, and guessing would silently cap the volume
+	// at the wrong number.
+	capacity := pvCapacityBytes(pv)
+	if capacity <= 0 {
+		err := errors.New("volume has no declared capacity to size a quota from")
+		logger.Warn().Err(err).Msg("Not backfilling quota")
+		return false, err
+	}
+
+	// Whether the cluster can do this cheaply. Creating a quota over a directory that already holds
+	// data makes the cluster walk the whole tree stamping the quota ID onto every file; a data
+	// services container runs that walk in the background, and without one it runs inline. Refusing
+	// here keeps a fleet-wide sweep from issuing walks that block on the cluster's management path.
+	support, err := vol.apiClient.SupportsQuotaOnNonEmptyDirectory(ctx)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Could not determine whether the cluster can quota a non-empty directory")
+		return false, err
+	}
+	if support != apiclient.QuotaOnNonEmptyDirectorySupported {
+		err := errors.New(quotaBackfillRemedy(support, vol.FilesystemName, capacity))
+		logger.Warn().Err(err).Msg("Cannot backfill quota for volume")
+		return false, err
+	}
+
+	logger.Info().Int64("capacity", capacity).Msg("Volume has no quota, backfilling from its PersistentVolume")
+	if _, err := vol.setQuota(ctx, nil, uint64(capacity)); err != nil {
+		logger.Error().Err(err).Msg("Failed to backfill quota for volume")
+		return false, err
+	}
+	logger.Info().Int64("capacity", capacity).Msg("Backfilled quota for volume")
+	return true, nil
+}
+
+// quotaBackfillRemedy turns the reason a backfill cannot happen into something an operator can act
+// on. Each case has a different fix, and saying only "unsupported" would send them looking in the
+// wrong place.
+func quotaBackfillRemedy(support apiclient.QuotaOnNonEmptyDirectorySupport, filesystemName string, capacity int64) string {
+	switch support {
+	case apiclient.QuotaOnNonEmptyDirectoryNoContainer:
+		return "the Weka cluster has no data services container, which is required to set a quota on a " +
+			"directory that already holds data - deploy one to let quotas be backfilled automatically"
+	case apiclient.QuotaOnNonEmptyDirectoryVersionTooOld:
+		return fmt.Sprintf("the Weka cluster is older than %s and cannot set a quota on a directory that "+
+			"already holds data - either upgrade it, or set the quota externally from a host with the Weka "+
+			"client, with the filesystem mounted: weka fs quota set <path> --filesystem %s --type directory "+
+			"--hard %d", apiclient.MinimumSupportedWekaVersions.DataServicesContainer,
+			filesystemName, capacity)
+	default:
+		return "could not determine whether the Weka cluster can set a quota on a directory that already holds data"
+	}
 }

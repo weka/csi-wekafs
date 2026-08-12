@@ -85,6 +85,23 @@ controller:
     #    permanently unchecked. Measured at roughly 15 seconds per 1000 volumes; raise it for
     #    larger fleets.
     timeoutSeconds: 300
+    # -- Let the volume health reconciler create a missing quota for a dynamically provisioned
+    #    volume, sized from its PersistentVolume. Off by default, because it writes to the WEKA
+    #    cluster from a background loop rather than in response to a request.
+    #    A volume with no quota has no capacity enforcement: its declared size is recorded only in
+    #    an extended attribute, which nothing checks, so the volume can grow past it unnoticed.
+    #    Enabling this gives such volumes a quota in place, and does not touch volumes that already
+    #    have one.
+    #    Requires a data services container on the WEKA cluster: setting a quota on a directory that
+    #    already holds data makes the cluster walk the whole tree, and that container is what runs
+    #    the walk in the background. Volumes that cannot be given a quota are logged with the reason.
+    backfillMissingQuotas: false
+    # -- Extend the above to statically provisioned volumes. Requires backfillMissingQuotas.
+    #    Kept separate because a static volume is yours, not the driver's: the driver did not create
+    #    it and never gave it a quota, and the documented behaviour is that you set one yourself.
+    #    Turning this on starts enforcing a capacity limit that was not being enforced before, using
+    #    the size declared on the PersistentVolume - so make sure that size is the one you want.
+    setQuotaOnStaticVolumes: false
   # -- optional nodeSelector for controller components only
   nodeSelector: {}
   # -- optional affinity for controller components only
