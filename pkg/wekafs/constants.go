@@ -171,6 +171,10 @@ const (
 	// about one apiserver read per distinct Secret rather than one per volume.
 	volumeSecretCacheTTL = 5 * time.Minute
 	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
+	// volumeNoQuotaMessage is reported for a volume that exists but carries no quota. It is not an
+	// abnormal condition - the volume works - but nothing enforces its capacity, so the condition
+	// says so rather than calling it plainly healthy.
+	volumeNoQuotaMessage = "volume exists on the Weka cluster, but has no quota, so its capacity is not enforced"
 
 	// listVolumesPageSize bounds a page when the CO does not set max_entries. Pages are served from
 	// the reconciler's cache, so this is only about response size, not about how much work one call
