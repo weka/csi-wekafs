@@ -125,3 +125,62 @@ func TestWaitForQuotaEstablishedHonoursContext(t *testing.T) {
 	assert.Less(t, elapsed, quotaEstablishTimeout,
 		"the wait must end with the request context, not run on to its own timeout")
 }
+
+// TestDeleteQuotaUsesTheSameRouteAsCreate exercises DeleteQuota end to end against the fake cluster.
+//
+// The driver never deletes a quota deliberately - removing the directory takes the quota with it -
+// so this path has no production caller, and this test is the only thing that executes it. It went
+// unnoticed that the request was built against ".../quotas/{inode}" while create and read used
+// ".../quota/{inode}", because the fake server had been written to match the client rather than the
+// real API, and so mirrored the same mistake. Verified against WEKA 5.1.24: DELETE on the singular
+// route returns 200.
+func TestDeleteQuotaUsesTheSameRouteAsCreate(t *testing.T) {
+	c, _ := newQuotaTestClient(t)
+	ctx := context.Background()
+
+	fsUid, inodeId, err := createQuota(t, c, false)
+	require.NoError(t, err)
+
+	// Readable through the create/read route.
+	q, err := c.GetQuotaByFileSystemAndInode(ctx, &FileSystem{Uid: fsUid}, inodeId)
+	require.NoError(t, err)
+	require.NotNil(t, q)
+
+	err = c.DeleteQuota(ctx, NewQuotaDeleteRequest(FileSystem{Uid: fsUid}, inodeId))
+	assert.NoError(t, err, "delete must reach the same route create and read use")
+
+	// And genuinely gone afterwards, which is what proves the delete landed on the right object
+	// rather than merely returning without error. A read of a removed quota is ObjectNotFoundError,
+	// not a nil quota with no error.
+	q, err = c.GetQuotaByFileSystemAndInode(ctx, &FileSystem{Uid: fsUid}, inodeId)
+	assert.ErrorIs(t, err, ObjectNotFoundError, "quota must be gone after delete")
+	assert.Nil(t, q)
+}
+
+// TestRequiredFieldsValidationDoesNotPanicOnUnknownField guards the reflection helper.
+//
+// getRequiredFields names struct fields as strings, so a name that no longer matches a field is not
+// a compile error. It used to reach IsZero on the zero reflect.Value, which panics - so a typo in a
+// validation list took the whole process down instead of failing the one request. QuotaDeleteRequest
+// carried exactly that typo ("inodeId" against a field named InodeId), and because nothing in the
+// driver calls DeleteQuota it was never hit.
+func TestRequiredFieldsValidationDoesNotPanicOnUnknownField(t *testing.T) {
+	// A request whose required-field list names something that does not exist on the struct.
+	bogus := &quotaRequestWithBadFieldName{QuotaDeleteRequest: QuotaDeleteRequest{
+		filesystemUid: uuid.New(),
+		InodeId:       1,
+	}}
+
+	assert.NotPanics(t, func() {
+		assert.False(t, ObjectRequestHasRequiredFields(bogus),
+			"an unknown field name must read as missing, not as satisfied")
+	})
+}
+
+type quotaRequestWithBadFieldName struct {
+	QuotaDeleteRequest
+}
+
+func (q *quotaRequestWithBadFieldName) getRequiredFields() []string {
+	return []string{"NoSuchFieldAnywhere"}
+}

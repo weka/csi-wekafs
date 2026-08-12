@@ -193,7 +193,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}/resolvePath", s.handleResolvePath)
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaGet)
 	mux.HandleFunc("PUT /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaPut)
-	mux.HandleFunc("DELETE /api/v2/fileSystems/{uid}/quotas/{inode}", s.handleQuotaDelete)
+	mux.HandleFunc("DELETE /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaDelete)
 
 	mux.HandleFunc("GET /api/v2/interfaceGroups", s.handleInterfaceGroups)
 
