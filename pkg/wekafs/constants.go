@@ -175,6 +175,16 @@ const (
 	capacityEnforcementParam = "capacityEnforcement"
 
 	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
+
+	// The conditions below are surfaced to whoever can read events in the volume's namespace, which
+	// is not necessarily whoever administers the Weka cluster. They deliberately carry no filesystem
+	// name and no path inside the filesystem: a PersistentVolume is cluster-scoped and a namespace
+	// user cannot read one, so naming shared storage in a namespaced event would tell them something
+	// they otherwise have no way to see. The identifiers are logged instead, where an administrator
+	// reads them - see ProbeHealth.
+	volumeFilesystemMissingMessage  = "the Weka filesystem backing this volume no longer exists"
+	volumeFilesystemRemovingMessage = "the Weka filesystem backing this volume is being removed"
+	volumePathMissingMessage        = "the volume's directory no longer exists on the Weka cluster"
 	// volumeNoQuotaMessage is reported for a volume that exists but carries no quota. It is not an
 	// abnormal condition - the volume works - but nothing enforces its capacity, so the condition
 	// says so rather than calling it plainly healthy.

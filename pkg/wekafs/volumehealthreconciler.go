@@ -152,7 +152,7 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 	filesystems := newFilesystemCache()
 	live := make(map[string]struct{}, len(pvs))
 
-	var abnormal, unknown, failed, quotaMissing, backfilled, backfillSkipped int64
+	var abnormal, unknown, failed, quotaMissing, quotaMismatch, backfilled, backfillSkipped int64
 	var counters sync.Mutex
 
 	var probes errgroup.Group
@@ -182,6 +182,9 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 			}
 			if health != nil && health.QuotaMissing {
 				quotaMissing++
+			}
+			if health != nil && health.QuotaMismatch {
+				quotaMismatch++
 			}
 			switch {
 			case created:
@@ -215,6 +218,7 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 		Int64("unknown", unknown).
 		Int64("failed", failed).
 		Int64("quotas_missing", quotaMissing).
+		Int64("quota_mismatches", quotaMismatch).
 		Int64("quotas_created", backfilled).
 		Int64("quotas_not_created", backfillSkipped).
 		Dur("duration", time.Since(started)).

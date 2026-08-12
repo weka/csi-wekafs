@@ -3,6 +3,7 @@ package wekafs
 import (
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,15 +122,39 @@ func TestSecretCache(t *testing.T) {
 }
 
 func TestAbnormalVolumeHealth(t *testing.T) {
-	health := abnormalVolumeHealth("filesystem %s does not exist", "myfs")
+	health := abnormalVolumeHealth(volumeFilesystemMissingMessage)
 	if !health.Abnormal {
 		t.Fatal("expected health to be abnormal")
 	}
-	if health.Message != "filesystem myfs does not exist" {
+	if health.Message != volumeFilesystemMissingMessage {
 		t.Fatalf("unexpected message: %s", health.Message)
 	}
 	if health.Capacity != 0 {
 		t.Fatalf("expected no capacity on an abnormal volume, got %d", health.Capacity)
+	}
+}
+
+// The abnormal conditions reach a Kubernetes event in the volume's namespace, which is readable by
+// someone who cannot read the cluster-scoped PersistentVolume - so they must not name the Weka
+// filesystem or the path inside it. The identifiers go to the driver log instead.
+func TestAbnormalConditionsCarryNoInfrastructureIdentifiers(t *testing.T) {
+	for _, msg := range []string{
+		volumeFilesystemMissingMessage,
+		volumeFilesystemRemovingMessage,
+		volumePathMissingMessage,
+		volumeNoQuotaMessage,
+		volumeNoApiClientMessage,
+		volumeHealthyMessage,
+	} {
+		// A format verb would mean a caller is still substituting something in.
+		if strings.Contains(msg, "%") {
+			t.Errorf("condition message must be a fixed string, got a format: %s", msg)
+		}
+		for _, leak := range []string{"csi-volumes", "/dir/", "dir/v1", "weka/v2"} {
+			if strings.Contains(msg, leak) {
+				t.Errorf("condition message must not carry storage layout (%q): %s", leak, msg)
+			}
+		}
 	}
 }
 
