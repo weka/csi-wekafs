@@ -107,6 +107,10 @@ controller:
     #    works, what it lacks is capacity enforcement, and on a fleet part-way through repair - or
     #    one with statically provisioned volumes that have no quota by design - flagging every one
     #    buries the genuinely broken volumes this is meant to surface.
+    #    Note the volume remains fully usable either way: abnormal is advisory, and only raises
+    #    events. Everything else this plugin reports as abnormal means the data is gone or going, so
+    #    turning this on adds a healthy-but-unenforced meaning to that same signal - check whether
+    #    anything alerts on it first.
     #    Independent of backfillMissingQuotas: you can report without repairing, or repair quietly.
     reportVolumesWithoutQuotaAsAbnormal: false
   # -- optional nodeSelector for controller components only
