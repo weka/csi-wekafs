@@ -49,6 +49,44 @@ exactly one thing — the API-less communication model.
 A `dir/v1` volume that references an API secret works in 3.0 exactly as it did in 2.x. Volume
 handles are unchanged, so nothing needs to be rewritten.
 
+## Volumes with no quota, and why capacity is still read from extended attributes
+
+Capacity for a WEKA CSI volume belongs in a **directory quota** on the WEKA cluster. Extended
+attributes on the volume directory (`user.weka_capacity`) are a much older mechanism, kept only for
+clusters too old to support directory quotas as volumes.
+
+3.0 still reads and writes those attributes. That is deliberate, and it is a stay of execution
+rather than a design decision:
+
+> **Due to a bug in earlier CSI Plugin versions, some volumes were created without a quota ever
+> being set on the WEKA cluster.** For those volumes the extended attribute is the *only* record of
+> their capacity. Removing extended-attribute support today would break them — the plugin would
+> have nothing left to read a capacity from.
+
+The attributes will be removed in a later release. Before that can happen, affected volumes have to
+be repaired, and the repair is not something the plugin can do on its own during an upgrade: it has
+to reconcile Kubernetes objects against WEKA cluster state.
+
+### The intended fix
+
+A migration readiness script will:
+
+* list every PersistentVolume in the cluster and keep those provisioned by the `csi.weka.io` driver;
+* look up each one's quota entry on the WEKA cluster through the REST API;
+* where no quota exists, create one matching the capacity declared on the PersistentVolume.
+
+The extended attribute is **disregarded entirely** in that flow. The PersistentVolume is the source
+of truth for what the volume's capacity is supposed to be; the attribute is at best a copy of it and
+at worst stale.
+
+This script does not ship yet. Until it does, and until you have run it, treat any volume that has
+no quota on the WEKA cluster as depending on extended attributes, and do not assume a future release
+will keep reading them.
+
+> The older `migration/migrate-legacy-csi-volumes.sh` is **not** this script. It walks a filesystem
+> rather than the PersistentVolume list, takes its capacity from the extended attribute rather than
+> from the PersistentVolume, and drives the `weka` CLI rather than the REST API.
+
 ## `debugPath` and dev mode have been removed
 
 The `--debugpath` command line flag is gone, along with the "dev mode" it enabled. In that mode the
@@ -90,3 +128,10 @@ has to be rebuilt is the Kubernetes object describing it. Two options:
 | `legacyVolumeSecretName` | Helm value | Reference an API secret from each StorageClass |
 | `/legacy-volume-access` | Secret mount path | none |
 | `--debugpath` | Plugin command line flag | none |
+
+Still present in 3.0, but scheduled for removal — see [Volumes with no quota, and why capacity is
+still read from extended attributes](#volumes-with-no-quota-and-why-capacity-is-still-read-from-extended-attributes):
+
+| Retained for now | Why |
+| --- | --- |
+| `user.weka_capacity` extended attribute | The only capacity record for volumes created without a quota by an earlier CSI Plugin bug |
