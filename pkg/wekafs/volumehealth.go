@@ -46,8 +46,16 @@ type VolumeHealth struct {
 	Abnormal bool
 	Message  string
 	// Capacity is the volume size in bytes as reported by the backend, or 0 when the backend
-	// does not track it (legacy volumes that keep their size in an extended attribute).
+	// does not track it (volumes that keep their size in an extended attribute).
 	Capacity int64
+	// QuotaMissing records that the volume resolved but carries no quota, so nothing enforces its
+	// capacity. Established as a by-product of the probe, which has to fetch the quota anyway -
+	// asking again separately would repeat the inode resolution and the quota fetch for every
+	// volume in a sweep.
+	QuotaMissing bool
+	// InodeId is the inode the volume's path resolved to, and the key a quota is created against.
+	// Carried so a caller acting on QuotaMissing does not have to resolve the path a second time.
+	InodeId uint64
 }
 
 func abnormalVolumeHealth(format string, args ...interface{}) *VolumeHealth {
@@ -108,11 +116,11 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 			// A volume without a quota is not broken - legacy volumes never had one. The inode
 			// resolved, so the volume is there; its size just cannot come from the API.
 			logger.Debug().Str("path", relativePath).Msg("Volume has no quota, capacity is not known from API")
-			return &VolumeHealth{Message: volumeHealthyMessage}, nil
+			return &VolumeHealth{Message: volumeNoQuotaMessage, QuotaMissing: true, InodeId: inodeId}, nil
 		}
 		return nil, err
 	}
-	return &VolumeHealth{Message: volumeHealthyMessage, Capacity: int64(quota.GetCapacityLimit())}, nil
+	return &VolumeHealth{Message: volumeHealthyMessage, Capacity: int64(quota.GetCapacityLimit()), InodeId: inodeId}, nil
 }
 
 func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
@@ -144,7 +152,7 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 		return nil, err
 	}
 
-	volume, condition, _, err := cs.describeVolume(ctx, pv, nil)
+	volume, condition, _, _, err := cs.describeVolume(ctx, pv, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -160,10 +168,10 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 // The filesystems cache may be nil, in which case every lookup goes to the Weka API.
 // describeVolume probes one PersistentVolume and reports what it found.
 //
-// It also returns the constructed Volume, which is nil whenever the probe could not get that far.
-// The reconciler needs it to act on the volume - rebuilding it there would repeat the API calls this
-// function has already made.
-func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (*csi.Volume, *csi.VolumeCondition, *Volume, error) {
+// It also returns the constructed Volume and the raw health result, which are nil whenever the probe
+// could not get that far. The reconciler needs both to act on the volume - rebuilding them there
+// would repeat the API calls this function has already made.
+func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (*csi.Volume, *csi.VolumeCondition, *Volume, *VolumeHealth, error) {
 	volumeID := pv.Spec.CSI.VolumeHandle
 	logger := log.Ctx(ctx).With().Str("volume_id", volumeID).Logger()
 
@@ -173,16 +181,16 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 
 	client, err := cs.apiClientFromPersistentVolume(ctx, pv)
 	if err != nil {
-		return volume, nil, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
+		return volume, nil, nil, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
 	}
 	if client == nil {
 		logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as unknown")
-		return volume, nil, nil, nil
+		return volume, nil, nil, nil, nil
 	}
 
 	vol, err := NewVolumeFromId(ctx, volumeID, client, cs)
 	if err != nil {
-		return volume, nil, nil, err
+		return volume, nil, nil, nil, err
 	}
 	// Seed the volume with an already-resolved filesystem, and publish whatever it resolved so the
 	// next volume on the same filesystem can skip the lookup.
@@ -193,9 +201,9 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 	if err != nil {
 		if errors.Is(err, ErrVolumeHealthUndetermined) {
 			logger.Warn().Err(err).Msg("Reporting volume condition as unknown")
-			return volume, nil, vol, nil
+			return volume, nil, vol, nil, nil
 		}
-		return volume, nil, vol, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
+		return volume, nil, vol, nil, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
 	}
 
 	if health.Capacity > 0 {
@@ -204,7 +212,7 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 	if health.Abnormal {
 		logger.Warn().Str("condition", health.Message).Msg("Volume is abnormal")
 	}
-	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, vol, nil
+	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, vol, health, nil
 }
 
 func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {

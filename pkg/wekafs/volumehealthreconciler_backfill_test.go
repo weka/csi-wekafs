@@ -30,15 +30,25 @@ func staticPV() *v1.PersistentVolume {
 	return &v1.PersistentVolume{ObjectMeta: metav1.ObjectMeta{Name: "pv-static"}}
 }
 
+// quotaMissingHealth is what the probe reports for a volume that resolved but has no quota. Without
+// it there is nothing to act on, so every gate test has to supply one.
+func quotaMissingHealth() *VolumeHealth {
+	return &VolumeHealth{Message: volumeNoQuotaMessage, QuotaMissing: true, InodeId: 4242}
+}
+
 // The reconciler writes to the Weka cluster only when explicitly told to. It is a background loop,
 // so a default that mutates storage would surprise anyone upgrading.
 func TestBackfillMissingQuotaIsOffByDefault(t *testing.T) {
 	assert.False(t, NewDriverConfig(DriverConfigOptions{}).backfillMissingQuotas,
 		"backfilling quotas must be opt-in")
 
+	// With the setting off, a volume that genuinely has no quota is still left alone. The volume
+	// carries no API client, so anything that got past the check would fail - a clean (false, nil)
+	// is only reachable by returning at the gate.
 	r := newBackfillReconciler(false)
-	// A nil volume would panic if the disabled check did not come first.
-	created, err := r.backfillMissingQuota(context.Background(), nil, nil)
+	vol := &Volume{id: "weka/v2/testfs/no-quota"}
+
+	created, err := r.backfillMissingQuota(context.Background(), vol, dynamicPV(), quotaMissingHealth())
 	assert.False(t, created)
 	assert.NoError(t, err)
 }
@@ -47,7 +57,31 @@ func TestBackfillMissingQuotaIsOffByDefault(t *testing.T) {
 // nothing to do rather than dereferencing it, since a failed probe is routine.
 func TestBackfillMissingQuotaSkipsNilVolume(t *testing.T) {
 	r := newBackfillReconciler(true)
-	created, err := r.backfillMissingQuota(context.Background(), nil, nil)
+	created, err := r.backfillMissingQuota(context.Background(), nil, nil, quotaMissingHealth())
+	assert.False(t, created)
+	assert.NoError(t, err)
+}
+
+// A volume that already has a quota must not cost a single extra API call. The probe has already
+// established that, so the backfill returns on the probe result alone - passing a volume with no API
+// client proves nothing further is attempted.
+func TestBackfillDoesNothingWhenTheQuotaExists(t *testing.T) {
+	r := newBackfillReconciler(true)
+	vol := &Volume{id: "weka/v2/testfs/has-a-quota"}
+	health := &VolumeHealth{Message: volumeHealthyMessage, Capacity: 1 << 30, InodeId: 4242}
+
+	created, err := r.backfillMissingQuota(context.Background(), vol, dynamicPV(), health)
+	assert.False(t, created)
+	assert.NoError(t, err, "a volume with a quota must not be probed again")
+}
+
+// A probe that could not establish the condition reports no health at all. There is then nothing to
+// act on, and guessing would be worse than waiting for the next sweep.
+func TestBackfillDoesNothingWithoutAProbeResult(t *testing.T) {
+	r := newBackfillReconciler(true)
+	vol := &Volume{id: "weka/v2/testfs/unknown"}
+
+	created, err := r.backfillMissingQuota(context.Background(), vol, dynamicPV(), nil)
 	assert.False(t, created)
 	assert.NoError(t, err)
 }
@@ -144,7 +178,7 @@ func TestStaticVolumesNeedTheirOwnFlag(t *testing.T) {
 	r := newBackfillReconciler(true)
 	vol := &Volume{id: "weka/v2/testfs/some-static-dir"}
 
-	created, err := r.backfillMissingQuota(context.Background(), vol, staticPV())
+	created, err := r.backfillMissingQuota(context.Background(), vol, staticPV(), quotaMissingHealth())
 	assert.False(t, created, "a static volume must not be given a quota without its own flag")
 	assert.NoError(t, err, "the static check must return before anything touches the API client")
 }
@@ -160,7 +194,7 @@ func TestStaticVolumesProceedWhenBothFlagsAreOn(t *testing.T) {
 	r := &volumeHealthReconciler{cs: cs, cache: newVolumeConditionCache()}
 	vol := &Volume{id: "weka/v2/testfs/some-static-dir"}
 
-	created, err := r.backfillMissingQuota(context.Background(), vol, staticPV())
+	created, err := r.backfillMissingQuota(context.Background(), vol, staticPV(), quotaMissingHealth())
 	assert.False(t, created)
 	assert.Error(t, err, "with both flags on the static volume must proceed past the gate")
 }
@@ -171,7 +205,7 @@ func TestDynamicVolumesDoNotNeedTheStaticFlag(t *testing.T) {
 	r := newBackfillReconciler(true)
 	vol := &Volume{id: "weka/v2/testfs/some-dynamic-dir"}
 
-	created, err := r.backfillMissingQuota(context.Background(), vol, dynamicPV())
+	created, err := r.backfillMissingQuota(context.Background(), vol, dynamicPV(), quotaMissingHealth())
 	assert.False(t, created)
 	assert.Error(t, err, "a dynamic volume must proceed past the gate on backfillMissingQuotas alone")
 }

@@ -152,7 +152,7 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 	filesystems := newFilesystemCache()
 	live := make(map[string]struct{}, len(pvs))
 
-	var abnormal, unknown, failed, backfilled, backfillSkipped int64
+	var abnormal, unknown, failed, quotaMissing, backfilled, backfillSkipped int64
 	var counters sync.Mutex
 
 	var probes errgroup.Group
@@ -164,11 +164,11 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 			if ctx.Err() != nil {
 				return nil
 			}
-			volume, condition, vol, err := r.cs.describeVolume(ctx, pv, filesystems)
+			volume, condition, vol, health, err := r.cs.describeVolume(ctx, pv, filesystems)
 
 			// Deliberately before the counters lock: this can issue Weka API calls, and holding the
 			// lock across them would serialise the whole sweep behind one volume.
-			created, backfillErr := r.backfillMissingQuota(ctx, vol, pv)
+			created, backfillErr := r.backfillMissingQuota(ctx, vol, pv, health)
 
 			counters.Lock()
 			defer counters.Unlock()
@@ -179,6 +179,9 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 				logger.Warn().Err(err).Str("volume_id", handle).Msg("Failed to probe volume health")
 				failed++
 				return nil
+			}
+			if health != nil && health.QuotaMissing {
+				quotaMissing++
 			}
 			switch {
 			case created:
@@ -211,8 +214,9 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 		Int64("abnormal", abnormal).
 		Int64("unknown", unknown).
 		Int64("failed", failed).
-		Int64("quotas_backfilled", backfilled).
-		Int64("quotas_not_backfilled", backfillSkipped).
+		Int64("quotas_missing", quotaMissing).
+		Int64("quotas_created", backfilled).
+		Int64("quotas_not_created", backfillSkipped).
 		Dur("duration", time.Since(started)).
 		Msg("Volume health reconciliation completed")
 }
@@ -251,24 +255,24 @@ func isStaticallyProvisioned(pv *v1.PersistentVolume) bool {
 // Returns whether a quota was created. An error means the volume needs a quota but did not get one;
 // it is reported by the caller and never aborts the sweep, since one volume that cannot be given a
 // quota must not stop the rest from getting theirs.
-func (r *volumeHealthReconciler) backfillMissingQuota(ctx context.Context, vol *Volume, pv *v1.PersistentVolume) (bool, error) {
+func (r *volumeHealthReconciler) backfillMissingQuota(ctx context.Context, vol *Volume, pv *v1.PersistentVolume, health *VolumeHealth) (bool, error) {
 	config := r.cs.getConfig()
-	if !config.backfillMissingQuotas || vol == nil {
+	if vol == nil || health == nil || !health.QuotaMissing {
 		return false, nil
 	}
 	logger := log.Ctx(ctx).With().Str("volume_id", vol.GetId()).Logger()
 
-	if isStaticallyProvisioned(pv) && !config.setQuotaOnStaticVolumes {
-		logger.Trace().Msg("Volume is statically provisioned and setQuotaOnStaticVolumes is off, not setting a quota")
+	// Whether the volume has a quota comes from the probe that has just run, which had to resolve
+	// the inode and fetch the quota anyway. Asking again here would repeat both calls for every
+	// volume in the sweep - two extra Weka API requests per volume, per interval, on a fleet that
+	// can run to five figures.
+	if !config.backfillMissingQuotas {
+		logger.Debug().Msg("Volume has no quota and its capacity is not enforced; backfillMissingQuotas is off")
 		return false, nil
 	}
 
-	quota, err := vol.getQuota(ctx)
-	if err != nil && !errors.Is(err, apiclient.ObjectNotFoundError) {
-		logger.Warn().Err(err).Msg("Could not determine whether volume has a quota, not backfilling")
-		return false, err
-	}
-	if quota != nil {
+	if isStaticallyProvisioned(pv) && !config.setQuotaOnStaticVolumes {
+		logger.Debug().Msg("Volume has no quota and is statically provisioned; setQuotaOnStaticVolumes is off")
 		return false, nil
 	}
 
