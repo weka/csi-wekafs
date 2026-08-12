@@ -542,3 +542,52 @@ func TestSoftQuotaIsNotAMismatch(t *testing.T) {
 	hard := &apiclient.Quota{SoftLimitBytes: uint64(declared), HardLimitBytes: uint64(declared)}
 	assert.Equal(t, uint64(declared), hard.GetCapacityLimit())
 }
+
+// stripUnnecessaryPVFields runs on every PersistentVolume the controller caches, and everything it
+// drops becomes invisible to every consumer of that cache - as an absent value, not an error.
+//
+// This is not hypothetical. It dropped ObjectMeta.Annotations and Spec.CSI.VolumeAttributes, which
+// made isStaticallyProvisioned answer "static" for every volume in the fleet and quietly disabled
+// the backfill, while quotaEnforcementFromPv returned the default for every one of them. Nothing
+// failed; the work simply never happened. Only a live cluster showed it.
+func TestStripUnnecessaryPVFieldsKeepsWhatTheDriverReads(t *testing.T) {
+	full := &v1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "pvc-1234",
+			Annotations: map[string]string{provisionedByAnnotation: "csi.weka.io"},
+		},
+		Spec: v1.PersistentVolumeSpec{
+			Capacity: v1.ResourceList{v1.ResourceStorage: resource.MustParse("1Gi")},
+			PersistentVolumeSource: v1.PersistentVolumeSource{CSI: &v1.CSIPersistentVolumeSource{
+				Driver:       "csi.weka.io",
+				VolumeHandle: "dir/v1/testfs/csi-volumes/pvc-1234",
+				VolumeAttributes: map[string]string{
+					capacityEnforcementParam: "SOFT",
+					"quotaGracePeriod":       "168h",
+				},
+			}},
+		},
+	}
+
+	out, err := stripUnnecessaryPVFields(full)
+	assert.NoError(t, err)
+	stripped, ok := out.(*v1.PersistentVolume)
+	assert.True(t, ok)
+
+	// The dynamic/static distinction, which decides whether a volume is repaired at all.
+	assert.False(t, isStaticallyProvisioned(stripped),
+		"the provisioned-by annotation must survive caching, or every volume looks static")
+
+	// The quota's shape, which decides what kind of quota a repaired volume gets.
+	enforce, err := quotaEnforcementFromPv(stripped)
+	assert.NoError(t, err)
+	assert.False(t, enforce, "capacityEnforcement must survive caching")
+
+	grace, err := quotaGracePeriodFromPv(stripped)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(168*60*60), grace, "quotaGracePeriod must survive caching")
+
+	// And the capacity a repaired quota is sized from.
+	assert.Equal(t, int64(1)<<30, pvCapacityBytes(stripped))
+	assert.Equal(t, "dir/v1/testfs/csi-volumes/pvc-1234", stripped.Spec.CSI.VolumeHandle)
+}

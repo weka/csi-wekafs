@@ -683,7 +683,13 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 	}
 }
 
-// stripUnnecessaryPVFields creates a minimal PV with only fields needed by the plugin features
+// stripUnnecessaryPVFields creates a minimal PV with only fields needed by the plugin features.
+//
+// This runs on every PersistentVolume the manager caches, so it is what bounds the controller's
+// memory on a large fleet. Anything dropped here is invisible to every consumer of the cache, and
+// reads as absent rather than as missing - which is how dropping the annotations silently disabled
+// the dynamic/static distinction rather than failing. Before removing a field, check what reads it:
+// TestStripUnnecessaryPVFieldsKeepsWhatTheDriverReads is the guard.
 func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 	pv, ok := obj.(*v1.PersistentVolume)
 	if !ok {
@@ -697,6 +703,11 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 			Name:            pv.ObjectMeta.Name,
 			UID:             pv.ObjectMeta.UID,
 			ResourceVersion: pv.ObjectMeta.ResourceVersion,
+			// Annotations must survive. pv.kubernetes.io/provisioned-by is how a dynamically
+			// provisioned volume is told from one an administrator wrote, and dropping it made every
+			// volume look statically provisioned - silently, since a missing annotation is
+			// indistinguishable from an absent one.
+			Annotations: pv.ObjectMeta.Annotations,
 		},
 		Spec: v1.PersistentVolumeSpec{
 			Capacity: pv.Spec.Capacity, // Need for capacity validation
@@ -716,6 +727,11 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 			ControllerPublishSecretRef: pv.Spec.CSI.ControllerPublishSecretRef,
 			NodeStageSecretRef:         pv.Spec.CSI.NodeStageSecretRef,
 			NodePublishSecretRef:       pv.Spec.CSI.NodePublishSecretRef,
+			// The StorageClass parameters a volume was provisioned with are persisted here, and are
+			// the only record of them once the StorageClass has moved on. capacityEnforcement and
+			// quotaGracePeriod decide what kind of quota a volume should have, so dropping these
+			// left every volume looking as though it asked for the defaults.
+			VolumeAttributes: pv.Spec.CSI.VolumeAttributes,
 		}
 	}
 
