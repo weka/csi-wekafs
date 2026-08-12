@@ -242,6 +242,16 @@ func quotaEnforcementFromPv(pv *v1.PersistentVolume) (bool, error) {
 	return getCapacityEnforcementParam(pv.Spec.CSI.VolumeAttributes)
 }
 
+// quotaGracePeriodFromPv reports the grace period a soft quota for this volume should carry, from
+// the same persisted StorageClass parameters as the enforcement mode. Absent means 0, matching
+// provisioning.
+func quotaGracePeriodFromPv(pv *v1.PersistentVolume) (uint64, error) {
+	if pv == nil || pv.Spec.CSI == nil {
+		return 0, nil
+	}
+	return getQuotaGracePeriodParam(pv.Spec.CSI.VolumeAttributes)
+}
+
 // isStaticallyProvisioned reports whether this PersistentVolume was written by an administrator
 // rather than created by the provisioner.
 func isStaticallyProvisioned(pv *v1.PersistentVolume) bool {
@@ -304,6 +314,34 @@ func (r *volumeHealthReconciler) backfillMissingQuota(ctx context.Context, vol *
 		return false, err
 	}
 
+	// Hard or soft comes from the volume itself, never from a default here: a volume provisioned
+	// with capacityEnforcement=SOFT must not be quietly given a hard quota, which would start
+	// failing writes that the volume was deliberately allowed to make.
+	enforceCapacity, err := quotaEnforcementFromPv(pv)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Volume has an unusable capacityEnforcement, not setting a quota")
+		return false, err
+	}
+
+	// A soft quota is only as useful as its grace period, and that comes from the same persisted
+	// parameters. setQuota reads it off the volume, which was built from an ID and so never had the
+	// StorageClass parameters applied - leaving it at 0, which means "never block" rather than the
+	// period that was asked for.
+	graceSeconds, err := quotaGracePeriodFromPv(pv)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Volume has an unusable quotaGracePeriod, not setting a quota")
+		return false, err
+	}
+	vol.quotaGracePeriodSeconds = graceSeconds
+
+	// Everything above comes from the PersistentVolume, so a volume that is misconfigured fails
+	// without a round trip to the cluster. Only now ask the cluster anything.
+	if vol.apiClient == nil {
+		err := errors.New("volume is not bound to a Weka API client")
+		logger.Warn().Err(err).Msg("Cannot create quota for volume")
+		return false, err
+	}
+
 	// Whether the cluster can do this cheaply. Creating a quota over a directory that already holds
 	// data makes the cluster walk the whole tree stamping the quota ID onto every file; a data
 	// services container runs that walk in the background, and without one it runs inline. Refusing
@@ -315,27 +353,19 @@ func (r *volumeHealthReconciler) backfillMissingQuota(ctx context.Context, vol *
 	}
 	if support != apiclient.QuotaOnNonEmptyDirectorySupported {
 		err := errors.New(quotaBackfillRemedy(support, vol.FilesystemName, capacity))
-		logger.Warn().Err(err).Msg("Cannot backfill quota for volume")
-		return false, err
-	}
-
-	// Hard or soft comes from the volume itself, never from a default here: a volume provisioned
-	// with capacityEnforcement=SOFT must not be quietly given a hard quota, which would start
-	// failing writes that the volume was deliberately allowed to make.
-	enforceCapacity, err := quotaEnforcementFromPv(pv)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Volume has an unusable capacityEnforcement, not setting a quota")
+		logger.Warn().Err(err).Msg("Cannot create quota for volume")
 		return false, err
 	}
 
 	logger.Info().Int64("capacity", capacity).Bool("enforce_capacity", enforceCapacity).
+		Uint64("grace_seconds", graceSeconds).
 		Msg("Volume has no quota, creating one from its PersistentVolume")
 	if _, err := vol.setQuota(ctx, &enforceCapacity, uint64(capacity)); err != nil {
 		logger.Error().Err(err).Msg("Failed to create quota for volume")
 		return false, err
 	}
 	logger.Info().Int64("capacity", capacity).Bool("enforce_capacity", enforceCapacity).
-		Msg("Created quota for volume")
+		Uint64("grace_seconds", graceSeconds).Msg("Created quota for volume")
 	return true, nil
 }
 
