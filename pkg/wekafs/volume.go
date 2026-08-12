@@ -135,9 +135,6 @@ func (v *Volume) withUnsupportedMountOptionsPruned(ctx context.Context, opts Mou
 		if v.apiClient != nil && !v.apiClient.SupportsSyncOnCloseMountOption() {
 			logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
 			opts = opts.RemoveOption(MountOptionSyncOnClose)
-		} else if v.apiClient == nil {
-			logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Cannot determine current Weka cluster version, dropping mount option.")
-			opts = opts.RemoveOption(MountOptionSyncOnClose)
 		}
 	}
 	return opts
@@ -556,8 +553,7 @@ func (v *Volume) getFilesystemTotalCapacity(ctx context.Context) (int64, error) 
 func (v *Volume) getMaxCapacity(ctx context.Context) (int64, error) {
 
 	if v.apiClient == nil {
-		// this is a legacy, API-unbound volume
-		return v.getFilesystemFreeSpace(ctx)
+		return -1, status.Errorf(codes.FailedPrecondition, "Could not bind volume %s to API endpoint", v.FilesystemName)
 	}
 
 	// max size of the volume is the current size of the filesystem (or 0 if not exists) + free space on storage
@@ -705,10 +701,7 @@ func (v *Volume) ensureSufficientFsSizeOnUpdateCapacity(ctx context.Context, cap
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	if v.apiClient == nil {
-		logger.Trace().Msg("Volume is not bound to API client, expansion is not possible")
-		return nil
-	} else {
-
+		return status.Errorf(codes.FailedPrecondition, "Volume %s is not bound to an API client, expansion is not possible", v.GetId())
 	}
 	currentFsCapacity, err := v.getCapacityFromFsSize(ctx)
 	if err != nil {
