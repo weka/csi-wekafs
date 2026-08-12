@@ -209,3 +209,74 @@ func TestDynamicVolumesDoNotNeedTheStaticFlag(t *testing.T) {
 	assert.False(t, created)
 	assert.Error(t, err, "a dynamic volume must proceed past the gate on backfillMissingQuotas alone")
 }
+
+// The quota mode must come from the volume, not from a default. A volume provisioned with
+// capacityEnforcement=SOFT that is quietly given a hard quota starts failing writes it was
+// deliberately allowed to make.
+func TestQuotaEnforcementComesFromTheVolumeContext(t *testing.T) {
+	withAttrs := func(attrs map[string]string) *v1.PersistentVolume {
+		return &v1.PersistentVolume{Spec: v1.PersistentVolumeSpec{
+			PersistentVolumeSource: v1.PersistentVolumeSource{
+				CSI: &v1.CSIPersistentVolumeSource{Driver: "csi.weka.io", VolumeAttributes: attrs},
+			},
+		}}
+	}
+
+	testCases := []struct {
+		name      string
+		attrs     map[string]string
+		expect    bool
+		expectErr bool
+	}{
+		// This is what a real PersistentVolume carries: the StorageClass parameters are persisted
+		// verbatim into volumeAttributes at provisioning time.
+		{name: "HARD is enforced", attrs: map[string]string{"capacityEnforcement": "HARD"}, expect: true},
+		{name: "SOFT is not enforced", attrs: map[string]string{"capacityEnforcement": "SOFT"}, expect: false},
+		{name: "absent defaults to hard", attrs: map[string]string{"volumeType": "dir/v1"}, expect: true},
+		{name: "empty attributes default to hard", attrs: map[string]string{}, expect: true},
+		{
+			// Better to leave the volume without a quota than to guess at the enforcement.
+			name:      "an unusable value is an error, not a guess",
+			attrs:     map[string]string{"capacityEnforcement": "SOMETHINGELSE"},
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := quotaEnforcementFromPv(withAttrs(tc.attrs))
+			if tc.expectErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expect, got)
+		})
+	}
+
+	// A PersistentVolume with no CSI source at all must not panic.
+	got, err := quotaEnforcementFromPv(&v1.PersistentVolume{})
+	assert.NoError(t, err)
+	assert.True(t, got)
+
+	got, err = quotaEnforcementFromPv(nil)
+	assert.NoError(t, err)
+	assert.True(t, got)
+}
+
+// GetQuotaType is what "retain the existing enforcement" is derived from when a caller passes no
+// preference, so its mapping has to be exact. Expanding a volume goes through that path, and a
+// wrong answer there silently converts a soft quota to hard.
+func TestQuotaTypeRoundTripsForRetain(t *testing.T) {
+	// A hard quota has both limits equal - see NewQuotaCreateRequest.
+	hard := &apiclient.Quota{HardLimitBytes: 1 << 30, SoftLimitBytes: 1 << 30}
+	assert.Equal(t, apiclient.QuotaTypeHard, hard.GetQuotaType())
+	assert.True(t, hard.GetQuotaType() == apiclient.QuotaTypeHard,
+		"a hard quota must be retained as enforced")
+
+	// A soft quota carries the maximum as its hard limit.
+	soft := &apiclient.Quota{HardLimitBytes: apiclient.MaxQuotaSize, SoftLimitBytes: 1 << 30}
+	assert.Equal(t, apiclient.QuotaTypeSoft, soft.GetQuotaType())
+	assert.False(t, soft.GetQuotaType() == apiclient.QuotaTypeHard,
+		"a soft quota must be retained as unenforced, not promoted to hard")
+}

@@ -742,7 +742,7 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 	}
 
 	// check if the quota already exists. If not - create it and exit
-	_, err = v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
+	existing, err := v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
 	if err != nil {
 		if err == apiclient.ObjectNotFoundError {
 			logger.Trace().Uint64("inode_id", inodeId).Msg("No quota entry for inode ID")
@@ -750,6 +750,17 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 			logger.Error().Err(err).Uint64("inode_id", inodeId).Msg("Failed to fetch quota object of the volume")
 			return status.Error(codes.Internal, err.Error())
 		}
+	}
+
+	// A nil enforceCapacity means RETAIN, as logged above: keep whatever enforcement the volume
+	// already has. Without this it fell through to setQuota's default of HARD, so expanding a volume
+	// provisioned with capacityEnforcement=SOFT silently converted its quota to hard - the caller
+	// asked to change the size, not the enforcement.
+	if enforceCapacity == nil && existing != nil {
+		retained := existing.GetQuotaType() == apiclient.QuotaTypeHard
+		enforceCapacity = &retained
+		logger.Debug().Str("retained_quota_type", string(existing.GetQuotaType())).
+			Msg("Retaining the enforcement mode the volume already had")
 	}
 
 	_, err = v.setQuota(ctx, enforceCapacity, uint64(capacityLimit))
