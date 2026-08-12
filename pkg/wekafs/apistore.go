@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
@@ -37,10 +36,9 @@ var ClusterApiNotFoundError = errors.New("could not get API client by cluster gu
 // ApiStore hashmap of all APIs defined by credentials + endpoints
 type ApiStore struct {
 	sync.RWMutex
-	apis          map[uint32]*apiclient.ApiClient
-	legacySecrets *map[string]string
-	config        *DriverConfig
-	Hostname      string
+	apis     map[uint32]*apiclient.ApiClient
+	config   *DriverConfig
+	Hostname string
 	// driverName labels the API metrics recorded by clients this store creates. It is passed in
 	// rather than read from config.GetDriver(), which is still nil when the store is constructed.
 	driverName string
@@ -227,37 +225,15 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	return newClient, nil
 }
 
-func (api *ApiStore) GetDefaultSecrets() (*map[string]string, error) {
-	err := pathIsDirectory(LegacySecretPath)
-	if err != nil {
-		return nil, errors.New("no legacy secret exists")
-	}
-	KEYS := []string{"scheme", "endpoints", "organization", "username", "password"}
-	ret := make(map[string]string)
-	for _, k := range KEYS {
-		filePath := fmt.Sprintf("%s/%s", LegacySecretPath, k)
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			return nil, errors.New(fmt.Sprintf("Missing key %s in legacy secret configuration", k))
-		}
-		contents, err := os.ReadFile(filePath)
-		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Could not read key %s from legacy secret configuration", k))
-		}
-		ret[k] = string(contents)
-	}
-	return &ret, nil
-}
-
 func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[string]string) (*apiclient.ApiClient, error) {
 	logger := log.Ctx(ctx)
+	// Every volume must resolve to a Weka API client. There is no unauthenticated fallback: a
+	// request that arrives without credentials is a misconfiguration, and failing here surfaces it
+	// instead of silently provisioning a volume the driver cannot enforce capacity on.
 	if len(secrets) == 0 {
-		if api.legacySecrets != nil {
-			logger.Trace().Msg("No explicit API service for request, using legacySecrets")
-			secrets = *api.legacySecrets
-		} else {
-			logger.Trace().Msg("No API service for request, switching to legacy mode")
-			return nil, nil
-		}
+		logger.Error().Msg("No API secret supplied for request")
+		return nil, errors.New("no Weka API credentials supplied: reference an API secret from the StorageClass " +
+			"(csi.storage.k8s.io/provisioner-secret-name and related parameters)")
 	}
 	client, err := api.fromSecrets(ctx, secrets, api.Hostname)
 	if err != nil {
@@ -265,26 +241,18 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 		return nil, err
 	}
 	if client == nil {
-		logger.Trace().Msg("API service was not found for request, switching to legacy mode")
-		return nil, nil
+		logger.Error().Msg("API service was not found for request")
+		return nil, errors.New("could not initialize a Weka API client from the supplied credentials")
 	}
 	logger.Trace().Msg("Successfully initialized API backend for request")
 	return client, nil
 }
 
 func NewApiStore(config *DriverConfig, hostname, driverName string) *ApiStore {
-	s := &ApiStore{
+	return &ApiStore{
 		apis:       make(map[uint32]*apiclient.ApiClient),
 		config:     config,
 		Hostname:   hostname,
 		driverName: driverName,
 	}
-	secrets, err := s.GetDefaultSecrets()
-	if err != nil {
-		log.Trace().Msg("No global API secret defined")
-	} else {
-		log.Info().Msg("Initialized API with global API secret")
-		s.legacySecrets = secrets
-	}
-	return s
 }
