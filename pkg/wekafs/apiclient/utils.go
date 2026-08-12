@@ -41,12 +41,20 @@ func ObjectRequestHasRequiredFields(o ApiObjectRequest) bool {
 	ref := reflect.ValueOf(o)
 	var missingFields []string
 	for _, field := range o.getRequiredFields() {
-		if reflect.Indirect(ref).FieldByName(field).IsZero() {
+		v := reflect.Indirect(ref).FieldByName(field)
+		if !v.IsValid() {
+			// The name does not match any field on the struct, which means getRequiredFields and the
+			// struct have drifted apart. Report it as missing rather than calling IsZero on the zero
+			// Value, which panics: a typo in a validation list must not take the process down.
+			missingFields = append(missingFields, field+" (no such field)")
+			continue
+		}
+		if v.IsZero() {
 			missingFields = append(missingFields, field)
 		}
 	}
 	if len(missingFields) > 0 {
-		log.Error().Strs("missing_fileds", missingFields).Msg("Object is missing mandatory fields")
+		log.Error().Strs("missing_fields", missingFields).Msg("Object is missing mandatory fields")
 		return false
 	}
 	return true

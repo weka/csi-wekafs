@@ -225,16 +225,18 @@ func (qd *QuotaDeleteRequest) String() string {
 	return fmt.Sprintln("QuotaDeleteRequest(fsUid:", qd.filesystemUid, "inodeId:", qd.InodeId, ")")
 }
 
+// getApiUrl delegates to the Quota object rather than restating the path, the same way
+// QuotaCreateRequest does. Building it by hand here is what let it drift to "quotas" while create
+// and read used "quota".
 func (qd *QuotaDeleteRequest) getApiUrl(a *ApiClient) string {
-	url, err := url.JoinPath((&FileSystem{Uid: qd.filesystemUid}).GetApiUrl(a), "quotas", strconv.FormatUint(qd.InodeId, 10))
-	if err != nil {
-		return ""
-	}
-	return url
+	return qd.getRelatedObject().GetApiUrl(a)
 }
 
 func (qd *QuotaDeleteRequest) getRequiredFields() []string {
-	return []string{"filesystemUid", "inodeId"}
+	// "InodeId" is capitalised because the field on this struct is - unlike the create and update
+	// requests, whose inodeId really is unexported. The names here are looked up by reflection, so a
+	// mismatch is not a compile error.
+	return []string{"filesystemUid", "InodeId"}
 }
 
 func (qd *QuotaDeleteRequest) hasRequiredFields() bool {
