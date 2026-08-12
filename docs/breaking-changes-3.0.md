@@ -58,32 +58,53 @@ clusters too old to support directory quotas as volumes.
 3.0 still reads and writes those attributes. That is deliberate, and it is a stay of execution
 rather than a design decision:
 
-> **Due to a bug in earlier CSI Plugin versions, some volumes were created without a quota ever
-> being set on the WEKA cluster.** For those volumes the extended attribute is the *only* record of
-> their capacity. Removing extended-attribute support today would break them — the plugin would
-> have nothing left to read a capacity from.
+> **Some existing volumes have no quota on the WEKA cluster at all.** For those, the extended
+> attribute is the *only* record of their capacity. Removing extended-attribute support today would
+> break them — the plugin would have nothing left to read a capacity from.
+>
+> Statically provisioned volumes are the expected case: the plugin does not create them and does not
+> set their quota, which is documented behaviour. Dynamically provisioned volumes should all have
+> one.
 
 The attributes will be removed in a later release. Before that can happen, affected volumes have to
 be repaired, and the repair is not something the plugin can do on its own during an upgrade: it has
 to reconcile Kubernetes objects against WEKA cluster state.
 
-### The intended fix
+### The fix
 
-A migration readiness script will:
+The plugin repairs this itself, in the volume health reconciler that already sweeps every
+PersistentVolume of the driver. For each volume with no quota it creates one matching the capacity
+declared on the PersistentVolume. Volumes that already have a quota are untouched.
 
-* list every PersistentVolume in the cluster and keep those provisioned by the `csi.weka.io` driver;
-* look up each one's quota entry on the WEKA cluster through the REST API;
-* where no quota exists, create one matching the capacity declared on the PersistentVolume.
+It is off by default, because it writes to the WEKA cluster from a background loop:
 
-The extended attribute is **disregarded entirely** in that flow. The PersistentVolume is the source
-of truth for what the volume's capacity is supposed to be; the attribute is at best a copy of it and
-at worst stale.
+```yaml
+controller:
+  healthMonitor:
+    backfillMissingQuotas: true
+    # Statically provisioned volumes are a separate decision - see below
+    setQuotaOnStaticVolumes: false
+```
 
-This script does not ship yet. Until it does, and until you have run it, treat any volume that has
-no quota on the WEKA cluster as depending on extended attributes, and do not assume a future release
-will keep reading them.
+`setQuotaOnStaticVolumes` is kept separate on purpose. A statically provisioned volume is yours: the
+plugin did not create it and never set its quota, and the documented behaviour is that you set one
+yourself. Turning that setting on starts enforcing a capacity limit that was not being enforced
+before, using the size declared on the PersistentVolume — so check that the size is the one you want
+before enabling it.
 
-> The older `migration/migrate-legacy-csi-volumes.sh` is **not** this script. It walks a filesystem
+The extended attribute is **disregarded entirely**. The PersistentVolume is the source of truth for
+what the volume's capacity is supposed to be; the attribute is at best a copy of it and at worst
+stale.
+
+This needs a **data services container** on the WEKA cluster. Setting a quota on a directory that
+already holds data makes the cluster walk the whole tree to stamp the quota ID onto every file, and
+that container is what runs the walk in the background. Volumes that cannot be given a quota are
+logged with the reason and the fix that applies to them.
+
+Until every volume has a quota, treat any volume without one as depending on extended attributes,
+and do not assume a future release will keep reading them.
+
+> The older `migration/migrate-legacy-csi-volumes.sh` does **not** do this job. It walks a filesystem
 > rather than the PersistentVolume list, takes its capacity from the extended attribute rather than
 > from the PersistentVolume, and drives the `weka` CLI rather than the REST API.
 
