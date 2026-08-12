@@ -102,6 +102,13 @@ controller:
     #    Turning this on starts enforcing a capacity limit that was not being enforced before, using
     #    the size declared on the PersistentVolume - so make sure that size is the one you want.
     setQuotaOnStaticVolumes: false
+    # -- Report a volume that has no quota as abnormal, which raises a warning event on its
+    #    PersistentVolumeClaim through the health monitor sidecar. Off by default: such a volume
+    #    works, what it lacks is capacity enforcement, and on a fleet part-way through repair - or
+    #    one with statically provisioned volumes that have no quota by design - flagging every one
+    #    buries the genuinely broken volumes this is meant to surface.
+    #    Independent of backfillMissingQuotas: you can report without repairing, or repair quietly.
+    reportVolumesWithoutQuotaAsAbnormal: false
   # -- optional nodeSelector for controller components only
   nodeSelector: {}
   # -- optional affinity for controller components only

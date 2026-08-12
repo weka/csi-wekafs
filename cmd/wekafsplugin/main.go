@@ -110,6 +110,7 @@ var (
 	keepThinProvisioningRatioOnExpand    = flag.Bool("keepthinprovisioningratioonexpand", true, "On filesystem expansion, scale thin-provisioning min-SSD and max-SSD to preserve their ratios to total capacity")
 	advertiseVolumeHealthSupport         = flag.Bool("advertisevolumehealthsupport", true, "Expose GET_VOLUME and VOLUME_CONDITION, allowing the CSI health monitor to report volume condition and capacity")
 	backfillMissingQuotas                = flag.Bool("backfillmissingquotas", false, "Let the volume health reconciler create a missing quota for a dynamically provisioned volume, sized from its PersistentVolume. Off by default: it writes to the Weka cluster from a background loop")
+	reportNoQuotaAsAbnormal              = flag.Bool("reportvolumeswithoutquotaasabnormal", false, "Report a volume that has no quota as abnormal, raising a warning event on its PersistentVolumeClaim. Off by default: such a volume works, it merely has no capacity enforcement")
 	setQuotaOnStaticVolumes              = flag.Bool("setquotaonstaticvolumes", false, "Extend quota backfilling to statically provisioned volumes. Requires backfillmissingquotas. Off by default: a static volume is administrator-managed and was never given a quota by the driver")
 	// Set by the build process
 	version = ""
@@ -243,6 +244,7 @@ func handle(ctx context.Context) {
 		AdvertiseVolumeHealthSupport: *advertiseVolumeHealthSupport,
 		BackfillMissingQuotas:        *backfillMissingQuotas,
 		SetQuotaOnStaticVolumes:      *setQuotaOnStaticVolumes,
+		ReportNoQuotaAsAbnormal:      *reportNoQuotaAsAbnormal,
 
 		MutuallyExclusiveMountOptions: mutuallyExclusiveMountOptionsStrings,
 

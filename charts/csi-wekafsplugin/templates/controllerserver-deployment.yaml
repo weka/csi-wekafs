@@ -126,6 +126,7 @@ spec:
             - "--advertisevolumehealthsupport={{ .Values.controller.healthMonitor.enabled }}"
             - "--backfillmissingquotas={{ .Values.controller.healthMonitor.backfillMissingQuotas }}"
             - "--setquotaonstaticvolumes={{ .Values.controller.healthMonitor.setQuotaOnStaticVolumes }}"
+            - "--reportvolumeswithoutquotaasabnormal={{ .Values.controller.healthMonitor.reportVolumesWithoutQuotaAsAbnormal }}"
           {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
             - "--usenfs"
           {{- end }}

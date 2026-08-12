@@ -98,8 +98,9 @@ func TestPvCapacityBytesIsTheBackfillSource(t *testing.T) {
 	assert.Equal(t, int64(3)<<30, pvCapacityBytes(pv))
 }
 
-// Each reason a backfill cannot happen has a different fix. Reporting only "unsupported" would send
-// an operator looking in the wrong place, so every branch must name what to actually do.
+// A quota creation that failed is explained by what the cluster can do, and each case has a
+// different fix. Reporting only "failed" would send an operator looking in the wrong place, so every
+// branch must name what to actually do.
 func TestQuotaBackfillRemedyNamesTheFix(t *testing.T) {
 	testCases := []struct {
 		name        string
@@ -125,9 +126,11 @@ func TestQuotaBackfillRemedyNamesTheFix(t *testing.T) {
 			},
 		},
 		{
-			name:        "undetermined",
-			support:     apiclient.QuotaOnNonEmptyDirectoryUnknown,
-			mustContain: []string{"could not determine"},
+			// The cluster can colour an existing directory, so a failure here is something else -
+			// say so, rather than sending the operator to look at data services.
+			name:        "cluster is capable, so this is not a data services problem",
+			support:     apiclient.QuotaOnNonEmptyDirectorySupported,
+			mustContain: []string{"not a data services problem"},
 		},
 	}
 
