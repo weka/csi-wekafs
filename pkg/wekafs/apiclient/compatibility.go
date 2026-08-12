@@ -11,7 +11,6 @@ type WekaCompatibilityRequiredVersions struct {
 	FilesystemAsVolume               string
 	DirectoryAsCSIVolume             string
 	QuotaDirectoryAsVolume           string
-	QuotaOnNonEmptyDirs              string
 	QuotaOnSnapshot                  string
 	MountFilesystemsUsingAuthToken   string
 	NewFilesystemFromSnapshot        string
