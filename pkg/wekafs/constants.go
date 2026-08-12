@@ -170,6 +170,10 @@ const (
 	// matches the chart's default health monitor interval, so a full sweep of the cluster costs
 	// about one apiserver read per distinct Secret rather than one per volume.
 	volumeSecretCacheTTL = 5 * time.Minute
+	// capacityEnforcementParam is the StorageClass parameter naming the quota type, persisted
+	// verbatim into a PersistentVolume's volumeAttributes at provisioning time.
+	capacityEnforcementParam = "capacityEnforcement"
+
 	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
 	// volumeNoQuotaMessage is reported for a volume that exists but carries no quota. It is not an
 	// abnormal condition - the volume works - but nothing enforces its capacity, so the condition

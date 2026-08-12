@@ -379,3 +379,48 @@ func TestQuotaParsesNullGraceSeconds(t *testing.T) {
 	assert.Equal(t, uint64(604800), q.GraceSeconds)
 	assert.Equal(t, apiclient.QuotaTypeSoft, q.GetQuotaType())
 }
+
+// The precedence rule for an expand: an explicit capacityEnforcement in the volume attributes wins
+// over whatever the quota currently is; its absence means retain, so the default of hard cannot
+// silently convert an existing soft quota.
+func TestQuotaEnforcementPrecedenceOnExpand(t *testing.T) {
+	// nil from getCapacityEnforcementParam's perspective is the "absent" case, which the caller
+	// turns into a nil *bool. These assertions pin the distinction the rule depends on: absent and
+	// explicit HARD both parse to true, so presence has to be tested separately from the value.
+	absent := map[string]string{"volumeType": "dir/v1"}
+	explicitHard := map[string]string{capacityEnforcementParam: "HARD"}
+	explicitSoft := map[string]string{capacityEnforcementParam: "SOFT"}
+
+	_, absentPresent := absent[capacityEnforcementParam]
+	_, hardPresent := explicitHard[capacityEnforcementParam]
+	assert.False(t, absentPresent, "absent must be distinguishable from explicit")
+	assert.True(t, hardPresent)
+
+	v, err := getCapacityEnforcementParam(absent)
+	assert.NoError(t, err)
+	assert.True(t, v, "absent parses to hard, which is why presence must be checked separately")
+
+	v, err = getCapacityEnforcementParam(explicitHard)
+	assert.NoError(t, err)
+	assert.True(t, v)
+
+	v, err = getCapacityEnforcementParam(explicitSoft)
+	assert.NoError(t, err)
+	assert.False(t, v)
+}
+
+// When capacityEnforcement is explicit, the whole quota spec comes from the volume attributes -
+// including an absent quotaGracePeriod, which is the documented default of "advisory only" rather
+// than a gap to be filled from the existing quota.
+func TestExplicitEnforcementTakesGraceFromTheSameSource(t *testing.T) {
+	attrs := map[string]string{capacityEnforcementParam: "SOFT"}
+	grace, err := getQuotaGracePeriodParam(attrs)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(0), grace,
+		"an absent grace alongside an explicit enforcement is a real value, not a gap")
+
+	attrs["quotaGracePeriod"] = "168h"
+	grace, err = getQuotaGracePeriodParam(attrs)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(168*60*60), grace)
+}

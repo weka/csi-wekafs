@@ -508,7 +508,7 @@ func Max[T constraints.Ordered](a, b T) T {
 
 func getCapacityEnforcementParam(params map[string]string) (bool, error) {
 	qt := ""
-	if val, ok := params["capacityEnforcement"]; ok {
+	if val, ok := params[capacityEnforcementParam]; ok {
 		qt = val
 	}
 	enforceCapacity := true
