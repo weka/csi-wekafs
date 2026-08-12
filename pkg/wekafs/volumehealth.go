@@ -193,6 +193,17 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 		return volume, nil, nil, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
 	}
 	if client == nil {
+		// Unknown by default, and deliberately: without credentials the driver cannot reach the
+		// cluster to find out anything about this volume, so it has no basis for calling it either
+		// healthy or broken - and unknown says precisely that. Reporting abnormal would assert a
+		// problem with the volume, when the problem is that nobody can look.
+		//
+		// It is still worth being able to surface: a volume the driver cannot see is one it cannot
+		// enforce capacity on, expand, or report on, so an operator may well want it raised.
+		if cs.getConfig().reportNoApiClientAsAbnormal {
+			logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as abnormal")
+			return volume, &csi.VolumeCondition{Abnormal: true, Message: volumeNoApiClientMessage}, nil, nil, nil
+		}
 		logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as unknown")
 		return volume, nil, nil, nil, nil
 	}

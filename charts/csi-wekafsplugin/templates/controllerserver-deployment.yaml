@@ -127,6 +127,7 @@ spec:
             - "--backfillmissingquotas={{ .Values.controller.healthMonitor.backfillMissingQuotas }}"
             - "--setquotaonstaticvolumes={{ .Values.controller.healthMonitor.setQuotaOnStaticVolumes }}"
             - "--reportvolumeswithoutquotaasabnormal={{ .Values.controller.healthMonitor.reportVolumesWithoutQuotaAsAbnormal }}"
+            - "--reportvolumeswithoutapiclientasabnormal={{ .Values.controller.healthMonitor.reportVolumesWithoutApiClientAsAbnormal }}"
           {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
             - "--usenfs"
           {{- end }}

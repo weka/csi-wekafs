@@ -179,6 +179,11 @@ const (
 	// abnormal condition - the volume works - but nothing enforces its capacity, so the condition
 	// says so rather than calling it plainly healthy.
 	volumeNoQuotaMessage = "volume exists on the Weka cluster, but has no quota, so its capacity is not enforced"
+	// volumeNoApiClientMessage is reported for a volume the driver has no credentials for. Its
+	// condition is unknown rather than bad - nothing is known about it at all - so this is only
+	// used when an operator has asked for such volumes to be raised.
+	volumeNoApiClientMessage = "volume has no Weka API credentials, so the driver cannot determine its condition, " +
+		"enforce its capacity or expand it - reference an API secret from its StorageClass"
 
 	// listVolumesPageSize bounds a page when the CO does not set max_entries. Pages are served from
 	// the reconciler's cache, so this is only about response size, not about how much work one call
