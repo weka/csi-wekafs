@@ -32,6 +32,7 @@ type DriverConfig struct {
 	setQuotaOnStaticVolumes           bool
 	reportNoQuotaAsAbnormal           bool
 	reportNoApiClientAsAbnormal       bool
+	reportQuotaMismatchAsAbnormal     bool
 	debugPath                         string
 	allowInsecureHttps                bool
 	alwaysAllowSnapshotVolumes        bool
@@ -69,6 +70,7 @@ func (dc *DriverConfig) Log() {
 		Bool("set_quota_on_static_volumes", dc.setQuotaOnStaticVolumes).
 		Bool("report_no_quota_as_abnormal", dc.reportNoQuotaAsAbnormal).
 		Bool("report_no_api_client_as_abnormal", dc.reportNoApiClientAsAbnormal).
+		Bool("report_quota_mismatch_as_abnormal", dc.reportQuotaMismatchAsAbnormal).
 		Bool("allow_insecure_https", dc.allowInsecureHttps).Bool("always_allow_snapshot_volumes", dc.alwaysAllowSnapshotVolumes).
 		Interface("mutually_exclusive_mount_options", dc.mutuallyExclusiveOptions).
 		Int64("max_create_volume_reqs", dc.maxConcurrencyPerOp["CreateVolume"]).
@@ -122,13 +124,14 @@ type DriverConfigOptions struct {
 	// The Suppress fields mirror the negative CLI flags of the same name. NewDriverConfig turns
 	// them into the positive advertise* settings the rest of the driver reads, so the inversion
 	// lives in exactly one place.
-	SuppressSnapshotSupport      bool
-	SuppressVolumeCloneSupport   bool
-	AdvertiseVolumeHealthSupport bool
-	BackfillMissingQuotas        bool
-	SetQuotaOnStaticVolumes      bool
-	ReportNoQuotaAsAbnormal      bool
-	ReportNoApiClientAsAbnormal  bool
+	SuppressSnapshotSupport       bool
+	SuppressVolumeCloneSupport    bool
+	AdvertiseVolumeHealthSupport  bool
+	BackfillMissingQuotas         bool
+	SetQuotaOnStaticVolumes       bool
+	ReportNoQuotaAsAbnormal       bool
+	ReportNoApiClientAsAbnormal   bool
+	ReportQuotaMismatchAsAbnormal bool
 
 	// MutuallyExclusiveMountOptions defaults to write cache / coherent / read cache when empty.
 	MutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings
@@ -194,6 +197,7 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		setQuotaOnStaticVolumes:           opts.SetQuotaOnStaticVolumes,
 		reportNoQuotaAsAbnormal:           opts.ReportNoQuotaAsAbnormal,
 		reportNoApiClientAsAbnormal:       opts.ReportNoApiClientAsAbnormal,
+		reportQuotaMismatchAsAbnormal:     opts.ReportQuotaMismatchAsAbnormal,
 		debugPath:                         opts.DebugPath,
 		allowInsecureHttps:                opts.AllowInsecureHttps,
 		alwaysAllowSnapshotVolumes:        opts.AlwaysAllowSnapshotVolumes,

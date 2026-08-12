@@ -53,13 +53,19 @@ type VolumeHealth struct {
 	// asking again separately would repeat the inode resolution and the quota fetch for every
 	// volume in a sweep.
 	QuotaMissing bool
+	// QuotaMismatch records that the quota's capacity differs from the one declared on the
+	// PersistentVolume. Established only when the driver is asked to look for it.
+	QuotaMismatch bool
 	// InodeId is the inode the volume's path resolved to, and the key a quota is created against.
 	// Carried so a caller acting on QuotaMissing does not have to resolve the path a second time.
 	InodeId uint64
 }
 
-func abnormalVolumeHealth(format string, args ...interface{}) *VolumeHealth {
-	return &VolumeHealth{Abnormal: true, Message: fmt.Sprintf(format, args...)}
+// abnormalVolumeHealth builds an abnormal condition. The message reaches a Kubernetes event, so it
+// takes a fixed string rather than a format: identifiers belong in the log line at the call site,
+// not in something a namespace user reads.
+func abnormalVolumeHealth(message string) *VolumeHealth {
+	return &VolumeHealth{Abnormal: true, Message: message}
 }
 
 // ProbeHealth inspects the volume using the Weka REST API only, never mounting the filesystem,
@@ -87,10 +93,12 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 		return nil, err
 	}
 	if fsObj == nil {
-		return abnormalVolumeHealth("filesystem %s does not exist on the Weka cluster", v.FilesystemName), nil
+		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Filesystem backing the volume does not exist on the Weka cluster")
+		return abnormalVolumeHealth(volumeFilesystemMissingMessage), nil
 	}
 	if fsObj.IsRemoving {
-		return abnormalVolumeHealth("filesystem %s is being removed", v.FilesystemName), nil
+		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Filesystem backing the volume is being removed")
+		return abnormalVolumeHealth(volumeFilesystemRemovingMessage), nil
 	}
 
 	// Every volume type is a path inside the filesystem - the filesystem root for filesystem-backed
@@ -105,7 +113,9 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 	inodeId, err := v.apiClient.ResolvePathToInode(ctx, fsObj, relativePath)
 	if err != nil {
 		if errors.Is(err, apiclient.ObjectNotFoundError) {
-			return abnormalVolumeHealth("path %s does not exist on filesystem %s", relativePath, v.FilesystemName), nil
+			logger.Warn().Str("filesystem", v.FilesystemName).Str("path", relativePath).
+				Msg("Volume directory does not exist on the Weka cluster")
+			return abnormalVolumeHealth(volumePathMissingMessage), nil
 		}
 		return nil, err
 	}
@@ -229,6 +239,26 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 	if health.Capacity > 0 {
 		volume.CapacityBytes = health.Capacity
 	}
+
+	// A quota that does not match the capacity Kubernetes declared. Reported only - the quota is
+	// never changed here.
+	//
+	// Correcting it automatically is the wrong call in the direction that matters. A quota larger
+	// than the PersistentVolume is usually an administrator having raised it deliberately, and the
+	// volume may already hold more than the declared capacity - which is why they raised it.
+	// Shrinking a hard quota back would put the volume instantly over quota and block its writes,
+	// from a background loop, on a workload that was fine a moment earlier.
+	//
+	// Skipped when the volume has no quota at all: that is a different condition with its own
+	// message, and 0 is not a mismatch.
+	declared := pvCapacityBytes(pv)
+	if cs.getConfig().reportQuotaMismatchAsAbnormal && !health.QuotaMissing &&
+		health.Capacity > 0 && declared > 0 && health.Capacity != declared {
+		health.QuotaMismatch = true
+		health.Abnormal = true
+		health.Message = quotaMismatchMessage(health.Capacity, declared)
+	}
+
 	if health.Abnormal {
 		logger.Warn().Str("condition", health.Message).Msg("Volume is abnormal")
 	}
@@ -547,4 +577,13 @@ func (sc *secretCache) store(key string, secrets map[string]string) {
 	sc.Lock()
 	defer sc.Unlock()
 	sc.entries[key] = secretCacheEntry{secrets: secrets, fetchedAt: time.Now()}
+}
+
+// quotaMismatchMessage explains a quota that does not match the declared capacity, and names the
+// fix. Expanding the claim is the fix in both directions: it re-runs the capacity update, which
+// rewrites the quota from the PersistentVolume, and it is also how an administrator makes a
+// deliberately raised quota official.
+func quotaMismatchMessage(quotaBytes, declaredBytes int64) string {
+	return fmt.Sprintf("the quota on the Weka cluster allows %d bytes, but the PersistentVolume declares %d - "+
+		"expand the PersistentVolumeClaim to bring them into line", quotaBytes, declaredBytes)
 }

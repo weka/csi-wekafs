@@ -123,6 +123,16 @@ controller:
     #    StorageClass. As with the setting above, the volume itself remains usable - existing mounts
     #    and running pods are unaffected.
     reportVolumesWithoutApiClientAsAbnormal: false
+    # -- Report a volume whose quota on the WEKA cluster does not match the capacity declared on its
+    #    PersistentVolume. Reports only - the quota is never changed.
+    #    Correcting it automatically would be wrong in the direction that matters: a quota larger
+    #    than the PersistentVolume usually means an administrator raised it deliberately, and the
+    #    volume may already hold more than the declared capacity - which is why they raised it.
+    #    Shrinking a hard quota back would put the volume instantly over quota and block its writes.
+    #    The reported message names the fix: expand the PersistentVolumeClaim to bring the two into
+    #    line. That works in both directions - it re-runs the capacity update, which rewrites the
+    #    quota from the PersistentVolume.
+    reportVolumesWithQuotaMismatchAsAbnormal: false
   # -- optional nodeSelector for controller components only
   nodeSelector: {}
   # -- optional affinity for controller components only

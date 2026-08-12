@@ -502,3 +502,43 @@ func TestDescribeVolumeReportsNoApiClientPerSetting(t *testing.T) {
 		})
 	}
 }
+
+// The mismatch message has to name the fix and both numbers, since which way the discrepancy runs
+// changes what the operator should think about it.
+func TestQuotaMismatchMessage(t *testing.T) {
+	msg := quotaMismatchMessage(10<<30, 1<<30)
+	assert.Contains(t, msg, "10737418240")
+	assert.Contains(t, msg, "1073741824")
+	assert.Contains(t, msg, "expand the PersistentVolumeClaim")
+}
+
+// Reporting a mismatch is opt-in, and reporting is all it ever does - the quota is not touched.
+func TestQuotaMismatchIsReportOnlyAndOptIn(t *testing.T) {
+	assert.False(t, NewDriverConfig(DriverConfigOptions{}).reportQuotaMismatchAsAbnormal,
+		"reporting quota mismatches must be opt-in")
+
+	// There is deliberately no setting that resets a quota to the PersistentVolume's capacity.
+	// Shrinking a hard quota under a volume that is already using more than its declared capacity
+	// blocks its writes, and that is the case an administrator most often creates on purpose.
+	cfg := NewDriverConfig(DriverConfigOptions{ReportQuotaMismatchAsAbnormal: true})
+	assert.True(t, cfg.reportQuotaMismatchAsAbnormal)
+	assert.False(t, cfg.backfillMissingQuotas,
+		"reporting a mismatch must not imply any write to the cluster")
+}
+
+// A soft quota is stored with its hard limit at the maximum, so comparing the wrong field reports
+// every soft-quota volume in the fleet as an exabyte-scale mismatch. GetCapacityLimit is what makes
+// the comparison meaningful, and this pins it.
+func TestSoftQuotaIsNotAMismatch(t *testing.T) {
+	declared := int64(1) << 30
+
+	soft := &apiclient.Quota{SoftLimitBytes: uint64(declared), HardLimitBytes: apiclient.MaxQuotaSize}
+	assert.Equal(t, apiclient.QuotaTypeSoft, soft.GetQuotaType())
+	assert.Equal(t, uint64(declared), soft.GetCapacityLimit(),
+		"a soft quota's capacity is its soft limit, not the maximum stored as its hard limit")
+	assert.NotEqual(t, soft.HardLimitBytes, uint64(declared),
+		"comparing the hard limit instead would report a mismatch of nearly 8 exabytes")
+
+	hard := &apiclient.Quota{SoftLimitBytes: uint64(declared), HardLimitBytes: uint64(declared)}
+	assert.Equal(t, uint64(declared), hard.GetCapacityLimit())
+}
