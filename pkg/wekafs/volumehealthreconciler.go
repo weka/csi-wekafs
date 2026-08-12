@@ -226,6 +226,22 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 // is what separates the two cases here.
 const provisionedByAnnotation = "pv.kubernetes.io/provisioned-by"
 
+// quotaEnforcementFromPv reports whether a quota created for this volume should be hard or soft.
+//
+// The StorageClass parameters a volume was provisioned with are persisted verbatim into the
+// PersistentVolume's volumeAttributes, so capacityEnforcement is readable there long after the
+// StorageClass itself may have changed - and a StorageClass cannot be edited anyway. For a
+// statically provisioned volume the administrator writes those attributes directly, so the same
+// lookup honours their choice too.
+//
+// Absent means hard, matching what provisioning does with an unset parameter.
+func quotaEnforcementFromPv(pv *v1.PersistentVolume) (bool, error) {
+	if pv == nil || pv.Spec.CSI == nil {
+		return true, nil
+	}
+	return getCapacityEnforcementParam(pv.Spec.CSI.VolumeAttributes)
+}
+
 // isStaticallyProvisioned reports whether this PersistentVolume was written by an administrator
 // rather than created by the provisioner.
 func isStaticallyProvisioned(pv *v1.PersistentVolume) bool {
@@ -303,12 +319,23 @@ func (r *volumeHealthReconciler) backfillMissingQuota(ctx context.Context, vol *
 		return false, err
 	}
 
-	logger.Info().Int64("capacity", capacity).Msg("Volume has no quota, backfilling from its PersistentVolume")
-	if _, err := vol.setQuota(ctx, nil, uint64(capacity)); err != nil {
-		logger.Error().Err(err).Msg("Failed to backfill quota for volume")
+	// Hard or soft comes from the volume itself, never from a default here: a volume provisioned
+	// with capacityEnforcement=SOFT must not be quietly given a hard quota, which would start
+	// failing writes that the volume was deliberately allowed to make.
+	enforceCapacity, err := quotaEnforcementFromPv(pv)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Volume has an unusable capacityEnforcement, not setting a quota")
 		return false, err
 	}
-	logger.Info().Int64("capacity", capacity).Msg("Backfilled quota for volume")
+
+	logger.Info().Int64("capacity", capacity).Bool("enforce_capacity", enforceCapacity).
+		Msg("Volume has no quota, creating one from its PersistentVolume")
+	if _, err := vol.setQuota(ctx, &enforceCapacity, uint64(capacity)); err != nil {
+		logger.Error().Err(err).Msg("Failed to create quota for volume")
+		return false, err
+	}
+	logger.Info().Int64("capacity", capacity).Bool("enforce_capacity", enforceCapacity).
+		Msg("Created quota for volume")
 	return true, nil
 }
 
