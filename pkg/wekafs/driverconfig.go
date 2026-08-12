@@ -28,6 +28,8 @@ type DriverConfig struct {
 	advertiseSnapshotSupport          bool
 	advertiseVolumeCloneSupport       bool
 	advertiseVolumeHealthSupport      bool
+	backfillMissingQuotas             bool
+	setQuotaOnStaticVolumes           bool
 	debugPath                         string
 	allowInsecureHttps                bool
 	alwaysAllowSnapshotVolumes        bool
@@ -61,6 +63,8 @@ func (dc *DriverConfig) Log() {
 		Bool("allow_auto_fs_creation", dc.allowAutoFsCreation).Bool("allow_auto_fs_expansion", dc.allowAutoFsExpansion).
 		Bool("advertise_snapshot_support", dc.advertiseSnapshotSupport).Bool("advertise_volume_clone_support", dc.advertiseVolumeCloneSupport).
 		Bool("advertise_volume_health_support", dc.advertiseVolumeHealthSupport).
+		Bool("backfill_missing_quotas", dc.backfillMissingQuotas).
+		Bool("set_quota_on_static_volumes", dc.setQuotaOnStaticVolumes).
 		Bool("allow_insecure_https", dc.allowInsecureHttps).Bool("always_allow_snapshot_volumes", dc.alwaysAllowSnapshotVolumes).
 		Interface("mutually_exclusive_mount_options", dc.mutuallyExclusiveOptions).
 		Int64("max_create_volume_reqs", dc.maxConcurrencyPerOp["CreateVolume"]).
@@ -117,6 +121,8 @@ type DriverConfigOptions struct {
 	SuppressSnapshotSupport      bool
 	SuppressVolumeCloneSupport   bool
 	AdvertiseVolumeHealthSupport bool
+	BackfillMissingQuotas        bool
+	SetQuotaOnStaticVolumes      bool
 
 	// MutuallyExclusiveMountOptions defaults to write cache / coherent / read cache when empty.
 	MutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings
@@ -178,6 +184,8 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		advertiseSnapshotSupport:          !opts.SuppressSnapshotSupport,
 		advertiseVolumeCloneSupport:       !opts.SuppressVolumeCloneSupport,
 		advertiseVolumeHealthSupport:      opts.AdvertiseVolumeHealthSupport,
+		backfillMissingQuotas:             opts.BackfillMissingQuotas,
+		setQuotaOnStaticVolumes:           opts.SetQuotaOnStaticVolumes,
 		debugPath:                         opts.DebugPath,
 		allowInsecureHttps:                opts.AllowInsecureHttps,
 		alwaysAllowSnapshotVolumes:        opts.AlwaysAllowSnapshotVolumes,
