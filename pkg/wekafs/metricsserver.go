@@ -136,10 +136,6 @@ func (ms *MetricsServer) getConfig() *DriverConfig {
 	return ms.config
 }
 
-func (ms *MetricsServer) isInDevMode() bool {
-	return ms.getConfig().isInDevMode()
-}
-
 func (ms *MetricsServer) getDefaultMountOptions() MountOptions {
 	return getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), ms.getConfig().mutuallyExclusiveOptions)
 }
