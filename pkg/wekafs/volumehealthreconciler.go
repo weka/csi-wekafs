@@ -170,6 +170,26 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 			// lock across them would serialise the whole sweep behind one volume.
 			created, backfillErr := r.backfillMissingQuota(ctx, vol, pv, health)
 
+			// A successful backfill has just repaired the very thing the probe above reported, so
+			// the condition in hand describes a volume that no longer exists in that state. Probe
+			// again and cache the result of the repair, not what prompted it - otherwise
+			// ListVolumes keeps answering "no quota" for a volume that has one, and with
+			// reportNoQuotaAsAbnormal the health monitor raises a warning event against a volume
+			// that was fixed moments earlier, until the next sweep clears it.
+			//
+			// Also outside the counters lock, for the same reason as the backfill itself. The
+			// original health is deliberately kept for the quotas_missing counter: that records
+			// what the sweep found, which is what makes quotas_created meaningful next to it.
+			cachedVolume, cachedCondition := volume, condition
+			if created && err == nil {
+				if v, c, _, _, reprobeErr := r.cs.describeVolume(ctx, pv, filesystems); reprobeErr != nil {
+					logger.Warn().Err(reprobeErr).Str("volume_id", handle).
+						Msg("Failed to re-probe volume health after quota backfill, caching the pre-backfill condition")
+				} else {
+					cachedVolume, cachedCondition = v, c
+				}
+			}
+
 			counters.Lock()
 			defer counters.Unlock()
 			if err != nil {
@@ -193,12 +213,12 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 				backfillSkipped++
 			}
 
-			entry := volumeConditionEntry{capacity: volume.CapacityBytes, probedAt: time.Now()}
-			if condition != nil {
+			entry := volumeConditionEntry{capacity: cachedVolume.CapacityBytes, probedAt: time.Now()}
+			if cachedCondition != nil {
 				entry.known = true
-				entry.abnormal = condition.Abnormal
-				entry.message = condition.Message
-				if condition.Abnormal {
+				entry.abnormal = cachedCondition.Abnormal
+				entry.message = cachedCondition.Message
+				if cachedCondition.Abnormal {
 					abnormal++
 				}
 			} else {
