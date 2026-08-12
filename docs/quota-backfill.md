@@ -10,13 +10,14 @@ to remember to run.
 
 ## Settings
 
-All three live under `controller.healthMonitor`, and all three are off by default.
+All of these live under `controller.healthMonitor`, and all are off by default.
 
 | Setting | What it does |
 | --- | --- |
 | `backfillMissingQuotas` | Create a quota for a **dynamically provisioned** volume that has none, sized from its PersistentVolume |
 | `setQuotaOnStaticVolumes` | Extend that to **statically provisioned** volumes. Requires `backfillMissingQuotas` |
-| `reportVolumesWithoutQuotaAsAbnormal` | Report a volume with no quota as **abnormal**, raising a warning event on its PersistentVolumeClaim. Independent of the other two |
+| `reportVolumesWithoutQuotaAsAbnormal` | Report a volume with no quota as **abnormal**, raising a warning event on its PersistentVolumeClaim. Independent of the others |
+| `reportVolumesWithoutApiClientAsAbnormal` | Report a volume with no WEKA API credentials as **abnormal** rather than as unknown. Independent of the others |
 
 `setQuotaOnStaticVolumes` is separate because a static volume is yours: the plugin did not create it,
 never set its quota, and its documented behaviour is that you set one yourself. Turning it on starts
@@ -102,7 +103,8 @@ abnormal:
 | `filesystem <name> does not exist on the Weka cluster` | **No** — the data is gone |
 | `filesystem <name> is being removed` | **No** — it is going right now |
 | `path <path> does not exist on filesystem <name>` | **No** — the volume's directory is gone |
-| `has no quota, so its capacity is not enforced` (only with this setting on) | **Yes** — it works, it is simply not enforced |
+| `has no quota, so its capacity is not enforced` (only with `reportVolumesWithoutQuotaAsAbnormal`) | **Yes** — it works, it is simply not enforced |
+| `has no Weka API credentials…` (only with `reportVolumesWithoutApiClientAsAbnormal`) | **Yes** — existing mounts and running pods are unaffected |
 
 The first three all mean the data is gone or going. Turning this setting on adds a fourth meaning to
 the same signal: a volume that is perfectly healthy. They are distinguishable only by reading the
@@ -115,6 +117,30 @@ fire for "capacity is not being enforced", which needs a different response and 
 Set `reportVolumesWithoutQuotaAsAbnormal: true` when you want those events — for instance while
 driving a repair to completion, where seeing which claims are still affected is the point. It is a
 poorer choice as a permanent setting if anyone alerts on those events.
+
+## Volumes the plugin cannot see at all
+
+A volume whose StorageClass references no API secret — or whose secret cannot be read — leaves the
+plugin with no way to reach the cluster on its behalf. Its condition is reported as **unknown**, not
+abnormal, and that is deliberate: unknown means the plugin could not look, whereas abnormal asserts
+that it looked and found something wrong. Defaulting to abnormal would blame the volume for what is
+really a credentials gap.
+
+Such a volume is still usable — existing mounts and running pods are unaffected — but the plugin
+cannot enforce its capacity, expand it, report its condition, or give it a quota. Nothing in this
+page's repair flow can reach it either.
+
+Set `reportVolumesWithoutApiClientAsAbnormal: true` to have those volumes raised instead:
+
+```
+volume has no Weka API credentials, so the driver cannot determine its condition, enforce its
+capacity or expand it - reference an API secret from its StorageClass
+```
+
+The fix is on the StorageClass rather than on the volume, which is why the message names it. Note a
+StorageClass cannot be edited after creation, so a volume provisioned without a secret reference
+needs the treatment described in the 3.0 breaking-changes documentation rather than an in-place
+change.
 
 ## Seeing the scale of it
 

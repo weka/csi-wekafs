@@ -113,6 +113,16 @@ controller:
     #    anything alerts on it first.
     #    Independent of backfillMissingQuotas: you can report without repairing, or repair quietly.
     reportVolumesWithoutQuotaAsAbnormal: false
+    # -- Report a volume that has no WEKA API credentials as abnormal, rather than as unknown.
+    #    Off by default. Without credentials the plugin cannot reach the cluster to find out anything
+    #    about the volume, so it has no basis for calling it healthy or broken - "unknown" says
+    #    exactly that, whereas "abnormal" asserts a problem with the volume when the problem is that
+    #    nobody can look.
+    #    Worth turning on if you want those volumes raised: the plugin cannot enforce their capacity,
+    #    expand them, or report their condition. The fix is to reference an API secret from their
+    #    StorageClass. As with the setting above, the volume itself remains usable - existing mounts
+    #    and running pods are unaffected.
+    reportVolumesWithoutApiClientAsAbnormal: false
   # -- optional nodeSelector for controller components only
   nodeSelector: {}
   # -- optional affinity for controller components only

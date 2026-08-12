@@ -31,6 +31,7 @@ type DriverConfig struct {
 	backfillMissingQuotas             bool
 	setQuotaOnStaticVolumes           bool
 	reportNoQuotaAsAbnormal           bool
+	reportNoApiClientAsAbnormal       bool
 	debugPath                         string
 	allowInsecureHttps                bool
 	alwaysAllowSnapshotVolumes        bool
@@ -67,6 +68,7 @@ func (dc *DriverConfig) Log() {
 		Bool("backfill_missing_quotas", dc.backfillMissingQuotas).
 		Bool("set_quota_on_static_volumes", dc.setQuotaOnStaticVolumes).
 		Bool("report_no_quota_as_abnormal", dc.reportNoQuotaAsAbnormal).
+		Bool("report_no_api_client_as_abnormal", dc.reportNoApiClientAsAbnormal).
 		Bool("allow_insecure_https", dc.allowInsecureHttps).Bool("always_allow_snapshot_volumes", dc.alwaysAllowSnapshotVolumes).
 		Interface("mutually_exclusive_mount_options", dc.mutuallyExclusiveOptions).
 		Int64("max_create_volume_reqs", dc.maxConcurrencyPerOp["CreateVolume"]).
@@ -126,6 +128,7 @@ type DriverConfigOptions struct {
 	BackfillMissingQuotas        bool
 	SetQuotaOnStaticVolumes      bool
 	ReportNoQuotaAsAbnormal      bool
+	ReportNoApiClientAsAbnormal  bool
 
 	// MutuallyExclusiveMountOptions defaults to write cache / coherent / read cache when empty.
 	MutuallyExclusiveMountOptions MutuallyExclusiveMountOptsStrings
@@ -190,6 +193,7 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		backfillMissingQuotas:             opts.BackfillMissingQuotas,
 		setQuotaOnStaticVolumes:           opts.SetQuotaOnStaticVolumes,
 		reportNoQuotaAsAbnormal:           opts.ReportNoQuotaAsAbnormal,
+		reportNoApiClientAsAbnormal:       opts.ReportNoApiClientAsAbnormal,
 		debugPath:                         opts.DebugPath,
 		allowInsecureHttps:                opts.AllowInsecureHttps,
 		alwaysAllowSnapshotVolumes:        opts.AlwaysAllowSnapshotVolumes,

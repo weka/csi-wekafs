@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -426,4 +427,78 @@ func TestExplicitEnforcementTakesGraceFromTheSameSource(t *testing.T) {
 	grace, err = getQuotaGracePeriodParam(attrs)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(168*60*60), grace)
+}
+
+// A volume with no API credentials reports unknown by default, and abnormal only when asked.
+//
+// The distinction matters: unknown means the driver could not look, abnormal asserts that it looked
+// and found a problem. Defaulting to abnormal would blame the volume for a credentials gap.
+func TestNoApiClientConditionIsOptInAbnormal(t *testing.T) {
+	assert.False(t, NewDriverConfig(DriverConfigOptions{}).reportNoApiClientAsAbnormal,
+		"reporting volumes without API credentials as abnormal must be opt-in")
+
+	// The message has to name the fix, since the operator's action is on the StorageClass rather
+	// than on the volume.
+	assert.Contains(t, volumeNoApiClientMessage, "API secret")
+	assert.Contains(t, volumeNoApiClientMessage, "StorageClass")
+	// And it must not read as though the volume itself is broken.
+	assert.Contains(t, volumeNoApiClientMessage, "cannot determine its condition")
+
+	// The two abnormal-reporting settings are independent - one is about a volume the driver cannot
+	// see, the other about a volume it can see but is not enforcing.
+	cfg := NewDriverConfig(DriverConfigOptions{ReportNoApiClientAsAbnormal: true})
+	assert.True(t, cfg.reportNoApiClientAsAbnormal)
+	assert.False(t, cfg.reportNoQuotaAsAbnormal)
+
+	cfg = NewDriverConfig(DriverConfigOptions{ReportNoQuotaAsAbnormal: true})
+	assert.True(t, cfg.reportNoQuotaAsAbnormal)
+	assert.False(t, cfg.reportNoApiClientAsAbnormal)
+}
+
+// describeVolume is what turns "no credentials" into a condition, so drive it both ways. A nil
+// manager makes the PV lookup irrelevant here; what matters is which of the two branches is taken.
+func TestDescribeVolumeReportsNoApiClientPerSetting(t *testing.T) {
+	pv := &v1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Name: "pv-no-creds"},
+		Spec: v1.PersistentVolumeSpec{
+			Capacity: v1.ResourceList{v1.ResourceStorage: resource.MustParse("1Gi")},
+			PersistentVolumeSource: v1.PersistentVolumeSource{CSI: &v1.CSIPersistentVolumeSource{
+				Driver:       "csi.weka.io",
+				VolumeHandle: "weka/v2/testfs/no-creds",
+			}},
+		},
+	}
+
+	for _, tc := range []struct {
+		name           string
+		report         bool
+		expectAbnormal bool
+		expectNil      bool
+	}{
+		{name: "default reports unknown", report: false, expectNil: true},
+		{name: "opted in reports abnormal", report: true, expectAbnormal: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cs := &ControllerServer{
+				config:      NewDriverConfig(DriverConfigOptions{ReportNoApiClientAsAbnormal: tc.report}),
+				api:         NewApiStore(NewDriverConfig(DriverConfigOptions{}), "test"),
+				secretCache: newSecretCache(time.Minute),
+			}
+
+			volume, condition, vol, health, err := cs.describeVolume(context.Background(), pv, nil)
+			assert.NoError(t, err)
+			assert.Nil(t, vol, "no volume can be built without an API client")
+			assert.Nil(t, health)
+			assert.Equal(t, int64(1)<<30, volume.CapacityBytes,
+				"the declared capacity is still reported when the condition is not known")
+
+			if tc.expectNil {
+				assert.Nil(t, condition, "unknown is a nil condition")
+				return
+			}
+			assert.NotNil(t, condition)
+			assert.True(t, condition.Abnormal)
+			assert.Equal(t, volumeNoApiClientMessage, condition.Message)
+		})
+	}
 }
