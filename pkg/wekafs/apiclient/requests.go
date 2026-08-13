@@ -109,6 +109,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	Response := &ApiResponse{}
 	err = json.Unmarshal(responseBody, Response)
 	Response.HttpStatusCode = response.StatusCode
+	Response.parseErrorCodes()
 	if err != nil {
 		endpoint.parseErrCount.Add(1)
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
@@ -230,6 +231,14 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 			return reqErr
 		}
 		if reqErr != nil {
+			// A full task queue is the cluster asking us to come back later, not a rejection of the
+			// request. Returning it as-is keeps it transient so retryBackoff waits and tries again,
+			// instead of failing the CSI operation and letting Kubernetes retry immediately - which
+			// only queues more work and keeps the queue full.
+			if IsTooManyTasksError(reqErr) {
+				logger.Debug().Msg("Cluster task queue is full, will back off and retry")
+				return reqErr
+			}
 			return ApiNonTransientError{reqErr}
 		}
 		s := rawResponse.HttpStatusCode
