@@ -92,6 +92,13 @@ Key components deployed:
 
 ## PR Descriptions
 
+**Every PR description follows the convention below, without exception.** It applies to
+drafts, refactors, CI changes, dependency bumps, one-line fixes, and PRs opened by tooling
+or reopened later. A PR whose description does not use these headers is not finished, and
+the description is written when the PR is opened rather than added afterwards. When editing
+an existing PR that predates this, bring it into the format rather than matching what is
+already there.
+
 PR descriptions are **copied into the release notes as they are**, so write them for
 whoever reads those — an operator or a customer, not the person who reviewed the diff.
 See PR #409 for the house example.
