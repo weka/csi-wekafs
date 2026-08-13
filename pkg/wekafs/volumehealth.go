@@ -151,7 +151,16 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 	volumeID := req.GetVolumeId()
 	logger := log.Ctx(ctx).With().Str("volume_id", volumeID).Logger()
 	logger.Debug().Msg(">>>> Received request")
-	defer logger.Debug().Msg("<<<< Completed processing request")
+
+	// Recorded from a defer because every failure below returns early; the health monitor calls this
+	// on every volume on every sweep, so it is the busiest controller RPC on a large fleet.
+	result := "FAILURE"
+	start := time.Now()
+	defer func() {
+		recordOperation(controllerMetrics.Operations.GetVolumeCounter, controllerMetrics.Operations.GetVolumeDuration,
+			start, cs.getConfig().GetDriver().name, result)
+		logger.Debug().Msg("<<<< Completed processing request")
+	}()
 
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_GET_VOLUME); err != nil {
 		logger.Err(err).Msg("Volume health reporting is not enabled")
@@ -175,6 +184,7 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 	if err != nil {
 		return nil, err
 	}
+	result = "SUCCESS"
 	return &csi.ControllerGetVolumeResponse{
 		Volume: volume,
 		Status: &csi.ControllerGetVolumeResponse_VolumeStatus{VolumeCondition: condition},
@@ -273,7 +283,15 @@ func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolume
 
 	logger := log.Ctx(ctx)
 	logger.Debug().Int32("max_entries", req.GetMaxEntries()).Msg(">>>> Received request")
-	defer logger.Debug().Msg("<<<< Completed processing request")
+
+	// As with ControllerGetVolume: recorded from a defer so the early returns above are counted too.
+	result := "FAILURE"
+	start := time.Now()
+	defer func() {
+		recordOperation(controllerMetrics.Operations.ListVolumesCounter, controllerMetrics.Operations.ListVolumesDuration,
+			start, cs.getConfig().GetDriver().name, result)
+		logger.Debug().Msg("<<<< Completed processing request")
+	}()
 
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_LIST_VOLUMES); err != nil {
 		logger.Err(err).Msg("Volume listing is not enabled")
@@ -300,6 +318,7 @@ func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolume
 	page, nextToken := paginateVolumes(remaining, int(req.GetMaxEntries()))
 
 	response := &csi.ListVolumesResponse{Entries: cs.describeVolumes(ctx, page), NextToken: nextToken}
+	result = "SUCCESS"
 	logger.Debug().Int("entries", len(response.Entries)).Bool("more_pages", nextToken != "").Msg("Listed volumes")
 	return response, nil
 }

@@ -618,6 +618,7 @@ func (ns *NodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	op := "NodeGetInfo"
 	result := "SUCCESS"
+	start := time.Now()
 	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
@@ -629,6 +630,8 @@ func (ns *NodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoReque
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		recordOperation(nodeMetrics.Operations.GetInfo, nodeMetrics.Operations.GetInfoDuration,
+			start, ns.getConfig().GetDriver().name, result)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
