@@ -1219,11 +1219,46 @@ func (v *Volume) isFilesystemEmpty(ctx context.Context) (empty bool, retErr erro
 	}
 	defer func() { _ = dir.Close() }()
 
-	fileNames, err := dir.Readdirnames(2)
-	if err == io.EOF {
-		return true, nil
+	return dirHoldsOnlySnapshots(dir)
+}
+
+// isSeedSnapshotEmpty returns true if the seed snapshot holds nothing but SnapshotsSubDirectory.
+// A seed snapshot is meant to capture the filesystem while it was still empty; anything visible
+// inside it means it no longer represents that state, and every volume seeded from it would
+// silently start life carrying that data.
+func (v *Volume) isSeedSnapshotEmpty(ctx context.Context) (empty bool, retErr error) {
+	err, umount := v.MountUnderlyingFS(ctx)
+	if err != nil {
+		return false, err
 	}
-	for _, name := range fileNames {
+	defer deferUmount(umount, &retErr)
+
+	seedSnapshotPath := filepath.Join(v.getMountPath(), SnapshotsSubDirectory, v.getSeedSnapshotAccessPoint())
+	dir, err := os.Open(seedSnapshotPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, errors.New("seed snapshot directory not found in filesystem")
+		}
+		return false, err
+	}
+	defer func() { _ = dir.Close() }()
+
+	return dirHoldsOnlySnapshots(dir)
+}
+
+// dirHoldsOnlySnapshots reports whether dir contains nothing besides the SnapshotsSubDirectory
+// entry. It reads at most two names, which is all it takes to tell empty from non-empty, so the
+// cost does not grow with the directory.
+//
+// An unreadable directory is an error, never "empty": both callers use this to decide whether to
+// refuse an operation, and answering "empty" on a failed read would wave through exactly the case
+// the check exists to catch.
+func dirHoldsOnlySnapshots(dir *os.File) (bool, error) {
+	names, err := dir.Readdirnames(2)
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+	for _, name := range names {
 		if name == SnapshotsSubDirectory {
 			continue
 		}
@@ -1338,6 +1373,19 @@ func (v *Volume) ensureSeedSnapshot(ctx context.Context) (*apiclient.Snapshot, e
 
 		if snap, err = v.createSeedSnapshot(ctx); err != nil {
 			return nil, err
+		}
+	} else if !v.server.isInDevMode() {
+		// The snapshot already existed, so nothing above established that it is still empty.
+		// Validate it before seeding anything from it: a seed snapshot that has been written into
+		// would hand its contents to every volume created from it, silently and permanently.
+		empty, err := v.isSeedSnapshotEmpty(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to validate that the seed snapshot is empty")
+			return nil, fmt.Errorf("failed to validate seed snapshot is empty: %w", err)
+		}
+		if !empty {
+			logger.Error().Msg("Seed snapshot is not empty, it has been modified and now contains data")
+			return nil, errors.New("seed snapshot is not empty, cannot provision new volumes from a seed snapshot that contains data")
 		}
 	}
 
