@@ -302,6 +302,12 @@
                 "csidriverTag": {
                     "type": "string"
                 },
+                "csimetricsserver": {
+                    "type": "string"
+                },
+                "csimetricsserverTag": {
+                    "type": "string"
+                },
                 "healthmonitorsidecar": {
                     "type": "string"
                 },
@@ -349,6 +355,9 @@
                 "enabled": {
                     "type": "boolean"
                 },
+                "metricsServerPort": {
+                    "type": "integer"
+                },
                 "nodePort": {
                     "type": "integer"
                 },
@@ -374,6 +383,82 @@
                 },
                 "snapshotterPort": {
                     "type": "integer"
+                }
+            }
+        },
+        "metricsServer": {
+            "type": "object",
+            "properties": {
+                "affinity": {
+                    "type": "object"
+                },
+                "enableBatchModeForQuotaUpdates": {
+                    "type": "boolean"
+                },
+                "enableLeaderElection": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "healthPort": {
+                    "type": "integer"
+                },
+                "labels": {
+                    "type": "object"
+                },
+                "logLevel": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "maxConcurrentRequests": {
+                    "type": "integer"
+                },
+                "metricsFetchIntervalSeconds": {
+                    "type": "integer"
+                },
+                "nodeSelector": {
+                    "type": "object"
+                },
+                "podLabels": {
+                    "type": "object"
+                },
+                "quotaCacheValiditySeconds": {
+                    "type": "integer"
+                },
+                "quotaUpdateConcurrentRequests": {
+                    "type": "integer"
+                },
+                "replicas": {
+                    "type": "integer"
+                },
+                "resources": {
+                    "type": "object"
+                },
+                "scrapeInterval": {
+                    "type": "string"
+                },
+                "terminationGracePeriodSeconds": {
+                    "type": "integer"
+                },
+                "tolerations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "effect": {
+                                "type": "string"
+                            },
+                            "key": {
+                                "type": "string"
+                            },
+                            "operator": {
+                                "type": "string"
+                            }
+                        }
+                    }
                 }
             }
         },

@@ -1,0 +1,30 @@
+{{- if .Values.metricsServer.enabled }}
+{{- if .Capabilities.APIVersions.Has "security.openshift.io/v1/SecurityContextConstraints" }}
+kind: SecurityContextConstraints
+apiVersion: security.openshift.io/v1
+metadata:
+  name: {{ .Release.Name }}-metrics-server-scc
+
+# The metrics server mounts nothing and runs no privileged operation - it only talks to the
+# Kubernetes and Weka APIs - so unlike the controller and node SCCs this grants neither
+# allowPrivilegedContainer nor allowHostDirVolumePlugin.
+{{- if .Values.hostNetwork }}
+allowHostNetwork: true
+{{- end }}
+volumes:
+  - secret
+  - emptyDir
+readOnlyRootFilesystem: false
+allowHostPorts: true
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: RunAsAny
+fsGroup:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+users:
+  - system:serviceaccount:{{ .Release.Namespace }}:{{ .Release.Name }}-metrics-server
+{{- end }}
+{{- end }}

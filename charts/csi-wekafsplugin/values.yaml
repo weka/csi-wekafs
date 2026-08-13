@@ -25,6 +25,11 @@ images:
   csidriver: quay.io/weka.io/csi-wekafs
   # -- CSI driver tag
   csidriverTag: *csiDriverVersion
+  # -- CSI metrics server image URL. Separate from the driver image: the metrics server ships as its
+  #    own image, built by Dockerfile-metricsserver
+  csimetricsserver: quay.io/weka.io/csi-metricsserver
+  # -- CSI metrics server image tag
+  csimetricsserverTag: *csiDriverVersion
 # -- image pull secret required for image download. Must have permissions to access all images above.
 #    Should be used in case of private registry that requires authentication
 imagePullSecret: ""
@@ -196,6 +201,74 @@ selinuxSupport: "off"
 # -- This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,
 #    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label
 #    `csi.weka.io/selinux_enabled="true"`
+metricsServer:
+  # -- Deploy the WEKA metrics server alongside the CSI plugin, reporting per-volume capacity and
+  #    performance to Prometheus.
+  #    NOTE: this grants a separate ServiceAccount cluster-wide read of PersistentVolumes and of the
+  #    Secrets they reference, so that it can query the WEKA cluster for those metrics.
+  #    Off by default: the metrics server also ships as its own csi-metricsserver chart, and running
+  #    both against one WEKA cluster doubles the quota API load for no extra data.
+  enabled: false
+  # -- Number of replicas for metrics server. More than one is only useful with enableLeaderElection,
+  #    which keeps exactly one of them collecting while the rest stand by.
+  #    A standby is not free: controller-runtime starts its cache on every replica, so each standby
+  #    holds a full PersistentVolume informer cache and a watch against the API server while idle
+  replicas: 2
+  # -- optional log level for metrics server only (defaults to the chart-wide logLevel)
+  logLevel: ~
+  # -- optional nodeSelector for metrics server only (merged over the chart-wide nodeSelector)
+  nodeSelector: {}
+  # -- optional affinity for metrics server only (merged over the chart-wide affinity)
+  affinity: {}
+  # -- optional labels to add to metrics server deployment
+  labels: {}
+  # -- optional labels to add to metrics server pods
+  podLabels: {}
+  # -- tolerations for metrics server only (by default same as global)
+  tolerations: *globalPluginTolerations
+  # -- concurrent requests for WEKA API (excluding quota)
+  maxConcurrentRequests: 50
+  # -- metrics fetch interval in seconds, default is 60 seconds.
+  #    Only expired metrics will be updated, set by quotaCacheValiditySeconds
+  metricsFetchIntervalSeconds: 60
+  # -- termination grace period for metrics server pods
+  terminationGracePeriodSeconds: 10
+  # -- enable leader election for metrics server
+  enableLeaderElection: true
+  # -- number of concurrent requests for metrics server to update quotas
+  quotaUpdateConcurrentRequests: 25
+  # -- the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,
+  #    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.
+  #    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded
+  quotaCacheValiditySeconds: 300
+  # -- Enable metrics server to fetch metrics from WEKA API using batches (all quotas for a filesystem in one request).
+  #    This is useful for large filesystems with many PVCs, as it reduces the number of requests to WEKA API.
+  #    This is disabled by default.
+  #    The drawback is that in such case, metrics will be reported less frequently, using cached values.
+  #    Report timestamp will be recorded for each metric, so you can see when the last update was.
+  #    This requires Prometheus server to honor timestamps.
+  #    When false, all quota values will be fetched instantaneously, during metrics collection.
+  #    Not recommended when having thousands of PVCs
+  enableBatchModeForQuotaUpdates: false
+  # -- Scrape interval for the metrics server. Defaults to the fetch interval rather than the
+  #    chart-wide metrics.podMonitor.interval: the gauges only move once per
+  #    metricsFetchIntervalSeconds, and with honorTimestamps a repeat scrape carries the same
+  #    timestamp and is discarded as a duplicate
+  scrapeInterval: 60s
+  # -- Port serving both the /healthz liveness probe and the /readyz readiness probe.
+  #    Deliberately not the controller's 8081: under hostNetwork the two share a node's network
+  #    namespace, and whichever bound second would fail
+  healthPort: 9196
+  # -- Resources for the metrics server container
+  resources:
+    limits:
+      cpu: 2
+      memory: 2Gi
+    requests:
+      cpu: 0.1
+      # Sized for the PersistentVolume informer cache plus in-flight quota fetches; at ~10k volumes
+      # the leader sits well above the 100Mi that looks sufficient when idle
+      memory: 256Mi
 selinuxNodeLabel: "csi.weka.io/selinux_enabled"
 # -- If true, the SELinux policy machine configuration will not be removed when uninstalling the plugin.
 #    This is useful for OpenShift Container Platform clusters, to not cause machine config pool update on plugin reinstall
@@ -215,6 +288,8 @@ metrics:
   snapshotterPort: 9093
   # -- Metrics port for Node Serer
   nodePort: 9094
+  # -- Metrics port for Metrics Server
+  metricsServerPort: 9096
   # -- PodMonitor resources for the Prometheus Operator. Only rendered when the
   #    monitoring.coreos.com/v1 CRDs are present in the cluster.
   podMonitor:

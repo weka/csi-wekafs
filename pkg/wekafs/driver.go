@@ -59,6 +59,7 @@ type WekaFsDriver struct {
 	ids            *identityServer
 	ns             *NodeServer
 	cs             *ControllerServer
+	ms             *MetricsServer
 	api            *ApiStore
 	debugPath      string
 	csiMode        CsiPluginMode
@@ -79,7 +80,9 @@ func NewWekaFsDriver(
 		return nil, errors.New("no node id provided")
 	}
 
-	if endpoint == "" {
+	// A mode with no CSI gRPC surface has no endpoint to listen on, and must not be made to invent a
+	// placeholder one just to satisfy this check.
+	if endpoint == "" && csiMode.servesCsiGrpc() {
 		return nil, errors.New("no driver endpoint provided")
 	}
 	if version != "" {
@@ -92,7 +95,7 @@ func NewWekaFsDriver(
 	log.Info().Msg(fmt.Sprintf("csiMode: %s", csiMode))
 	config.Log()
 
-	return &WekaFsDriver{
+	driver := &WekaFsDriver{
 		name:              driverName,
 		nodeID:            nodeID,
 		version:           vendorVersion,
@@ -103,7 +106,33 @@ func NewWekaFsDriver(
 		csiMode:           csiMode, // either "controller", "node", "all"
 		selinuxSupport:    selinuxSupport,
 		config:            config,
-	}, nil
+	}
+
+	// The metrics server lists PersistentVolumes cluster-wide through the controller-runtime manager,
+	// so it is only ever constructed for the modes that run one - CsiModeMetricsServer (its own
+	// Deployment) or CsiModeAll. It must never be constructed merely because the controller or node
+	// service is running, and never for a node-only pod, which would otherwise list the same
+	// cluster-wide PVs from every node. Constructing it here rather than lazily in Run() lets main.go
+	// register its Prometheus collectors right after the driver is built, before Run() blocks for the
+	// lifetime of the process.
+	//
+	// How a failure is handled depends on the mode. A CsiModeMetricsServer pod exists only to export
+	// metrics, so one that came up without a metrics server would sit there looking healthy while
+	// collecting nothing - fail instead, and let the Deployment surface it. Under CsiModeAll the CSI
+	// services are the job and metrics are a bonus, so carry on without them.
+	if csiMode == CsiModeMetricsServer || csiMode == CsiModeAll {
+		ms, err := NewMetricsServer(driver)
+		if err != nil {
+			if csiMode == CsiModeMetricsServer {
+				return nil, fmt.Errorf("failed to initialize metrics server: %w", err)
+			}
+			log.Warn().Err(err).Msg("Failed to initialize metrics server, continuing without it")
+		} else {
+			driver.ms = ms
+		}
+	}
+
+	return driver, nil
 }
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
@@ -114,11 +143,16 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		}
 	}
 
-	mounter := driver.NewMounter(ctx)
+	// Without a CSI gRPC surface there are no volumes to mount and no Identity service to answer, so
+	// skip building a real mounter and the IdentityServer.
+	var mounter AnyMounter
+	if driver.csiMode.servesCsiGrpc() {
+		mounter = driver.NewMounter(ctx)
 
-	// Create servers
-	log.Info().Msg("Loading IdentityServer")
-	driver.ids = NewIdentityServer(driver.name, driver.version, driver.config)
+		// Create servers
+		log.Info().Msg("Loading IdentityServer")
+		driver.ids = NewIdentityServer(driver.name, driver.version, driver.config)
+	}
 
 	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
 		log.Info().Msg("Loading ControllerServer")
@@ -162,15 +196,27 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		driver.ns = &NodeServer{}
 	}
 
+	// Metrics-server-only mode has no ControllerServer to bring up a manager for, but it still needs
+	// one for Kubernetes access and (optionally) leader election - the same mechanism controller mode
+	// uses. It never registers a gRPC surface though; see runWithLeaderElection/runWithoutLeaderElection.
+	// Unlike controller mode, there is no useful degraded mode to fall back to here: without a manager
+	// the metrics server has no Kubernetes access, so it would discover no PersistentVolumes and export
+	// nothing at all. Fail rather than idle.
+	if driver.csiMode == CsiModeMetricsServer {
+		if err := driver.initManager(ctx, true); err != nil {
+			log.Fatal().Err(err).Msg("Failed to initialize Kubernetes manager, metrics server cannot run")
+		}
+	}
+
 	s := NewNonBlockingGRPCServer(driver.csiMode)
 
 	termContext, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
-	// Controller mode with manager: use leader election
+	// Controller/metrics-server mode with manager: use leader election
 	// Controller mode without manager (not in K8s): run without leader election
 	// Node-only mode: run without leader election
-	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll) && driver.manager != nil {
+	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll || driver.csiMode == CsiModeMetricsServer) && driver.manager != nil {
 		driver.runWithLeaderElection(ctx, termContext, s)
 	} else {
 		driver.runWithoutLeaderElection(ctx, termContext, s)
@@ -276,7 +322,9 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 		}
 	}
 
-	if leaderElection {
+	// This probe reports on the gRPC server, so it belongs only to the modes that run one. A metrics
+	// server has no endpoint to parse or dial; AddToManager registers its own healthz instead.
+	if leaderElection && d.csiMode.servesCsiGrpc() {
 		// Parse socket path from endpoint (format: "unix:///path/to/socket")
 		socketProto, socketPath, err := parseEndpoint(d.endpoint)
 		if err != nil {

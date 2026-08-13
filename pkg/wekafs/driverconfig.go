@@ -53,6 +53,16 @@ type DriverConfig struct {
 	setOwnershipOnDynamicFilesystems  bool
 	allowMountOptionOverrides         bool
 	keepThinProvisioningRatioOnExpand bool
+
+	// Metrics server settings. Whether a MetricsServer is constructed at all in NewWekaFsDriver is
+	// gated on csiMode (CsiModeMetricsServer or CsiModeAll), not on any of these; the settings below
+	// only matter to the metrics server lifecycle (see metricsserver.go) once it is running.
+	metricsFetchInterval              time.Duration // how often the PV streamer refreshes its list and re-polls Weka for stats
+	metricsFetchConcurrentRequests    int           // concurrency cap for both PV processing and single-metric fetches
+	enableMetricsServerLeaderElection bool          // gate the metrics server's readiness on holding leadership
+	quotaFetchConcurrentRequests      int           // concurrency cap for refreshing per-filesystem quota maps
+	quotaCacheValidityDuration        time.Duration // how long a fetched quota map (or single quota) is considered fresh
+	useQuotaMapsForMetrics            bool          // fetch quotas in filesystem-wide batches instead of one request per volume
 }
 
 func (dc *DriverConfig) Log() {
@@ -86,6 +96,12 @@ func (dc *DriverConfig) Log() {
 		Bool("set_ownership_on_dynamic_filesystems", dc.setOwnershipOnDynamicFilesystems).
 		Bool("allow_mount_option_overrides", dc.allowMountOptionOverrides).
 		Bool("keep_thin_provisioning_ratio_on_expand", dc.keepThinProvisioningRatioOnExpand).
+		Dur("metrics_fetch_interval", dc.metricsFetchInterval).
+		Int("metrics_fetch_concurrent_requests", dc.metricsFetchConcurrentRequests).
+		Bool("enable_metrics_server_leader_election", dc.enableMetricsServerLeaderElection).
+		Int("quota_fetch_concurrent_requests", dc.quotaFetchConcurrentRequests).
+		Dur("quota_cache_validity_duration", dc.quotaCacheValidityDuration).
+		Bool("use_quota_maps_for_metrics", dc.useQuotaMapsForMetrics).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -146,7 +162,25 @@ type DriverConfigOptions struct {
 	EnforceDirVolTotalCapacity        bool
 	SetOwnershipOnDynamicFilesystems  bool
 	KeepThinProvisioningRatioOnExpand bool
+
+	// MetricsFetchIntervalSeconds, MetricsFetchConcurrentRequests, QuotaFetchConcurrentRequests and
+	// QuotaCacheValiditySeconds default to sensible non-zero values in NewDriverConfig when left at
+	// zero, since zero would otherwise mean "never" or "unbounded".
+	MetricsFetchIntervalSeconds       int
+	MetricsFetchConcurrentRequests    int
+	EnableMetricsServerLeaderElection bool
+	QuotaFetchConcurrentRequests      int
+	QuotaCacheValiditySeconds         int
+	UseQuotaMapsForMetrics            bool
 }
+
+// Defaults applied by NewDriverConfig when the corresponding metrics server option is left at zero.
+const (
+	defaultMetricsFetchIntervalSeconds    = 60
+	defaultMetricsFetchConcurrentRequests = 1
+	defaultQuotaFetchConcurrentRequests   = 5
+	defaultQuotaCacheValiditySeconds      = 60
+)
 
 func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 	var MutuallyExclusiveMountOptions []mutuallyExclusiveMountOptionSet
@@ -165,6 +199,23 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		"DeleteSnapshot":      opts.MaxDeleteSnapshotReqs,
 		"NodePublishVolume":   opts.MaxNodePublishVolumeReqs,
 		"NodeUnpublishVolume": opts.MaxNodeUnpublishVolumeReqs,
+	}
+
+	metricsFetchIntervalSeconds := opts.MetricsFetchIntervalSeconds
+	if metricsFetchIntervalSeconds == 0 {
+		metricsFetchIntervalSeconds = defaultMetricsFetchIntervalSeconds
+	}
+	metricsFetchConcurrentRequests := opts.MetricsFetchConcurrentRequests
+	if metricsFetchConcurrentRequests == 0 {
+		metricsFetchConcurrentRequests = defaultMetricsFetchConcurrentRequests
+	}
+	quotaFetchConcurrentRequests := opts.QuotaFetchConcurrentRequests
+	if quotaFetchConcurrentRequests == 0 {
+		quotaFetchConcurrentRequests = defaultQuotaFetchConcurrentRequests
+	}
+	quotaCacheValiditySeconds := opts.QuotaCacheValiditySeconds
+	if quotaCacheValiditySeconds == 0 {
+		quotaCacheValiditySeconds = defaultQuotaCacheValiditySeconds
 	}
 
 	return &DriverConfig{
@@ -202,6 +253,13 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		setOwnershipOnDynamicFilesystems:  opts.SetOwnershipOnDynamicFilesystems,
 		allowMountOptionOverrides:         opts.AllowMountOptionOverrides,
 		keepThinProvisioningRatioOnExpand: opts.KeepThinProvisioningRatioOnExpand,
+
+		metricsFetchInterval:              time.Duration(metricsFetchIntervalSeconds) * time.Second,
+		metricsFetchConcurrentRequests:    metricsFetchConcurrentRequests,
+		enableMetricsServerLeaderElection: opts.EnableMetricsServerLeaderElection,
+		quotaFetchConcurrentRequests:      quotaFetchConcurrentRequests,
+		quotaCacheValidityDuration:        time.Duration(quotaCacheValiditySeconds) * time.Second,
+		useQuotaMapsForMetrics:            opts.UseQuotaMapsForMetrics,
 	}
 }
 

@@ -1,0 +1,159 @@
+{{- if .Values.metricsServer.enabled }}
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ .Release.Name }}-metrics-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}-metrics-server
+    component: {{ .Release.Name }}-metrics-server
+    release: {{ .Release.Name }}
+    {{- if .Values.metricsServer.labels }}
+    {{- toYaml .Values.metricsServer.labels | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-metrics-server
+      component: {{ .Release.Name }}-metrics-server
+      release: {{ .Release.Name }}
+  replicas: {{ .Values.metricsServer.replicas | default 1 }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-metrics-server
+        component: {{ .Release.Name }}-metrics-server
+        release: {{ .Release.Name }}
+        {{- if .Values.metricsServer.podLabels }}
+        {{- toYaml .Values.metricsServer.podLabels | nindent 8 }}
+        {{- end }}
+    {{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/metrics'
+        prometheus.io/port: '{{ .Values.metrics.metricsServerPort | default 9096 }}'
+    {{- end }}
+    spec:
+      {{- if or .Values.metricsServer.affinity .Values.affinity }}
+      {{- $metricsServerAffinity := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $metricsServerAffinity .Values.metricsServer.affinity .Values.affinity) }}
+      affinity:
+        {{- toYaml $metricsServerAffinity | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.nodeSelector .Values.metricsServer.nodeSelector }}
+      {{- $nodeSelector := dict -}}
+      {{- $_ := include "helm-toolkit.utils.merge" (tuple $nodeSelector .Values.metricsServer.nodeSelector .Values.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml $nodeSelector | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ .Release.Name }}-metrics-server
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- if .Values.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
+      containers:
+        - name: metrics-server
+          image: {{ .Values.images.csimetricsserver }}:v{{ .Values.images.csimetricsserverTag }}
+          imagePullPolicy: Always
+          # A separate image from the CSI driver's, carrying only the metrics server. Its entrypoint is
+          # already /metricsserver; naming it explicitly keeps the command visible in the pod spec.
+          command:
+            - /metricsserver
+          args:
+            - "--drivername=$(CSI_DRIVER_NAME)"
+            - "--nodeid=$(KUBE_NODE_NAME)"
+            - "--v={{ .Values.metricsServer.logLevel | default .Values.logLevel }}"
+          {{- if .Values.tracingUrl }}
+            - "--tracingurl={{ .Values.tracingUrl }}"
+          {{- end }}
+            {{/* Deliberately not gated on .Values.metrics.enabled, which turns off metrics for the
+                 CSI sidecars. Exporting metrics is this pod's only job, so a metrics server that
+                 emitted nothing would be a pod with nothing to do. */}}
+            - "--enablemetrics"
+            - "--metricsport={{ .Values.metrics.metricsServerPort | default 9096 }}"
+          {{- if .Values.pluginConfig.allowInsecureHttps }}
+            - "--allowinsecurehttps"
+          {{- end }}
+          {{- if .Values.useJsonLogging }}
+            - "--usejsonlogging"
+          {{- end }}
+          {{- if .Values.metricsServer.maxConcurrentRequests }}
+            - "--wekametricsfetchconcurrentrequests={{ .Values.metricsServer.maxConcurrentRequests }}"
+          {{- end }}
+          {{- if .Values.metricsServer.metricsFetchIntervalSeconds }}
+            - "--wekametricsfetchintervalseconds={{ .Values.metricsServer.metricsFetchIntervalSeconds }}"
+          {{- end }}
+          {{- if .Values.metricsServer.enableLeaderElection }}
+            - "--enablemetricsserverleaderelection"
+          {{- end }}
+          {{- if .Values.metricsServer.quotaUpdateConcurrentRequests }}
+            - "--wekametricsquotaupdateconcurrentrequests={{ .Values.metricsServer.quotaUpdateConcurrentRequests }}"
+          {{- end }}
+          {{- if .Values.metricsServer.quotaCacheValiditySeconds }}
+            - "--wekametricsquotacachevalidityseconds={{ .Values.metricsServer.quotaCacheValiditySeconds }}"
+          {{- end }}
+          {{- if .Values.metricsServer.enableBatchModeForQuotaUpdates }}
+            - "--fetchquotasinbatchmode"
+          {{- end }}
+          ports:
+            # controller-runtime serves /healthz and /readyz on one bind address, so liveness and
+            # readiness share a single port rather than each having their own.
+            - containerPort: {{ .Values.metricsServer.healthPort | default 9196 }}
+              name: healthz
+              protocol: TCP
+            - containerPort: {{ .Values.metrics.metricsServerPort | default 9096 }}
+              name: ms-metrics
+              protocol: TCP
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 2
+          # With leader election on, /readyz reports leadership, so exactly one replica shows Ready
+          # and the standbys are visibly standing by rather than looking identical to the leader.
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /readyz
+              port: healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 10
+          env:
+            - name: CSI_DRIVER_NAME
+              value: {{ required "Provide CSI Driver Name" .Values.csiDriverName }}
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBE_NODE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: HEALTH_PORT
+              value: "{{ .Values.metricsServer.healthPort | default 9196 }}"
+            {{- if .Values.tracingDeploymentIdentifier }}
+            - name: OTEL_DEPLOYMENT_IDENTIFIER
+              value: {{ .Values.tracingDeploymentIdentifier }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.metricsServer.resources | nindent 12 }}
+      {{- with .Values.metricsServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.metricsServer.terminationGracePeriodSeconds | default 30 }}
+{{- end }}

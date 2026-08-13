@@ -20,41 +20,16 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
-	"net/http"
 	"os"
-	"os/signal"
 	"path"
-	"strconv"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
+	"github.com/wekafs/csi-wekafs/pkg/bootstrap"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
-	zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {
-		short := file
-		for i := len(file) - 1; i > 0; i-- {
-			if file[i] == '/' {
-				short = file[i+1:]
-				break
-			}
-		}
-		file = short
-		return file + ":" + strconv.Itoa(line)
-	}
-
-}
 
 var (
 	mutuallyExclusiveMountOptionsStrings wekafs.MutuallyExclusiveMountOptsStrings
@@ -69,14 +44,14 @@ var (
 	showVersion       = flag.Bool("version", false, "Show version.")
 	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
-	csimodetext                          = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default)")
+	csimodetext                          = flag.String("csimode", "all", "Mode of CSI plugin, either \"controller\", \"node\", \"all\" (default), or \"metricsserver\"")
 	selinuxSupport                       = flag.Bool("selinux-support", false, "Enable support for SELinux")
 	newVolumePrefix                      = flag.String("newvolumeprefix", "csivol-", "Prefix for Weka volumes and snapshots that represent a CSI volume")
 	newSnapshotPrefix                    = flag.String("newsnapshotprefix", "csisnp-", "Prefix for Weka snapshots that represent a CSI snapshot")
 	seedSnapshotPrefix                   = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
 	allowAutoFsExpansion                 = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
 	allowAutoFsCreation                  = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
-	allowSnapshotsOfLegacyVolumes        = flag.Bool("allowsnapshotsoflegacyvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
+	allowSnapshotsOfLegacyVolumes        = flag.Bool("allowsnapshotsofdirectoryvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
 	suppressSnapshotsCapability          = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
 	suppressVolumeCloneCapability        = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
 	enableMetrics                        = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
@@ -111,42 +86,25 @@ var (
 	allowMountOptionOverrides            = flag.Bool("allowmountoptionoverrides", false, "Allow mount option overrides via PVC and pod annotations")
 	keepThinProvisioningRatioOnExpand    = flag.Bool("keepthinprovisioningratioonexpand", true, "On filesystem expansion, scale thin-provisioning min-SSD and max-SSD to preserve their ratios to total capacity")
 	advertiseVolumeHealthSupport         = flag.Bool("advertisevolumehealthsupport", true, "Expose GET_VOLUME and VOLUME_CONDITION, allowing the CSI health monitor to report volume condition and capacity")
+
+	// Metrics server settings. These only take effect when csimode is "metricsserver" or "all" -
+	// the metrics server itself is only ever constructed for those modes (see NewWekaFsDriver).
+	wekaMetricsFetchIntervalSeconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
+	wekaMetricsFetchConcurrentRequests       = flag.Int("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
+	enableMetricsServerLeaderElection        = flag.Bool("enablemetricsserverleaderelection", false, "Enable leader election for metrics server")
+	wekaMetricsQuotaUpdateConcurrentRequests = flag.Int("wekametricsquotaupdateconcurrentrequests", 5, "Maximum concurrent requests to update quotas for metrics server")
+	wekaMetricsQuotaCacheValiditySeconds     = flag.Int("wekametricsquotacachevalidityseconds", 60, "Duration in seconds for which the quota map is considered valid")
+	fetchQuotasInBatchMode                   = flag.Bool("fetchquotasinbatchmode", false, "Use batch mode for metrics server, fetch all filesystem quotas in one go")
 	// Set by the build process
 	version = ""
 )
-
-func mapVerbosity(verbosity int) zerolog.Level {
-	verbMap := make(map[int]zerolog.Level)
-
-	verbMap[0] = zerolog.Disabled
-	verbMap[1] = zerolog.PanicLevel
-	verbMap[2] = zerolog.FatalLevel
-	verbMap[3] = zerolog.ErrorLevel
-	verbMap[4] = zerolog.InfoLevel
-	verbMap[5] = zerolog.DebugLevel
-	verbMap[6] = zerolog.TraceLevel
-
-	v := verbosity
-	if v >= len(verbMap) {
-		v = len(verbMap) - 1
-	}
-	return verbMap[v]
-}
 
 func main() {
 	// set mountOptions
 	flag.Var(&mutuallyExclusiveMountOptionsStrings, "mutuallyexclusivemountoptions", "Set list of mount options that cannot be set together")
 
 	flag.Parse()
-	if !*usejsonlogging {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339Nano}).With().Caller().Logger()
-	}
-	zerolog.SetGlobalLevel(mapVerbosity(*verbosity))
-	// log.Ctx returns a *disabled* logger for a context that carries none, so anything written from
-	// a startup path or a background goroutine - neither of which passes through a gRPC handler that
-	// attaches one - is discarded without a trace. Fall back to the global logger instead, so a
-	// missing context logger costs the request fields rather than the whole line.
-	zerolog.DefaultContextLogger = &log.Logger
+	bootstrap.SetupLogging(*usejsonlogging, *verbosity)
 
 	csiMode = wekafs.GetCsiPluginMode(csimodetext)
 	if *showVersion {
@@ -154,7 +112,7 @@ func main() {
 		fmt.Println(baseName, version)
 		return
 	}
-	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode {
+	if csiMode != wekafs.CsiModeAll && csiMode != wekafs.CsiModeController && csiMode != wekafs.CsiModeNode && csiMode != wekafs.CsiModeMetricsServer {
 		log.Panic().Str("requestedCsiMode", string(csiMode)).Msg("Invalid mode specified for CSI driver")
 	}
 	log.Info().Str("csi_mode", string(csiMode)).Bool("selinux_mode", *selinuxSupport).Msg("Started CSI driver")
@@ -171,61 +129,12 @@ func main() {
 		if csiMode == wekafs.CsiModeNode || csiMode == wekafs.CsiModeAll {
 			prometheus.MustRegister(wekafs.NodeCollectors()...)
 		}
-		go func() {
-			http.Handle("/metrics", promhttp.Handler())
-			if err := http.ListenAndServe(fmt.Sprintf(":%s", *metricsPort), nil); err != nil {
-				log.Error().Str("metrics_port", *metricsPort).Err(err).Msg("Failed to start metrics service")
-			}
-			log.Debug().Str("metrics_port", *metricsPort).Msg("Started metrics service")
-		}()
+		bootstrap.ServeMetrics(*metricsPort)
 	}
 
 	ctx := context.Background()
-	var tp *sdktrace.TracerProvider
-	var err error
-	var url string
-	if *tracingUrl != "" {
-		url = *tracingUrl
-
-	} else {
-		url = ""
-	}
-	tp, err = wekafs.TracerProvider(version, url, csiMode)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to set up OpenTelemetry tracerProvider")
-	} else {
-		otel.SetTracerProvider(tp)
-		log.Info().Str("tracing_url", url).Msg("OpenTelemetry tracing initialized")
-		ctx, cancel := context.WithCancel(ctx)
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		defer func() {
-			signal.Stop(c)
-			cancel()
-		}()
-		go func() {
-			select {
-			case <-c:
-				cancel()
-			case <-ctx.Done():
-			}
-		}()
-
-		defer func() {
-			if err := tp.ForceFlush(ctx); err != nil {
-				log.Error().Err(err).Msg("Failed to flush traces")
-			} else {
-				log.Info().Msg("Flushed traces successfully")
-			}
-
-			if err := tp.Shutdown(ctx); err != nil {
-				log.Error().Err(err).Msg("Failed to shutdown tracing engine")
-			} else {
-				log.Info().Msg("Tracing engine shut down successfully")
-			}
-
-		}()
-	}
+	shutdownTracing := bootstrap.SetupTracing(ctx, version, *tracingUrl, csiMode)
+	defer shutdownTracing()
 
 	handle(ctx)
 	os.Exit(0)
@@ -280,6 +189,13 @@ func handle(ctx context.Context) {
 		EnforceDirVolTotalCapacity:        *enforceDirVolTotalCapacity,
 		SetOwnershipOnDynamicFilesystems:  *setOwnershipOnDynamicFilesystems,
 		KeepThinProvisioningRatioOnExpand: *keepThinProvisioningRatioOnExpand,
+
+		MetricsFetchIntervalSeconds:       *wekaMetricsFetchIntervalSeconds,
+		MetricsFetchConcurrentRequests:    *wekaMetricsFetchConcurrentRequests,
+		EnableMetricsServerLeaderElection: *enableMetricsServerLeaderElection,
+		QuotaFetchConcurrentRequests:      *wekaMetricsQuotaUpdateConcurrentRequests,
+		QuotaCacheValiditySeconds:         *wekaMetricsQuotaCacheValiditySeconds,
+		UseQuotaMapsForMetrics:            *fetchQuotasInBatchMode,
 	})
 	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
 	if err != nil {
@@ -287,6 +203,20 @@ func handle(ctx context.Context) {
 		os.Exit(1)
 	}
 	config.SetDriver(driver)
+
+	// Register the metrics server's own collectors, but only if metrics export is on in the first
+	// place and a metrics server was actually constructed (csimode "metricsserver" or "all" - see
+	// NewWekaFsDriver) - a driver running in another mode must export nothing. This has to happen
+	// here rather than alongside the other collectors above: those are
+	// registered before the driver exists, and the metrics server (if any) is only built once
+	// NewWekaFsDriver runs. Registering after driver.Run(ctx) below would never happen - it blocks for
+	// the process lifetime - but that's fine: prometheus.MustRegister only needs to run before the
+	// first scrape, not before promhttp.Handler() starts serving.
+	if enableMetrics != nil && *enableMetrics {
+		if collectors := driver.MetricsServerCollectors(); len(collectors) > 0 {
+			prometheus.MustRegister(collectors...)
+		}
+	}
 
 	driver.Run(ctx)
 }
