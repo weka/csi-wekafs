@@ -224,8 +224,20 @@ func TestReconcileOnceReportsVolumeHealthMetrics(t *testing.T) {
 // healthMetricLabels returns a distinct, well-formed LabelsForCsiVolumes value for handle, so tests
 // below don't need a real PersistentVolume or fake Weka cluster just to give the Status gauge
 // something to key on.
+// The trailing value is secret_name, the last label in LabelsForCsiVolumes. Built by hand here, so
+// it has to be kept in step with that list - which is what the length assertion below is for: a
+// mismatch is otherwise a runtime panic inside Prometheus rather than a test failure that names the
+// problem.
 func healthMetricLabels(handle string) []string {
-	return []string{"csi.weka.io", "pv-" + handle, "guid-" + handle, "wekafs-sc", "fs-" + handle, "dir", "default", "pvc-" + handle, "default", "uid-" + handle}
+	return []string{"csi.weka.io", "pv-" + handle, "guid-" + handle, "wekafs-sc", "fs-" + handle, "dir", "default", "pvc-" + handle, "default", "uid-" + handle, "weka-secrets/api-creds"}
+}
+
+// TestHealthMetricLabelsMatchTheLabelSet fails loudly if the hand-built values above drift from
+// LabelsForCsiVolumes, instead of letting every test using them panic somewhere inside Prometheus.
+func TestHealthMetricLabelsMatchTheLabelSet(t *testing.T) {
+	if got, want := len(healthMetricLabels("h")), len(LabelsForCsiVolumes); got != want {
+		t.Fatalf("healthMetricLabels returns %d values but LabelsForCsiVolumes declares %d labels", got, want)
+	}
 }
 
 // TestDeleteVolumeForgetsHealthMetricsImmediately is the regression test for the fix this change
