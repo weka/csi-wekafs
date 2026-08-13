@@ -189,7 +189,8 @@ func (v *Volume) isEncrypted(ctx context.Context) (bool, error) {
 
 	if v.encrypted == nil {
 		// TODO: maybe we should move it into a separate method that is explicitly invoked when Volume is constructed from VolumeID rather than doing it here
-		if exists, err := v.Exists(ctx); err == nil {
+		exists, existsErr := v.Exists(ctx)
+		if existsErr == nil {
 			if v.apiClient != nil {
 				fsObj, err := v.getFilesystemObj(ctx, true)
 				if err != nil {
@@ -215,6 +216,21 @@ func (v *Volume) isEncrypted(ctx context.Context) (bool, error) {
 					v.encrypted = &[]bool{false}[0]
 				}
 			}
+		}
+
+		// Nothing above is guaranteed to have set v.encrypted. Exists() can fail, and for a
+		// filesystem-backed volume with no API client bound it returns (false, nil) - so the error
+		// check passes, there is no client to query, and the field stays unset. Dereferencing it
+		// here is what made that a panic.
+		//
+		// Report it instead. "Not encrypted" would be the dangerous answer: callers act on this to
+		// decide whether to apply encryption, so a volume whose state we could not read would be
+		// treated as one we had read and found unencrypted.
+		if v.encrypted == nil {
+			if existsErr != nil {
+				return false, fmt.Errorf("cannot determine whether the volume is encrypted: %w", existsErr)
+			}
+			return false, errors.New("cannot determine whether the volume is encrypted: no API client is bound to the volume")
 		}
 	}
 	return *v.encrypted, nil
