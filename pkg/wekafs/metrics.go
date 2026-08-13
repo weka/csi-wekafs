@@ -12,8 +12,11 @@ var (
 	CsiControllerConcurrencyMetricsLabels       = []string{"status"}
 	CsiControllerVolumeOperationMetricsLabels   = []string{"status", "backing_type"}
 	CsiControllerSnapshotOperationMetricsLabels = []string{"status"}
-	CsiNodeConcurrencyMetricsLabels             = []string{"status"}
-	CsiNodeVolumeOperationMetricsLabels         = []string{"status"}
+	// The read-only controller RPCs carry no backing type: ListVolumes spans every backing type at
+	// once, and ControllerGetVolume can fail long before the volume behind the handle is resolved.
+	CsiControllerQueryOperationMetricsLabels = []string{"status"}
+	CsiNodeConcurrencyMetricsLabels          = []string{"status"}
+	CsiNodeVolumeOperationMetricsLabels      = []string{"status"}
 )
 
 const MetricsPrefix = "weka_csi"
@@ -56,6 +59,21 @@ func recordOperation(counter *prometheus.CounterVec, duration *prometheus.Histog
 	duration.WithLabelValues(labels...).Observe(time.Since(start).Seconds())
 }
 
+// netExpansion returns how many bytes a ControllerExpandVolume call actually added to a volume:
+// zero unless it succeeded, the previous size was known, and the volume genuinely grew.
+//
+// Each guard matters, and none is correctable after the fact because counters only ever go up.
+// Recording the resulting size would re-count every byte the volume already had on each subsequent
+// expansion. Recording an attempt that failed after the old size was read - a rejected capacity
+// reservation, or a Weka API error part-way through - would credit growth that never happened. A
+// request that never got far enough to read the old size has nothing to compare against.
+func netExpansion(succeeded bool, previousCapacity, capacity int64) float64 {
+	if !succeeded || previousCapacity < 0 || capacity <= previousCapacity {
+		return 0
+	}
+	return float64(capacity - previousCapacity)
+}
+
 // ControllerCollectors returns the controller server metrics for the caller to register.
 func ControllerCollectors() []prometheus.Collector { return controllerMetrics.Collectors() }
 
@@ -75,6 +93,16 @@ type ControllerOperationMetrics struct {
 	CreateSnapshotDuration    *prometheus.HistogramVec
 	DeleteSnapshotCounter     *prometheus.CounterVec
 	DeleteSnapshotDuration    *prometheus.HistogramVec
+
+	// The read-only RPCs. On a large fleet these are the entire steady-state controller workload -
+	// the external health monitor calls GetVolume and ListVolumes continuously - so without them a
+	// busy driver exports nothing at all between provisioning events.
+	GetVolumeCounter                   *prometheus.CounterVec
+	GetVolumeDuration                  *prometheus.HistogramVec
+	ListVolumesCounter                 *prometheus.CounterVec
+	ListVolumesDuration                *prometheus.HistogramVec
+	ValidateVolumeCapabilitiesCounter  *prometheus.CounterVec
+	ValidateVolumeCapabilitiesDuration *prometheus.HistogramVec
 }
 
 // Collectors returns the metrics for the caller to register.
@@ -92,10 +120,16 @@ func (c *ControllerOperationMetrics) Collectors() []prometheus.Collector {
 		c.CreateSnapshotDuration,
 		c.DeleteSnapshotCounter,
 		c.DeleteSnapshotDuration,
+		c.GetVolumeCounter,
+		c.GetVolumeDuration,
+		c.ListVolumesCounter,
+		c.ListVolumesDuration,
+		c.ValidateVolumeCapabilitiesCounter,
+		c.ValidateVolumeCapabilitiesDuration,
 	}
 }
 
-func NewControllerOperationMetrics(volumeLabels, snapshotLabels []string) *ControllerOperationMetrics {
+func NewControllerOperationMetrics(volumeLabels, snapshotLabels, queryLabels []string) *ControllerOperationMetrics {
 	return &ControllerOperationMetrics{
 		CreateVolumeCounter:       newCounterVec("controller", "create_volume_total", "Total number of ControllerCreateVolume calls", volumeLabels),
 		CreateVolumeDuration:      newHistogramVec("controller", "create_volume_duration_seconds", "Duration of ControllerCreateVolume calls in seconds", volumeLabels),
@@ -104,11 +138,18 @@ func NewControllerOperationMetrics(volumeLabels, snapshotLabels []string) *Contr
 		DeleteVolumeDuration:      newHistogramVec("controller", "delete_volume_duration_seconds", "Duration of ControllerDeleteVolume calls in seconds", volumeLabels),
 		ExpandVolumeCounter:       newCounterVec("controller", "expand_volume_total", "Total number of ControllerExpandVolume calls", volumeLabels),
 		ExpandVolumeDuration:      newHistogramVec("controller", "expand_volume_duration_seconds", "Duration of ControllerExpandVolume calls in seconds", volumeLabels),
-		ExpandVolumeTotalCapacity: newCounterVec("controller", "expand_volume_total_capacity_bytes", "Total capacity of volumes expanded by ControllerExpandVolume in bytes", volumeLabels),
+		ExpandVolumeTotalCapacity: newCounterVec("controller", "expand_volume_total_capacity_bytes", "Total capacity added to volumes by ControllerExpandVolume in bytes, counting only the increase over the previous size", volumeLabels),
 		CreateSnapshotCounter:     newCounterVec("controller", "create_snapshot_total", "Total number of ControllerCreateSnapshot calls", snapshotLabels),
 		CreateSnapshotDuration:    newHistogramVec("controller", "create_snapshot_duration_seconds", "Duration of ControllerCreateSnapshot calls in seconds", snapshotLabels),
 		DeleteSnapshotCounter:     newCounterVec("controller", "delete_snapshot_total", "Total number of ControllerDeleteSnapshot calls", snapshotLabels),
 		DeleteSnapshotDuration:    newHistogramVec("controller", "delete_snapshot_duration_seconds", "Duration of ControllerDeleteSnapshot calls in seconds", snapshotLabels),
+
+		GetVolumeCounter:                   newCounterVec("controller", "get_volume_total", "Total number of ControllerGetVolume calls", queryLabels),
+		GetVolumeDuration:                  newHistogramVec("controller", "get_volume_duration_seconds", "Duration of ControllerGetVolume calls in seconds", queryLabels),
+		ListVolumesCounter:                 newCounterVec("controller", "list_volumes_total", "Total number of ControllerListVolumes calls", queryLabels),
+		ListVolumesDuration:                newHistogramVec("controller", "list_volumes_duration_seconds", "Duration of ControllerListVolumes calls in seconds", queryLabels),
+		ValidateVolumeCapabilitiesCounter:  newCounterVec("controller", "validate_volume_capabilities_total", "Total number of ValidateVolumeCapabilities calls", queryLabels),
+		ValidateVolumeCapabilitiesDuration: newHistogramVec("controller", "validate_volume_capabilities_duration_seconds", "Duration of ValidateVolumeCapabilities calls in seconds", queryLabels),
 	}
 }
 
@@ -163,7 +204,7 @@ type ControllerServerMetrics struct {
 
 func NewControllerServerMetrics() *ControllerServerMetrics {
 	return &ControllerServerMetrics{
-		Operations:  NewControllerOperationMetrics(CsiControllerVolumeOperationMetricsLabels, CsiControllerSnapshotOperationMetricsLabels),
+		Operations:  NewControllerOperationMetrics(CsiControllerVolumeOperationMetricsLabels, CsiControllerSnapshotOperationMetricsLabels, CsiControllerQueryOperationMetricsLabels),
 		Concurrency: NewControllerConcurrencyMetrics(CsiControllerConcurrencyMetricsLabels),
 	}
 }
@@ -206,6 +247,10 @@ type NodeServerOperationMetrics struct {
 	UnpublishVolumeDuration *prometheus.HistogramVec
 	GetVolumeStats          *prometheus.CounterVec
 	GetVolumeStatsDuration  *prometheus.HistogramVec
+	// Called once per node at registration, so this is a low-rate counter whose value is in
+	// spotting nodes that fail to register rather than in its rate.
+	GetInfo         *prometheus.CounterVec
+	GetInfoDuration *prometheus.HistogramVec
 }
 
 // Collectors returns the metrics for the caller to register.
@@ -217,6 +262,8 @@ func (m *NodeServerOperationMetrics) Collectors() []prometheus.Collector {
 		m.UnpublishVolumeDuration,
 		m.GetVolumeStats,
 		m.GetVolumeStatsDuration,
+		m.GetInfo,
+		m.GetInfoDuration,
 	}
 }
 
@@ -228,6 +275,8 @@ func NewNodeOperationMetrics(volumeLabels []string) *NodeServerOperationMetrics 
 		UnpublishVolumeDuration: newHistogramVec("node", "unpublish_volume_duration_seconds", "Duration of NodeUnpublishVolume calls in seconds", volumeLabels),
 		GetVolumeStats:          newCounterVec("node", "get_volume_stats_total", "Total number of NodeGetVolumeStats calls", volumeLabels),
 		GetVolumeStatsDuration:  newHistogramVec("node", "get_volume_stats_duration_seconds", "Duration of NodeGetVolumeStats calls in seconds", volumeLabels),
+		GetInfo:                 newCounterVec("node", "get_info_total", "Total number of NodeGetInfo calls", volumeLabels),
+		GetInfoDuration:         newHistogramVec("node", "get_info_duration_seconds", "Duration of NodeGetInfo calls in seconds", volumeLabels),
 	}
 }
 

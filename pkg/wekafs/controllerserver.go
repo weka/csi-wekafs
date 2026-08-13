@@ -586,6 +586,9 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	logger.Info().Int64("capacity", capacity).Msg(">>>> Received request")
 	start := time.Now()
 	var backingType VolumeBackingType
+	// The size the volume had before this call, so the capacity counter can record what was actually
+	// added rather than the resulting size. Stays -1 if the request failed before it could be read.
+	previousCapacity := int64(-1)
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
@@ -600,8 +603,8 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 			bt = string(VolumeBackingTypeUnknown)
 		}
 		driverName := cs.getConfig().GetDriver().name
-		if capacity > 0 {
-			controllerMetrics.Operations.ExpandVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(float64(capacity))
+		if added := netExpansion(result == "SUCCESS", previousCapacity, capacity); added > 0 {
+			controllerMetrics.Operations.ExpandVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(added)
 		}
 		recordOperation(controllerMetrics.Operations.ExpandVolumeCounter, controllerMetrics.Operations.ExpandVolumeDuration, start, driverName, result, bt)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
@@ -655,6 +658,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if err != nil {
 		return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not get volume capacity: %s", err.Error()))
 	}
+	previousCapacity = currentSize
 	logger.Debug().Int64("current_capacity", currentSize).Int64("new_capacity", capacity).Msg("Expanding volume capacity")
 
 	// Validate capacity for expansion
@@ -856,6 +860,7 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	result := "FAILURE"
+	start := time.Now()
 	logger := log.Ctx(ctx)
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
 	defer func() {
@@ -863,6 +868,8 @@ func (cs *ControllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		recordOperation(controllerMetrics.Operations.ValidateVolumeCapabilitiesCounter,
+			controllerMetrics.Operations.ValidateVolumeCapabilitiesDuration, start, cs.getConfig().GetDriver().name, result)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
