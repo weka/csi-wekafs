@@ -14,6 +14,10 @@ https://github.com/weka/csi-wekafs
 | ---- | ------ | --- |
 | WekaIO, Inc. | <csi@weka.io> | <https://weka.io> |
 
+## Source Code
+
+* <https://github.com/weka/csi-wekafs/tree/v2.9.1>
+
 ## Pre-requisite
 - Kubernetes cluster of version 1.18 and up, 1.19 and up recommended
 - Helm v3 must be installed and configured properly
