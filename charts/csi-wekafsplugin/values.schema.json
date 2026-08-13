@@ -5,6 +5,9 @@
         "affinity": {
             "type": "object"
         },
+        "apiTimeoutSeconds": {
+            "type": "integer"
+        },
         "controller": {
             "type": "object",
             "properties": {
@@ -391,6 +394,9 @@
             "properties": {
                 "affinity": {
                     "type": "object"
+                },
+                "apiTimeoutSeconds": {
+                    "type": "integer"
                 },
                 "enableBatchModeForQuotaUpdates": {
                     "type": "boolean"

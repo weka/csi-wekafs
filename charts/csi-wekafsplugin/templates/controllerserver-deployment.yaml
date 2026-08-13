@@ -107,6 +107,9 @@ spec:
             - "--usejsonlogging"
           {{- end }}
           {{- if .Values.controller.grpcRequestTimeoutSeconds }}
+          {{- if .Values.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.apiTimeoutSeconds }}"
+          {{- end }}
             - "--grpcrequesttimeoutseconds={{ .Values.controller.grpcRequestTimeoutSeconds | default "5" }}"
           {{- end }}
             - "--healthprobewekatimeoutseconds=5"

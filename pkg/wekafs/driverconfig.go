@@ -33,6 +33,7 @@ type DriverConfig struct {
 	alwaysAllowSnapshotVolumes        bool
 	mutuallyExclusiveOptions          []mutuallyExclusiveMountOptionSet
 	maxConcurrencyPerOp               map[string]int64
+	wekaApiTimeout                    time.Duration // bounds a single Weka API request
 	grpcRequestTimeout                time.Duration
 	healthProbeWekaTimeout            time.Duration
 	allowProtocolContainers           bool
@@ -81,6 +82,7 @@ func (dc *DriverConfig) Log() {
 		Int64("max_node_publish_volume_reqs", dc.maxConcurrencyPerOp["NodePublishVolume"]).
 		Int64("max_node_unpublish_volume_reqs", dc.maxConcurrencyPerOp["NodeUnpublishVolume"]).
 		Int("grpc_request_timeout_seconds", int(dc.grpcRequestTimeout.Seconds())).
+		Dur("weka_api_timeout", dc.wekaApiTimeout).
 		Int("health_probe_weka_timeout_seconds", int(dc.healthProbeWekaTimeout.Seconds())).
 		Bool("allow_protocol_containers", dc.allowProtocolContainers).
 		Bool("allow_nfs_failback", dc.allowNfsFailback).
@@ -145,7 +147,10 @@ type DriverConfigOptions struct {
 	MaxNodePublishVolumeReqs   int64
 	MaxNodeUnpublishVolumeReqs int64
 
-	GrpcRequestTimeoutSeconds     int
+	GrpcRequestTimeoutSeconds int
+	// WekaApiTimeoutSeconds bounds a single Weka API request. Zero falls back to the API client's own
+	// default, so a caller that does not care keeps today's behaviour.
+	WekaApiTimeoutSeconds         int
 	HealthProbeWekaTimeoutSeconds int
 
 	AllowNfsFailback   bool
@@ -235,6 +240,7 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		mutuallyExclusiveOptions:          MutuallyExclusiveMountOptions,
 		maxConcurrencyPerOp:               concurrency,
 		grpcRequestTimeout:                time.Duration(opts.GrpcRequestTimeoutSeconds) * time.Second,
+		wekaApiTimeout:                    time.Duration(opts.WekaApiTimeoutSeconds) * time.Second,
 		healthProbeWekaTimeout:            time.Duration(opts.HealthProbeWekaTimeoutSeconds) * time.Second,
 		allowProtocolContainers:           opts.AllowProtocolContainers,
 		allowNfsFailback:                  opts.AllowNfsFailback,
