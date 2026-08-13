@@ -132,7 +132,14 @@ timestamp, so it behaves like an ordinary gauge.
 
 ### Labels
 Volume metrics carry `csi_driver_name`, `pv_name`, `cluster_guid`, `storage_class_name`,
-`filesystem_name`, `volume_type`, `organization`, `pvc_name`, `pvc_namespace`, `pvc_uid`.
+`filesystem_name`, `volume_type`, `organization`, `pvc_name`, `pvc_namespace`, `pvc_uid`,
+`secret_name`.
+
+`organization` and `secret_name` both identify the tenant a volume belongs to - the WEKA
+organization, and the Kubernetes Secret holding the credentials used to reach it. A tenant is
+expected to use one Secret, so neither adds series to a per-volume metric; they make capacity
+groupable and attributable by tenant. Where one tenant is spread over several Secrets, its series
+split accordingly.
 
 The shipped PodMonitor relabels away the scrape-identity labels that would otherwise fork a series
 per pod for this family - see [PodMonitors](#podmonitors) below for exactly which labels, on which

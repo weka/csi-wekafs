@@ -222,10 +222,30 @@ func TestReconcileOnceReportsVolumeHealthMetrics(t *testing.T) {
 }
 
 // healthMetricLabels returns a distinct, well-formed LabelsForCsiVolumes value for handle, so tests
-// below don't need a real PersistentVolume or fake Weka cluster just to give the Status gauge
-// something to key on.
+// below don't need a fake Weka cluster just to give the Status gauge something to key on.
+//
+// It goes through csiVolumeLabelValues rather than listing the values itself. Spelling them out by
+// hand meant every label added to LabelsForCsiVolumes broke these tests with a cardinality panic at
+// run time instead of a compile error, and the fix was to append one more string in a place with no
+// indication of which label it was meant to be.
 func healthMetricLabels(handle string) []string {
-	return []string{"csi.weka.io", "pv-" + handle, "guid-" + handle, "wekafs-sc", "fs-" + handle, "dir", "default", "pvc-" + handle, "default", "uid-" + handle}
+	pv := &v1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{Name: "pv-" + handle},
+		Spec: v1.PersistentVolumeSpec{
+			StorageClassName: "wekafs-sc",
+			ClaimRef: &v1.ObjectReference{
+				Name:      "pvc-" + handle,
+				Namespace: "default",
+				UID:       types.UID("uid-" + handle),
+			},
+			PersistentVolumeSource: v1.PersistentVolumeSource{
+				CSI: &v1.CSIPersistentVolumeSource{
+					NodePublishSecretRef: &v1.SecretReference{Name: "api-secret", Namespace: "csi-wekafs"},
+				},
+			},
+		},
+	}
+	return csiVolumeLabelValues("csi.weka.io", pv, "guid-"+handle, "fs-"+handle, "dir", "default")
 }
 
 // TestDeleteVolumeForgetsHealthMetricsImmediately is the regression test for the fix this change
@@ -364,5 +384,52 @@ func TestReconcileOncePrunesRemovedVolumeSeries(t *testing.T) {
 	}
 	if _, ok := cache.lookup("weka/v2/default"); !ok {
 		t.Fatal("expected the staying volume to remain cached")
+	}
+}
+
+// TestCsiVolumeLabelValuesCarriesSecretName covers the secret_name label. A volume's API Secret is
+// the credential its capacity and API traffic are attributable to, and CSI never hands the driver
+// that name - it passes the Secret's contents - so the PersistentVolume is the only place it
+// survives. Both the metrics server's capacity series and the controller's volume-health series go
+// through this one builder, so labelling here is what keeps them attributable to the same Secret.
+func TestCsiVolumeLabelValuesCarriesSecretName(t *testing.T) {
+	indexOfSecretName := -1
+	for i, l := range LabelsForCsiVolumes {
+		if l == "secret_name" {
+			indexOfSecretName = i
+		}
+	}
+	if indexOfSecretName == -1 {
+		t.Fatal("secret_name is not part of LabelsForCsiVolumes")
+	}
+
+	withRef := func(ref *v1.SecretReference) *v1.PersistentVolume {
+		return &v1.PersistentVolume{
+			ObjectMeta: metav1.ObjectMeta{Name: "pv-1"},
+			Spec: v1.PersistentVolumeSpec{
+				PersistentVolumeSource: v1.PersistentVolumeSource{
+					CSI: &v1.CSIPersistentVolumeSource{ControllerExpandSecretRef: ref},
+				},
+			},
+		}
+	}
+
+	for _, tt := range []struct {
+		name string
+		pv   *v1.PersistentVolume
+		want string
+	}{
+		{"secret ref present", withRef(&v1.SecretReference{Name: "api-secret", Namespace: "csi-wekafs"}), "csi-wekafs/api-secret"},
+		{"no ref at all - a static volume need not carry one", withRef(nil), ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := csiVolumeLabelValues("csi.weka.io", tt.pv, "guid", "fs", "dir", "Root")
+			if len(got) != len(LabelsForCsiVolumes) {
+				t.Fatalf("built %d values for %d labels", len(got), len(LabelsForCsiVolumes))
+			}
+			if got[indexOfSecretName] != tt.want {
+				t.Fatalf("secret_name = %q, want %q", got[indexOfSecretName], tt.want)
+			}
+		})
 	}
 }
