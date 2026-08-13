@@ -30,6 +30,18 @@ spec:
       # only keeps those timestamps if told to honor them.
       honorTimestamps: true
       metricRelabelings:
+        # A volume metric describes a volume, not the pod that happened to observe it. The metrics
+        # server is a leader-elected Deployment, so leaving pod on forks a fresh series for every
+        # volume on each rollout and each leader failover: graphs draw one line per pod a volume has
+        # ever been reported by, and anything summing across pods double-counts during a handover.
+        # Setting a label to the empty string removes it, and unlike labeldrop this can be
+        # conditioned on the metric name - so pod survives on the metrics server's own health
+        # metrics, where the pod is precisely what is being described.
+        - action: replace
+          sourceLabels: [__name__]
+          regex: weka_csi_volume_.*
+          targetLabel: pod
+          replacement: ""
         - action: labeldrop
           regex: ^job$
         - action: labeldrop
