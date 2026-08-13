@@ -1880,7 +1880,7 @@ func (v *Volume) deleteSnapshot(ctx context.Context) error {
 		}
 		logger.Error().Err(err).Str("snapshot", v.SnapshotName).Str("snapshot_uid", snapUid.String()).
 			Msg("Failed to delete snapshot")
-		return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
+		return status.Errorf(codes.Internal, "Failed to delete snapshot %s: %s", v.SnapshotName, err)
 	}
 	if v.server.getConfig().waitForObjectDeletion {
 		return v.waitForSnapshotDeletion(ctx, logger, snapUid)

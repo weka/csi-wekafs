@@ -11,13 +11,12 @@ import (
 )
 
 type wekafsMounter struct {
-	mountMap                *mountMap
-	kMounter                mount.Interface
-	debugPath               string
-	gc                      *innerPathVolGc
-	allowProtocolContainers bool
-	config                  *DriverConfig
-	mountBaseDir            string
+	mountMap     *mountMap
+	kMounter     mount.Interface
+	debugPath    string
+	gc           *innerPathVolGc
+	config       *DriverConfig
+	mountBaseDir string
 	mounterState
 }
 
@@ -68,13 +67,12 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 	}
 	uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
 	wMount := &wekafsMount{
-		mounter:                 m,
-		kMounter:                m.kMounter,
-		fsName:                  fsName,
-		debugPath:               m.debugPath,
-		mountPoint:              m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
-		mountOptions:            options,
-		allowProtocolContainers: m.allowProtocolContainers,
+		mounter:      m,
+		kMounter:     m.kMounter,
+		fsName:       fsName,
+		debugPath:    m.debugPath,
+		mountPoint:   m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+		mountOptions: options,
 	}
 	return wMount
 }
