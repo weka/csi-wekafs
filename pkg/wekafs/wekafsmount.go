@@ -127,17 +127,6 @@ func (m *wekafsMount) decRef(ctx context.Context) error {
 	return nil
 }
 
-func (m *wekafsMount) locateContainerName() error {
-	if m.containerName == "" {
-		containerName, err := GetMountContainerNameFromActualMountPoint(m.mountPoint)
-		if err != nil {
-			return err
-		}
-		m.containerName = containerName
-	}
-	return nil
-}
-
 func (m *wekafsMount) doUnmount(ctx context.Context) error {
 	logger := log.Ctx(ctx).With().Str("mount_point", m.getMountPoint()).Str("filesystem", m.fsName).Logger()
 	logger.Trace().Strs("mount_options", m.getMountOptions().Strings()).Msg("Performing umount via k8s native mounter")

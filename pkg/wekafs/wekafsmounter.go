@@ -105,20 +105,6 @@ func (m *wekafsMounter) Mount(ctx context.Context, fs string, apiClient *apiclie
 	return m.mountWithOptions(ctx, fs, getDefaultMountOptions(), apiClient)
 }
 
-func (m *wekafsMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
-	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolWekafs)
-	log.Ctx(ctx).Trace().Strs("mount_options", options.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
-	mnt := m.NewMount(fsName, options).(*wekafsMount)
-
-	err := mnt.locateContainerName()
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("Failed to locate containerName")
-		return err
-	}
-
-	return mnt.decRef(ctx)
-}
-
 func (m *wekafsMounter) LogActiveMounts(ctx context.Context) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
