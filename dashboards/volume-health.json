@@ -1411,7 +1411,8 @@
               "legend": false,
               "tooltip": false,
               "viz": false
-            }
+            },
+            "axisSoftMin": 0
           },
           "mappings": [],
           "min": 0,
@@ -1423,7 +1424,8 @@
               }
             ]
           },
-          "unit": "short"
+          "unit": "short",
+          "decimals": 0
         },
         "overrides": [
           {
@@ -1547,9 +1549,9 @@
           "sort": "none"
         },
         "legend": {
-          "showLegend": false,
+          "showLegend": true,
           "displayMode": "list",
-          "placement": "bottom",
+          "placement": "right",
           "calcs": []
         }
       },
