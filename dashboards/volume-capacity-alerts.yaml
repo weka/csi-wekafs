@@ -1,0 +1,85 @@
+# Alert rules for the thresholds drawn on the "Weka CSI volume capacity" dashboard
+# (dashboards/volume-capacity.json). Apply to a cluster running the Prometheus Operator:
+#
+#   kubectl apply -n <prometheus-namespace> -f dashboards/volume-capacity-alerts.yaml
+#
+# For a plain Prometheus, lift the `groups:` block into your own rule file.
+#
+# Two things about these expressions are deliberate:
+#
+#   * last_over_time over 15m, not an instant selector. A reading carries the timestamp of its own
+#     measurement, and the metrics server serves a quota from cache for quotaCacheValiditySeconds
+#     (chart default 300s), so a volume emits roughly one sample per cache period rather than one
+#     per scrape. An instant query would evaluate against gaps and the alert would flap. The window
+#     must stay comfortably larger than quotaCacheValiditySeconds - raise it if you raise that.
+#
+#   * clamp_min on the denominator. A volume whose capacity reads zero would otherwise divide by
+#     zero and evaluate to +Inf, firing every alert here at once.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: weka-csi-volume-capacity
+  labels:
+    app.kubernetes.io/name: csi-wekafsplugin
+    app.kubernetes.io/component: alerts
+spec:
+  groups:
+    - name: weka-csi-volume-capacity
+      rules:
+        # Recording rule so both alerts and any ad-hoc query share one definition of "utilisation",
+        # and so the expensive division is evaluated once per interval rather than per alert.
+        - record: weka_csi_volume:used_ratio
+          expr: |
+            100
+              * last_over_time(weka_csi_volume_used_bytes[15m])
+              / clamp_min(last_over_time(weka_csi_volume_capacity_bytes[15m]), 1)
+
+        - alert: WekaCsiVolumeAlmostFull
+          expr: weka_csi_volume:used_ratio >= 85 < 95
+          # Longer than the quota cache validity, so a single stale or transient reading cannot
+          # fire this on its own.
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: >-
+              PersistentVolume {{ $labels.pvc_namespace }}/{{ $labels.pvc_name }} is
+              {{ $value | printf "%.1f" }}% full
+            description: >-
+              PersistentVolume {{ $labels.pv_name }} (PVC {{ $labels.pvc_namespace }}/{{
+              $labels.pvc_name }}) on Weka filesystem {{ $labels.filesystem_name }}, tenant {{
+              $labels.organization }}, has used {{ $value | printf "%.1f" }}% of its capacity.
+              Expand the PersistentVolumeClaim or reclaim space before it fills.
+
+        - alert: WekaCsiVolumeFull
+          expr: weka_csi_volume:used_ratio >= 95
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: >-
+              PersistentVolume {{ $labels.pvc_namespace }}/{{ $labels.pvc_name }} is critically
+              full at {{ $value | printf "%.1f" }}%
+            description: >-
+              PersistentVolume {{ $labels.pv_name }} (PVC {{ $labels.pvc_namespace }}/{{
+              $labels.pvc_name }}) on Weka filesystem {{ $labels.filesystem_name }}, tenant {{
+              $labels.organization }}, has used {{ $value | printf "%.1f" }}% of its capacity.
+              Writes will start failing when it reaches the quota's hard limit.
+
+        # Not a capacity threshold, but the alert that makes the two above trustworthy: if the
+        # metrics server stops collecting, utilisation freezes at its last value instead of going
+        # missing, and a volume can fill without either alert ever firing.
+        - alert: WekaCsiVolumeMetricsStale
+          expr: |
+            count(count_over_time(weka_csi_volume_used_bytes[15m]))
+              < 0.9 * max(weka_csi_metricsserver_monitored_persistent_volumes_gauge)
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Weka CSI volume capacity metrics are stale
+            description: >-
+              Only {{ $value }} volumes reported capacity in the last 15 minutes, against the
+              number the metrics server believes it is monitoring. Check the metrics server's
+              weka_csi_metricsserver_fetch_* failure counters and its ability to reach the Weka
+              API.
