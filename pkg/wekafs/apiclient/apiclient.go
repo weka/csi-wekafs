@@ -58,6 +58,11 @@ type ApiClient struct {
 	clientHash                 uint32
 	hostname                   string
 	driverName                 string
+	// rotateEndpointOnEachRequest spreads requests across the cluster's management nodes instead of
+	// staying on one until it fails. Wanted for the metrics server, which issues a steady stream of
+	// read-only calls; not for the plugin, whose calls are sparse and where staying put keeps a
+	// working endpoint's stats meaningful.
+	rotateEndpointOnEachRequest bool
 	// nfsInterfaceGroups caches interface groups by name. It carries its own lock - see the type.
 	nfsInterfaceGroups    *interfaceGroups
 	ApiUserRole           ApiUserRole
@@ -91,6 +96,10 @@ type ApiClientOptions struct {
 	// ApiHttpTimeOutSeconds rather than to http.Client's own zero value, which means no timeout at
 	// all - a caller that forgot to set it would hang forever instead of failing.
 	ApiTimeout time.Duration
+	// RotateEndpointOnEachRequest sends each request to a different management node rather than
+	// staying on one until it fails. Intended for the metrics server; see the field of the same
+	// name on ApiClient.
+	RotateEndpointOnEachRequest bool
 }
 
 // apiTimeoutOrDefault keeps an unset or nonsensical timeout from disabling timeouts entirely.
@@ -125,13 +134,14 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 			Jar:           nil,
 			Timeout:       apiTimeoutOrDefault(opts.ApiTimeout),
 		},
-		ClusterGuid:        uuid.UUID{},
-		Credentials:        credentials,
-		CompatibilityMap:   &WekaCompatibilityMap{},
-		hostname:           opts.Hostname,
-		driverName:         opts.DriverName,
-		apiEndpoints:       NewApiEndPoints(),
-		nfsInterfaceGroups: newInterfaceGroups(),
+		ClusterGuid:                 uuid.UUID{},
+		Credentials:                 credentials,
+		CompatibilityMap:            &WekaCompatibilityMap{},
+		hostname:                    opts.Hostname,
+		rotateEndpointOnEachRequest: opts.RotateEndpointOnEachRequest,
+		driverName:                  opts.DriverName,
+		apiEndpoints:                NewApiEndPoints(),
+		nfsInterfaceGroups:          newInterfaceGroups(),
 	}
 	if len(a.Credentials.Endpoints) < 1 {
 		return nil, &ApiNoEndpointsError{

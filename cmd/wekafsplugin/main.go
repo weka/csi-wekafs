@@ -70,23 +70,26 @@ var (
 	maxConcurrentNodeUnpublishVolumeReqs = flag.Int64("concurrency.nodeUnpublishVolume", 5, "Maximum concurrent NodeUnpublishVolume requests")
 	grpcRequestTimeoutSeconds            = flag.Int("grpcrequesttimeoutseconds", 30, "Time out requests waiting in queue after X seconds")
 	wekaApiTimeoutSeconds                = flag.Int("wekaapitimeoutseconds", 60, "Timeout for a single Weka API request in seconds")
-	healthProbeWekaTimeoutSeconds        = flag.Int("healthprobewekatimeoutseconds", 2, "Timeout in seconds for WekaFS health check in liveness probe")
-	allowProtocolContainers              = flag.Bool("allowprotocolcontainers", false, "Allow protocol containers to be used for mounting filesystems")
-	allowNfsFailback                     = flag.Bool("allownfsfailback", false, "Allow NFS failback")
-	useNfs                               = flag.Bool("usenfs", false, "Use NFS for mounting volumes")
-	interfaceGroupName                   = flag.String("interfacegroupname", "", "Name of the NFS interface group to use for mounting volumes")
-	clientGroupName                      = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
-	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
-	wekafsContainerName                  = flag.String("wekafscontainername", "", "Name of the Weka container to use for mounting filesystems")
-	skipGarbageCollection                = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
-	waitForObjectDeletion                = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
-	allowEncryptionWithoutKms            = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
-	manageNodeTopologyLabels             = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
-	enforceDirVolTotalCapacity           = flag.Bool("enforcedirvoltotalcapacity", false, "Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)")
-	setOwnershipOnDynamicFilesystems     = flag.Bool("setownershipondynamicfilesystems", false, "Set ownership on Dynamic Filesystems (only OrgAdmin/CSI user that created the filesystem will be able to mount it")
-	allowMountOptionOverrides            = flag.Bool("allowmountoptionoverrides", false, "Allow mount option overrides via PVC and pod annotations")
-	keepThinProvisioningRatioOnExpand    = flag.Bool("keepthinprovisioningratioonexpand", true, "On filesystem expansion, scale thin-provisioning min-SSD and max-SSD to preserve their ratios to total capacity")
-	advertiseVolumeHealthSupport         = flag.Bool("advertisevolumehealthsupport", true, "Expose GET_VOLUME and VOLUME_CONDITION, allowing the CSI health monitor to report volume condition and capacity")
+	// Off by default here: the plugin's API traffic is sparse and bursty, and staying on one
+	// endpoint until it misbehaves keeps its per-endpoint failure counters meaningful.
+	rotateApiEndpointOnEachRequest    = flag.Bool("rotateapiendpointoneachrequest", false, "Send each Weka API request to a different management node rather than staying on one until it fails")
+	healthProbeWekaTimeoutSeconds     = flag.Int("healthprobewekatimeoutseconds", 2, "Timeout in seconds for WekaFS health check in liveness probe")
+	allowProtocolContainers           = flag.Bool("allowprotocolcontainers", false, "Allow protocol containers to be used for mounting filesystems")
+	allowNfsFailback                  = flag.Bool("allownfsfailback", false, "Allow NFS failback")
+	useNfs                            = flag.Bool("usenfs", false, "Use NFS for mounting volumes")
+	interfaceGroupName                = flag.String("interfacegroupname", "", "Name of the NFS interface group to use for mounting volumes")
+	clientGroupName                   = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
+	nfsProtocolVersion                = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
+	wekafsContainerName               = flag.String("wekafscontainername", "", "Name of the Weka container to use for mounting filesystems")
+	skipGarbageCollection             = flag.Bool("skipgarbagecollection", false, "Skip garbage collection of directory volumes data, only move to trash")
+	waitForObjectDeletion             = flag.Bool("waitforobjectdeletion", false, "Wait for object deletion before returning from DeleteVolume")
+	allowEncryptionWithoutKms         = flag.Bool("allowencryptionwithoutkms", false, "Allow encryption without KMS, for testing purposes only")
+	manageNodeTopologyLabels          = flag.Bool("managenodetopologylabels", false, "Manage node topology labels for CSI driver")
+	enforceDirVolTotalCapacity        = flag.Bool("enforcedirvoltotalcapacity", false, "Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning)")
+	setOwnershipOnDynamicFilesystems  = flag.Bool("setownershipondynamicfilesystems", false, "Set ownership on Dynamic Filesystems (only OrgAdmin/CSI user that created the filesystem will be able to mount it")
+	allowMountOptionOverrides         = flag.Bool("allowmountoptionoverrides", false, "Allow mount option overrides via PVC and pod annotations")
+	keepThinProvisioningRatioOnExpand = flag.Bool("keepthinprovisioningratioonexpand", true, "On filesystem expansion, scale thin-provisioning min-SSD and max-SSD to preserve their ratios to total capacity")
+	advertiseVolumeHealthSupport      = flag.Bool("advertisevolumehealthsupport", true, "Expose GET_VOLUME and VOLUME_CONDITION, allowing the CSI health monitor to report volume condition and capacity")
 
 	// Metrics server settings. These only take effect when csimode is "metricsserver" -
 	// the metrics server itself is only ever constructed for that mode (see NewWekaFsDriver).
@@ -174,9 +177,10 @@ func handle(ctx context.Context) {
 		MaxNodePublishVolumeReqs:   *maxConcurrentNodePublishVolumeReqs,
 		MaxNodeUnpublishVolumeReqs: *maxConcurrentNodeUnpublishVolumeReqs,
 
-		GrpcRequestTimeoutSeconds:     *grpcRequestTimeoutSeconds,
-		WekaApiTimeoutSeconds:         *wekaApiTimeoutSeconds,
-		HealthProbeWekaTimeoutSeconds: *healthProbeWekaTimeoutSeconds,
+		GrpcRequestTimeoutSeconds:      *grpcRequestTimeoutSeconds,
+		WekaApiTimeoutSeconds:          *wekaApiTimeoutSeconds,
+		RotateApiEndpointOnEachRequest: *rotateApiEndpointOnEachRequest,
+		HealthProbeWekaTimeoutSeconds:  *healthProbeWekaTimeoutSeconds,
 
 		AllowNfsFailback:   *allowNfsFailback,
 		UseNfs:             *useNfs,

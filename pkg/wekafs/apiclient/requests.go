@@ -24,6 +24,13 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			Err: errors.New("no endpoints could be found for API client"),
 		}
 	}
+	// Spread requests across the management nodes when the caller asked for it. This has to happen
+	// once, here, rather than inside getEndpoint: a single request resolves the endpoint twice - to
+	// build the URL and again to record stats - and rotating on each of those would attribute the
+	// request to a different endpoint than the one it was actually sent to.
+	if a.rotateEndpointOnEachRequest {
+		a.apiEndpoints.Rotate()
+	}
 	u, uErr := a.getUrl(ctx, Path)
 	if uErr != nil {
 		return &ApiResponse{}, uErr
