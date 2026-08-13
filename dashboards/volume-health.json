@@ -663,10 +663,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "range": true,
           "refId": "A",
-          "legendFormat": "{{category}} / {{condition}}",
-          "expr": "count by (category, condition) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})"
+          "legendFormat": "healthy",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}) - (count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})) or vector(0))"
         },
         {
           "datasource": {
@@ -674,10 +675,83 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "range": true,
           "refId": "B",
-          "legendFormat": "healthy",
-          "expr": "count(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}) - (count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})) or vector(0))"
+          "legendFormat": "corrupt / directory_not_found",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"directory_not_found\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "C",
+          "legendFormat": "corrupt / snapshot_not_found",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"snapshot_not_found\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "D",
+          "legendFormat": "corrupt / filesystem_not_found",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_not_found\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "E",
+          "legendFormat": "corrupt / filesystem_removing",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_removing\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "F",
+          "legendFormat": "degraded / no_quota",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_quota\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "G",
+          "legendFormat": "degraded / quota_mismatch",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"quota_mismatch\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "H",
+          "legendFormat": "unknown / legacy_volume",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"legacy_volume\"})"
         }
       ]
     },
@@ -1562,11 +1636,95 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "instant": true,
-          "range": false,
           "refId": "A",
-          "legendFormat": "{{category}} / {{condition}}",
-          "expr": "count by (category, condition) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})"
+          "legendFormat": "healthy",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}) - (count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})) or vector(0))"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "B",
+          "legendFormat": "corrupt / directory_not_found",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"directory_not_found\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "C",
+          "legendFormat": "corrupt / snapshot_not_found",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"snapshot_not_found\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "D",
+          "legendFormat": "corrupt / filesystem_not_found",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_not_found\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "E",
+          "legendFormat": "corrupt / filesystem_removing",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_removing\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "F",
+          "legendFormat": "degraded / no_quota",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_quota\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "G",
+          "legendFormat": "degraded / quota_mismatch",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"quota_mismatch\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "H",
+          "legendFormat": "unknown / legacy_volume",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"legacy_volume\"})"
         }
       ]
     },
