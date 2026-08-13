@@ -59,7 +59,7 @@ func TestVolumeConditionCacheRetainOnlyDropsDeletedVolumes(t *testing.T) {
 		c.store(h, volumeConditionEntry{known: true, probedAt: time.Now()})
 	}
 
-	remaining := c.retainOnly(map[string]struct{}{"a": {}, "c": {}})
+	remaining, _, _ := c.retainOnly(map[string]struct{}{"a": {}, "c": {}})
 	if remaining != 2 {
 		t.Fatalf("expected 2 entries to remain, got %d", remaining)
 	}
@@ -72,8 +72,42 @@ func TestVolumeConditionCacheRetainOnlyDropsDeletedVolumes(t *testing.T) {
 		}
 	}
 
-	if c.retainOnly(map[string]struct{}{}) != 0 {
+	if remaining, _, _ := c.retainOnly(map[string]struct{}{}); remaining != 0 {
 		t.Fatal("expected an empty live set to clear the cache")
+	}
+}
+
+// forget is what DeleteVolume uses to remove a volume's cache entry immediately, instead of waiting
+// for the next sweep's retainOnly. It must hand back the labels that were cached (so the caller can
+// delete the corresponding metric series), and be a harmless no-op for a handle that was never
+// cached, or one cached without labels (a probe that never resolved an API client for it).
+func TestVolumeConditionCacheForget(t *testing.T) {
+	c := newVolumeConditionCache()
+
+	if got := c.forget("never-cached"); got != nil {
+		t.Fatalf("expected forgetting an unknown handle to return nil, got %v", got)
+	}
+
+	c.store("dir/v1/fs/a", volumeConditionEntry{known: true, probedAt: time.Now(), labels: []string{"csi.weka.io", "pv-a"}})
+	c.store("dir/v1/fs/b", volumeConditionEntry{known: false, probedAt: time.Now()}) // never got labels
+
+	if got := c.forget("dir/v1/fs/a"); len(got) != 2 || got[0] != "csi.weka.io" || got[1] != "pv-a" {
+		t.Fatalf("expected the stored labels back, got %v", got)
+	}
+	if _, ok := c.lookup("dir/v1/fs/a"); ok {
+		t.Fatal("expected the entry to be gone after forget")
+	}
+
+	if got := c.forget("dir/v1/fs/b"); got != nil {
+		t.Fatalf("expected forgetting a label-less entry to return nil, got %v", got)
+	}
+	if _, ok := c.lookup("dir/v1/fs/b"); ok {
+		t.Fatal("expected the label-less entry to be gone after forget too")
+	}
+
+	// Forgetting twice is a no-op the second time, not an error.
+	if got := c.forget("dir/v1/fs/a"); got != nil {
+		t.Fatalf("expected a repeat forget to return nil, got %v", got)
 	}
 }
 

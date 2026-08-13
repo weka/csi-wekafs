@@ -2,6 +2,8 @@ package wekafs
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
+	v1 "k8s.io/api/core/v1"
 )
 
 // Metrics reported by the metrics server: one set describing each observed PersistentVolume, and
@@ -28,6 +30,32 @@ const (
 	MetricsServerSubsystem = "metricsserver"
 	VolumesSubsystem       = "volume"
 )
+
+// csiVolumeLabelValues builds the LabelsForCsiVolumes label values for one PersistentVolume, in
+// order. It is the one place that convention is spelled out, so every caller that identifies a
+// volume for a metric - the metrics server's per-volume series and the controller's volume-health
+// series alike - labels it the same way. pvc_name/pvc_namespace/pvc_uid are blank for a PV with no
+// claim ref, e.g. one that was provisioned but never bound.
+func csiVolumeLabelValues(driverName string, pv *v1.PersistentVolume, clusterGuid, filesystemName, volumeType, organization string) []string {
+	labelValues := []string{
+		driverName,
+		pv.Name,
+		clusterGuid,
+		pv.Spec.StorageClassName,
+		filesystemName,
+		volumeType,
+		organization,
+	}
+	if pv.Spec.ClaimRef != nil {
+		labelValues = append(labelValues,
+			pv.Spec.ClaimRef.Name,
+			pv.Spec.ClaimRef.Namespace,
+			string(pv.Spec.ClaimRef.UID))
+	} else {
+		labelValues = append(labelValues, "", "", "")
+	}
+	return labelValues
+}
 
 type PrometheusMetrics struct {
 	volumes struct {

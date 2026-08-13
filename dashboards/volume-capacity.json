@@ -56,8 +56,73 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "WEKA CSI metrics server health",
+      "tooltip": "",
+      "type": "link",
+      "url": "/d/4d078021-3d69-4d4c-b412-e1508ba8529f"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "WEKA CSI plugin health",
+      "tooltip": "",
+      "type": "link",
+      "url": "/d/weka-csi-plugin-health"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "WEKA CSI volume health",
+      "tooltip": "",
+      "type": "link",
+      "url": "/d/weka-csi-volume-health"
+    }
+  ],
   "panels": [
+    {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 0
+      },
+      "hideTimeOverride": true,
+      "id": 12,
+      "options": {
+        "code": {
+          "language": "html",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<img style=\"width:99%;margin-left:auto;margin-right:auto;margin-top:0;display:block;\" src=\"data:image/svg+xml;base64, PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0ODAgMTAzLjAzIj48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6IzZiMDBkZDt9PC9zdHlsZT48L2RlZnM+PHRpdGxlPkFzc2V0IDM8L3RpdGxlPjxnIGlkPSJMYXllcl8yIiBkYXRhLW5hbWU9IkxheWVyIDIiPjxnIGlkPSJMYXllcl8xLTIiIGRhdGEtbmFtZT0iTGF5ZXIgMSI+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMTEzLjQ4LjEyLDEzOC4yLDBBMy43OSwzLjc5LDAsMCwxLDE0MiwzLjc5VjI4LjY2YTMuNzksMy43OSwwLDAsMS02LjQ3LDIuNjdMMTEwLjgxLDYuNThBMy43OSwzLjc5LDAsMCwxLDExMy40OC4xMloiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0wLDMuODl2MjBBMjAuODUsMjAuODUsMCwwLDAsNi4wNSwzOC42MUw2OC45MywxMDEuOWEzLjc5LDMuNzksMCwwLDAsNi40OC0yLjY3di0yMGEyMC44NSwyMC44NSwwLDAsMC02LTE0LjY4TDYuNDcsMS4yMkEzLjc5LDMuNzksMCwwLDAsMCwzLjg5WiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTY2Ljc2LDMuODl2MjBhMjAuODUsMjAuODUsMCwwLDAsNiwxNC42OEwxMzUuNywxMDEuOWEzLjc4LDMuNzgsMCwwLDAsNi40Ny0yLjY3di0yMGEyMC44NSwyMC44NSwwLDAsMC02LTE0LjY4TDczLjI0LDEuMjJBMy43OSwzLjc5LDAsMCwwLDY2Ljc2LDMuODlaIi8+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMTk0LjgsMjMuNTNoNi44OWwxNiw0Ni42OSwxNS4zOC00Ni44NWg1LjJsMTUuMzgsNDYuODUsMTYtNDYuNjloNi42NUwyNTYuMyw4MGgtNS4zN0wyMzUuNTYsMzQuNTEsMjIwLjEsODBoLTUuMjhaIi8+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMjk3LjM2LDIzLjUzaDQwLjUyVjI5LjNIMzAzLjY5VjQ4LjQ0aDMwLjU5djUuNzdIMzAzLjY5VjczLjgyaDM0LjU5djUuNzdIMjk3LjM2WiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTM2MC42MSwyMy41M2g2LjMzVjU3bDMyLjE5LTMzLjQ4aDguMTdMMzgzLjI4LDQ4bDI1LjA2LDMxLjU1aC03LjkzTDM3OC44Nyw1Mi40NCwzNjYuOTQsNjQuNTNWNzkuNTloLTYuMzNaIi8+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNNDQ4LjUzLDIzLjEzaDUuOTJMNDgwLDc5LjU5aC02LjgxbC02LjU2LTE0LjgySDQzNi4xMmwtNi42NSwxNC44Mkg0MjNabTE1LjYxLDM2TDQ1MS40MSwzMC41LDQzOC42LDU5LjA5WiIvPjwvZz48L2c+PC9zdmc+\">",
+        "mode": "html"
+      },
+      "pluginVersion": "11.6.14+security-01",
+      "timeFrom": "1m",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
     {
       "type": "row",
       "title": "Per-volume capacity",
@@ -67,7 +132,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 4
       },
       "panels": []
     },
@@ -84,7 +149,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 1
+        "y": 5
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -131,7 +196,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "#0ca30c"
               }
             ]
           },
@@ -186,7 +251,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 1
+        "y": 5
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -233,7 +298,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "#0ca30c"
               }
             ]
           },
@@ -288,7 +353,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 11
+        "y": 15
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -335,7 +400,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "#0ca30c"
               }
             ]
           },
@@ -390,7 +455,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 11
+        "y": 15
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -437,14 +502,14 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "#0ca30c"
               },
               {
-                "color": "orange",
+                "color": "#fab219",
                 "value": 85
               },
               {
-                "color": "red",
+                "color": "#d03b3b",
                 "value": 95
               }
             ]
@@ -491,540 +556,541 @@
       "type": "row",
       "title": "Volume rankings",
       "id": 6,
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 21
+        "y": 25
       },
-      "panels": []
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "type": "table",
-      "title": "Top volume sizes",
-      "description": "The 100 largest volumes by provisioned capacity.",
-      "id": 7,
-      "gridPos": {
-        "h": 12,
-        "w": 12,
-        "x": 0,
-        "y": 22
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
           },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false,
-            "filterable": true
+          "type": "table",
+          "title": "Top volume sizes",
+          "description": "The 100 largest volumes by provisioned capacity.",
+          "id": 7,
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 0,
+            "y": 26
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text"
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false,
+                "filterable": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text"
+                  }
+                ]
               }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Namespace"
             },
-            "properties": [
+            "overrides": [
               {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "PVC"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "PersistentVolume"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Filesystem"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Tenant"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Capacity"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
+                "matcher": {
+                  "id": "byName",
+                  "options": "Namespace"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
               },
               {
-                "id": "unit",
-                "value": "bytes"
+                "matcher": {
+                  "id": "byName",
+                  "options": "PVC"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "PersistentVolume"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Filesystem"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Tenant"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Capacity"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Used"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
               }
             ]
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Used"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "countRows": false,
+              "fields": ""
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
               },
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
+              "editorMode": "code",
+              "expr": "topk(100, max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "A",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) and on (pv_name) topk(100, max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "B",
+              "format": "table"
+            }
           ],
-          "countRows": false,
-          "fields": ""
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "topk(100, max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "A",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) and on (pv_name) topk(100, max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "B",
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": [
-                "pvc_namespace",
-                "pvc_name",
-                "pv_name",
-                "filesystem_name",
-                "organization",
-                "Value #A",
-                "Value #B"
-              ]
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "renameByName": {
-              "pvc_namespace": "Namespace",
-              "pvc_name": "PVC",
-              "pv_name": "PersistentVolume",
-              "filesystem_name": "Filesystem",
-              "organization": "Tenant",
-              "Value #A": "Capacity",
-              "Value #B": "Used"
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
             },
-            "indexByName": {
-              "pvc_namespace": 0,
-              "pvc_name": 1,
-              "pv_name": 2,
-              "filesystem_name": 3,
-              "organization": 4,
-              "Value #A": 5,
-              "Value #B": 6
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": {},
-            "sort": [
-              {
-                "field": "Capacity",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "type": "table",
-      "title": "Top volume usage",
-      "description": "The 100 fullest volumes. Amber at 85%, red at 95% \u2014 the same thresholds as the WekaCsiVolumeAlmostFull and WekaCsiVolumeFull alert rules in dashboards/volume-capacity-alerts.yaml.",
-      "id": 8,
-      "gridPos": {
-        "h": 12,
-        "w": 12,
-        "x": 12,
-        "y": 22
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false,
-            "filterable": true
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text"
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Namespace"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "PVC"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "PersistentVolume"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Filesystem"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Tenant"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Used %"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
-              },
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "gradient"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green"
-                    },
-                    {
-                      "color": "orange",
-                      "value": 85
-                    },
-                    {
-                      "color": "red",
-                      "value": 95
-                    }
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "pvc_namespace",
+                    "pvc_name",
+                    "pv_name",
+                    "filesystem_name",
+                    "organization",
+                    "Value #A",
+                    "Value #B"
                   ]
                 }
               }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Used"
             },
-            "properties": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "renameByName": {
+                  "pvc_namespace": "Namespace",
+                  "pvc_name": "PVC",
+                  "pv_name": "PersistentVolume",
+                  "filesystem_name": "Filesystem",
+                  "organization": "Tenant",
+                  "Value #A": "Capacity",
+                  "Value #B": "Used"
+                },
+                "indexByName": {
+                  "pvc_namespace": 0,
+                  "pvc_name": 1,
+                  "pv_name": 2,
+                  "filesystem_name": 3,
+                  "organization": 4,
+                  "Value #A": 5,
+                  "Value #B": 6
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "fields": {},
+                "sort": [
+                  {
+                    "field": "Capacity",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "table",
+          "title": "Top volume usage",
+          "description": "The 100 fullest volumes. Amber at 85%, red at 95% \u2014 the same thresholds as the WekaCsiVolumeAlmostFull and WekaCsiVolumeFull alert rules in dashboards/volume-capacity-alerts.yaml.",
+          "id": 8,
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 12,
+            "y": 26
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false,
+                "filterable": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text"
+                  }
+                ]
+              }
+            },
+            "overrides": [
               {
-                "id": "custom.width",
-                "value": 130
+                "matcher": {
+                  "id": "byName",
+                  "options": "Namespace"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
               },
               {
-                "id": "unit",
-                "value": "bytes"
+                "matcher": {
+                  "id": "byName",
+                  "options": "PVC"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "PersistentVolume"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Filesystem"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Tenant"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Used %"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "#0ca30c"
+                        },
+                        {
+                          "color": "#fab219",
+                          "value": 85
+                        },
+                        {
+                          "color": "#d03b3b",
+                          "value": 95
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Used"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Capacity"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
               }
             ]
           },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Capacity"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "countRows": false,
+              "fields": ""
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
               },
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
+              "editorMode": "code",
+              "expr": "topk(100, 100 * max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) / clamp_min(max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])), 1))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "A",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) and on (pv_name) topk(100, 100 * max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) / clamp_min(max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])), 1))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "B",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) and on (pv_name) topk(100, 100 * max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) / clamp_min(max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])), 1))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "C",
+              "format": "table"
+            }
           ],
-          "countRows": false,
-          "fields": ""
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "topk(100, 100 * max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) / clamp_min(max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])), 1))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "A",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) and on (pv_name) topk(100, 100 * max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) / clamp_min(max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])), 1))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "B",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) and on (pv_name) topk(100, 100 * max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) / clamp_min(max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])), 1))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "C",
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": [
-                "pvc_namespace",
-                "pvc_name",
-                "pv_name",
-                "filesystem_name",
-                "organization",
-                "Value #A",
-                "Value #B",
-                "Value #C"
-              ]
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "renameByName": {
-              "pvc_namespace": "Namespace",
-              "pvc_name": "PVC",
-              "pv_name": "PersistentVolume",
-              "filesystem_name": "Filesystem",
-              "organization": "Tenant",
-              "Value #A": "Used %",
-              "Value #B": "Used",
-              "Value #C": "Capacity"
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
             },
-            "indexByName": {
-              "pvc_namespace": 0,
-              "pvc_name": 1,
-              "pv_name": 2,
-              "filesystem_name": 3,
-              "organization": 4,
-              "Value #A": 5,
-              "Value #B": 6,
-              "Value #C": 7
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": {},
-            "sort": [
-              {
-                "field": "Used %",
-                "desc": true
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "pvc_namespace",
+                    "pvc_name",
+                    "pv_name",
+                    "filesystem_name",
+                    "organization",
+                    "Value #A",
+                    "Value #B",
+                    "Value #C"
+                  ]
+                }
               }
-            ]
-          }
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "renameByName": {
+                  "pvc_namespace": "Namespace",
+                  "pvc_name": "PVC",
+                  "pv_name": "PersistentVolume",
+                  "filesystem_name": "Filesystem",
+                  "organization": "Tenant",
+                  "Value #A": "Used %",
+                  "Value #B": "Used",
+                  "Value #C": "Capacity"
+                },
+                "indexByName": {
+                  "pvc_namespace": 0,
+                  "pvc_name": 1,
+                  "pv_name": 2,
+                  "filesystem_name": 3,
+                  "organization": 4,
+                  "Value #A": 5,
+                  "Value #B": 6,
+                  "Value #C": 7
+                }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "fields": {},
+                "sort": [
+                  {
+                    "field": "Used %",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1032,576 +1098,577 @@
       "type": "row",
       "title": "Filesystem and tenant rankings",
       "id": 9,
-      "collapsed": false,
+      "collapsed": true,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 38
       },
-      "panels": []
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "type": "table",
-      "title": "Top filesystems",
-      "description": "Volumes aggregated per filesystem. Directory-backed volumes share one filesystem, so this is where a fleet's real concentration shows.",
-      "id": 10,
-      "gridPos": {
-        "h": 12,
-        "w": 12,
-        "x": 0,
-        "y": 35
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
           },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false,
-            "filterable": true
+          "type": "table",
+          "title": "Top filesystems",
+          "description": "Volumes aggregated per filesystem. Directory-backed volumes share one filesystem, so this is where a fleet's real concentration shows.",
+          "id": 10,
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 0,
+            "y": 39
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text"
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false,
+                "filterable": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text"
+                  }
+                ]
               }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Cluster"
             },
-            "properties": [
+            "overrides": [
               {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Filesystem"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Tenant"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Used"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
+                "matcher": {
+                  "id": "byName",
+                  "options": "Cluster"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
               },
               {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Capacity"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
+                "matcher": {
+                  "id": "byName",
+                  "options": "Filesystem"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
               },
               {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Volumes"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
+                "matcher": {
+                  "id": "byName",
+                  "options": "Tenant"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
               },
               {
-                "id": "unit",
-                "value": "short"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Used %"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
+                "matcher": {
+                  "id": "byName",
+                  "options": "Used"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
               },
               {
-                "id": "unit",
-                "value": "percent"
+                "matcher": {
+                  "id": "byName",
+                  "options": "Capacity"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
               },
               {
-                "id": "max",
-                "value": 100
+                "matcher": {
+                  "id": "byName",
+                  "options": "Volumes"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  }
+                ]
               },
               {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "gradient"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green"
-                    },
-                    {
-                      "color": "orange",
-                      "value": 85
-                    },
-                    {
-                      "color": "red",
-                      "value": 95
+                "matcher": {
+                  "id": "byName",
+                  "options": "Used %"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
                     }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "#0ca30c"
+                        },
+                        {
+                          "color": "#fab219",
+                          "value": 85
+                        },
+                        {
+                          "color": "#d03b3b",
+                          "value": 95
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "countRows": false,
+              "fields": ""
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "topk(100, sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "A",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (cluster_guid, filesystem_name, organization) topk(100, sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "B",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "count by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (cluster_guid, filesystem_name, organization) topk(100, sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "C",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "100 * sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) / clamp_min(sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))), 1) and on (cluster_guid, filesystem_name, organization) topk(100, sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "D",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "cluster_guid",
+                    "filesystem_name",
+                    "organization",
+                    "Value #A",
+                    "Value #B",
+                    "Value #C",
+                    "Value #D"
                   ]
                 }
               }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
-          ],
-          "countRows": false,
-          "fields": ""
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "topk(100, sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "A",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (cluster_guid, filesystem_name, organization) topk(100, sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "B",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "count by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (cluster_guid, filesystem_name, organization) topk(100, sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "C",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "100 * sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) / clamp_min(sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))), 1) and on (cluster_guid, filesystem_name, organization) topk(100, sum by (cluster_guid, filesystem_name, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "D",
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": [
-                "cluster_guid",
-                "filesystem_name",
-                "organization",
-                "Value #A",
-                "Value #B",
-                "Value #C",
-                "Value #D"
-              ]
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "renameByName": {
-              "cluster_guid": "Cluster",
-              "filesystem_name": "Filesystem",
-              "organization": "Tenant",
-              "Value #A": "Used",
-              "Value #B": "Capacity",
-              "Value #C": "Volumes",
-              "Value #D": "Used %"
             },
-            "indexByName": {
-              "cluster_guid": 0,
-              "filesystem_name": 1,
-              "organization": 2,
-              "Value #A": 3,
-              "Value #B": 4,
-              "Value #C": 5,
-              "Value #D": 6
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": {},
-            "sort": [
-              {
-                "field": "Used",
-                "desc": true
-              }
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "type": "table",
-      "title": "Top tenants",
-      "description": "Volumes aggregated per Weka organization, taken from the credentials each volume's API client authenticated with. Ranked by usage; the Capacity column ranks by size.",
-      "id": 11,
-      "gridPos": {
-        "h": 12,
-        "w": 12,
-        "x": 12,
-        "y": 35
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "inspect": false,
-            "filterable": true
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text"
-              }
-            ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Tenant"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Used"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
-              },
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Capacity"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
-              },
-              {
-                "id": "unit",
-                "value": "bytes"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Volumes"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
-              },
-              {
-                "id": "unit",
-                "value": "short"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Used %"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 130
-              },
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "gradient"
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "renameByName": {
+                  "cluster_guid": "Cluster",
+                  "filesystem_name": "Filesystem",
+                  "organization": "Tenant",
+                  "Value #A": "Used",
+                  "Value #B": "Capacity",
+                  "Value #C": "Volumes",
+                  "Value #D": "Used %"
+                },
+                "indexByName": {
+                  "cluster_guid": 0,
+                  "filesystem_name": 1,
+                  "organization": 2,
+                  "Value #A": 3,
+                  "Value #B": 4,
+                  "Value #C": 5,
+                  "Value #D": 6
                 }
+              }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "fields": {},
+                "sort": [
+                  {
+                    "field": "Used",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "table",
+          "title": "Top tenants",
+          "description": "Volumes aggregated per WEKA organization, taken from the credentials each volume's API client authenticated with. Ranked by usage; the Capacity column ranks by size.",
+          "id": 11,
+          "gridPos": {
+            "h": 12,
+            "w": 12,
+            "x": 12,
+            "y": 39
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false,
+                "filterable": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "text"
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Tenant"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 250
+                  }
+                ]
               },
               {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green"
-                    },
-                    {
-                      "color": "orange",
-                      "value": 85
-                    },
-                    {
-                      "color": "red",
-                      "value": 95
+                "matcher": {
+                  "id": "byName",
+                  "options": "Used"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Capacity"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Volumes"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Used %"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  },
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "max",
+                    "value": 100
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-background",
+                      "mode": "gradient"
                     }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "#0ca30c"
+                        },
+                        {
+                          "color": "#fab219",
+                          "value": 85
+                        },
+                        {
+                          "color": "#d03b3b",
+                          "value": 95
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "footer": {
+              "show": false,
+              "reducer": [
+                "sum"
+              ],
+              "countRows": false,
+              "fields": ""
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "A",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "B",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "count by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "C",
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "100 * sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) / clamp_min(sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))), 1) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+              "legendFormat": "__auto",
+              "range": false,
+              "instant": true,
+              "refId": "D",
+              "format": "table"
+            }
+          ],
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "organization",
+                    "Value #A",
+                    "Value #B",
+                    "Value #C",
+                    "Value #D"
                   ]
                 }
               }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
-          ],
-          "countRows": false,
-          "fields": ""
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "A",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "B",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "count by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "C",
-          "format": "table"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "100 * sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) / clamp_min(sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))), 1) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
-          "legendFormat": "__auto",
-          "range": false,
-          "instant": true,
-          "refId": "D",
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "filterFieldsByName",
-          "options": {
-            "include": {
-              "names": [
-                "organization",
-                "Value #A",
-                "Value #B",
-                "Value #C",
-                "Value #D"
-              ]
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {},
-            "renameByName": {
-              "organization": "Tenant",
-              "Value #A": "Used",
-              "Value #B": "Capacity",
-              "Value #C": "Volumes",
-              "Value #D": "Used %"
             },
-            "indexByName": {
-              "organization": 0,
-              "Value #A": 1,
-              "Value #B": 2,
-              "Value #C": 3,
-              "Value #D": 4
-            }
-          }
-        },
-        {
-          "id": "sortBy",
-          "options": {
-            "fields": {},
-            "sort": [
-              {
-                "field": "Used",
-                "desc": true
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {},
+                "renameByName": {
+                  "organization": "Tenant",
+                  "Value #A": "Used",
+                  "Value #B": "Capacity",
+                  "Value #C": "Volumes",
+                  "Value #D": "Used %"
+                },
+                "indexByName": {
+                  "organization": 0,
+                  "Value #A": 1,
+                  "Value #B": 2,
+                  "Value #C": 3,
+                  "Value #D": 4
+                }
               }
-            ]
-          }
+            },
+            {
+              "id": "sortBy",
+              "options": {
+                "fields": {},
+                "sort": [
+                  {
+                    "field": "Used",
+                    "desc": true
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }
@@ -1682,7 +1749,7 @@
           "query": "label_values(weka_csi_volume_capacity_bytes, organization)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery-organization"
         },
-        "description": "Weka organization the volume belongs to.",
+        "description": "WEKA organization the volume belongs to.",
         "includeAll": true,
         "allValue": ".+",
         "multi": true,
@@ -1714,7 +1781,7 @@
           "query": "label_values(weka_csi_volume_capacity_bytes, filesystem_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery-filesystem_name"
         },
-        "description": "Weka filesystem backing the volume.",
+        "description": "WEKA filesystem backing the volume.",
         "includeAll": true,
         "allValue": ".*",
         "multi": true,
@@ -1836,7 +1903,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Weka CSI volume capacity",
+  "title": "WEKA CSI volume capacity",
   "uid": "weka-csi-volume-capacity",
   "version": 1,
   "weekStart": ""

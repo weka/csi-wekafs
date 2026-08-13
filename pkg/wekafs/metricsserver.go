@@ -933,24 +933,14 @@ func organizationLabel(client *apiclient.ApiClient) string {
 }
 
 func (ms *MetricsServer) createPrometheusLabelsForMetric(metric *VolumeMetric) []string {
-	labelValues := []string{
+	return csiVolumeLabelValues(
 		ms.driver.name,
-		metric.persistentVolume.Name,
+		metric.persistentVolume,
 		metric.apiClient.ClusterGuid.String(),
-		metric.persistentVolume.Spec.StorageClassName,
 		metric.volume.FilesystemName,
 		string(metric.volume.GetBackingType()),
 		organizationLabel(metric.apiClient),
-	}
-	if metric.persistentVolume.Spec.ClaimRef != nil {
-		labelValues = append(labelValues,
-			metric.persistentVolume.Spec.ClaimRef.Name,
-			metric.persistentVolume.Spec.ClaimRef.Namespace,
-			string(metric.persistentVolume.Spec.ClaimRef.UID))
-	} else {
-		labelValues = append(labelValues, "", "", "")
-	}
-	return labelValues
+	)
 }
 
 // removePrometheusMetricsForLabels deletes every Prometheus series for one volume, e.g. once it is
