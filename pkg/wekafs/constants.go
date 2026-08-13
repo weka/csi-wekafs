@@ -166,11 +166,6 @@ const (
 )
 
 const (
-	xattrCapacity   = "user.weka_capacity"
-	xattrVolumeName = "user.weka_k8s_volname"
-)
-
-const (
 	MaxSnapshotDeletionDuration = time.Hour * 2 // Max time to delete snapshot
 )
 

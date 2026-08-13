@@ -32,7 +32,7 @@ csi-wekafs/
 │   ├── nodeserver.go            # CSI Node (Publish/Unpublish, Stage/Unstage)
 │   ├── identityserver.go        # CSI Identity (plugin info, capabilities)
 │   ├── wekafs.go                # Driver init, gRPC setup, health probes
-│   ├── volume.go                # Volume abstraction, capacity, xattr metadata
+│   ├── volume.go                # Volume abstraction, capacity via quota
 │   ├── snapshot.go              # Snapshot operations & state
 │   ├── volumehealth.go          # ControllerGetVolume: volume condition & capacity via REST API
 │   ├── wekafsmount.go           # Native Weka mount operations

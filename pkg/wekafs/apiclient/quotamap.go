@@ -121,8 +121,8 @@ func (a *ApiClient) GetQuotaMap(ctx context.Context, fs *FileSystem) (*QuotaMap,
 	}
 	for _, q := range *out {
 		ret.Quotas[q.InodeId] = &Quota{
-			FilesystemUid:  fs.Uid,
-			InodeId:        q.InodeId,
+			FilesystemUid: fs.Uid,
+			InodeId:       q.InodeId,
 			// The listing calls consumed capacity total_bytes; Quota calls it UsedBytes,
 			// after the name the single-quota endpoint uses. Same quantity.
 			UsedBytes:      q.TotalBytes,
