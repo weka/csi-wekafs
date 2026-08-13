@@ -30,6 +30,7 @@ https://github.com/weka/csi-wekafs
 ## Deployment
 - [Helm public repo](https://artifacthub.io/packages/helm/csi-wekafs/csi-wekafsplugin) (recommended)
 - [Deployment and upgrade workflows](docs/deployment.md)
+- [Breaking changes in version 3.0](docs/breaking-changes-3.0.md)
 - [Helm-based local deployment](charts/csi-wekafsplugin/LOCAL.md)
 
 ## Usage
@@ -140,7 +141,6 @@ make migrator-image    # container image
 | apiTimeoutSeconds | int | `60` | Timeout for a single WEKA API request, in seconds |
 | logLevel | int | `5` | Log level of CSI plugin |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
-| legacyVolumeSecretName | string | `""` | for migration of pre-CSI 0.7.0 volumes only, default API secret. Must reside in same namespace as the plugin |
 | priorityClassName | string | `""` | Optional CSI Plugin priorityClassName for both components, overridable per component with `controller.priorityClassName` and `node.priorityClassName` |
 | selinuxSupport | string | `"off"` | Support SELinux labeling for Persistent Volumes, may be either `off`, `mixed`, `enforced` (default off)    In `enforced` mode, CSI node components will only start on nodes having a label `selinuxNodeLabel` below    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!    NOTE: SELinux support is enabled automatically on clusters recognized as RedHat OpenShift Container Platform |
 | metricsServer | object | `{"affinity":{},"apiTimeoutSeconds":180,"enableBatchModeForQuotaUpdates":true,"enableLeaderElection":true,"enabled":false,"healthPort":9196,"labels":{},"logLevel":null,"maxConcurrentRequests":50,"metricsFetchIntervalSeconds":60,"nodeSelector":{},"podLabels":{},"priorityClassName":"","quotaCacheValiditySeconds":300,"quotaUpdateConcurrentRequests":25,"replicas":2,"resources":{"limits":{"cpu":2,"memory":"2Gi"},"requests":{"cpu":0.1,"memory":"256Mi"}},"scrapeInterval":"60s","terminationGracePeriodSeconds":10,"tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]}` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
@@ -187,7 +187,7 @@ make migrator-image    # container image
 | pluginConfig.objectNaming.seedSnapshotPrefix | string | `"csisnp-seed-"` | Prefix that will be added to automatically created "seed" snapshot of empty filesytem,    must not exceed 12 symbols. |
 | pluginConfig.allowedOperations.autoCreateFilesystems | bool | `true` | Allow automatic provisioning of CSI volumes based on distinct Weka filesystem |
 | pluginConfig.allowedOperations.autoExpandFilesystems | bool | `true` | Allow automatic expansion of filesystem on which Weka snapshot-backed or directory-backed CSI volumes reside,    e.g. in case a required volume capacity exceeds the size of filesystem. |
-| pluginConfig.allowedOperations.snapshotDirectoryVolumes | bool | `false` | Create snapshots of legacy (dir/v1) volumes. By default disabled.    Note: when enabled, for every legacy volume snapshot, a full filesystem snapshot will be created (wasteful) |
+| pluginConfig.allowedOperations.snapshotDirectoryVolumes | bool | `false` | Create snapshots of directory-backed (dir/v1) volumes. By default disabled.    Note: when enabled, for every directory-backed volume snapshot, a full filesystem snapshot will be created (wasteful) |
 | pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement | bool | `false` | Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced |
 | pluginConfig.allowedOperations.enforceDirVolTotalCapacity | bool | `false` | Enforce total filesystem capacity for directory-backed volumes (prevents over-provisioning) |
 | pluginConfig.allowedOperations.keepThinProvisioningRatioOnExpand | bool | `true` | When expanding a thinly-provisioned (tiered) filesystem, scale its thin min-SSD and max-SSD    by the same factor the total capacity grows, preserving the SSD ratios. When false, the thin    min-SSD and max-SSD are left unchanged and only total capacity (object tier) grows. Has no    effect on thick (non-tiered) filesystems. |

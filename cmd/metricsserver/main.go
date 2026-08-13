@@ -117,7 +117,7 @@ func handle(ctx context.Context) {
 	})
 
 	// No endpoint and no volume limit: this process serves no gRPC and stages nothing.
-	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, "", 0, version, "", csiMode, false, config)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, "", 0, version, csiMode, false, config)
 	if err != nil {
 		fmt.Printf("Failed to initialize metrics server: %s", err.Error())
 		os.Exit(1)

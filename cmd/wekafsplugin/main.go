@@ -36,13 +36,10 @@ var (
 	csiMode                              = wekafs.CsiPluginMode("")
 	endpoint                             = flag.String("endpoint", "unix://tmp/csi.sock", "CSI endpoint")
 	driverName                           = flag.String("drivername", "csi.weka.io", "name of the driver")
-	debugPath                            = flag.String("debugpath", "",
-		"Debug path to use instead of actually mounting weka, can be local fs or wekafs,"+
-			" virtual FS will be created in this path instead of actual mounting")
-	nodeID            = flag.String("nodeid", "", "node id")
-	maxVolumesPerNode = flag.Int64("maxvolumespernode", 0, "limit of volumes per node")
-	showVersion       = flag.Bool("version", false, "Show version.")
-	dynamicSubPath    = flag.String("dynamic-path", "csi-volumes",
+	nodeID                               = flag.String("nodeid", "", "node id")
+	maxVolumesPerNode                    = flag.Int64("maxvolumespernode", 0, "limit of volumes per node")
+	showVersion                          = flag.Bool("version", false, "Show version.")
+	dynamicSubPath                       = flag.String("dynamic-path", "csi-volumes",
 		"Store dynamically provisioned volumes in subdirectory rather than in root directory of th filesystem")
 	csimodetext                          = flag.String("csimode", "", "Mode of CSI plugin, either \"controller\", \"node\", or \"metricsserver\" (required, no default)")
 	selinuxSupport                       = flag.Bool("selinux-support", false, "Enable support for SELinux")
@@ -51,7 +48,7 @@ var (
 	seedSnapshotPrefix                   = flag.String("seedsnapshotprefix", "csisnp-seed-", "Prefix for empty (seed) snapshot to create on newly provisioned filesystem")
 	allowAutoFsExpansion                 = flag.Bool("allowautofsexpansion", false, "Allow expansion of filesystems used as CSI volumes")
 	allowAutoFsCreation                  = flag.Bool("allowautofscreation", false, "Allow provisioning of CSI volumes as new Weka filesystems")
-	allowSnapshotsOfLegacyVolumes        = flag.Bool("allowsnapshotsofdirectoryvolumes", false, "Allow provisioning of CSI volumes or snapshots from legacy volumes")
+	allowSnapshotsOfDirectoryVolumes     = flag.Bool("allowsnapshotsofdirectoryvolumes", false, "Allow provisioning of CSI volumes or snapshots from directory-backed volumes")
 	suppressSnapshotsCapability          = flag.Bool("suppresssnapshotcapability", false, "Do not expose CREATE_DELETE_SNAPSHOT, for testing purposes only")
 	suppressVolumeCloneCapability        = flag.Bool("suppressrvolumeclonecapability", false, "Do not expose CLONE_VOLUME, for testing purposes only")
 	enableMetrics                        = flag.Bool("enablemetrics", false, "Enable Prometheus metrics endpoint")
@@ -151,12 +148,11 @@ func handle(ctx context.Context) {
 		VolumePrefix:       *newVolumePrefix,
 		SnapshotPrefix:     *newSnapshotPrefix,
 		SeedSnapshotPrefix: *seedSnapshotPrefix,
-		DebugPath:          *debugPath,
 		Version:            version,
 
 		AllowAutoFsCreation:              *allowAutoFsCreation,
 		AllowAutoFsExpansion:             *allowAutoFsExpansion,
-		AllowSnapshotsOfDirectoryVolumes: *allowSnapshotsOfLegacyVolumes,
+		AllowSnapshotsOfDirectoryVolumes: *allowSnapshotsOfDirectoryVolumes,
 		AllowInsecureHttps:               *allowInsecureHttps,
 		AlwaysAllowSnapshotVolumes:       *alwaysAllowSnapshotVolumes,
 		AllowProtocolContainers:          *allowProtocolContainers,
@@ -204,7 +200,7 @@ func handle(ctx context.Context) {
 		QuotaCacheValiditySeconds:         *wekaMetricsQuotaCacheValiditySeconds,
 		UseQuotaMapsForMetrics:            *fetchQuotasInBatchMode,
 	})
-	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, *debugPath, csiMode, *selinuxSupport, config)
+	driver, err := wekafs.NewWekaFsDriver(*driverName, *nodeID, *endpoint, *maxVolumesPerNode, version, csiMode, *selinuxSupport, config)
 	if err != nil {
 		fmt.Printf("Failed to initialize driver: %s", err.Error())
 		os.Exit(1)

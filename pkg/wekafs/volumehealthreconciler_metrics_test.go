@@ -115,7 +115,7 @@ func newHealthReconcilerTestServer(t *testing.T, objs ...runtimeclient.Object) (
 		UseNfs:           false,
 	})
 
-	driver, err := NewWekaFsDriver("csi.weka.io", "localhost", "unix://tmp/csi.sock", 10, "v1.0", "", CsiModeController, false, driverConfig)
+	driver, err := NewWekaFsDriver("csi.weka.io", "localhost", "unix://tmp/csi.sock", 10, "v1.0", CsiModeController, false, driverConfig)
 	if err != nil {
 		t.Fatalf("failed to create driver: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestDeleteVolumeForgetsHealthMetricsIdempotently(t *testing.T) {
 
 // TestDeleteVolumeForgetsHealthMetricsNilCache is the crash-risk test: DeleteVolume runs on every
 // successful delete regardless of whether volume health support is advertised, so conditionCache is
-// nil whenever it isn't (also true in dev mode, or when the k8s manager is nil - see
+// nil whenever it isn't (also true when the k8s manager is nil - see
 // NewControllerServer). forgetVolumeHealthMetrics must guard that case rather than deref a nil
 // *volumeConditionCache's embedded mutex.
 func TestDeleteVolumeForgetsHealthMetricsNilCache(t *testing.T) {

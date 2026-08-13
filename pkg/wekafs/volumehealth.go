@@ -409,9 +409,9 @@ func isDriverPersistentVolume(pv *v1.PersistentVolume, driverName string) bool {
 func (cs *ControllerServer) apiClientFromPersistentVolume(ctx context.Context, pv *v1.PersistentVolume) (*apiclient.ApiClient, error) {
 	ref := preferredSecretRef(pv)
 	if ref == nil {
-		// Statically provisioned volumes may reference no Secret at all - fall back to the
-		// cluster-wide legacy secret if the driver was started with one.
-		return cs.getApiStore().GetClientFromSecrets(ctx, nil)
+		// A volume that references no Secret at all cannot be reached over the API, so its
+		// condition is unknown rather than unhealthy.
+		return nil, nil
 	}
 	key := ref.Namespace + "/" + ref.Name
 	secrets, cached := cs.secretCache.lookup(key)

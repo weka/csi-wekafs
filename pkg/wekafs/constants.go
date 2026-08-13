@@ -33,12 +33,10 @@ const (
 )
 
 const (
-	VolumeTypeDirV1   = volumeid.TypeDirV1   // if specified in storage class, create directory quotas (as in legacy CSI volumes). FS name must be set in SC as well
+	VolumeTypeDirV1   = volumeid.TypeDirV1   // directory-backed volume. If specified in the storage class, create directory quotas. FS name must be set in the SC as well
 	VolumeTypeUnified = volumeid.TypeUnified // no need to specify this in storageClass
 	VolumeTypeUNKNOWN = volumeid.TypeUnknown
 	VolumeTypeEmpty   = volumeid.TypeEmpty
-
-	LegacySecretPath = "/legacy-volume-access"
 
 	CsiModeNode          CsiPluginMode = "node"
 	CsiModeController    CsiPluginMode = "controller"

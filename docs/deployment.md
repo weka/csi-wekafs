@@ -128,7 +128,7 @@ To configure a storage class and start using the driver, see the [Examples](../e
 
 In WEKA CSI Plugin v2.0, the CSIDriver object has undergone changes. Specifically, CSIDriver objects are now immutable. Consequently, the upgrade process involves uninstalling the previous CSI version using Helm and subsequently installing the new version. It is important to note that the uninstall operation does not delete any existing secrets, StorageClasses, or PVC configurations.
 
-**Warning**: If you plan to upgrade the existing WEKA CSI Plugin and enable directory quota enforcement for already existing volumes, bind the legacy volumes to a single secret. See the [Bind legacy volumes to API](../migration/upgrade-legacy-pv.md) section.
+**Warning**: If you plan to upgrade the existing WEKA CSI Plugin and enable directory quota enforcement for already existing volumes, bind the legacy volumes to a single secret. See the [Bind legacy volumes to API](../migration/upgrade-legacy-pv.md) section. This applies to 2.x only — in 3.0 the legacy communication model, and the `legacyVolumeSecretName` setting it relied on, have been removed. See [Breaking changes in WEKA CSI Plugin 3.0](breaking-changes-3.0.md).
 
 #### 1. Prepare for the upgrade
 

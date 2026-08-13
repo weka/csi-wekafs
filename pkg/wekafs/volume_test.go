@@ -52,7 +52,7 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 
 		KeepThinProvisioningRatioOnExpand: true,
 	})
-	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", "", CsiModeController, false, driverConfig)
+	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", CsiModeController, false, driverConfig)
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)
 	}
