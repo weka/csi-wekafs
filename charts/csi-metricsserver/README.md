@@ -1,12 +1,13 @@
 # WEKA CSI Metrics Server
 ========================
-Helm chart for Deployment of Metrics Server for WEKA CSI Plugin
+Helm chart for Deployment of the WekaIO CSI Metrics Server, exporting per-volume WekaFS capacity and performance metrics to Prometheus
+
 This is a standalone application that can be installed on top of the Weka CSI Plugin to provide metrics for Prometheus and Grafana
 Note that WEKA CSI Plugin 3.0 has built-in metrics server, so this chart is not needed for WEKA CSI Plugin 3.0 and up
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-![Version: 2.8.0-SNAPSHOT.114.sha.d96674b](https://img.shields.io/badge/Version-2.8.0--SNAPSHOT.114.sha.d96674b-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.0-SNAPSHOT.114.sha.d96674b](https://img.shields.io/badge/AppVersion-v2.8.0--SNAPSHOT.114.sha.d96674b-informational?style=flat-square)
+![Version: 2.8.9](https://img.shields.io/badge/Version-2.8.9-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.8.9](https://img.shields.io/badge/AppVersion-v2.8.9-informational?style=flat-square)
 
 ## Homepage
 https://github.com/weka/csi-wekafs
@@ -21,103 +22,46 @@ https://github.com/weka/csi-wekafs
 - Kubernetes cluster of version 1.18 and up, 1.19 and up recommended
 - Helm v3 must be installed and configured properly
 - Weka system pre-configured and Weka client installed and registered in cluster for each Kubernetes node
+- Weka CSI Plugin installed and configured in the cluster.
 
-## Deployment
-```shell
-helm repo add csi-wekafs https://weka.github.io/csi-wekafs
-helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafsplugin --create-namespace [--set selinuxSupport=<off | mixed | enforced>]
-```
-
-> **NOTE:** Since version 3.0.0, WEKA CSI Plugin removes support for legacy volumes without API binding.
-> For further information, refer [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
-
-## Usage
-- [Deploy an Example application](https://github.com/weka/csi-wekafs/blob/master/docs/usage.md)
-- [SELinux Support & Installation Notes](https://github.com/weka/csi-wekafs/blob/master/selinux/README.md)
-
-## Additional Documentation
-- [Official Weka CSI Plugin documentation](https://docs.weka.io/appendices/weka-csi-plugin)
+> **NOTE:** This chart is not needed for WEKA CSI Plugin 3.0 and up, as it has built-in metrics server.
 
 ## Values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
-| csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.8.0-SNAPSHOT.114.sha.d96674b"` | CSI driver version |
-| images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.16.0"` | CSI liveness probe sidecar image URL |
-| images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.9.0"` | CSI attacher sidecar image URL |
-| images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v5.3.0"` | CSI provisioner sidecar image URL |
-| images.registrarsidecar | string | `"registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.14.0"` | CSI registrar sidercar |
-| images.resizersidecar | string | `"registry.k8s.io/sig-storage/csi-resizer:v1.14.0"` | CSI resizer sidecar image URL |
-| images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.3.0"` | CSI snapshotter sidecar image URL |
-| images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.8.0-SNAPSHOT.114.sha.d96674b"` | CSI driver tag |
-| imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
-| globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
-| controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
-| nodePluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI node component only (by default same as global) |
-| nodeSelector | object | `{}` | Optional nodeSelector for CSI plugin deployment on certain Kubernetes nodes only    This nodeselector will be applied to all CSI plugin components |
-| affinity | object | `{}` | Optional affinity for CSI plugin deployment    This affinity will be applied to all CSI plugin components |
-| machineConfigLabels | list | `["worker","master"]` | Optional setting for OCP platform only, which machineconfig pools to apply the Weka SELinux policy on    NOTE: by default, the policy will be installed both on workers and control plane nodes |
-| controller.replicas | int | `2` | Controller number of replicas |
-| controller.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
-| controller.concurrency | object | `{"createSnapshot":5,"createVolume":5,"deleteSnapshot":5,"deleteVolume":5,"expandVolume":5}` | maximum concurrent operations per operation type |
-| controller.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
-| controller.configureProvisionerLeaderElection | bool | `true` | Configure provisioner sidecar for leader election |
-| controller.configureResizerLeaderElection | bool | `true` | Configure resizer sidecar for leader election |
-| controller.configureSnapshotterLeaderElection | bool | `true` | Configure snapshotter sidecar for leader election |
-| controller.configureAttacherLeaderElection | bool | `true` | Configure attacher sidecar for leader election |
-| controller.nodeSelector | object | `{}` | optional nodeSelector for controller components only |
-| controller.affinity | object | `{}` | optional affinity for controller components only |
-| controller.labels | object | `{}` | optional labels to add to controller deployment |
-| controller.podLabels | object | `{}` | optional labels to add to controller pods |
-| controller.terminationGracePeriodSeconds | int | `10` | termination grace period for controller pods |
-| node.maxConcurrentRequests | int | `5` | Maximum concurrent requests from sidecars (global) |
-| node.concurrency | object | `{"nodePublishVolume":5,"nodeUnpublishVolume":5}` | maximum concurrent operations per operation type (to avoid API starvation) |
-| node.grpcRequestTimeoutSeconds | int | `30` | Return GRPC Unavailable if request waits in queue for that long time (seconds) |
-| node.nodeSelector | object | `{}` | optional nodeSelector for node components only |
-| node.affinity | object | `{}` | optional affinity for node components only |
-| node.labels | object | `{}` | optional labels to add to node daemonset |
-| node.podLabels | object | `{}` | optional labels to add to node pods |
-| node.terminationGracePeriodSeconds | int | `10` | termination grace period for node pods |
-| logLevel | int | `5` | Log level of CSI plugin |
+| csiDriverName | string | `"csi.weka.io"` | Name of the CSI driver whose PersistentVolumes to report on. Must match the csiDriverName of the    csi-wekafsplugin release that provisioned them, or no volumes will be discovered. |
+| image.repository | string | `"quay.io/weka.io/csi-metricsserver"` | The metrics server has its own image, built by Dockerfile-metricsserver |
+| image.pullPolicy | string | `"Always"` |  |
+| image.tag | string | `""` | Image tag; defaults to v<chart version> when empty |
+| imagePullSecret | string | `""` |  |
+| hostNetwork | bool | `false` |  |
+| priorityClassName | string | `""` | Optional priorityClassName for the metrics server, overridable with `metricsServer.priorityClassName` |
+| metricsServer.replicas | int | `2` | Number of replicas for metrics server. More than one is only useful with enableLeaderElection,    which keeps exactly one of them collecting while the rest stand by. Standbys report Ready like    any other pod; which one holds leadership is visible in the Lease object, not in pod status.    A standby is not free: controller-runtime starts its cache on every replica, so each standby    holds a full PersistentVolume informer cache and a watch against the API server while idle |
+| metricsServer.nodeSelector | object | `{}` | optional nodeSelector for metrics server only |
+| metricsServer.affinity | object | `{}` | optional affinity for metrics server only |
+| metricsServer.priorityClassName | string | `""` | optional priorityClassName for metrics server pods only, overriding the global `priorityClassName` |
+| metricsServer.labels | object | `{}` | optional labels to add to metrics server deployment |
+| metricsServer.podLabels | object | `{}` | optional labels to add to metrics server pods |
+| metricsServer.tolerations | object | `{}` | tolerations for metrics server only |
+| metricsServer.maxConcurrentRequests | int | `50` | concurrent requests for WEKA API (excluding quota) |
+| metricsServer.metricsFetchIntervalSeconds | int | `60` | metrics fetch interval in seconds, default is 60 seconds.    Only expired metrics will be updated, set by quotaCacheValiditySeconds |
+| metricsServer.terminationGracePeriodSeconds | int | `10` | termination grace period for metrics server pods |
+| metricsServer.enableLeaderElection | bool | `true` | enable leader election for metrics server |
+| metricsServer.quotaUpdateConcurrentRequests | int | `25` | number of concurrent requests for metrics server to update quotas |
+| metricsServer.quotaCacheValiditySeconds | int | `300` | the time period for which quotaMap of a certain filesystem should be considered valid. usually should match metricsFetchIntervalSeconds,    but in deployments with thousands of PVCs this can be increased to reduce the load on the metrics server.    Metrics in such case will be updated less frequently. But for each metric, a last update time will be recorded |
+| metricsServer.apiTimeoutSeconds | int | `180` | Timeout for a single WEKA API request, in seconds. Higher than the plugin's default because a    quota map fetch pulls every quota on a filesystem in one request |
+| metricsServer.enableBatchModeForQuotaUpdates | bool | `true` | Fetch all quotas of a filesystem in one request instead of one request per volume.    On by default, because directory-backed volumes share a filesystem: a fleet of 5800 of them    spread over 5 filesystems costs 5 requests per cycle this way and roughly 5800 without.    Filesystem-backed volumes hold one volume per filesystem, so batching is no worse for them.    The trade-off is freshness. Quotas come from a cache kept for quotaCacheValiditySeconds, so a    value can be that old; each metric carries the timestamp of its own measurement rather than of    the scrape, which needs honorTimestamps on the Prometheus side (the PodMonitor sets it).    Set false to fetch every quota during collection instead, at one API request per volume. |
+| metricsServer.scrapeInterval | string | `"60s"` | Scrape interval for the metrics server. Defaults to the fetch interval rather than the    chart-wide 30s: the gauges only move once per metricsFetchIntervalSeconds, and with    honorTimestamps a repeat scrape carries the same timestamp and is discarded as a duplicate |
+| metricsServer.healthPort | int | `9196` | Port serving both the /healthz liveness probe and the /readyz readiness probe.    Deliberately not the controller's 8081: under hostNetwork the two share a node's network    namespace, and whichever bound second would fail |
+| metricsServer.resources | object | `{"limits":{"cpu":2,"memory":"2Gi"},"requests":{"cpu":0.1,"memory":"256Mi"}}` | Resources for the metrics server container |
+| logLevel | int | `4` | Log level of the metrics server |
 | useJsonLogging | bool | `false` | Use JSON structured logging instead of human-readable logging format (for exporting logs to structured log parser) |
-| priorityClassName | string | `""` | Optional CSI Plugin priorityClassName |
-| selinuxSupport | string | `"off"` | Support SELinux labeling for Persistent Volumes, may be either `off`, `mixed`, `enforced` (default off)    In `enforced` mode, CSI node components will only start on nodes having a label `selinuxNodeLabel` below    In `mixed` mode, separate CSI node components will be installed on SELinux-enabled and regular hosts    In `off` mode, only non-SELinux-enabled node components will be run on hosts without label.    WARNING: if SELinux is not enabled, volume provisioning and publishing might fail!    NOTE: SELinux support is enabled automatically on clusters recognized as RedHat OpenShift Container Platform |
-| selinuxNodeLabel | string | `"csi.weka.io/selinux_enabled"` | This label must be set to `"true"` on SELinux-enabled Kubernetes nodes,    e.g., to run the node server in secure mode on SELinux-enabled node, the node must have label    `csi.weka.io/selinux_enabled="true"` |
-| selinuxOcpRetainMachineConfig | bool | `false` | If true, the SELinux policy machine configuration will not be removed when uninstalling the plugin.    This is useful for OpenShift Container Platform clusters, to not cause machine config pool update on plugin reinstall |
-| kubeletPath | string | `"/var/lib/kubelet"` | kubelet path, in cases Kubernetes is installed not in default folder |
-| metrics.enabled | bool | `true` | Enable Prometheus Metrics |
-| metrics.controllerPort | int | `9090` | Metrics port for Controller Server |
-| metrics.provisionerPort | int | `9091` | Provisioner metrics port |
-| metrics.resizerPort | int | `9092` | Resizer metrics port |
-| metrics.snapshotterPort | int | `9093` | Snapshotter metrics port |
-| metrics.nodePort | int | `9094` | Metrics port for Node Serer |
-| metrics.attacherPort | int | `9095` | Attacher metrics port |
-| hostNetwork | bool | `false` | Set to true to use host networking. Will be always set to true when using NFS mount protocol |
-| pluginConfig.fsGroupPolicy | string | `"File"` | WARNING: Changing this value might require uninstall and re-install of the plugin |
-| pluginConfig.allowInsecureHttps | bool | `false` | Allow insecure HTTPS (skip TLS certificate verification) |
-| pluginConfig.objectNaming.volumePrefix | string | `"csivol-"` | Prefix that will be added to names of Weka cluster filesystems / snapshots assocciated with CSI volume,    must not exceed 7 symbols. |
-| pluginConfig.objectNaming.snapshotPrefix | string | `"csisnp-"` | Prefix that will be added to names of Weka cluster snapshots assocciated with CSI snapshot,    must not exceed 7 symbols. |
-| pluginConfig.objectNaming.seedSnapshotPrefix | string | `"csisnp-seed-"` | Prefix that will be added to automatically created "seed" snapshot of empty filesytem,    must not exceed 12 symbols. |
-| pluginConfig.allowedOperations.autoCreateFilesystems | bool | `true` | Allow automatic provisioning of CSI volumes based on distinct Weka filesystem |
-| pluginConfig.allowedOperations.autoExpandFilesystems | bool | `true` | Allow automatic expansion of filesystem on which Weka snapshot-backed CSI volumes,    e.g. in case a required volume capacity exceeds the size of filesystem.    Note: the filesystem is not expanded automatically when a new directory-backed volume is provisioned |
-| pluginConfig.allowedOperations.snapshotDirectoryVolumes | bool | `false` | Create snapshots of directory-backed (dir/v1) volumes. By default disabled.    Note: when enabled, every snapshot of a directory-backed volume creates a full filesystem snapshot (wasteful) |
-| pluginConfig.allowedOperations.snapshotVolumesWithoutQuotaEnforcement | bool | `false` | Allow creation of snapshot-backed volumes even on unsupported Weka cluster versions, off by default    Note: On versions of Weka < v4.2 snapshot-backed volume capacity cannot be enforced |
-| pluginConfig.allowedOperations.allowAsyncObjectDeletion | bool | `true` | Should the CSI plugin wait for object deletion before reporting completion.    If true, the plugin will report success on deletion of volumes while the actual deletion of objects will be done in the background.    If false, the plugin will report success only after the objects are deleted on WEKA cluster.    Usually, async deletion would drastically increase speed of volume deletions, since deletion is performed serially.    However, it may cause objects on Weka cluster to remain if the plugin crashes or is restarted before the deletion is completed. |
-| pluginConfig.mutuallyExclusiveMountOptions[0] | string | `"readcache,writecache,coherent,forcedirect"` |  |
-| pluginConfig.mutuallyExclusiveMountOptions[1] | string | `"sync,async"` |  |
-| pluginConfig.mutuallyExclusiveMountOptions[2] | string | `"ro,rw"` |  |
-| pluginConfig.encryption.allowEncryptionWithoutKms | bool | `false` | Allow encryption of Weka filesystems associated with CSI volumes without using external KMS server.    Should never be run in production, only for testing purposes |
-| pluginConfig.mountProtocol.useNfs | bool | `false` | Use NFS transport for mounting Weka filesystems, off by default |
-| pluginConfig.mountProtocol.allowNfsFailback | bool | `false` | Allow Failback to NFS transport if Weka client fails to mount filesystem using native protocol |
-| pluginConfig.mountProtocol.interfaceGroupName | string | `""` | Specify name of NFS interface group to use for mounting Weka filesystems. If not set, first NFS interface group will be used |
-| pluginConfig.mountProtocol.clientGroupName | string | `""` | Specify existing client group name for NFS configuration. If not set, "WekaCSIPluginClients" group will be created |
-| pluginConfig.mountProtocol.nfsProtocolVersion | string | `"4.1"` | Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions |
-| pluginConfig.skipGarbageCollection | bool | `false` | Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false |
-| pluginConfig.manageNodeTopologyLabels | bool | `true` | Allow CSI plugin to manage node topology labels. For Operator-managed clusters, this should be set to false. |
-| pluginConfig.apiTimeoutSeconds | int | `60` | WEKA API timeout, default 60 seconds |
+| metrics.metricsServerPort | int | `9096` | Metrics server metrics port. The metrics server always exports; exporting is its only job,    so there is no switch to turn it off |
+| metrics.podMonitor.enabled | bool | `true` | Create a PodMonitor, if the Prometheus Operator CRDs are installed |
+| metrics.podMonitor.interval | string | `"30s"` | Scrape interval for charts that do not override it |
+| metrics.podMonitor.additionalLabels | object | `{}` | Additional labels, e.g. the release label your Prometheus selects PodMonitors by |
+| pluginConfig.allowInsecureHttps | bool | `false` |  |
 
 ----------------------------------------------
 Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)

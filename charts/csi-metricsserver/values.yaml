@@ -14,6 +14,9 @@ imagePullSecret: ""
 
 hostNetwork: false
 
+# -- Optional priorityClassName for the metrics server, overridable with `metricsServer.priorityClassName`
+priorityClassName: ""
+
 metricsServer:
   # -- Number of replicas for metrics server. More than one is only useful with enableLeaderElection,
   #    which keeps exactly one of them collecting while the rest stand by. Standbys report Ready like
@@ -25,6 +28,8 @@ metricsServer:
   nodeSelector: {}
   # -- optional affinity for metrics server only
   affinity: {}
+  # -- optional priorityClassName for metrics server pods only, overriding the global `priorityClassName`
+  priorityClassName: ""
   # -- optional labels to add to metrics server deployment
   labels: {}
   # -- optional labels to add to metrics server pods

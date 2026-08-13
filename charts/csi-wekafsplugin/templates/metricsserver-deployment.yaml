@@ -51,8 +51,9 @@ spec:
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
       {{- end }}
-      {{- if .Values.priorityClassName }}
-      priorityClassName: {{ .Values.priorityClassName }}
+      {{- $priorityClassName := coalesce .Values.metricsServer.priorityClassName .Values.priorityClassName }}
+      {{- if $priorityClassName }}
+      priorityClassName: {{ $priorityClassName }}
       {{- end }}
       {{- if .Values.hostNetwork }}
       hostNetwork: true

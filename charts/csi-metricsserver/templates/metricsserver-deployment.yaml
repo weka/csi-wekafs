@@ -42,6 +42,10 @@ spec:
         {{- toYaml .Values.metricsServer.nodeSelector | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Release.Name }}-metrics-server
+      {{- $priorityClassName := coalesce .Values.metricsServer.priorityClassName .Values.priorityClassName }}
+      {{- if $priorityClassName }}
+      priorityClassName: {{ $priorityClassName }}
+      {{- end }}
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}

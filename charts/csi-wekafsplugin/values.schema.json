@@ -431,6 +431,9 @@
                 "podLabels": {
                     "type": "object"
                 },
+                "priorityClassName": {
+                    "type": "string"
+                },
                 "quotaCacheValiditySeconds": {
                     "type": "integer"
                 },
