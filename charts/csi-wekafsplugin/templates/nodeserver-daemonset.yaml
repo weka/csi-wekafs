@@ -125,7 +125,7 @@ spec:
           ports:
           {{- if .Values.node.livenessProbeEnabled }}
             - containerPort: 9899
-              name: healthz
+              name: ns-healthz
               protocol: TCP
           {{- end }}
           {{- if .Values.metrics.enabled }}
@@ -139,7 +139,7 @@ spec:
             failureThreshold: 10
             httpGet:
               path: /healthz
-              port: healthz
+              port: ns-healthz
             initialDelaySeconds: 10
             timeoutSeconds: 10
             periodSeconds: 10
@@ -228,10 +228,10 @@ spec:
             - "--health-port=9809"
           ports:
             - containerPort: 9809
-              name: healthz
+              name: reg-healthz
           livenessProbe:
             httpGet:
-              port: healthz
+              port: reg-healthz
               path: /healthz
             initialDelaySeconds: 5
             timeoutSeconds: 5
