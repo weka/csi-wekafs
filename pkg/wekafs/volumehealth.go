@@ -59,6 +59,39 @@ type VolumeHealth struct {
 	// InodeId is the inode the volume's path resolved to, and the key a quota is created against.
 	// Carried so a caller acting on QuotaMissing does not have to resolve the path a second time.
 	InodeId uint64
+	// NoApiClient records that no Weka API credentials could be resolved for the volume, so nothing
+	// below this point was attempted. Kept as a fact of its own because it is the one condition that
+	// stops the probe before it can establish anything else - Capacity, QuotaMissing and the rest are
+	// all unknown rather than false.
+	NoApiClient bool
+}
+
+// Conditions names every condition this probe found, for the weka_csi_volume_health_conditions
+// series. Empty for a healthy volume.
+//
+// These are reported regardless of the reportAs...Abnormal settings. Those settings decide whether a
+// condition reaches a namespace user as a Kubernetes event; this is read by whoever runs the driver,
+// where hiding a condition only makes the affected volumes harder to find.
+func (h *VolumeHealth) Conditions() []string {
+	if h == nil {
+		return nil
+	}
+	var conditions []string
+	if h.NoApiClient {
+		conditions = append(conditions, volumeConditionNoApiClient)
+	}
+	if h.QuotaMissing {
+		conditions = append(conditions, volumeConditionNoQuota)
+	}
+	if h.QuotaMismatch {
+		conditions = append(conditions, volumeConditionQuotaMismatch)
+	}
+	// Abnormal for a reason none of the above covers - a missing filesystem or directory, say. Those
+	// have no flag and are always abnormal, so the condition is derived rather than tracked.
+	if h.Abnormal && len(conditions) == 0 {
+		conditions = append(conditions, volumeConditionUnavailable)
+	}
+	return conditions
 }
 
 // abnormalVolumeHealth builds an abnormal condition. The message reaches a Kubernetes event, so it
@@ -191,6 +224,16 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 	}, nil
 }
 
+// driverName is the CSI driver name for metric labels, tolerating an unset driver reference. Every
+// running server has one; a server constructed directly, as tests do, need not, and a metric label
+// is not worth a panic on a path that is otherwise reachable without a driver.
+func (cs *ControllerServer) driverName() string {
+	if d := cs.getConfig().GetDriver(); d != nil {
+		return d.name
+	}
+	return ""
+}
+
 // describeVolume resolves a PersistentVolume into the capacity and condition reported by both
 // ControllerGetVolume and ListVolumes, plus the weka_csi_volume_health_status label values for the
 // volume (see csiVolumeLabelValues) - built here, rather than by the caller, because building them
@@ -225,19 +268,31 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 		//
 		// It is still worth being able to surface: a volume the driver cannot see is one it cannot
 		// enforce capacity on, expand, or report on, so an operator may well want it raised.
+		//
+		// The fact is recorded either way. Whether to raise it as a Kubernetes event is the
+		// operator's choice, but a metric is read by whoever runs the driver rather than by a
+		// namespace user, so gating it would hide the volume from the only people who can act on it.
+		//
+		// Labelled from the PersistentVolume alone, leaving blank the dimensions that need an API
+		// client - cluster, filesystem, volume type, organization. Blank is honest here: nobody knows
+		// which cluster this volume is on, which is the problem being reported. pv_name still names
+		// it, which is what makes the series actionable.
+		noClientHealth := &VolumeHealth{Message: volumeNoApiClientMessage, NoApiClient: true}
+		noClientLabels := csiVolumeLabelValues(cs.driverName(), pv, "", "", "", "")
 		if cs.getConfig().reportNoApiClientAsAbnormal {
 			logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as abnormal")
-			return volume, &csi.VolumeCondition{Abnormal: true, Message: volumeNoApiClientMessage}, nil, nil, nil, nil
+			noClientHealth.Abnormal = true
+			return volume, &csi.VolumeCondition{Abnormal: true, Message: volumeNoApiClientMessage}, nil, noClientHealth, noClientLabels, nil
 		}
 		logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as unknown")
-		return volume, nil, nil, nil, nil, nil
+		return volume, nil, nil, noClientHealth, noClientLabels, nil
 	}
 
 	vol, err = NewVolumeFromId(ctx, volumeID, client, cs)
 	if err != nil {
 		return volume, nil, nil, nil, nil, err
 	}
-	labels = csiVolumeLabelValues(cs.getConfig().GetDriver().name, pv,
+	labels = csiVolumeLabelValues(cs.driverName(), pv,
 		client.ClusterGuid.String(), vol.FilesystemName, string(vol.GetBackingType()), organizationLabel(client))
 	// Seed the volume with an already-resolved filesystem, and publish whatever it resolved so the
 	// next volume on the same filesystem can skip the lookup.
@@ -268,12 +323,19 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 	//
 	// Skipped when the volume has no quota at all: that is a different condition with its own
 	// message, and 0 is not a mismatch.
+	//
+	// Detected unconditionally, and only *reported* on request. The comparison is free - both numbers
+	// are already in hand - and the flag decides whether a namespace user gets a Kubernetes event
+	// about it, not whether the driver is allowed to notice. Deciding it here once meant a mismatch
+	// was invisible to metrics too, so nobody could see how many volumes were affected before turning
+	// the events on.
 	declared := pvCapacityBytes(pv)
-	if cs.getConfig().reportQuotaMismatchAsAbnormal && !health.QuotaMissing &&
-		health.Capacity > 0 && declared > 0 && health.Capacity != declared {
+	if !health.QuotaMissing && health.Capacity > 0 && declared > 0 && health.Capacity != declared {
 		health.QuotaMismatch = true
-		health.Abnormal = true
-		health.Message = quotaMismatchMessage(health.Capacity, declared)
+		if cs.getConfig().reportQuotaMismatchAsAbnormal {
+			health.Abnormal = true
+			health.Message = quotaMismatchMessage(health.Capacity, declared)
+		}
 	}
 
 	if health.Abnormal {

@@ -18,6 +18,7 @@ package wekafs
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -194,10 +195,25 @@ func TestReconcileOnceReportsVolumeHealthMetrics(t *testing.T) {
 		t.Errorf("expected abnormal volume status %v, got %v", float64(volumeHealthStatusAbnormal), got)
 	}
 
-	// The unknown volume never resolved an API client, so it never got a label set at all - there is
-	// nothing to assert Status against, and the aggregate tally below is what covers it.
-	if entry, ok := cache.lookup("weka/v2/no-credentials"); !ok || entry.known || entry.labels != nil {
-		t.Fatalf("expected the credential-less volume to be cached as unknown with no labels, got ok=%v entry=%+v", ok, entry)
+	// The credential-less volume is still unknown - nothing could be established about it - but it is
+	// now labelled from the PersistentVolume alone and carries the no_api_client condition, so a
+	// dashboard can name the affected volume rather than only counting it.
+	entry, ok := cache.lookup("weka/v2/no-credentials")
+	if !ok || entry.known {
+		t.Fatalf("expected the credential-less volume to be cached as unknown, got ok=%v entry=%+v", ok, entry)
+	}
+	if len(entry.labels) != len(LabelsForCsiVolumes) {
+		t.Fatalf("expected the credential-less volume to be labelled, got %v", entry.labels)
+	}
+	if !slices.Contains(entry.conditions, volumeConditionNoApiClient) {
+		t.Errorf("expected the no_api_client condition, got %v", entry.conditions)
+	}
+	if got := testutil.ToFloat64(controllerMetrics.VolumeHealth.Conditions.WithLabelValues(
+		volumeConditionLabelValues(entry.labels, volumeConditionNoApiClient)...)); got != 1 {
+		t.Errorf("expected the no_api_client condition series to be 1, got %v", got)
+	}
+	if got := testutil.ToFloat64(controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, volumeConditionNoApiClient)); got != 1 {
+		t.Errorf("expected 1 volume counted without an API client, got %v", got)
 	}
 
 	if got := testutil.ToFloat64(controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, "healthy")); got != 1 {
