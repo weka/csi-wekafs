@@ -55,7 +55,10 @@ Comments:
    As a result, the capacity required by such snapshot would significantly depend on data usage pattern of all CSI directory-backed volumes on same filesystem, and much larger than the volume size.  
    Hence, snapshot creation is prohibited by default, but can be enabled. Refer to Weka CSI Plugin Helm chart documentation for additional information
 4. In Weka versions prior to 4.2, quota is not enforced inside filesystem snapshots. As a result, capacity enforcement is not supported for this type of volume.  
-   If capacity enforcement is crucial for your workload, use directory-backed volumes or upgrade to latest Weka software
+   If capacity enforcement is crucial for your workload, use directory-backed volumes or upgrade to latest Weka software  
+   The `capacityEnforcement` StorageClass parameter accepts `HARD` (default, writes blocked above quota) or `SOFT` (warning issued but writes not blocked).  
+   When using `SOFT` enforcement, the optional `quotaGracePeriod` parameter sets how long a soft-limit breach is tolerated before the soft limit is treated as a hard limit and writes are blocked.  
+   The value is a Go duration string (e.g. `"72h"`, `"30m"`, `"1h30m"`); default is `0`, meaning the soft limit is advisory only and is never enforced (writes are never blocked). This parameter is ignored when `capacityEnforcement` is `HARD`.
 5. Filesystem size and used capacity is not monitoried by CSI plugin. The administrator has to make sure enough capacity is allocated for the filesystem.  
    Filesystems created dynamically (via filesystem-backed volume) can be set with initial size to accomodate future volumes, refer to Weka CSI Plugin Helm chart documentation for additional information
 6. Weka CSI plugin does not support automatic configuration of tiering for filesystem-backed volumes, but those can be set externally.
