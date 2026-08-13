@@ -333,7 +333,7 @@ jobs:
             APP_VERSION="${{ steps.version.outputs.version }}"
             yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
-            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
+            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v'$CHART_VERSION'/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
             yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
             echo ------------------ values ------------------
             cat $BASEDIR/values.yaml
@@ -442,7 +442,7 @@ jobs:
             APP_VERSION="${{ steps.version.outputs.version }}"
             yq -i '.version = "'$CHART_VERSION'"' $BASEDIR/Chart.yaml
             yq -i '.appVersion = "'$APP_VERSION'"' $BASEDIR/Chart.yaml
-            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v$CHART_VERSION/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
+            yq -i '.sources[0] = "https://github.com/weka/csi-wekafs/tree/v'$CHART_VERSION'/charts/csi-wekafsplugin"' $BASEDIR/Chart.yaml
             yq -i '.csiDriverVersion = "'$DRIVER_VERSION'"' $BASEDIR/values.yaml
             echo ------------------ values ------------------
             cat $BASEDIR/values.yaml
