@@ -8,7 +8,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-version v1.9.0
 	github.com/kubernetes-csi/csi-lib-utils v0.24.0
-	github.com/pkg/xattr v0.4.12
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.2
 	github.com/rs/zerolog v1.35.1
