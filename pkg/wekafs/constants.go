@@ -191,7 +191,7 @@ const (
 	volumeConditionNoApiClient   = "no_api_client"
 	volumeConditionNoQuota       = "no_quota"
 	volumeConditionQuotaMismatch = "quota_mismatch"
-	volumeConditionUnavailable   = "unavailable"
+	volumeConditionUnavailable   = "legacy_volume"
 	// The causes that are always abnormal - they have no setting, because a volume whose filesystem
 	// or directory is gone is broken however you configure the driver. Named separately because the
 	// fix differs: a missing directory may be restorable from a snapshot, a missing filesystem is

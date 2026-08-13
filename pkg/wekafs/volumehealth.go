@@ -127,9 +127,9 @@ func (h *VolumeHealth) Conditions() []string {
 	if h.QuotaMismatch {
 		conditions = append(conditions, volumeConditionQuotaMismatch)
 	}
-	// A cause with no setting - filesystem or directory gone - names itself. The generic fallback
-	// is only for an abnormal volume whose cause was never recorded, which would be a bug here
-	// rather than a state of the volume, and is worth seeing rather than dropping.
+	// A cause with no setting - filesystem or directory gone - names itself. The fallback covers an
+	// abnormal volume whose cause was not recorded, which in practice is a volume the driver could
+	// not inspect properly: an API-unbound legacy volume, or a gap in this function.
 	if h.Condition != "" {
 		conditions = append(conditions, h.Condition)
 	} else if h.Abnormal && len(conditions) == 0 {
