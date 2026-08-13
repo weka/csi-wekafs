@@ -84,7 +84,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 3,
+        "w": 24,
         "x": 0,
         "y": 0
       },
@@ -129,7 +129,7 @@
       "id": 2,
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 5,
         "x": 0,
         "y": 5
       },
@@ -188,141 +188,13 @@
         "uid": "${DS_PROMETHEUS}"
       },
       "type": "stat",
-      "title": "Abnormal volumes",
-      "description": "These three tiles partition the fleet: healthy + abnormal + unknown equals the number of volumes the reconciler tracked in its last completed sweep. Derived from the per-volume weka_csi_volume_health_status series, so it DOES respect the Tenant / Filesystem / Storage class / Namespace / PersistentVolume filters above.",
-      "id": 3,
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 5
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#d03b3b"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#d03b3b"
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "count(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0) or vector(0)",
-          "legendFormat": "Abnormal",
-          "range": false,
-          "instant": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "type": "stat",
-      "title": "Unknown volumes",
-      "description": "These three tiles partition the fleet: healthy + abnormal + unknown equals the number of volumes the reconciler tracked in its last completed sweep. Derived from the per-volume weka_csi_volume_health_status series, so it DOES respect the Tenant / Filesystem / Storage class / Namespace / PersistentVolume filters above.",
-      "id": 4,
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 5
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#fab219"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#fab219"
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "count(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == -1) or vector(0)",
-          "legendFormat": "Unknown",
-          "range": false,
-          "instant": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "type": "stat",
       "title": "Probe failures (last sweep)",
       "description": "Probes that ERRORED during the last sweep. This is NOT a volume state and does NOT add to the other three tiles - it overlaps them: a failed probe leaves the volume's previous status in place rather than overwriting it with a guess. NOTE: this is the only tile that CANNOT honour the filters above - it comes from weka_csi_volume_health_volumes, which carries no per-volume labels. It is always fleet-wide.",
       "id": 5,
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 5,
         "y": 5
       },
       "pluginVersion": "12.0.2",
@@ -385,9 +257,9 @@
       "id": 25,
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 0,
-        "y": 9
+        "w": 5,
+        "x": 9,
+        "y": 5
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -448,9 +320,9 @@
       "id": 26,
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 8,
-        "y": 9
+        "w": 5,
+        "x": 14,
+        "y": 5
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -511,9 +383,9 @@
       "id": 27,
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 9
+        "w": 5,
+        "x": 19,
+        "y": 5
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -572,7 +444,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 9
       },
       "panels": []
     },
@@ -589,7 +461,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 10
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -758,7 +630,7 @@
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#f2a33c"
+                  "fixedColor": "#ef5350"
                 }
               }
             ]
@@ -818,7 +690,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 18
       },
       "panels": [
         {
@@ -834,7 +706,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 23
+            "y": 19
           },
           "pluginVersion": "12.0.2",
           "fieldConfig": {
@@ -948,7 +820,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 23
+            "y": 19
           },
           "pluginVersion": "12.0.2",
           "fieldConfig": {
@@ -1010,341 +882,6 @@
     },
     {
       "type": "row",
-      "title": "Abnormal & unknown volumes",
-      "id": 8,
-      "collapsed": true,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 23
-      },
-      "panels": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "type": "table",
-          "title": "Abnormal volumes",
-          "description": "Every volume the driver currently reports as abnormal, and why. The reason comes from weka_csi_volume_health_conditions - a volume with more than one problem appears once per condition.",
-          "id": 9,
-          "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 0,
-            "y": 24
-          },
-          "pluginVersion": "12.0.2",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                },
-                "inspect": false,
-                "filterable": true
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "#d03b3b"
-                  }
-                ]
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Namespace"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 200
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "PVC"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 200
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "PersistentVolume"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 200
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "showHeader": true,
-            "cellHeight": "sm",
-            "footer": {
-              "show": false,
-              "reducer": [
-                "sum"
-              ],
-              "countRows": false,
-              "fields": ""
-            }
-          },
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "editorMode": "code",
-              "expr": "(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0) * on(pv_name) group_left(condition) weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}",
-              "legendFormat": "__auto",
-              "range": false,
-              "instant": true,
-              "refId": "A",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "filterFieldsByName",
-              "options": {
-                "include": {
-                  "names": [
-                    "pvc_namespace",
-                    "pvc_name",
-                    "pv_name",
-                    "filesystem_name",
-                    "storage_class_name",
-                    "volume_type",
-                    "organization"
-                  ]
-                }
-              }
-            },
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {},
-                "renameByName": {
-                  "pvc_namespace": "Namespace",
-                  "pvc_name": "PVC",
-                  "pv_name": "PersistentVolume",
-                  "filesystem_name": "Filesystem",
-                  "storage_class_name": "StorageClass",
-                  "volume_type": "VolumeType",
-                  "organization": "Tenant",
-                  "condition": "Reason"
-                },
-                "indexByName": {
-                  "pvc_namespace": 0,
-                  "pvc_name": 1,
-                  "pv_name": 2,
-                  "filesystem_name": 3,
-                  "storage_class_name": 4,
-                  "volume_type": 5,
-                  "organization": 6
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "fields": {},
-                "sort": [
-                  {
-                    "field": "Namespace",
-                    "desc": false
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "type": "table",
-          "title": "Unknown / stale volumes",
-          "description": "Every volume whose weka_csi_volume_health_status equals -1 (unknown) within the last $value_max_age. Includes volumes the reconciler has not refreshed within volumeHealthMaxAge (30m default).",
-          "id": 10,
-          "gridPos": {
-            "h": 10,
-            "w": 12,
-            "x": 12,
-            "y": 24
-          },
-          "pluginVersion": "12.0.2",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                },
-                "inspect": false,
-                "filterable": true
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "#fab219"
-                  }
-                ]
-              }
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Namespace"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 200
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "PVC"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 200
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "PersistentVolume"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 200
-                  }
-                ]
-              }
-            ]
-          },
-          "options": {
-            "showHeader": true,
-            "cellHeight": "sm",
-            "footer": {
-              "show": false,
-              "reducer": [
-                "sum"
-              ],
-              "countRows": false,
-              "fields": ""
-            }
-          },
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "editorMode": "code",
-              "expr": "weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == -1",
-              "legendFormat": "__auto",
-              "range": false,
-              "instant": true,
-              "refId": "A",
-              "format": "table"
-            }
-          ],
-          "transformations": [
-            {
-              "id": "filterFieldsByName",
-              "options": {
-                "include": {
-                  "names": [
-                    "pvc_namespace",
-                    "pvc_name",
-                    "pv_name",
-                    "filesystem_name",
-                    "storage_class_name",
-                    "volume_type",
-                    "organization"
-                  ]
-                }
-              }
-            },
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": {},
-                "renameByName": {
-                  "pvc_namespace": "Namespace",
-                  "pvc_name": "PVC",
-                  "pv_name": "PersistentVolume",
-                  "filesystem_name": "Filesystem",
-                  "storage_class_name": "StorageClass",
-                  "volume_type": "VolumeType",
-                  "organization": "Tenant"
-                },
-                "indexByName": {
-                  "pvc_namespace": 0,
-                  "pvc_name": 1,
-                  "pv_name": 2,
-                  "filesystem_name": 3,
-                  "storage_class_name": 4,
-                  "volume_type": 5,
-                  "organization": 6
-                }
-              }
-            },
-            {
-              "id": "sortBy",
-              "options": {
-                "fields": {},
-                "sort": [
-                  {
-                    "field": "Namespace",
-                    "desc": false
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "type": "row",
       "title": "Unhealthy breakdown by dimension",
       "id": 11,
       "collapsed": true,
@@ -1352,7 +889,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 19
       },
       "panels": [
         {
@@ -1368,7 +905,7 @@
             "h": 10,
             "w": 8,
             "x": 0,
-            "y": 25
+            "y": 21
           },
           "pluginVersion": "12.0.2",
           "fieldConfig": {
@@ -1524,7 +1061,7 @@
             "h": 10,
             "w": 8,
             "x": 8,
-            "y": 25
+            "y": 21
           },
           "pluginVersion": "12.0.2",
           "fieldConfig": {
@@ -1680,7 +1217,7 @@
             "h": 10,
             "w": 8,
             "x": 16,
-            "y": 25
+            "y": 21
           },
           "pluginVersion": "12.0.2",
           "fieldConfig": {
@@ -1831,7 +1368,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 20
       },
       "id": 19,
       "panels": [],
@@ -1843,122 +1380,133 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "type": "table",
-      "title": "Condition summary",
+      "type": "piechart",
+      "title": "Condition breakdown",
       "id": 24,
-      "description": "How many volumes carry each condition, and which category it falls into. corrupt means the volume's data is gone; degraded means it works but the driver cannot enforce or manage it. Counted per volume from the per-volume series, so it honours the filters above.",
+      "description": "Share of affected volumes by condition. Colour carries severity: reds are data loss, orange a missing snapshot, yellow/orange the quota conditions, grey unclassified. Counted per volume, honouring the filters above.",
       "gridPos": {
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 21
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            },
-            "filterable": false
+          "color": {
+            "mode": "palette-classic"
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "text"
-              }
-            ]
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
           }
         },
         "overrides": [
           {
             "matcher": {
               "id": "byName",
-              "options": "Volumes"
+              "options": "directory_not_found"
             },
             "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "gradient"
-                }
-              },
               {
                 "id": "color",
                 "value": {
-                  "mode": "continuous-YlRd"
+                  "mode": "fixed",
+                  "fixedColor": "#d03b3b"
                 }
-              },
-              {
-                "id": "custom.width",
-                "value": 120
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Category"
+              "options": "filesystem_not_found"
             },
             "properties": [
               {
-                "id": "custom.width",
-                "value": 140
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Condition"
-            },
-            "properties": [
-              {
-                "id": "mappings",
-                "value": [
-                  {
-                    "type": "value",
-                    "options": {
-                      "directory_not_found": {
-                        "color": "#d03b3b",
-                        "index": 0
-                      },
-                      "filesystem_not_found": {
-                        "color": "#8b1a1a",
-                        "index": 1
-                      },
-                      "filesystem_removing": {
-                        "color": "#b02a2a",
-                        "index": 2
-                      },
-                      "no_quota": {
-                        "color": "#e5c02c",
-                        "index": 3
-                      },
-                      "quota_mismatch": {
-                        "color": "#e0752d",
-                        "index": 4
-                      },
-                      "legacy_volume": {
-                        "color": "#8a8a8a",
-                        "index": 5
-                      },
-                      "snapshot_not_found": {
-                        "color": "#f2a33c",
-                        "index": 6
-                      }
-                    }
-                  }
-                ]
-              },
-              {
-                "id": "custom.cellOptions",
+                "id": "color",
                 "value": {
-                  "type": "color-text"
+                  "mode": "fixed",
+                  "fixedColor": "#8b1a1a"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "filesystem_removing"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#b02a2a"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "snapshot_not_found"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ef5350"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "no_quota"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e5c02c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "quota_mismatch"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e0752d"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "legacy_volume"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8a8a8a"
                 }
               }
             ]
@@ -1966,21 +1514,31 @@
         ]
       },
       "options": {
-        "showHeader": true,
-        "sortBy": [
-          {
-            "desc": true,
-            "displayName": "Volumes"
-          }
-        ],
-        "footer": {
-          "show": false,
-          "reducer": [
-            "sum"
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
           ],
-          "countRows": false,
-          "fields": ""
-        }
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "displayLabels": [
+          "name",
+          "value"
+        ]
       },
       "targets": [
         {
@@ -1989,35 +1547,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "format": "table",
           "instant": true,
           "range": false,
           "refId": "A",
-          "expr": "sort_desc(count by (category, condition) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}))"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true,
-              "job": true,
-              "instance": true,
-              "csi_driver_name": true
-            },
-            "renameByName": {
-              "category": "Category",
-              "condition": "Condition",
-              "Value": "Volumes"
-            },
-            "indexByName": {
-              "category": 0,
-              "condition": 1,
-              "Value": 2
-            }
-          }
+          "legendFormat": "{{condition}}",
+          "expr": "count by (condition) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})"
         }
       ]
     },
@@ -2034,7 +1568,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 33
+        "y": 28
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
