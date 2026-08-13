@@ -31,12 +31,18 @@ const (
 )
 
 type Quota struct {
-	FilesystemUid  uuid.UUID `json:"-"`
-	InodeId        uint64    `json:"inode_id,omitempty"`
-	TotalBytes     uint64    `json:"total_bytes,omitempty"`
-	HardLimitBytes uint64    `json:"hard_limit_bytes,omitempty"`
-	SoftLimitBytes uint64    `json:"soft_limit_bytes,omitempty"`
-	Status         string    `json:"status,omitempty"`
+	FilesystemUid uuid.UUID `json:"-"`
+	InodeId       uint64    `json:"inode_id,omitempty"`
+	// UsedBytes is the capacity consumed under the quota. Weka names this differently depending on
+	// which endpoint returned the quota: fetching one by inode
+	// (GET fileSystems/{uid}/quota/{inodeId}, what this struct decodes) calls it used_bytes, while
+	// listing a filesystem's quotas (GET filesystems/{uid}/quota) calls it total_bytes and omits
+	// used_bytes entirely. QuotaInList models the listing's shape and GetQuotaMap translates, so
+	// the difference is confined to that one conversion rather than leaking into callers.
+	UsedBytes      uint64 `json:"used_bytes,omitempty"`
+	HardLimitBytes uint64 `json:"hard_limit_bytes,omitempty"`
+	SoftLimitBytes uint64 `json:"soft_limit_bytes,omitempty"`
+	Status         string `json:"status,omitempty"`
 }
 
 func (q *Quota) String() string {

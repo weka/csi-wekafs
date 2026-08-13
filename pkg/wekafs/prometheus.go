@@ -98,6 +98,7 @@ type PrometheusMetrics struct {
 		QuotaMapRefreshFailureCount      *prometheus.CounterVec   // total number of quota map updates
 		QuotaMapRefreshDurationSeconds   *prometheus.CounterVec   // total duration of quota map updates per filesystem in seconds
 		QuotaMapRefreshDurationHistogram *prometheus.HistogramVec // histogram of durations for quota map updates per filesystem
+		QuotaMapMissCount                *prometheus.CounterVec   // volumes absent from their filesystem's quota map, fetched one at a time instead
 
 		QuotaUpdateBatchInvokeCount       prometheus.Counter   // total number of all quota updates
 		QuotaUpdateBatchSuccessCount      prometheus.Counter   // total number of all quota updates
@@ -273,6 +274,8 @@ func NewPrometheusMetrics() *PrometheusMetrics {
 
 	m.server.QuotaMapRefreshDurationHistogram = newFsHistogramVec("quota_map_refresh_duration_seconds_histogram", "Histogram of durations for quota map updates per filesystem")
 
+	m.server.QuotaMapMissCount = newFsCounterVec("quota_map_miss_count_total", "Total number of volume readings that could not be served from the filesystem-wide quota map and fell back to a per-volume API request. Expected to be non-zero only for snapshot-backed volumes, whose quota lives in a snapshot view and is not returned when listing a filesystem's quotas")
+
 	// metrics for quota update batches
 	m.server.QuotaUpdateBatchInvokeCount = newServerCounter("quota_update_batch_invoke_count_total", "Total number of all quota update batches performed")
 
@@ -344,6 +347,7 @@ func (m *PrometheusMetrics) Collectors() []prometheus.Collector {
 		m.server.QuotaMapRefreshFailureCount,
 		m.server.QuotaMapRefreshDurationSeconds,
 		m.server.QuotaMapRefreshDurationHistogram,
+		m.server.QuotaMapMissCount,
 		m.server.QuotaUpdateBatchInvokeCount,
 		m.server.QuotaUpdateBatchSuccessCount,
 		m.server.QuotaUpdateBatchDurationSeconds,

@@ -566,10 +566,11 @@ func (ms *MetricsServer) InvalidateSecret(ctx context.Context, secretName, secre
 // Free is derived rather than reported by the API, since a quota describes a hard limit rather than
 // a used/free split.
 func quotaToUsageStats(q *apiclient.Quota, ts time.Time) *UsageStats {
+	used := q.UsedBytes
 	return &UsageStats{
 		Capacity:  int64(q.HardLimitBytes),
-		Used:      int64(q.TotalBytes),
-		Free:      int64(q.HardLimitBytes - q.TotalBytes),
+		Used:      int64(used),
+		Free:      int64(q.HardLimitBytes - used),
 		Timestamp: ts,
 	}
 }
@@ -804,7 +805,13 @@ func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclie
 
 		q := qm.GetQuotaForInodeId(inodeId)
 		if q == nil {
-			logger.Warn().Uint64("inode_id", inodeId).Msg("No quota entry found for inode ID in quota map, skipping")
+			// Not necessarily an error: a quota that lives in a snapshot view is absent from the
+			// filesystem-wide quota list, while a direct per-inode lookup still finds it. That is
+			// exactly the shape of a snapshot-backed volume, so skipping here would drop every one
+			// of them from reporting - silently, since nothing else on this path counts a failure.
+			// Falling back keeps batch mode a superset of the per-volume path, at a cost bounded by
+			// the number of volumes the map cannot serve, which is normally zero.
+			ms.reportVolumesMissingFromQuotaMap(ctx, qm, inodeId)
 			continue
 		}
 		stats := &PvStats{Usage: quotaToUsageStats(q, qm.LastUpdate)}
@@ -816,6 +823,46 @@ func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclie
 			case <-ctx.Done():
 				return
 			}
+		}
+	}
+}
+
+// reportVolumesMissingFromQuotaMap fetches, one at a time, the volumes sitting at an inode the
+// filesystem's quota map has no entry for, and hands them to MetricsReportStreamer.
+//
+// The per-volume fetch it falls back to is cached for quotaCacheValidityDuration exactly as it is on
+// the non-batch path, so a volume permanently absent from the map costs one API request per cache
+// period rather than one per cycle.
+func (ms *MetricsServer) reportVolumesMissingFromQuotaMap(ctx context.Context, qm *apiclient.QuotaMap, inodeId uint64) {
+	logger := log.Ctx(ctx)
+	targets := ms.volumeMetrics.ForInode(qm.FileSystemUid, inodeId)
+	if len(targets) == 0 {
+		return
+	}
+	// LabelsForFilesystemOps, the same three the other quota-map counters carry: driver, cluster,
+	// filesystem. WithLabelValues panics on a count mismatch rather than returning an error, and
+	// this path only runs when a map is actually missing an entry, so a wrong count here is a crash
+	// that no amount of ordinary running would reveal.
+	clusterGuid := ""
+	if apiClient := ms.observedFilesystems.GetApiClient(qm.FileSystemUid); apiClient != nil {
+		clusterGuid = apiClient.ClusterGuid.String()
+	}
+	for _, target := range targets {
+		ms.prometheusMetrics.server.QuotaMapMissCount.
+			WithLabelValues(ms.driver.name, clusterGuid, target.volume.FilesystemName).Inc()
+		usage, err := ms.fetchPvUsageStatsFromWekaWithCache(ctx, target)
+		if err != nil {
+			// Logged with the PersistentVolume name, not just the inode: an inode ID on its own
+			// cannot be traced back to a volume without querying the cluster.
+			logger.Warn().Err(err).Uint64("inode_id", inodeId).Str("pv_name", target.pvName()).
+				Msg("Volume is absent from its filesystem's quota map and could not be fetched directly")
+			continue
+		}
+		target.metrics = &PvStats{Usage: usage}
+		select {
+		case ms.volumeMetricsChan <- target:
+		case <-ctx.Done():
+			return
 		}
 	}
 }

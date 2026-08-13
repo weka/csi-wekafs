@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -145,18 +146,35 @@ func (g *clientGroupRecord) toWire() map[string]any {
 
 type quotaRecord struct {
 	InodeId        uint64
-	TotalBytes     uint64
+	UsedBytes      uint64
 	HardLimitBytes uint64
 	SoftLimitBytes uint64
 	Status         string
 }
 
+// toWire and toWireInList are deliberately different, because the real API's two quota endpoints
+// are. Fetching one quota by inode returns used_bytes and no total_bytes; listing a filesystem's
+// quotas returns total_bytes and no used_bytes. Serving one shape from both - which this fake used
+// to do - makes a client that decodes the wrong key pass every test, which is exactly how the
+// per-volume path came to report every volume's used capacity as zero.
 func (q *quotaRecord) toWire() map[string]any {
 	return map[string]any{
 		"inode_id":         q.InodeId,
-		"total_bytes":      q.TotalBytes,
+		"used_bytes":       q.UsedBytes,
 		"hard_limit_bytes": q.HardLimitBytes,
 		"soft_limit_bytes": q.SoftLimitBytes,
+		"snap_view_id":     1,
+		"status":           q.Status,
+	}
+}
+
+func (q *quotaRecord) toWireInList() map[string]any {
+	return map[string]any{
+		"inode_id":         q.InodeId,
+		"total_bytes":      q.UsedBytes,
+		"hard_limit_bytes": q.HardLimitBytes,
+		"soft_limit_bytes": q.SoftLimitBytes,
+		"snap_view_id":     1,
 		"status":           q.Status,
 	}
 }
@@ -191,6 +209,9 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/v2/fileSystems", s.handleFsList)
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}", s.handleFsGet)
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}/resolvePath", s.handleResolvePath)
+	// The client builds the listing URL with a lowercase "filesystems" and the single-quota URL
+	// with camelCase "fileSystems"; both are registered as the client spells them.
+	mux.HandleFunc("GET /api/v2/filesystems/{uid}/quota", s.handleQuotaList)
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaGet)
 	mux.HandleFunc("PUT /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaPut)
 	mux.HandleFunc("DELETE /api/v2/fileSystems/{uid}/quotas/{inode}", s.handleQuotaDelete)
@@ -365,6 +386,21 @@ func (s *Server) handleQuotaGet(w http.ResponseWriter, r *http.Request) {
 	writeData(w, q.toWire())
 }
 
+// handleQuotaList serves the filesystem-wide quota listing that batch mode reads. Quotas are keyed
+// "<fsUid>:<inode>", so the filesystem's own quotas are the entries whose key carries its uid.
+func (s *Server) handleQuotaList(w http.ResponseWriter, r *http.Request) {
+	uid := r.PathValue("uid")
+	s.mu.Lock()
+	out := make([]map[string]any, 0, len(s.quotas))
+	for key, q := range s.quotas {
+		if strings.HasPrefix(key, uid+":") {
+			out = append(out, q.toWireInList())
+		}
+	}
+	s.mu.Unlock()
+	writeData(w, out)
+}
+
 func (s *Server) handleQuotaPut(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		HardLimitBytes uint64 `json:"hard_limit_bytes"`
@@ -375,6 +411,7 @@ func (s *Server) handleQuotaPut(w http.ResponseWriter, r *http.Request) {
 	inodeId, _ := strconv.ParseUint(r.PathValue("inode"), 10, 64)
 	q := &quotaRecord{
 		InodeId:        inodeId,
+		UsedBytes:      0,
 		HardLimitBytes: body.HardLimitBytes,
 		SoftLimitBytes: body.SoftLimitBytes,
 		Status:         "ACTIVE",
@@ -384,6 +421,16 @@ func (s *Server) handleQuotaPut(w http.ResponseWriter, r *http.Request) {
 	s.quotas[key] = q
 	s.mu.Unlock()
 	writeData(w, q.toWire())
+}
+
+// SetQuotaUsedBytes sets how much capacity a seeded quota has consumed. Quotas created through the
+// API start empty, so a test that cares what "used" reports has to say so explicitly.
+func (s *Server) SetQuotaUsedBytes(fsUid string, inodeId uint64, used uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if q, ok := s.quotas[s.quotaKey(fsUid, strconv.FormatUint(inodeId, 10))]; ok {
+		q.UsedBytes = used
+	}
 }
 
 func (s *Server) handleQuotaDelete(w http.ResponseWriter, r *http.Request) {
