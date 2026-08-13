@@ -338,7 +338,14 @@ func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsN
 		logger.Debug().Int("permissions", len(*permissions)).Str("filesystem", fsName).Msg("Found stale NFS permissions, deleting")
 	}
 	for _, p := range *permissions {
+		// The request layer already retries transient failures five times with backoff, so anything
+		// still failing here is not worth another loop around it.
 		err = a.DeleteNfsPermission(ctx, &NfsPermissionDeleteRequest{Uid: p.Uid})
+		if errors.Is(err, ObjectNotFoundError) {
+			// Someone else removed it first, which is the state this function exists to reach.
+			logger.Trace().Str("permission", p.Uid.String()).Str("filesystem", p.Filesystem).Msg("NFS permission already gone")
+			continue
+		}
 		if err != nil {
 			logger.Error().Err(err).Str("permission", p.Uid.String()).Str("filesystem", p.Filesystem).Str("client_group", p.Group).Msg("Failed to delete NFS permission")
 			return err
