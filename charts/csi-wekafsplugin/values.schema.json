@@ -491,6 +491,9 @@
                 "labels": {
                     "type": "object"
                 },
+                "healthPort": {
+                    "type": "integer"
+                },
                 "livenessProbeEnabled": {
                     "type": "boolean"
                 },
