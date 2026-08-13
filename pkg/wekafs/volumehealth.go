@@ -64,6 +64,47 @@ type VolumeHealth struct {
 	// stops the probe before it can establish anything else - Capacity, QuotaMissing and the rest are
 	// all unknown rather than false.
 	NoApiClient bool
+	// Condition names the specific cause when the volume is abnormal for a reason that has no
+	// setting - its filesystem or directory is gone. Without it every such volume reports the same
+	// generic condition, which is the difference between "restore the directory" and "the filesystem
+	// is gone, this volume is not coming back".
+	Condition string
+}
+
+// allVolumeConditions is every condition value the driver can report. The per-sweep tally is set for
+// each of them, including the ones nobody has, so a dashboard tile reads 0 rather than "no data" -
+// which is indistinguishable from the driver not reporting at all.
+var allVolumeConditions = []string{
+	volumeConditionNoApiClient,
+	volumeConditionNoQuota,
+	volumeConditionQuotaMismatch,
+	volumeConditionDirectoryNotFound,
+	volumeConditionFilesystemNotFound,
+	volumeConditionFilesystemRemoving,
+	volumeConditionUnavailable,
+}
+
+// volumeConditionCategories maps each condition to what it costs. Kept as one table rather than
+// spread across the call sites, so a condition added without a category is a compile-time gap in one
+// place rather than a series that quietly reports no category at all.
+var volumeConditionCategories = map[string]string{
+	volumeConditionDirectoryNotFound:  volumeCategoryCorrupt,
+	volumeConditionFilesystemNotFound: volumeCategoryCorrupt,
+	volumeConditionFilesystemRemoving: volumeCategoryCorrupt,
+	volumeConditionNoQuota:            volumeCategoryDegraded,
+	volumeConditionQuotaMismatch:      volumeCategoryDegraded,
+	volumeConditionNoApiClient:        volumeCategoryDegraded,
+	volumeConditionUnavailable:        volumeCategoryUnknown,
+}
+
+// volumeConditionCategory returns the category for a condition, or unknown for one with no mapping -
+// which is a gap in the table above rather than a property of the volume, and is worth surfacing
+// rather than labelling blank.
+func volumeConditionCategory(condition string) string {
+	if category, ok := volumeConditionCategories[condition]; ok {
+		return category
+	}
+	return volumeCategoryUnknown
 }
 
 // Conditions names every condition this probe found, for the weka_csi_volume_health_conditions
@@ -86,9 +127,12 @@ func (h *VolumeHealth) Conditions() []string {
 	if h.QuotaMismatch {
 		conditions = append(conditions, volumeConditionQuotaMismatch)
 	}
-	// Abnormal for a reason none of the above covers - a missing filesystem or directory, say. Those
-	// have no flag and are always abnormal, so the condition is derived rather than tracked.
-	if h.Abnormal && len(conditions) == 0 {
+	// A cause with no setting - filesystem or directory gone - names itself. The generic fallback
+	// is only for an abnormal volume whose cause was never recorded, which would be a bug here
+	// rather than a state of the volume, and is worth seeing rather than dropping.
+	if h.Condition != "" {
+		conditions = append(conditions, h.Condition)
+	} else if h.Abnormal && len(conditions) == 0 {
 		conditions = append(conditions, volumeConditionUnavailable)
 	}
 	return conditions
@@ -97,8 +141,8 @@ func (h *VolumeHealth) Conditions() []string {
 // abnormalVolumeHealth builds an abnormal condition. The message reaches a Kubernetes event, so it
 // takes a fixed string rather than a format: identifiers belong in the log line at the call site,
 // not in something a namespace user reads.
-func abnormalVolumeHealth(message string) *VolumeHealth {
-	return &VolumeHealth{Abnormal: true, Message: message}
+func abnormalVolumeHealth(condition, message string) *VolumeHealth {
+	return &VolumeHealth{Abnormal: true, Message: message, Condition: condition}
 }
 
 // ProbeHealth inspects the volume using the Weka REST API only, never mounting the filesystem,
@@ -127,11 +171,11 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 	}
 	if fsObj == nil {
 		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Filesystem backing the volume does not exist on the Weka cluster")
-		return abnormalVolumeHealth(volumeFilesystemMissingMessage), nil
+		return abnormalVolumeHealth(volumeConditionFilesystemNotFound, volumeFilesystemMissingMessage), nil
 	}
 	if fsObj.IsRemoving {
 		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Filesystem backing the volume is being removed")
-		return abnormalVolumeHealth(volumeFilesystemRemovingMessage), nil
+		return abnormalVolumeHealth(volumeConditionFilesystemRemoving, volumeFilesystemRemovingMessage), nil
 	}
 
 	// Every volume type is a path inside the filesystem - the filesystem root for filesystem-backed
@@ -148,7 +192,7 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 		if errors.Is(err, apiclient.ObjectNotFoundError) {
 			logger.Warn().Str("filesystem", v.FilesystemName).Str("path", relativePath).
 				Msg("Volume directory does not exist on the Weka cluster")
-			return abnormalVolumeHealth(volumePathMissingMessage), nil
+			return abnormalVolumeHealth(volumeConditionDirectoryNotFound, volumePathMissingMessage), nil
 		}
 		return nil, err
 	}

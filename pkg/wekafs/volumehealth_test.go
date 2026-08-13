@@ -122,9 +122,12 @@ func TestSecretCache(t *testing.T) {
 }
 
 func TestAbnormalVolumeHealth(t *testing.T) {
-	health := abnormalVolumeHealth(volumeFilesystemMissingMessage)
+	health := abnormalVolumeHealth(volumeConditionFilesystemNotFound, volumeFilesystemMissingMessage)
 	if !health.Abnormal {
 		t.Fatal("expected health to be abnormal")
+	}
+	if health.Condition != volumeConditionFilesystemNotFound {
+		t.Fatalf("expected the specific cause to be recorded, got %q", health.Condition)
 	}
 	if health.Message != volumeFilesystemMissingMessage {
 		t.Fatalf("unexpected message: %s", health.Message)

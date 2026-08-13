@@ -37,10 +37,28 @@ func TestConditionsAreReportedIndependentlyOfAbnormal(t *testing.T) {
 			want:   []string{volumeConditionNoApiClient},
 		},
 		{
-			// A missing filesystem or directory has no flag - it is always abnormal - so it has no
-			// condition of its own and is reported under a generic one rather than silently omitted.
-			name:   "abnormal for a reason with no flag",
-			health: &VolumeHealth{Abnormal: true, Message: volumeFilesystemMissingMessage},
+			// The always-abnormal causes name themselves. Collapsing them into one generic condition
+			// loses the distinction that matters most: a directory may be restorable, a filesystem
+			// that is gone means the volume is not coming back.
+			name:   "filesystem gone",
+			health: abnormalVolumeHealth(volumeConditionFilesystemNotFound, volumeFilesystemMissingMessage),
+			want:   []string{volumeConditionFilesystemNotFound},
+		},
+		{
+			name:   "filesystem being removed",
+			health: abnormalVolumeHealth(volumeConditionFilesystemRemoving, volumeFilesystemRemovingMessage),
+			want:   []string{volumeConditionFilesystemRemoving},
+		},
+		{
+			name:   "directory gone",
+			health: abnormalVolumeHealth(volumeConditionDirectoryNotFound, volumePathMissingMessage),
+			want:   []string{volumeConditionDirectoryNotFound},
+		},
+		{
+			// Only reachable if a future abnormal path forgets to name its cause, which is worth
+			// seeing rather than dropping silently.
+			name:   "abnormal with no recorded cause",
+			health: &VolumeHealth{Abnormal: true},
 			want:   []string{volumeConditionUnavailable},
 		},
 		{
@@ -70,9 +88,12 @@ func TestVolumeConditionLabelValuesDoesNotAliasTheCache(t *testing.T) {
 	first := volumeConditionLabelValues(base, volumeConditionNoQuota)
 	second := volumeConditionLabelValues(base, volumeConditionQuotaMismatch)
 
-	assert.Equal(t, volumeConditionNoQuota, first[len(first)-1],
+	// Values end with condition, then category.
+	assert.Equal(t, volumeConditionNoQuota, first[len(first)-2],
 		"building a second condition must not have overwritten the first")
-	assert.Equal(t, volumeConditionQuotaMismatch, second[len(second)-1])
+	assert.Equal(t, volumeCategoryDegraded, first[len(first)-1])
+	assert.Equal(t, volumeConditionQuotaMismatch, second[len(second)-2])
+	assert.Equal(t, volumeCategoryDegraded, second[len(second)-1])
 	assert.Len(t, base, len(LabelsForCsiVolumes), "the caller's slice must be left alone")
 	assert.Nil(t, volumeConditionLabelValues(nil, volumeConditionNoQuota),
 		"a volume with no labels has no series to key on")
@@ -99,4 +120,32 @@ func TestConditionCacheClearsResolvedConditions(t *testing.T) {
 	_, removed, _ := cache.retainOnly(map[string]struct{}{})
 	assert.Len(t, removed, 1)
 	assert.Equal(t, labels, removed[0].labels)
+}
+
+// TestEveryConditionHasACategory is the guard on the mapping table: a condition added without one
+// would report as "unknown", quietly landing in the category meant for causes nobody recorded.
+func TestEveryConditionHasACategory(t *testing.T) {
+	for _, condition := range allVolumeConditions {
+		if condition == volumeConditionUnavailable {
+			continue // the one condition that legitimately means "cause not recorded"
+		}
+		category, ok := volumeConditionCategories[condition]
+		assert.True(t, ok, "condition %q has no category", condition)
+		assert.NotEqual(t, volumeCategoryUnknown, category,
+			"condition %q must name a real category", condition)
+	}
+}
+
+// TestCategoriesSeparateDataLossFromEnforcement pins the distinction the categories exist for: one
+// group means the volume's data is gone, the other means it works but cannot be managed. Anything
+// that blurs those two makes an alert on "corrupt" either noisy or useless.
+func TestCategoriesSeparateDataLossFromEnforcement(t *testing.T) {
+	for _, c := range []string{volumeConditionDirectoryNotFound, volumeConditionFilesystemNotFound, volumeConditionFilesystemRemoving} {
+		assert.Equal(t, volumeCategoryCorrupt, volumeConditionCategory(c), "%s means data is gone", c)
+	}
+	for _, c := range []string{volumeConditionNoQuota, volumeConditionQuotaMismatch, volumeConditionNoApiClient} {
+		assert.Equal(t, volumeCategoryDegraded, volumeConditionCategory(c), "%s leaves the data intact", c)
+	}
+	assert.Equal(t, volumeCategoryUnknown, volumeConditionCategory("something-new"),
+		"an unmapped condition must not be silently filed as corrupt or degraded")
 }

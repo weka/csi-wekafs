@@ -594,7 +594,7 @@
           },
           "type": "table",
           "title": "Abnormal volumes",
-          "description": "Every volume whose weka_csi_volume_health_status equals 0 (abnormal) within the last $value_max_age.",
+          "description": "Every volume the driver currently reports as abnormal, and why. The reason comes from weka_csi_volume_health_conditions - a volume with more than one problem appears once per condition.",
           "id": 9,
           "gridPos": {
             "h": 10,
@@ -684,7 +684,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0",
+              "expr": "(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0) * on(pv_name) group_left(condition) weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}",
               "legendFormat": "__auto",
               "range": false,
               "instant": true,
@@ -720,7 +720,8 @@
                   "filesystem_name": "Filesystem",
                   "storage_class_name": "StorageClass",
                   "volume_type": "VolumeType",
-                  "organization": "Tenant"
+                  "organization": "Tenant",
+                  "condition": "Reason"
                 },
                 "indexByName": {
                   "pvc_namespace": 0,
@@ -1608,195 +1609,6 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "type": "stat",
-      "title": "Volumes with no quota",
-      "description": "Volumes that resolved but carry no quota, so nothing enforces their capacity. Counted whether or not controller.healthMonitor.reportVolumesWithoutQuotaAsAbnormal is set - that setting controls only whether a Kubernetes event is raised on the PVC.",
-      "id": 20,
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 0,
-        "y": 42
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#e0752d"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#e0752d"
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_quota\"}) or vector(0)",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "type": "stat",
-      "title": "Volumes with a quota mismatch",
-      "description": "Volumes whose quota differs from the capacity declared on the PersistentVolume. Detected on every sweep; reportVolumesWithQuotaMismatchAsAbnormal controls only whether it is raised as an abnormal condition.",
-      "id": 21,
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 8,
-        "y": 42
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#e0752d"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#e0752d"
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"quota_mismatch\"}) or vector(0)",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "type": "stat",
-      "title": "Volumes with no API credentials",
-      "description": "Volumes the driver cannot reach, because no Weka API secret could be resolved for them. Their cluster, filesystem and organization labels are blank - that is the condition being reported.",
-      "id": 22,
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 42
-      },
-      "pluginVersion": "12.0.2",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed",
-            "fixedColor": "#8a8a8a"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "#8a8a8a"
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_api_client\"}) or vector(0)",
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "type": "table",
       "title": "Volumes by condition",
       "id": 23,
@@ -1805,7 +1617,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 53
       },
       "pluginVersion": "12.0.2",
       "fieldConfig": {
@@ -1891,9 +1703,263 @@
               "storage_class_name": "Storage class",
               "organization": "Tenant",
               "secret_name": "API secret",
-              "volume_type": "Volume type"
+              "volume_type": "Volume type",
+              "category": "Category"
             }
           }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "bargauge",
+      "title": "Volumes by condition, within category",
+      "id": 24,
+      "description": "One bar per condition the driver can report, so a condition added later appears here without editing the dashboard. Counted from the per-volume series, so it honours the filters above. Independent of the reportAs...Abnormal settings: a volume can be counted here and still show as healthy.",
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#e0752d"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#e0752d"
+              }
+            ]
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "expr": "count by (condition) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})",
+          "legendFormat": "{{category}} / {{condition}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Corrupt volumes",
+      "description": "Volumes whose data is gone or going: the directory or the whole filesystem no longer exists on the Weka cluster. The driver cannot repair these, and any workload using them is already broken. Counted per volume, so a volume with two such conditions is counted once.",
+      "id": 25,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 42
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#d03b3b"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#d03b3b"
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"corrupt\"})) or vector(0)"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Degraded volumes",
+      "description": "Volumes that work and whose data is intact, but which the driver cannot fully manage: no quota enforcing their capacity, a quota that disagrees with the PersistentVolume, or no API credentials. Not urgent, but they will not behave as declared.",
+      "id": 26,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 42
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#e0752d"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#e0752d"
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"degraded\"})) or vector(0)"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Unclassified",
+      "description": "Abnormal volumes whose cause was not recorded. Expected to be zero - anything here is a gap in the driver's reporting rather than a state of the volume.",
+      "id": 27,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 42
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "#8a8a8a"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8a8a8a"
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"unknown\"})) or vector(0)"
         }
       ]
     }
