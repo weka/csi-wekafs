@@ -693,6 +693,12 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 		},
 		Spec: v1.PersistentVolumeSpec{
 			Capacity: pv.Spec.Capacity, // Need for capacity validation
+			// Both are read by csiVolumeLabelValues, which labels every per-volume metric series.
+			// Dropped, they do not fail - they come back as the empty string, so storage_class_name
+			// and every pvc_* label would be blank for the whole fleet and the volume dashboards
+			// would have nothing to group or filter by.
+			StorageClassName: pv.Spec.StorageClassName,
+			ClaimRef:         pv.Spec.ClaimRef,
 		},
 		Status: v1.PersistentVolumeStatus{
 			Phase: pv.Status.Phase, // Need to check if Bound or Released
