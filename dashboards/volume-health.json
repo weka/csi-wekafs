@@ -1380,10 +1380,10 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "type": "piechart",
+      "type": "barchart",
       "title": "Condition breakdown",
       "id": 24,
-      "description": "Share of affected volumes by condition. Colour carries severity: reds are data loss, orange a missing snapshot, yellow/orange the quota conditions, grey unclassified. Counted per volume, honouring the filters above.",
+      "description": "How many volumes carry each condition right now. Colour carries severity: reds are data loss, yellow and orange the quota conditions, grey unclassified. Counted per volume, honouring the filters above. A condition nobody has does not appear.",
       "gridPos": {
         "h": 7,
         "w": 24,
@@ -1396,14 +1396,34 @@
           "color": {
             "mode": "palette-classic"
           },
-          "mappings": [],
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "volumes",
+            "axisPlacement": "auto",
+            "fillOpacity": 85,
+            "gradientMode": "none",
+            "lineWidth": 1,
+            "thresholdsStyle": {
+              "mode": "off"
+            },
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             }
-          }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "short"
         },
         "overrides": [
           {
@@ -1514,31 +1534,24 @@
         ]
       },
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "pieType": "donut",
+        "orientation": "horizontal",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0,
+        "showValue": "always",
+        "stacking": "none",
+        "groupWidth": 0.7,
+        "barWidth": 0.8,
+        "fullHighlight": false,
         "tooltip": {
           "mode": "single",
           "sort": "none"
         },
         "legend": {
-          "displayMode": "table",
-          "placement": "right",
           "showLegend": true,
-          "values": [
-            "value",
-            "percent"
-          ]
-        },
-        "displayLabels": [
-          "name",
-          "value"
-        ]
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
       },
       "targets": [
         {
@@ -1550,8 +1563,23 @@
           "instant": true,
           "range": false,
           "refId": "A",
+          "format": "table",
           "legendFormat": "{{condition}}",
           "expr": "count by (condition) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "condition": "Condition",
+              "Value": "Volumes"
+            }
+          }
         }
       ]
     },
