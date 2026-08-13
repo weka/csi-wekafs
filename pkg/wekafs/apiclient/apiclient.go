@@ -232,11 +232,21 @@ func (a *ApiClient) retryBackoff(ctx context.Context, attempts int, sleep time.D
 		}
 		if attempts--; attempts > 0 {
 			log.Ctx(ctx).Debug().Int("remaining_attempts", attempts).Msg("Failed to perform API call")
+			// A full task queue drains only as tasks finish, so back off harder for it than for an
+			// ordinary transient error, which usually clears immediately.
+			factor := RetryBackoffExponentialFactor
+			if IsTooManyTasksError(err) {
+				factor = RetryBackoffTooManyTasksFactor
+			}
 			// Add some randomness to prevent creating a Thundering Herd
 			jitter := time.Duration(rand.Int63n(int64(sleep)))
 			sleep = sleep + jitter/2
+			maxSleep := time.Second * MaxRetryBackoffTooManyTasksSeconds
+			if sleep > maxSleep {
+				sleep = maxSleep
+			}
 			time.Sleep(sleep)
-			return a.retryBackoff(ctx, attempts, RetryBackoffExponentialFactor*sleep, f)
+			return a.retryBackoff(ctx, attempts, time.Duration(factor)*sleep, f)
 		}
 		return &ApiRetriesExceeded{
 			ApiError: ApiError{

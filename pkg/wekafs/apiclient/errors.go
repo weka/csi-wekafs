@@ -248,3 +248,51 @@ func (e transportError) Error() string {
 func (e transportError) getType() string {
 	return "transportError"
 }
+
+// ExceptionClassTooManyTasks is returned by the cluster when an operation would exceed the limit on
+// concurrently running tasks. It arrives as an HTTP 400 alongside BadStateException, but it is not a
+// bad request: the request was valid and would succeed once the queue drains.
+const ExceptionClassTooManyTasks = "CannotStartOperationTooManyTasks"
+
+// IsTooManyTasksError reports whether err is the cluster refusing an operation because its task
+// queue is full.
+//
+// This is backpressure rather than failure, and the distinction matters: treated as a hard error it
+// fails the whole CSI operation, Kubernetes retries immediately, and each retry queues more work -
+// which is how a burst of volume creations turns into a self-sustaining storm rather than a slow
+// success.
+func IsTooManyTasksError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return responseOf(err).HasErrorCode(ExceptionClassTooManyTasks)
+}
+
+// responseOf digs the API response out of an error, whichever concrete type it happens to be, so
+// callers can inspect what the backend actually said. Returns nil when the error carries no
+// response, which HasErrorCode handles.
+func responseOf(err error) *ApiResponse {
+	switch e := err.(type) {
+	case *ApiBadRequestError:
+		return e.ApiResponse
+	case ApiBadRequestError:
+		return e.ApiResponse
+	case *ApiError:
+		return e.ApiResponse
+	case ApiError:
+		return e.ApiResponse
+	case *ApiInternalError:
+		return e.ApiResponse
+	case ApiInternalError:
+		return e.ApiResponse
+	case *ApiConflictError:
+		return e.ApiResponse
+	case ApiConflictError:
+		return e.ApiResponse
+	case ApiNonTransientError:
+		return responseOf(e.apiError)
+	case *ApiNonTransientError:
+		return responseOf(e.apiError)
+	}
+	return nil
+}
