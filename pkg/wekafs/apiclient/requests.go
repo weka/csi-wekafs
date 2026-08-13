@@ -109,6 +109,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	Response := &ApiResponse{}
 	err = json.Unmarshal(responseBody, Response)
 	Response.HttpStatusCode = response.StatusCode
+	Response.parseErrorCodes()
 	if err != nil {
 		endpoint.parseErrCount.Add(1)
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
@@ -230,6 +231,14 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 			return reqErr
 		}
 		if reqErr != nil {
+			// A full task queue is the cluster asking us to come back later, not a rejection of the
+			// request. Returning it as-is keeps it transient so retryBackoff waits and tries again,
+			// instead of failing the CSI operation and letting Kubernetes retry immediately - which
+			// only queues more work and keeps the queue full.
+			if IsTooManyTasksError(reqErr) {
+				logger.Debug().Msg("Cluster task queue is full, will back off and retry")
+				return reqErr
+			}
 			return ApiNonTransientError{reqErr}
 		}
 		s := rawResponse.HttpStatusCode
@@ -289,7 +298,13 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 	}
 	err := a.retryBackoff(ctx, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), f)
 	if err != nil {
-		return "", err.(apiError)
+		// Checked, because this is the one place an error crosses from retryBackoff into the
+		// apiError return type. An unchecked assertion turns anything that is not an apiError into
+		// a panic in the controller, which is a far worse outcome than the failure being reported.
+		if apiErr, ok := err.(apiError); ok {
+			return "", apiErr
+		}
+		return "", ApiInternalError{Err: err, Text: err.Error()}
 	}
 	return nextToken, nil
 }

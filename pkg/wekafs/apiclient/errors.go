@@ -221,6 +221,26 @@ func (e ApiRetriesExceeded) Error() string {
 	return fmt.Sprintf("%s, retried %d times", e.ApiError.Error(), e.Retries)
 }
 
+// ApiContextCancelledError reports that the caller's context ended while the client was waiting to
+// retry. Every error leaving request() has to satisfy apiError - the caller type-asserts to it - so
+// a bare context.Canceled would panic there instead of failing the operation. Unwrap keeps
+// errors.Is(err, context.Canceled) answering truthfully through the wrapper.
+type ApiContextCancelledError struct {
+	ApiError
+}
+
+func (e ApiContextCancelledError) getType() string {
+	return "ApiContextCancelledError"
+}
+
+func (e ApiContextCancelledError) Error() string {
+	return fmt.Sprintf("%s: %s: %v", e.getType(), e.Text, e.Err)
+}
+
+func (e ApiContextCancelledError) Unwrap() error {
+	return e.Err
+}
+
 var ObjectNotFoundError = errors.New("object not found")
 var MultipleObjectsFoundError = errors.New("ambiguous filter, multiple objects match")
 var RequestMissingParams = errors.New("request cannot be sent since some required params are missing")
@@ -247,4 +267,52 @@ func (e transportError) Error() string {
 
 func (e transportError) getType() string {
 	return "transportError"
+}
+
+// ExceptionClassTooManyTasks is returned by the cluster when an operation would exceed the limit on
+// concurrently running tasks. It arrives as an HTTP 400 alongside BadStateException, but it is not a
+// bad request: the request was valid and would succeed once the queue drains.
+const ExceptionClassTooManyTasks = "CannotStartOperationTooManyTasks"
+
+// IsTooManyTasksError reports whether err is the cluster refusing an operation because its task
+// queue is full.
+//
+// This is backpressure rather than failure, and the distinction matters: treated as a hard error it
+// fails the whole CSI operation, Kubernetes retries immediately, and each retry queues more work -
+// which is how a burst of volume creations turns into a self-sustaining storm rather than a slow
+// success.
+func IsTooManyTasksError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return responseOf(err).HasErrorCode(ExceptionClassTooManyTasks)
+}
+
+// responseOf digs the API response out of an error, whichever concrete type it happens to be, so
+// callers can inspect what the backend actually said. Returns nil when the error carries no
+// response, which HasErrorCode handles.
+func responseOf(err error) *ApiResponse {
+	switch e := err.(type) {
+	case *ApiBadRequestError:
+		return e.ApiResponse
+	case ApiBadRequestError:
+		return e.ApiResponse
+	case *ApiError:
+		return e.ApiResponse
+	case ApiError:
+		return e.ApiResponse
+	case *ApiInternalError:
+		return e.ApiResponse
+	case ApiInternalError:
+		return e.ApiResponse
+	case *ApiConflictError:
+		return e.ApiResponse
+	case ApiConflictError:
+		return e.ApiResponse
+	case ApiNonTransientError:
+		return responseOf(e.apiError)
+	case *ApiNonTransientError:
+		return responseOf(e.apiError)
+	}
+	return nil
 }

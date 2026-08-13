@@ -232,11 +232,31 @@ func (a *ApiClient) retryBackoff(ctx context.Context, attempts int, sleep time.D
 		}
 		if attempts--; attempts > 0 {
 			log.Ctx(ctx).Debug().Int("remaining_attempts", attempts).Msg("Failed to perform API call")
+			// A full task queue drains only as tasks finish, so back off harder for it than for an
+			// ordinary transient error, which usually clears immediately.
+			factor := RetryBackoffExponentialFactor
+			if IsTooManyTasksError(err) {
+				factor = RetryBackoffTooManyTasksFactor
+			}
 			// Add some randomness to prevent creating a Thundering Herd
 			jitter := time.Duration(rand.Int63n(int64(sleep)))
 			sleep = sleep + jitter/2
-			time.Sleep(sleep)
-			return a.retryBackoff(ctx, attempts, RetryBackoffExponentialFactor*sleep, f)
+			maxSleep := time.Second * MaxRetryBackoffTooManyTasksSeconds
+			if sleep > maxSleep {
+				sleep = maxSleep
+			}
+			// Interruptible, and deliberately so. These waits are long - a full task queue backs
+			// off harder than an ordinary transient error - and can outlast grpcRequestTimeout,
+			// which defaults to 30s. An uninterruptible sleep would keep the caller's semaphore
+			// held past its own deadline and then issue further Weka API calls on behalf of a
+			// request that no longer exists.
+			select {
+			case <-ctx.Done():
+				log.Ctx(ctx).Debug().Err(ctx.Err()).Msg("Request cancelled while backing off, abandoning retries")
+				return ApiContextCancelledError{ApiError{Err: ctx.Err(), Text: "request cancelled while backing off"}}
+			case <-time.After(sleep):
+			}
+			return a.retryBackoff(ctx, attempts, time.Duration(factor)*sleep, f)
 		}
 		return &ApiRetriesExceeded{
 			ApiError: ApiError{
