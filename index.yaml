@@ -3,6 +3,63 @@ entries:
   csi-wekafsplugin:
   - annotations:
       artifacthub.io/category: storage
+      artifacthub.io/changes: |-
+        - kind: changed
+          description: 'feat: allow a separate priorityClassName for controller and node components'
+          links:
+            - name: 'PR #778'
+              url: https://github.com/weka/csi-wekafs/pull/778
+        - kind: fixed
+          description: 'fix(chart): use the configured logLevel for the csi-snapshotter sidecar'
+          links:
+            - name: 'PR #779'
+              url: https://github.com/weka/csi-wekafs/pull/779
+        - kind: fixed
+          description: 'fix: give every container port a name unique within its pod'
+          links:
+            - name: 'PR #792'
+              url: https://github.com/weka/csi-wekafs/pull/792
+        - kind: fixed
+          description: 'fix: stop the driver panicking when it cannot determine volume encryption'
+          links:
+            - name: 'PR #793'
+              url: https://github.com/weka/csi-wekafs/pull/793
+        - kind: fixed
+          description: 'docs: show a Source Code link on the chart page'
+          links:
+            - name: 'PR #794'
+              url: https://github.com/weka/csi-wekafs/pull/794
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/signKey: |
+        fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
+        url: https://weka.github.io/csi-wekafs/csi-public.gpg
+    apiVersion: v2
+    appVersion: v2.9.2
+    created: "2026-08-13T09:45:49.229756832Z"
+    description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI)
+      plugin for WekaFS - the world fastest filesystem
+    digest: c3fa12479528793f80e69d6feb0a49f4ee827b7a2f2073b6955107f0b899de1c
+    home: https://github.com/weka/csi-wekafs
+    icon: https://weka.github.io/csi-wekafs/logo.png
+    keywords:
+    - storage
+    - filesystem
+    - HPC
+    maintainers:
+    - email: csi@weka.io
+      name: WekaIO, Inc.
+      url: https://weka.io
+    name: csi-wekafsplugin
+    sources:
+    - https://github.com/weka/csi-wekafs/tree/v2.9.2
+    type: application
+    urls:
+    - https://github.com/weka/csi-wekafs/releases/download/v2.9.2/csi-wekafsplugin-2.9.2.tgz
+    version: 2.9.2
+  - annotations:
+      artifacthub.io/category: storage
       artifacthub.io/containsSecurityUpdates: "true"
       artifacthub.io/license: Apache-2.0
       artifacthub.io/prerelease: "false"
@@ -1528,4 +1585,4 @@ entries:
     urls:
     - https://weka.github.io/csi-wekafs/csi-wekafsplugin-0.6.2-0.tgz
     version: 0.6.2-0
-generated: "2026-08-11T11:16:48.132301985Z"
+generated: "2026-08-13T09:45:49.229930925Z"
