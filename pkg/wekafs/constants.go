@@ -199,6 +199,7 @@ const (
 	volumeConditionFilesystemNotFound = "filesystem_not_found"
 	volumeConditionFilesystemRemoving = "filesystem_removing"
 	volumeConditionDirectoryNotFound  = "directory_not_found"
+	volumeConditionSnapshotNotFound   = "snapshot_not_found"
 
 	// Categories group conditions by what they cost, because the response differs completely.
 	// corrupt means the volume's data is gone or going - nothing the driver can repair, and the
@@ -218,6 +219,7 @@ const (
 	volumeFilesystemMissingMessage  = "the Weka filesystem backing this volume no longer exists"
 	volumeFilesystemRemovingMessage = "the Weka filesystem backing this volume is being removed"
 	volumePathMissingMessage        = "the volume's directory no longer exists on the Weka cluster"
+	volumeSnapshotMissingMessage    = "the Weka snapshot this volume is based on no longer exists"
 	// volumeNoQuotaMessage is reported for a volume that exists but carries no quota. It is not an
 	// abnormal condition - the volume works - but nothing enforces its capacity, so the condition
 	// says so rather than calling it plainly healthy.

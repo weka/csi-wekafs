@@ -79,6 +79,7 @@ var allVolumeConditions = []string{
 	volumeConditionNoQuota,
 	volumeConditionQuotaMismatch,
 	volumeConditionDirectoryNotFound,
+	volumeConditionSnapshotNotFound,
 	volumeConditionFilesystemNotFound,
 	volumeConditionFilesystemRemoving,
 	volumeConditionUnavailable,
@@ -89,6 +90,7 @@ var allVolumeConditions = []string{
 // place rather than a series that quietly reports no category at all.
 var volumeConditionCategories = map[string]string{
 	volumeConditionDirectoryNotFound:  volumeCategoryCorrupt,
+	volumeConditionSnapshotNotFound:   volumeCategoryCorrupt,
 	volumeConditionFilesystemNotFound: volumeCategoryCorrupt,
 	volumeConditionFilesystemRemoving: volumeCategoryCorrupt,
 	volumeConditionNoQuota:            volumeCategoryDegraded,
@@ -190,6 +192,19 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 	inodeId, err := v.apiClient.ResolvePathToInode(ctx, fsObj, relativePath)
 	if err != nil {
 		if errors.Is(err, apiclient.ObjectNotFoundError) {
+			// A snapshot-backed volume resolves through its snapshot's access point, so a snapshot
+			// that has been deleted fails here exactly like a deleted directory. Reporting both as a
+			// missing directory sends an operator looking in the wrong place: the directory is fine,
+			// the snapshot it lived in is gone. Only asked on the failure path, so a healthy volume
+			// still costs one resolve.
+			if v.isOnSnapshot() {
+				snapObj, snapErr := v.getSnapshotObj(ctx, true)
+				if snapErr == nil && snapObj == nil {
+					logger.Warn().Str("filesystem", v.FilesystemName).Str("snapshot", v.SnapshotName).
+						Msg("Snapshot backing the volume does not exist on the Weka cluster")
+					return abnormalVolumeHealth(volumeConditionSnapshotNotFound, volumeSnapshotMissingMessage), nil
+				}
+			}
 			logger.Warn().Str("filesystem", v.FilesystemName).Str("path", relativePath).
 				Msg("Volume directory does not exist on the Weka cluster")
 			return abnormalVolumeHealth(volumeConditionDirectoryNotFound, volumePathMissingMessage), nil
