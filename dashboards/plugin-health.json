@@ -1,0 +1,4916 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__elements": {},
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "12.0.2"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "row",
+      "name": "Row",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 0
+      },
+      "hideTimeOverride": true,
+      "id": 213,
+      "options": {
+        "code": {
+          "language": "html",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "<img style=\"width:99%;margin-left:auto;margin-right:auto;margin-top:0;display:block;\" src=\"data:image/svg+xml;base64, PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0ODAgMTAzLjAzIj48ZGVmcz48c3R5bGU+LmNscy0xe2ZpbGw6IzZiMDBkZDt9PC9zdHlsZT48L2RlZnM+PHRpdGxlPkFzc2V0IDM8L3RpdGxlPjxnIGlkPSJMYXllcl8yIiBkYXRhLW5hbWU9IkxheWVyIDIiPjxnIGlkPSJMYXllcl8xLTIiIGRhdGEtbmFtZT0iTGF5ZXIgMSI+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMTEzLjQ4LjEyLDEzOC4yLDBBMy43OSwzLjc5LDAsMCwxLDE0MiwzLjc5VjI4LjY2YTMuNzksMy43OSwwLDAsMS02LjQ3LDIuNjdMMTEwLjgxLDYuNThBMy43OSwzLjc5LDAsMCwxLDExMy40OC4xMloiLz48cGF0aCBjbGFzcz0iY2xzLTEiIGQ9Ik0wLDMuODl2MjBBMjAuODUsMjAuODUsMCwwLDAsNi4wNSwzOC42MUw2OC45MywxMDEuOWEzLjc5LDMuNzksMCwwLDAsNi40OC0yLjY3di0yMGEyMC44NSwyMC44NSwwLDAsMC02LTE0LjY4TDYuNDcsMS4yMkEzLjc5LDMuNzksMCwwLDAsMCwzLjg5WiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTY2Ljc2LDMuODl2MjBhMjAuODUsMjAuODUsMCwwLDAsNiwxNC42OEwxMzUuNywxMDEuOWEzLjc4LDMuNzgsMCwwLDAsNi40Ny0yLjY3di0yMGEyMC44NSwyMC44NSwwLDAsMC02LTE0LjY4TDczLjI0LDEuMjJBMy43OSwzLjc5LDAsMCwwLDY2Ljc2LDMuODlaIi8+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMTk0LjgsMjMuNTNoNi44OWwxNiw0Ni42OSwxNS4zOC00Ni44NWg1LjJsMTUuMzgsNDYuODUsMTYtNDYuNjloNi42NUwyNTYuMyw4MGgtNS4zN0wyMzUuNTYsMzQuNTEsMjIwLjEsODBoLTUuMjhaIi8+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNMjk3LjM2LDIzLjUzaDQwLjUyVjI5LjNIMzAzLjY5VjQ4LjQ0aDMwLjU5djUuNzdIMzAzLjY5VjczLjgyaDM0LjU5djUuNzdIMjk3LjM2WiIvPjxwYXRoIGNsYXNzPSJjbHMtMSIgZD0iTTM2MC42MSwyMy41M2g2LjMzVjU3bDMyLjE5LTMzLjQ4aDguMTdMMzgzLjI4LDQ4bDI1LjA2LDMxLjU1aC03LjkzTDM3OC44Nyw1Mi40NCwzNjYuOTQsNjQuNTNWNzkuNTloLTYuMzNaIi8+PHBhdGggY2xhc3M9ImNscy0xIiBkPSJNNDQ4LjUzLDIzLjEzaDUuOTJMNDgwLDc5LjU5aC02LjgxbC02LjU2LTE0LjgySDQzNi4xMmwtNi42NSwxNC44Mkg0MjNabTE1LjYxLDM2TDQ1MS40MSwzMC41LDQzOC42LDU5LjA5WiIvPjwvZz48L2c+PC9zdmc+\">",
+        "mode": "html"
+      },
+      "pluginVersion": "11.6.14+security-01",
+      "timeFrom": "1m",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
+      "type": "row",
+      "title": "Kubernetes workload health",
+      "id": 200,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "panels": []
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Controller (Deployment) replicas",
+      "description": "Desired/available/unavailable/updated replica counts for the controller Deployment, from kube-state-metrics. 'unavailable' > 0 or 'updated' < desired for a sustained period indicates the controller is not fully up.",
+      "id": 201,
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.0001
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_deployment_spec_replicas{namespace=~\"$namespace\",deployment=~\"$controller_deployment\"})",
+          "legendFormat": "desired",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_deployment_status_replicas_available{namespace=~\"$namespace\",deployment=~\"$controller_deployment\"})",
+          "legendFormat": "available",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_deployment_status_replicas_unavailable{namespace=~\"$namespace\",deployment=~\"$controller_deployment\"})",
+          "legendFormat": "unavailable",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_deployment_status_replicas_updated{namespace=~\"$namespace\",deployment=~\"$controller_deployment\"})",
+          "legendFormat": "updated",
+          "range": true,
+          "instant": false,
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Controller rollout status",
+      "description": "1 (Rollout in progress) when updated replicas haven't caught up to desired, or the Deployment's observed_generation lags its metadata_generation (a spec change is still being rolled out). Computed as clamp_max(sum of two 'less than' booleans, 1) since PromQL 'or' between two label-less vectors would otherwise silently drop the second condition.",
+      "id": 202,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 5
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Stable",
+                  "color": "#0ca30c",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Rollout in progress",
+                  "color": "#fab219",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#fab219",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "clamp_max((sum(kube_deployment_status_replicas_updated{namespace=~\"$namespace\",deployment=~\"$controller_deployment\"}) < bool sum(kube_deployment_spec_replicas{namespace=~\"$namespace\",deployment=~\"$controller_deployment\"})) + (sum(kube_deployment_status_observed_generation{namespace=~\"$namespace\",deployment=~\"$controller_deployment\"}) < bool sum(kube_deployment_metadata_generation{namespace=~\"$namespace\",deployment=~\"$controller_deployment\"})), 1)",
+          "legendFormat": "rollout",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Node coverage gaps",
+      "description": "Two operationally distinct gaps between cluster nodes and running node-server pods, from kube-state-metrics: 'excluded by scheduling' = nodes the DaemonSet never targets (nodeSelector/taints/tolerations), computed as count(kube_node_info) minus desired_number_scheduled; 'targeted but not ready' = nodes the DaemonSet does target but whose pod isn't ready, computed as desired_number_scheduled minus number_ready. The former means 'by design, nothing to fix here'; the latter means 'a node that should have the driver doesn't'.",
+      "id": 203,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 5
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.0001
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "count(kube_node_info) - sum(kube_daemonset_status_desired_number_scheduled{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "excluded by scheduling",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_daemonset_status_desired_number_scheduled{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"}) - sum(kube_daemonset_status_number_ready{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "targeted but pod not ready",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Node DaemonSet (node-server) status",
+      "description": "Desired/current/ready/available/unavailable/updated/misscheduled counts for the node-server DaemonSet, from kube-state-metrics. 'updated' < desired during a rollout means the upgrade is still in progress; 'misscheduled' > 0 means pods are running on nodes the DaemonSet no longer wants them on.",
+      "id": 204,
+      "gridPos": {
+        "h": 4,
+        "w": 18,
+        "x": 0,
+        "y": 9
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.0001
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_daemonset_status_desired_number_scheduled{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "desired",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_daemonset_status_current_number_scheduled{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "current",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_daemonset_status_number_ready{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "ready",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_daemonset_status_number_available{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "available",
+          "range": true,
+          "instant": false,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_daemonset_status_number_unavailable{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "unavailable",
+          "range": true,
+          "instant": false,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_daemonset_status_updated_number_scheduled{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "updated (upgrading)",
+          "range": true,
+          "instant": false,
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_daemonset_status_number_misscheduled{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})",
+          "legendFormat": "misscheduled",
+          "range": true,
+          "instant": false,
+          "refId": "G"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Node DaemonSet rollout status",
+      "description": "1 (Rollout in progress) when updated_number_scheduled hasn't caught up to desired, or the DaemonSet's observed_generation lags its metadata_generation. Same clamp_max(sum of booleans, 1) pattern as the controller rollout panel, for the same reason.",
+      "id": 205,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 9
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Stable",
+                  "color": "#0ca30c",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Rollout in progress",
+                  "color": "#fab219",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#fab219",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "clamp_max((sum(kube_daemonset_status_updated_number_scheduled{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"}) < bool sum(kube_daemonset_status_desired_number_scheduled{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})) + (sum(kube_daemonset_status_observed_generation{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"}) < bool sum(kube_daemonset_metadata_generation{namespace=~\"$namespace\",daemonset=~\"$node_daemonset\"})), 1)",
+          "legendFormat": "rollout",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "timeseries",
+      "title": "Container restarts (last 1h)",
+      "description": "increase() of kube_pod_container_status_restarts_total over the last hour, per pod and container. Includes every container in the pod (sidecars: csi-provisioner/attacher/resizer/snapshotter/external-health-monitor on the controller, csi-registrar/liveness-probe on the node), not just the driver container, since a crash-looping sidecar can degrade the plugin just as much as the driver container itself.",
+      "id": 206,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "sortBy": "Last *",
+          "sortDesc": true,
+          "width": 350
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc",
+          "maxHeight": 600
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (pod, container) (increase(kube_pod_container_status_restarts_total{namespace=~\"$namespace\"}[1h]))",
+          "legendFormat": "{{pod}} / {{container}}",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "stat",
+      "title": "Containers in CrashLoopBackOff / pods not Ready / OOMKilled",
+      "description": "Three cluster-wide health counters from kube-state-metrics, each wrapped in 'or vector(0)' because a GaugeVec/CounterVec with no observed label combination (e.g. nothing currently crash-looping) exports no series at all, which would otherwise render as 'No data' instead of a reassuring zero. kube_pod_container_status_waiting_reason only emits a series while a container is actually waiting for that specific reason.",
+      "id": 207,
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 13
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 0.0001
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_pod_container_status_waiting_reason{namespace=~\"$namespace\",reason=\"CrashLoopBackOff\"}) or vector(0)",
+          "legendFormat": "CrashLoopBackOff",
+          "range": true,
+          "instant": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_pod_status_ready{namespace=~\"$namespace\",condition=\"false\"}) or vector(0)",
+          "legendFormat": "pods not Ready",
+          "range": true,
+          "instant": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(kube_pod_container_status_last_terminated_reason{namespace=~\"$namespace\",reason=\"OOMKilled\"}) or vector(0)",
+          "legendFormat": "OOMKilled (last termination)",
+          "range": true,
+          "instant": false,
+          "refId": "C"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "table",
+      "title": "CrashLoopBackOff containers (detail)",
+      "description": "Which pod/container is currently in CrashLoopBackOff, filtered to reason=\"CrashLoopBackOff\" and value > 0 so the table is empty (not zero rows of noise) when nothing is crash-looping.",
+      "id": 208,
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 13
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "kube_pod_container_status_waiting_reason{namespace=~\"$namespace\",reason=\"CrashLoopBackOff\"} > 0",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Value": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "service": true,
+              "uid": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "table",
+      "title": "Driver image per pod (version/rollout skew)",
+      "description": "kube_pod_container_info filtered to container=\"wekafs\" (the driver container, present on both controller and node-server pods). During a healthy rollout every row briefly shows two images; if it stays split after the rollout should have finished, a pod is stuck on the old image.",
+      "id": 209,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 21
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "kube_pod_container_info{namespace=~\"$namespace\",container=\"wekafs\"}",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Value": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "service": true,
+              "uid": true,
+              "container_id": true,
+              "image_id": true,
+              "image_spec": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "table",
+      "title": "Leader election lease holders",
+      "description": "kube_lease_owner for every csi.weka.io-*-leader Lease, showing which pod currently holds each one. Deliberately NOT scoped to $namespace: the whole point is to catch a lease being held by a pod from an unexpected workload or namespace (PR #739 was a real incident where metrics-server pods stole the CSI controller's lease, which hung provisioning while every pod still looked Running). A pod name in lease_holder that doesn't match the expected controller/node-server naming is the signal to look for.",
+      "id": 210,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "kube_lease_owner{lease=~\"csi\\\\..*leader.*\"}",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "container": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "service": true,
+              "pod": true,
+              "uid": true,
+              "owner_kind": true,
+              "owner_name": true
+            },
+            "includeByName": {},
+            "indexByName": {
+              "lease": 0,
+              "namespace": 1,
+              "lease_holder": 2
+            },
+            "renameByName": {
+              "lease": "Lease",
+              "namespace": "Namespace",
+              "lease_holder": "Held by"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "table",
+      "title": "Pod age",
+      "description": "time() - kube_pod_start_time per pod. A cluster-wide unexpected drop to a low value across multiple pods at once is a cheap tell for an unplanned mass restart (e.g. node drain, OOM, crashloop) that individual restart counters can be slower to surface.",
+      "id": 211,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 29
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "time() - kube_pod_start_time{namespace=~\"$namespace\"}",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "service": true,
+              "uid": true,
+              "container": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "type": "table",
+      "title": "Recent container terminations",
+      "description": "kube_pod_container_status_last_terminated_reason, filtered to value > 0 so it stays empty rather than listing every never-terminated container. Complements the OOMKilled counter above with the pod/container breakdown and the actual reason string (OOMKilled, Error, etc.) for any container that has terminated.",
+      "id": 212,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 29
+      },
+      "pluginVersion": "12.0.2",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#0ca30c"
+              },
+              {
+                "color": "#d03b3b",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "kube_pod_container_status_last_terminated_reason{namespace=~\"$namespace\"} > 0",
+          "legendFormat": "",
+          "range": false,
+          "instant": true,
+          "refId": "A",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "Value": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "service": true,
+              "uid": true
+            },
+            "indexByName": {},
+            "renameByName": {}
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Overview",
+      "id": 101,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "stat",
+          "title": "Controller error rate (all operations)",
+          "description": "Sum of FAILURE-status rates across every controller operation counter. Uses 'or vector(0)' because a CounterVec with no observed label combination (e.g. no failures ever seen) exports no series at all, which would otherwise render this stat as 'No data' instead of zero.",
+          "id": 102,
+          "gridPos": {
+            "h": 4,
+            "w": 12,
+            "x": 0,
+            "y": 38
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 0.0001
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "(sum(rate(weka_csi_controller_create_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_delete_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_expand_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_create_snapshot_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_delete_snapshot_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_get_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_list_volumes_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_validate_volume_capabilities_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))) or vector(0)",
+              "legendFormat": "errors/sec",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "stat",
+          "title": "Node error rate (all operations)",
+          "description": "Sum of FAILURE-status rates across every node operation counter. Uses 'or vector(0)' for the same reason as the controller panel. Node request volume is naturally near-zero in steady state (measured: ~6 requests on a node vs 176k on the controller over the same window), so this stat will typically read 0.",
+          "id": 103,
+          "gridPos": {
+            "h": 4,
+            "w": 12,
+            "x": 12,
+            "y": 38
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 0.0001
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "wideLayout": true
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "(sum(rate(weka_csi_node_publish_volume_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_unpublish_volume_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_get_volume_stats_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_get_info_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))) or vector(0)",
+              "legendFormat": "errors/sec",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Controller operations",
+      "id": 104,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Controller operation request rate",
+          "description": "Rate of each controller RPC (all statuses combined), summed across pods since only the leader controller normally produces data. Uses $__rate_interval rather than a fixed window so the query stays valid regardless of scrape interval.",
+          "id": 105,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 43
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_create_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "create_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_delete_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "delete_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_expand_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "expand_volume",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_create_snapshot_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "create_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_delete_snapshot_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "delete_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_get_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "get_volume",
+              "range": true,
+              "instant": false,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_list_volumes_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "list_volumes",
+              "range": true,
+              "instant": false,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_validate_volume_capabilities_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "validate_volume_capabilities",
+              "range": true,
+              "instant": false,
+              "refId": "H"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Controller operation error rate",
+          "description": "Rate of status=\"FAILURE\" results per controller RPC. A CounterVec with no failures observed exports no series at all (not even zero), so an operation missing from the legend means it has never failed, not that it errored at zero rate.",
+          "id": 106,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 43
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_create_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "create_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_delete_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "delete_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_expand_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "expand_volume",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_create_snapshot_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "create_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_delete_snapshot_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "delete_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_get_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "get_volume",
+              "range": true,
+              "instant": false,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_list_volumes_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "list_volumes",
+              "range": true,
+              "instant": false,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_validate_volume_capabilities_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "validate_volume_capabilities",
+              "range": true,
+              "instant": false,
+              "refId": "H"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Create volume rate by backing type",
+          "description": "CreateVolume request rate split by backing_type (DIRECTORY/FILESYSTEM/SNAPSHOT/HYBRID/UNKNOWN). Only create_volume, delete_volume and expand_volume carry this label; the other controller operations do not.",
+          "id": 107,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 51
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (backing_type) (rate(weka_csi_controller_create_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "{{backing_type}}",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Provisioned capacity rate",
+          "description": "Bytes/sec of capacity handed out via CreateVolume and ExpandVolume, derived from the cumulative *_total_capacity_bytes counters. A flat line at zero is normal on a quiet cluster; it means no provisioning happened in the window, not that the metric is broken.",
+          "id": 108,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 51
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "Bps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_create_volume_total_capacity_bytes{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "provisioned (create)",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_expand_volume_total_capacity_bytes{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "provisioned (expand)",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Controller operation latency (p50)",
+          "description": "p50 latency per controller RPC computed via histogram_quantile over the *_duration_seconds histogram. Always uses $__rate_interval: a literal [1m] window against a 30s scrape interval only ever holds ~2 samples and rate() silently returns nothing once the scrape cadence changes (this broke a previous version of this dashboard, see PR #741).",
+          "id": 109,
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 59
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "create_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "delete_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "expand_volume",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "create_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "delete_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_volume",
+              "range": true,
+              "instant": false,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "list_volumes",
+              "range": true,
+              "instant": false,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "validate_volume_capabilities",
+              "range": true,
+              "instant": false,
+              "refId": "H"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Controller operation latency (p95)",
+          "description": "p95 latency per controller RPC computed via histogram_quantile over the *_duration_seconds histogram. Always uses $__rate_interval: a literal [1m] window against a 30s scrape interval only ever holds ~2 samples and rate() silently returns nothing once the scrape cadence changes (this broke a previous version of this dashboard, see PR #741).",
+          "id": 110,
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 59
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "create_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "delete_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "expand_volume",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "create_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "delete_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_volume",
+              "range": true,
+              "instant": false,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "list_volumes",
+              "range": true,
+              "instant": false,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "validate_volume_capabilities",
+              "range": true,
+              "instant": false,
+              "refId": "H"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Controller operation latency (p99)",
+          "description": "p99 latency per controller RPC computed via histogram_quantile over the *_duration_seconds histogram. Always uses $__rate_interval: a literal [1m] window against a 30s scrape interval only ever holds ~2 samples and rate() silently returns nothing once the scrape cadence changes (this broke a previous version of this dashboard, see PR #741).",
+          "id": 111,
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 59
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "create_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "delete_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "expand_volume",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "create_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "delete_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_volume",
+              "range": true,
+              "instant": false,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "list_volumes",
+              "range": true,
+              "instant": false,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "validate_volume_capabilities",
+              "range": true,
+              "instant": false,
+              "refId": "H"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Controller concurrency",
+      "id": 112,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 67
+      },
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Controller in-flight operations",
+          "description": "Current number of in-flight operations per semaphore (status=\"acquired\"), summed across pods. Since only the leader acquires these semaphores in practice, this is effectively the leader's own gauge value.",
+          "id": 113,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 68
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(weka_csi_controller_concurrency_create_volume{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "legendFormat": "create_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(weka_csi_controller_concurrency_delete_volume{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "legendFormat": "delete_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(weka_csi_controller_concurrency_expand_volume{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "legendFormat": "expand_volume",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(weka_csi_controller_concurrency_create_snapshot{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "legendFormat": "create_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(weka_csi_controller_concurrency_delete_snapshot{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "legendFormat": "delete_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "E"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Controller semaphore wait latency (p95)",
+          "description": "p95 time spent waiting to acquire each concurrency semaphore before the operation could start. Sustained growth here indicates the concurrency limit for that operation is undersized for the current load.",
+          "id": 114,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 68
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_create_volume_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "create_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_delete_volume_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "delete_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_expand_volume_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "expand_volume",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_create_snapshot_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "create_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_delete_snapshot_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "delete_snapshot",
+              "range": true,
+              "instant": false,
+              "refId": "E"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Controller semaphore acquire outcome rate",
+          "description": "Rate of semaphore acquisition attempts that succeeded vs. failed (e.g. context cancelled/timed out while waiting), per operation. A CounterVec with no failures observed exports no series, so an operation absent from 'failure' legend entries has simply never failed.",
+          "id": 115,
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 76
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "ops"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_create_volume{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "create_volume success",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_delete_volume{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "delete_volume success",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_expand_volume{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "expand_volume success",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_create_snapshot{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "create_snapshot success",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_delete_snapshot{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "delete_snapshot success",
+              "range": true,
+              "instant": false,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_create_volume{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "create_volume failure",
+              "range": true,
+              "instant": false,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_delete_volume{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "delete_volume failure",
+              "range": true,
+              "instant": false,
+              "refId": "G"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_expand_volume{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "expand_volume failure",
+              "range": true,
+              "instant": false,
+              "refId": "H"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_create_snapshot{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "create_snapshot failure",
+              "range": true,
+              "instant": false,
+              "refId": "I"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_controller_concurrency_delete_snapshot{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "delete_snapshot failure",
+              "range": true,
+              "instant": false,
+              "refId": "J"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Node operations",
+      "id": 116,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 84
+      },
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Node operation request rate",
+          "description": "Rate of each node RPC (all statuses combined) across the selected node pods. These are near-zero in steady state (measured: 6 requests on a node vs 176k on the controller over the same window) since nodes only see traffic on pod mount/unmount events, not on the ongoing polling the controller does.",
+          "id": 117,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 85
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_node_publish_volume_total{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "publish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_node_unpublish_volume_total{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "unpublish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_node_get_volume_stats_total{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "get_volume_stats",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_node_get_info_total{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "get_info",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Node operation error rate",
+          "description": "Rate of status=\"FAILURE\" results per node RPC. Expect this panel to be empty most of the time on a healthy, idle cluster: a CounterVec with no failures observed exports no series at all, not a zero value.",
+          "id": 118,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 85
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_node_publish_volume_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "publish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_node_unpublish_volume_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "unpublish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_node_get_volume_stats_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "get_volume_stats",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(weka_csi_node_get_info_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "get_info",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Node operation latency (p50)",
+          "description": "p50 latency per node RPC computed via histogram_quantile over the *_duration_seconds histogram, using $__rate_interval. With node request volume near-zero at steady state, these histograms may have too few samples for a stable quantile; treat isolated spikes with that in mind.",
+          "id": 119,
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 93
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "publish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "unpublish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_volume_stats",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_info",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Node operation latency (p95)",
+          "description": "p95 latency per node RPC computed via histogram_quantile over the *_duration_seconds histogram, using $__rate_interval. With node request volume near-zero at steady state, these histograms may have too few samples for a stable quantile; treat isolated spikes with that in mind.",
+          "id": 120,
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 93
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "publish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "unpublish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_volume_stats",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_info",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Node operation latency (p99)",
+          "description": "p99 latency per node RPC computed via histogram_quantile over the *_duration_seconds histogram, using $__rate_interval. With node request volume near-zero at steady state, these histograms may have too few samples for a stable quantile; treat isolated spikes with that in mind.",
+          "id": 121,
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 93
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "publish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "unpublish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_volume_stats",
+              "range": true,
+              "instant": false,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "get_info",
+              "range": true,
+              "instant": false,
+              "refId": "D"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Node concurrency",
+      "id": 122,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 101
+      },
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Node in-flight operations",
+          "description": "Current number of in-flight NodePublishVolume/NodeUnpublishVolume calls per node (status=\"acquired\"), summed across the selected node pods.",
+          "id": 123,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 102
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(weka_csi_node_concurrency_node_publish_volume{status=\"acquired\",pod=~\"$node_pod\"})",
+              "legendFormat": "node_publish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum(weka_csi_node_concurrency_node_unpublish_volume{status=\"acquired\",pod=~\"$node_pod\"})",
+              "legendFormat": "node_unpublish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "Node semaphore wait latency (p95)",
+          "description": "p95 time a NodePublishVolume/NodeUnpublishVolume call spent waiting for its concurrency semaphore. With near-zero node traffic at steady state, expect sparse or empty data outside of bulk pod scheduling events.",
+          "id": 124,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 102
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_concurrency_node_publish_volume_wait_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "node_publish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_concurrency_node_unpublish_volume_wait_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "node_unpublish_volume",
+              "range": true,
+              "instant": false,
+              "refId": "B"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "WEKA API",
+      "id": 125,
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 110
+      },
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "WEKA API request rate by URL (controller)",
+          "description": "Rate of WEKA REST API calls issued by controller pods, by URL template. This is the dominant source of WEKA API traffic from the CSI driver.",
+          "id": 126,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 111
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (url) (rate(weka_csi_api_request_count{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "{{url}}",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "WEKA API request rate by URL (node)",
+          "description": "Rate of WEKA REST API calls issued by node pods, by URL template. Expect this to be much lower than the controller panel; nodes only call the WEKA API incidentally (e.g. during mount/stat operations).",
+          "id": 127,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 111
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (url) (rate(weka_csi_api_request_count{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "{{url}}",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "WEKA API request latency by URL, p95 (controller)",
+          "description": "p95 latency of WEKA REST API calls from controller pods, by URL template, via histogram_quantile over weka_csi_api_request_duration_seconds (buckets extend to 300s to capture slow long-poll/bulk-quota style calls).",
+          "id": 128,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 119
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le, url) (rate(weka_csi_api_request_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "legendFormat": "{{url}}",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "WEKA API request latency by URL, p95 (node)",
+          "description": "p95 latency of WEKA REST API calls from node pods, by URL template. Sparse node traffic can make this quantile noisy or absent for long stretches.",
+          "id": 129,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 119
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum by (le, url) (rate(weka_csi_api_request_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "legendFormat": "{{url}}",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "WEKA API error rate by URL (controller)",
+          "description": "Rate of status=\"FAILURE\" WEKA API responses from controller pods, by URL template. A URL missing from the legend has never failed (a CounterVec with no observed failures exports no series at all).",
+          "id": 130,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 127
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (url) (rate(weka_csi_api_request_count{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "legendFormat": "{{url}}",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "type": "timeseries",
+          "title": "WEKA API error rate by URL (node)",
+          "description": "Rate of status=\"FAILURE\" WEKA API responses from node pods, by URL template.",
+          "id": 131,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 127
+          },
+          "pluginVersion": "12.0.2",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#0ca30c"
+                  },
+                  {
+                    "color": "#d03b3b",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps"
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "displayMode": "table",
+              "placement": "right",
+              "showLegend": true,
+              "sortBy": "Last *",
+              "sortDesc": true,
+              "width": 350
+            },
+            "tooltip": {
+              "hideZeros": false,
+              "mode": "multi",
+              "sort": "desc",
+              "maxHeight": 600
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "editorMode": "code",
+              "expr": "sum by (url) (rate(weka_csi_api_request_count{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "legendFormat": "{{url}}",
+              "range": true,
+              "instant": false,
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 41,
+  "tags": [
+    "weka",
+    "csi",
+    "plugin-health"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(weka_csi_controller_create_volume_total,pod)",
+        "label": "Controller pod",
+        "name": "controller_pod",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(weka_csi_controller_create_volume_total,pod)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery-controller_pod"
+        },
+        "refresh": 2,
+        "regex": "",
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "sort": 1,
+        "description": "Controller pods, derived from a metric only the controller exports. Defaults to All: controller operation metrics only move on the elected leader, so pinning a single (possibly standby) pod can render every controller panel empty, and the selection would otherwise break on every rollout."
+      },
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(weka_csi_node_publish_volume_total,pod)",
+        "label": "Node pod",
+        "name": "node_pod",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(weka_csi_node_publish_volume_total,pod)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery-node_pod"
+        },
+        "refresh": 2,
+        "regex": "",
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "sort": 1,
+        "description": "Node pods, derived from a metric only the node service exports. A single node pod is not representative of the DaemonSet, so this defaults to All across every node in the cluster. Note node-side metrics are near-zero in steady state (measured: 6 requests on a node vs 176k on the controller), so these panels legitimately look sparse."
+      },
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(kube_deployment_spec_replicas{deployment=~\".*csi.*controller.*\"}, namespace)",
+        "label": "Namespace",
+        "name": "namespace",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(kube_deployment_spec_replicas{deployment=~\".*csi.*controller.*\"}, namespace)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery-namespace"
+        },
+        "refresh": 2,
+        "regex": "",
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "sort": 1,
+        "description": "Namespace the CSI plugin is installed into, discovered from kube-state-metrics rather than hardcoded, so this dashboard works under any Helm release name/namespace. Defaults to All: on a normal install exactly one namespace matches, so All is equivalent to selecting it, but doesn't break if the controller and node-server ever end up in different namespaces."
+      },
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(kube_deployment_spec_replicas{namespace=~\"$namespace\",deployment=~\".*csi.*controller.*\"}, deployment)",
+        "label": "Controller Deployment",
+        "name": "controller_deployment",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(kube_deployment_spec_replicas{namespace=~\"$namespace\",deployment=~\".*csi.*controller.*\"}, deployment)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery-controller_deployment"
+        },
+        "refresh": 2,
+        "regex": "",
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "sort": 1,
+        "description": "Name of the controller Deployment, matched by a '.*controller.*' regex rather than hardcoded to 'csi-wekafs-controller' so a customer's own release name (e.g. 'myrelease-csi-wekafs-controller') still matches. Defaults to All for the same reason as $namespace."
+      },
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(kube_daemonset_status_desired_number_scheduled{namespace=~\"$namespace\",daemonset=~\".*csi.*node.*\"}, daemonset)",
+        "label": "Node DaemonSet",
+        "name": "node_daemonset",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(kube_daemonset_status_desired_number_scheduled{namespace=~\"$namespace\",daemonset=~\".*csi.*node.*\"}, daemonset)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery-node_daemonset"
+        },
+        "refresh": 2,
+        "regex": "",
+        "type": "query",
+        "multi": true,
+        "includeAll": true,
+        "sort": 1,
+        "description": "Name of the node-server DaemonSet, matched by a '.*node.*' regex rather than hardcoded to 'csi-wekafs-node' so a customer's own release name still matches. Defaults to All for the same reason as $namespace."
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "WEKA CSI plugin health",
+  "uid": "weka-csi-plugin-health",
+  "version": 1,
+  "weekStart": ""
+}
