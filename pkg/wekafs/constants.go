@@ -186,6 +186,30 @@ const (
 
 	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
 
+	// Values of the "condition" label on weka_csi_volume_health_conditions. Stable strings: a
+	// dashboard or alert selects on them, so renaming one silently breaks whatever selects it.
+	volumeConditionNoApiClient   = "no_api_client"
+	volumeConditionNoQuota       = "no_quota"
+	volumeConditionQuotaMismatch = "quota_mismatch"
+	volumeConditionUnavailable   = "legacy_volume"
+	// The causes that are always abnormal - they have no setting, because a volume whose filesystem
+	// or directory is gone is broken however you configure the driver. Named separately because the
+	// fix differs: a missing directory may be restorable from a snapshot, a missing filesystem is
+	// not, and a filesystem mid-removal is someone else's deletion still in progress.
+	volumeConditionFilesystemNotFound = "filesystem_not_found"
+	volumeConditionFilesystemRemoving = "filesystem_removing"
+	volumeConditionDirectoryNotFound  = "directory_not_found"
+	volumeConditionSnapshotNotFound   = "snapshot_not_found"
+
+	// Categories group conditions by what they cost, because the response differs completely.
+	// corrupt means the volume's data is gone or going - nothing the driver can repair, and the
+	// workload using it is already broken. degraded means the volume works and its data is intact,
+	// but the driver cannot enforce or manage it - capacity is unenforced, or credentials are
+	// missing. unknown is an abnormal volume whose cause was not recorded.
+	volumeCategoryCorrupt  = "corrupt"
+	volumeCategoryDegraded = "degraded"
+	volumeCategoryUnknown  = "unknown"
+
 	// The conditions below are surfaced to whoever can read events in the volume's namespace, which
 	// is not necessarily whoever administers the Weka cluster. They deliberately carry no filesystem
 	// name and no path inside the filesystem: a PersistentVolume is cluster-scoped and a namespace
@@ -195,6 +219,7 @@ const (
 	volumeFilesystemMissingMessage  = "the Weka filesystem backing this volume no longer exists"
 	volumeFilesystemRemovingMessage = "the Weka filesystem backing this volume is being removed"
 	volumePathMissingMessage        = "the volume's directory no longer exists on the Weka cluster"
+	volumeSnapshotMissingMessage    = "the Weka snapshot this volume is based on no longer exists"
 	// volumeNoQuotaMessage is reported for a volume that exists but carries no quota. It is not an
 	// abnormal condition - the volume works - but nothing enforces its capacity, so the condition
 	// says so rather than calling it plainly healthy.

@@ -59,13 +59,92 @@ type VolumeHealth struct {
 	// InodeId is the inode the volume's path resolved to, and the key a quota is created against.
 	// Carried so a caller acting on QuotaMissing does not have to resolve the path a second time.
 	InodeId uint64
+	// NoApiClient records that no Weka API credentials could be resolved for the volume, so nothing
+	// below this point was attempted. Kept as a fact of its own because it is the one condition that
+	// stops the probe before it can establish anything else - Capacity, QuotaMissing and the rest are
+	// all unknown rather than false.
+	NoApiClient bool
+	// Condition names the specific cause when the volume is abnormal for a reason that has no
+	// setting - its filesystem or directory is gone. Without it every such volume reports the same
+	// generic condition, which is the difference between "restore the directory" and "the filesystem
+	// is gone, this volume is not coming back".
+	Condition string
+}
+
+// allVolumeConditions is every condition value the driver can report. The per-sweep tally is set for
+// each of them, including the ones nobody has, so a dashboard tile reads 0 rather than "no data" -
+// which is indistinguishable from the driver not reporting at all.
+var allVolumeConditions = []string{
+	volumeConditionNoApiClient,
+	volumeConditionNoQuota,
+	volumeConditionQuotaMismatch,
+	volumeConditionDirectoryNotFound,
+	volumeConditionSnapshotNotFound,
+	volumeConditionFilesystemNotFound,
+	volumeConditionFilesystemRemoving,
+	volumeConditionUnavailable,
+}
+
+// volumeConditionCategories maps each condition to what it costs. Kept as one table rather than
+// spread across the call sites, so a condition added without a category is a compile-time gap in one
+// place rather than a series that quietly reports no category at all.
+var volumeConditionCategories = map[string]string{
+	volumeConditionDirectoryNotFound:  volumeCategoryCorrupt,
+	volumeConditionSnapshotNotFound:   volumeCategoryCorrupt,
+	volumeConditionFilesystemNotFound: volumeCategoryCorrupt,
+	volumeConditionFilesystemRemoving: volumeCategoryCorrupt,
+	volumeConditionNoQuota:            volumeCategoryDegraded,
+	volumeConditionQuotaMismatch:      volumeCategoryDegraded,
+	volumeConditionNoApiClient:        volumeCategoryDegraded,
+	volumeConditionUnavailable:        volumeCategoryUnknown,
+}
+
+// volumeConditionCategory returns the category for a condition, or unknown for one with no mapping -
+// which is a gap in the table above rather than a property of the volume, and is worth surfacing
+// rather than labelling blank.
+func volumeConditionCategory(condition string) string {
+	if category, ok := volumeConditionCategories[condition]; ok {
+		return category
+	}
+	return volumeCategoryUnknown
+}
+
+// Conditions names every condition this probe found, for the weka_csi_volume_health_conditions
+// series. Empty for a healthy volume.
+//
+// These are reported regardless of the reportAs...Abnormal settings. Those settings decide whether a
+// condition reaches a namespace user as a Kubernetes event; this is read by whoever runs the driver,
+// where hiding a condition only makes the affected volumes harder to find.
+func (h *VolumeHealth) Conditions() []string {
+	if h == nil {
+		return nil
+	}
+	var conditions []string
+	if h.NoApiClient {
+		conditions = append(conditions, volumeConditionNoApiClient)
+	}
+	if h.QuotaMissing {
+		conditions = append(conditions, volumeConditionNoQuota)
+	}
+	if h.QuotaMismatch {
+		conditions = append(conditions, volumeConditionQuotaMismatch)
+	}
+	// A cause with no setting - filesystem or directory gone - names itself. The fallback covers an
+	// abnormal volume whose cause was not recorded, which in practice is a volume the driver could
+	// not inspect properly: an API-unbound legacy volume, or a gap in this function.
+	if h.Condition != "" {
+		conditions = append(conditions, h.Condition)
+	} else if h.Abnormal && len(conditions) == 0 {
+		conditions = append(conditions, volumeConditionUnavailable)
+	}
+	return conditions
 }
 
 // abnormalVolumeHealth builds an abnormal condition. The message reaches a Kubernetes event, so it
 // takes a fixed string rather than a format: identifiers belong in the log line at the call site,
 // not in something a namespace user reads.
-func abnormalVolumeHealth(message string) *VolumeHealth {
-	return &VolumeHealth{Abnormal: true, Message: message}
+func abnormalVolumeHealth(condition, message string) *VolumeHealth {
+	return &VolumeHealth{Abnormal: true, Message: message, Condition: condition}
 }
 
 // ProbeHealth inspects the volume using the Weka REST API only, never mounting the filesystem,
@@ -94,11 +173,11 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 	}
 	if fsObj == nil {
 		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Filesystem backing the volume does not exist on the Weka cluster")
-		return abnormalVolumeHealth(volumeFilesystemMissingMessage), nil
+		return abnormalVolumeHealth(volumeConditionFilesystemNotFound, volumeFilesystemMissingMessage), nil
 	}
 	if fsObj.IsRemoving {
 		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Filesystem backing the volume is being removed")
-		return abnormalVolumeHealth(volumeFilesystemRemovingMessage), nil
+		return abnormalVolumeHealth(volumeConditionFilesystemRemoving, volumeFilesystemRemovingMessage), nil
 	}
 
 	// Every volume type is a path inside the filesystem - the filesystem root for filesystem-backed
@@ -113,9 +192,22 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 	inodeId, err := v.apiClient.ResolvePathToInode(ctx, fsObj, relativePath)
 	if err != nil {
 		if errors.Is(err, apiclient.ObjectNotFoundError) {
+			// A snapshot-backed volume resolves through its snapshot's access point, so a snapshot
+			// that has been deleted fails here exactly like a deleted directory. Reporting both as a
+			// missing directory sends an operator looking in the wrong place: the directory is fine,
+			// the snapshot it lived in is gone. Only asked on the failure path, so a healthy volume
+			// still costs one resolve.
+			if v.isOnSnapshot() {
+				snapObj, snapErr := v.getSnapshotObj(ctx, true)
+				if snapErr == nil && snapObj == nil {
+					logger.Warn().Str("filesystem", v.FilesystemName).Str("snapshot", v.SnapshotName).
+						Msg("Snapshot backing the volume does not exist on the Weka cluster")
+					return abnormalVolumeHealth(volumeConditionSnapshotNotFound, volumeSnapshotMissingMessage), nil
+				}
+			}
 			logger.Warn().Str("filesystem", v.FilesystemName).Str("path", relativePath).
 				Msg("Volume directory does not exist on the Weka cluster")
-			return abnormalVolumeHealth(volumePathMissingMessage), nil
+			return abnormalVolumeHealth(volumeConditionDirectoryNotFound, volumePathMissingMessage), nil
 		}
 		return nil, err
 	}
@@ -180,7 +272,7 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 		return nil, err
 	}
 
-	volume, condition, _, _, err := cs.describeVolume(ctx, pv, nil)
+	volume, condition, _, _, _, err := cs.describeVolume(ctx, pv, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -191,26 +283,41 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 	}, nil
 }
 
+// driverName is the CSI driver name for metric labels, tolerating an unset driver reference. Every
+// running server has one; a server constructed directly, as tests do, need not, and a metric label
+// is not worth a panic on a path that is otherwise reachable without a driver.
+func (cs *ControllerServer) driverName() string {
+	if d := cs.getConfig().GetDriver(); d != nil {
+		return d.name
+	}
+	return ""
+}
+
 // describeVolume resolves a PersistentVolume into the capacity and condition reported by both
-// ControllerGetVolume and ListVolumes. A nil condition with a nil error means the condition could
-// not be established, which callers must report as unknown rather than as abnormal.
-// The filesystems cache may be nil, in which case every lookup goes to the Weka API.
-// describeVolume probes one PersistentVolume and reports what it found.
+// ControllerGetVolume and ListVolumes, plus the weka_csi_volume_health_status label values for the
+// volume (see csiVolumeLabelValues) - built here, rather than by the caller, because building them
+// needs the API client and *Volume this function already resolves at the cost of a Weka API call
+// apiece. labels is nil whenever this never got as far as resolving an API client, in which case the
+// caller has no way to label a series for the volume either.
 //
 // It also returns the constructed Volume and the raw health result, which are nil whenever the probe
 // could not get that far. The reconciler needs both to act on the volume - rebuilding them there
 // would repeat the API calls this function has already made.
-func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (*csi.Volume, *csi.VolumeCondition, *Volume, *VolumeHealth, error) {
+//
+// A nil condition with a nil error means the condition could not be established, which callers must
+// report as unknown rather than as abnormal. The filesystems cache may be nil, in which case every
+// lookup goes to the Weka API.
+func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (volume *csi.Volume, condition *csi.VolumeCondition, vol *Volume, health *VolumeHealth, labels []string, err error) {
 	volumeID := pv.Spec.CSI.VolumeHandle
 	logger := log.Ctx(ctx).With().Str("volume_id", volumeID).Logger()
 
 	// The PersistentVolume holds the requested size, which stands in whenever the backend cannot
 	// supply one of its own.
-	volume := &csi.Volume{VolumeId: volumeID, CapacityBytes: pvCapacityBytes(pv)}
+	volume = &csi.Volume{VolumeId: volumeID, CapacityBytes: pvCapacityBytes(pv)}
 
 	client, err := cs.apiClientFromPersistentVolume(ctx, pv)
 	if err != nil {
-		return volume, nil, nil, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
+		return volume, nil, nil, nil, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
 	}
 	if client == nil {
 		// Unknown by default, and deliberately: without credentials the driver cannot reach the
@@ -220,30 +327,44 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 		//
 		// It is still worth being able to surface: a volume the driver cannot see is one it cannot
 		// enforce capacity on, expand, or report on, so an operator may well want it raised.
+		//
+		// The fact is recorded either way. Whether to raise it as a Kubernetes event is the
+		// operator's choice, but a metric is read by whoever runs the driver rather than by a
+		// namespace user, so gating it would hide the volume from the only people who can act on it.
+		//
+		// Labelled from the PersistentVolume alone, leaving blank the dimensions that need an API
+		// client - cluster, filesystem, volume type, organization. Blank is honest here: nobody knows
+		// which cluster this volume is on, which is the problem being reported. pv_name still names
+		// it, which is what makes the series actionable.
+		noClientHealth := &VolumeHealth{Message: volumeNoApiClientMessage, NoApiClient: true}
+		noClientLabels := csiVolumeLabelValues(cs.driverName(), pv, "", "", "", "")
 		if cs.getConfig().reportNoApiClientAsAbnormal {
 			logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as abnormal")
-			return volume, &csi.VolumeCondition{Abnormal: true, Message: volumeNoApiClientMessage}, nil, nil, nil
+			noClientHealth.Abnormal = true
+			return volume, &csi.VolumeCondition{Abnormal: true, Message: volumeNoApiClientMessage}, nil, noClientHealth, noClientLabels, nil
 		}
 		logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as unknown")
-		return volume, nil, nil, nil, nil
+		return volume, nil, nil, noClientHealth, noClientLabels, nil
 	}
 
-	vol, err := NewVolumeFromId(ctx, volumeID, client, cs)
+	vol, err = NewVolumeFromId(ctx, volumeID, client, cs)
 	if err != nil {
-		return volume, nil, nil, nil, err
+		return volume, nil, nil, nil, nil, err
 	}
+	labels = csiVolumeLabelValues(cs.driverName(), pv,
+		client.ClusterGuid.String(), vol.FilesystemName, string(vol.GetBackingType()), organizationLabel(client))
 	// Seed the volume with an already-resolved filesystem, and publish whatever it resolved so the
 	// next volume on the same filesystem can skip the lookup.
 	vol.fileSystemObject = filesystems.get(vol.FilesystemName)
 	defer func() { filesystems.put(vol.FilesystemName, vol.fileSystemObject) }()
 
-	health, err := vol.ProbeHealth(ctx)
+	health, err = vol.ProbeHealth(ctx)
 	if err != nil {
 		if errors.Is(err, ErrVolumeHealthUndetermined) {
 			logger.Warn().Err(err).Msg("Reporting volume condition as unknown")
-			return volume, nil, vol, nil, nil
+			return volume, nil, vol, nil, labels, nil
 		}
-		return volume, nil, vol, nil, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
+		return volume, nil, vol, nil, labels, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
 	}
 
 	if health.Capacity > 0 {
@@ -261,18 +382,25 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 	//
 	// Skipped when the volume has no quota at all: that is a different condition with its own
 	// message, and 0 is not a mismatch.
+	//
+	// Detected unconditionally, and only *reported* on request. The comparison is free - both numbers
+	// are already in hand - and the flag decides whether a namespace user gets a Kubernetes event
+	// about it, not whether the driver is allowed to notice. Deciding it here once meant a mismatch
+	// was invisible to metrics too, so nobody could see how many volumes were affected before turning
+	// the events on.
 	declared := pvCapacityBytes(pv)
-	if cs.getConfig().reportQuotaMismatchAsAbnormal && !health.QuotaMissing &&
-		health.Capacity > 0 && declared > 0 && health.Capacity != declared {
+	if !health.QuotaMissing && health.Capacity > 0 && declared > 0 && health.Capacity != declared {
 		health.QuotaMismatch = true
-		health.Abnormal = true
-		health.Message = quotaMismatchMessage(health.Capacity, declared)
+		if cs.getConfig().reportQuotaMismatchAsAbnormal {
+			health.Abnormal = true
+			health.Message = quotaMismatchMessage(health.Capacity, declared)
+		}
 	}
 
 	if health.Abnormal {
 		logger.Warn().Str("condition", health.Message).Msg("Volume is abnormal")
 	}
-	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, vol, health, nil
+	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, vol, health, labels, nil
 }
 
 func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {

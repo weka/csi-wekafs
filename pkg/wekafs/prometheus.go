@@ -2,6 +2,8 @@ package wekafs
 
 import (
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 var (
@@ -21,7 +23,21 @@ var (
 	// removing a label breaks every dashboard, recording rule and alert written against them, so it
 	// is fixed here in its final shape before the first release that exports any of these series.
 	LabelsForCsiVolumes = []string{"csi_driver_name", "pv_name", "cluster_guid", "storage_class_name", "filesystem_name", "volume_type", "organization", "pvc_name", "pvc_namespace", "pvc_uid", "secret_name"}
+
+	// HistogramDurationBuckets is the bucket set every duration histogram in the package shares, so
+	// two durations can be compared without first checking they were bucketed the same way.
+	HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000}
 )
+
+// organizationLabel names the Weka tenant a volume belongs to. Credentials leave Organization empty
+// to mean the root organization, so that is spelled out rather than exported as a blank label, which
+// would be indistinguishable from "not known" in a query.
+func organizationLabel(client *apiclient.ApiClient) string {
+	if client == nil || client.Credentials.Organization == "" {
+		return apiclient.RootOrganizationName
+	}
+	return client.Credentials.Organization
+}
 
 // csiVolumeLabelValues builds the LabelsForCsiVolumes label values for one PersistentVolume, in
 // order. It is the one place that convention is spelled out, so every caller that identifies a

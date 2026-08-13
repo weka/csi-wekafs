@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -42,6 +43,15 @@ type volumeConditionEntry struct {
 	message  string
 	capacity int64
 	probedAt time.Time
+	// labels are this volume's weka_csi_volume_health_status label values (see
+	// csiVolumeLabelValues), or nil if a probe has never resolved an API client for it. Carrying
+	// these means retainOnly can delete the metric series for a volume that disappears without
+	// needing the PersistentVolume to still exist to rebuild them.
+	labels []string
+	// conditions are the condition label values last reported for this volume (see
+	// VolumeHealth.Conditions). Kept so a condition that clears can have its series deleted, rather
+	// than sitting at 1 forever once the volume recovers.
+	conditions []string
 }
 
 // volumeConditionCache holds the reconciler's most recent result per volume handle. ListVolumes
@@ -55,34 +65,154 @@ func newVolumeConditionCache() *volumeConditionCache {
 	return &volumeConditionCache{entries: make(map[string]volumeConditionEntry)}
 }
 
+// stale reports whether this entry's probe result is too old to serve, or to report the volume's
+// live status as anything but unknown.
+func (e volumeConditionEntry) stale() bool {
+	return time.Since(e.probedAt) > volumeHealthMaxAge
+}
+
 // lookup returns the entry for a volume handle if one exists and is still fresh enough to serve.
 func (c *volumeConditionCache) lookup(handle string) (volumeConditionEntry, bool) {
 	c.RLock()
 	defer c.RUnlock()
 	entry, ok := c.entries[handle]
-	if !ok || time.Since(entry.probedAt) > volumeHealthMaxAge {
+	if !ok || entry.stale() {
 		return volumeConditionEntry{}, false
 	}
 	return entry, true
 }
 
-func (c *volumeConditionCache) store(handle string, entry volumeConditionEntry) {
+// store records a probe result. If entry carries no labels - a probe that never resolved an API
+// client, e.g. a Secret that was temporarily unreadable - the previous entry's labels are kept
+// rather than cleared, since it is the label identity of the volume's metric series, and it is only
+// ever cleared for real by retainOnly, once the volume itself is gone. Without this, a single
+// transient failure would strand the series unlabeled until the volume's next successful probe.
+// It returns the conditions this volume carried before and no longer does, so the caller can delete
+// those series. A condition gauge that is only ever set would stay at 1 after the volume recovered.
+func (c *volumeConditionCache) store(handle string, entry volumeConditionEntry) (cleared []string) {
 	c.Lock()
 	defer c.Unlock()
+	previous, existed := c.entries[handle]
+	if entry.labels == nil && existed {
+		entry.labels = previous.labels
+	}
+	if existed {
+		for _, was := range previous.conditions {
+			if !slices.Contains(entry.conditions, was) {
+				cleared = append(cleared, was)
+			}
+		}
+	}
 	c.entries[handle] = entry
+	return cleared
+}
+
+// forget removes a volume's entry immediately, independent of retainOnly's sweep-driven eviction.
+// DeleteVolume calls this so a deleted volume's weka_csi_volume_health_status series doesn't have to
+// wait for the next reconciler sweep to be pruned. Returns the entry's labels so the caller can
+// delete the metric series, or nil if the handle was never cached or was cached without labels (a
+// probe that never resolved an API client for it, see volumeConditionEntry.labels).
+func (c *volumeConditionCache) forget(handle string) []string {
+	c.Lock()
+	defer c.Unlock()
+	entry, ok := c.entries[handle]
+	delete(c.entries, handle)
+	if !ok {
+		return nil
+	}
+	return entry.labels
+}
+
+// setVolumeConditionSeries and deleteVolumeConditionSeries are the only places the condition label is
+// appended to a volume's label values, so the order stays in step with the metric's declaration -
+// LabelsForCsiVolumes followed by "condition". Both no-op on a volume with no labels, which is a
+// volume whose credentials never resolved and so has no series to key on.
+func setVolumeConditionSeries(labels []string, conditions []string) {
+	for _, condition := range conditions {
+		if values := volumeConditionLabelValues(labels, condition); values != nil {
+			controllerMetrics.VolumeHealth.Conditions.WithLabelValues(values...).Set(1)
+		}
+	}
+}
+
+func deleteVolumeConditionSeries(labels []string, conditions []string) {
+	for _, condition := range conditions {
+		if values := volumeConditionLabelValues(labels, condition); values != nil {
+			controllerMetrics.VolumeHealth.Conditions.DeleteLabelValues(values...)
+		}
+	}
+}
+
+// volumeConditionLabelValues builds the full label values for one condition series: the volume's
+// labels, the condition, and the category it belongs to.
+//
+// It copies rather than appending in place - labels is the slice held in the cache entry, and append
+// would write into its spare capacity, so two conditions on one volume would overwrite each other's
+// series key.
+func volumeConditionLabelValues(labels []string, condition string) []string {
+	if labels == nil {
+		return nil
+	}
+	values := make([]string, 0, len(labels)+2)
+	values = append(values, labels...)
+	return append(values, condition, volumeConditionCategory(condition))
+}
+
+// classifyVolumeHealth turns a probe outcome into the weka_csi_volume_health_status value. It is the
+// one place that decides what healthy/abnormal/unknown mean, so the per-sweep tally (computed from a
+// fresh probe's condition) and the per-volume gauge (re-derived from a cache entry, including its
+// staleness) can't drift apart into two different definitions.
+func classifyVolumeHealth(known, abnormal bool) float64 {
+	if !known {
+		return volumeHealthStatusUnknown
+	}
+	if abnormal {
+		return volumeHealthStatusAbnormal
+	}
+	return volumeHealthStatusHealthy
+}
+
+// volumeHealthStatusSample is one series' worth of weka_csi_volume_health_status to report: the
+// label values identify it, value is what to set it to.
+type volumeHealthStatusSample struct {
+	labels     []string
+	value      float64
+	conditions []string
+}
+
+// removedVolume is a volume that has gone away, and everything needed to delete its series.
+type removedVolume struct {
+	labels     []string
+	conditions []string
 }
 
 // retainOnly drops entries for volumes that no longer exist, so the cache tracks the fleet rather
-// than growing forever with deleted volumes.
-func (c *volumeConditionCache) retainOnly(handles map[string]struct{}) int {
+// than growing forever with deleted volumes, and in the same locked pass reports the current
+// weka_csi_volume_health_status sample for every volume that remains. Re-deriving every live
+// sample here - not only for the volumes a sweep actually probed - is what turns a volume stuck
+// failing probes into "unknown" once its last good result ages past volumeHealthMaxAge, instead of
+// leaving its gauge parked at a stale value forever. Doing both in one pass, rather than a second
+// full lock-and-scan after this one, matters at a fleet size in the tens of thousands.
+func (c *volumeConditionCache) retainOnly(handles map[string]struct{}) (remaining int, removed []removedVolume, live []volumeHealthStatusSample) {
 	c.Lock()
 	defer c.Unlock()
-	for handle := range c.entries {
-		if _, live := handles[handle]; !live {
+	for handle, entry := range c.entries {
+		if _, ok := handles[handle]; !ok {
+			if entry.labels != nil {
+				removed = append(removed, removedVolume{labels: entry.labels, conditions: entry.conditions})
+			}
 			delete(c.entries, handle)
+			continue
+		}
+		if entry.labels != nil {
+			live = append(live, volumeHealthStatusSample{
+				labels:     entry.labels,
+				value:      classifyVolumeHealth(entry.known && !entry.stale(), entry.abnormal),
+				conditions: entry.conditions,
+			})
 		}
 	}
-	return len(c.entries)
+	return len(c.entries), removed, live
 }
 
 // volumeHealthReconciler keeps volume conditions up to date in the background.
@@ -139,6 +269,8 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 	defer span.End()
 	logger := log.Ctx(ctx)
 
+	driverName := r.cs.driverName()
+
 	started := time.Now()
 	pvs, err := r.cs.listDriverPersistentVolumes(ctx, "")
 	if err != nil {
@@ -152,7 +284,10 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 	filesystems := newFilesystemCache()
 	live := make(map[string]struct{}, len(pvs))
 
-	var abnormal, unknown, failed, quotaMissing, quotaMismatch, backfilled, backfillSkipped int64
+	var healthy, abnormal, unknown, failed, backfilled, backfillSkipped int64
+	// Counted by condition name rather than one variable per condition, so a condition added later is
+	// tallied without touching this loop or the reporting below.
+	conditionCounts := map[string]int64{}
 	var counters sync.Mutex
 
 	var probes errgroup.Group
@@ -164,27 +299,53 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 			if ctx.Err() != nil {
 				return nil
 			}
-			volume, condition, vol, health, err := r.cs.describeVolume(ctx, pv, filesystems)
+			volume, condition, vol, health, labels, err := r.cs.describeVolume(ctx, pv, filesystems)
 
-			// Deliberately before the counters lock: this can issue Weka API calls, and holding the
+			// Deliberately outside the counters lock: this can issue Weka API calls, and holding the
 			// lock across them would serialise the whole sweep behind one volume.
 			created, backfillErr := r.backfillMissingQuota(ctx, vol, pv, health)
-
-			counters.Lock()
-			defer counters.Unlock()
 			if err != nil {
 				// Keep the previous entry rather than overwriting it with "unknown", so a transient
 				// API failure does not erase a condition that was good a moment ago. It ages out
 				// through volumeHealthMaxAge if the failure persists.
 				logger.Warn().Err(err).Str("volume_id", handle).Msg("Failed to probe volume health")
+				counters.Lock()
 				failed++
+				counters.Unlock()
 				return nil
 			}
-			if health != nil && health.QuotaMissing {
-				quotaMissing++
+
+			// Built without the counters lock held: none of it touches shared state, and computing it
+			// there would serialize this across every one of the volumeHealthProbeConcurrency
+			// goroutines for no reason.
+			entry := volumeConditionEntry{
+				capacity:   volume.CapacityBytes,
+				probedAt:   time.Now(),
+				labels:     labels,
+				conditions: health.Conditions(),
 			}
-			if health != nil && health.QuotaMismatch {
-				quotaMismatch++
+			known := condition != nil
+			isAbnormal := known && condition.Abnormal
+			if known {
+				entry.known = true
+				entry.abnormal = condition.Abnormal
+				entry.message = condition.Message
+			}
+
+			counters.Lock()
+			switch classifyVolumeHealth(known, isAbnormal) {
+			case volumeHealthStatusHealthy:
+				healthy++
+			case volumeHealthStatusAbnormal:
+				abnormal++
+			default:
+				unknown++
+			}
+			// The quota tallies are independent of the health status above: a volume with no quota is
+			// reported abnormal only when the driver is configured to, so it can be counted here while
+			// still classifying as healthy.
+			for _, condition := range entry.conditions {
+				conditionCounts[condition]++
 			}
 			switch {
 			case created:
@@ -192,36 +353,54 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 			case backfillErr != nil:
 				backfillSkipped++
 			}
+			counters.Unlock()
 
-			entry := volumeConditionEntry{capacity: volume.CapacityBytes, probedAt: time.Now()}
-			if condition != nil {
-				entry.known = true
-				entry.abnormal = condition.Abnormal
-				entry.message = condition.Message
-				if condition.Abnormal {
-					abnormal++
-				}
-			} else {
-				unknown++
-			}
-			r.cache.store(handle, entry)
+			cleared := r.cache.store(handle, entry)
+			deleteVolumeConditionSeries(entry.labels, cleared)
 			return nil
 		})
 	}
 	_ = probes.Wait()
 
-	cached := r.cache.retainOnly(live)
+	cached, removedLabels, liveStatuses := r.cache.retainOnly(live)
+	for _, gone := range removedLabels {
+		controllerMetrics.VolumeHealth.Status.DeleteLabelValues(gone.labels...)
+		deleteVolumeConditionSeries(gone.labels, gone.conditions)
+	}
+	for _, sample := range liveStatuses {
+		controllerMetrics.VolumeHealth.Status.WithLabelValues(sample.labels...).Set(sample.value)
+		setVolumeConditionSeries(sample.labels, sample.conditions)
+	}
+
+	duration := time.Since(started)
+	controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, "healthy").Set(float64(healthy))
+	controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, "abnormal").Set(float64(abnormal))
+	controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, "unknown").Set(float64(unknown))
+	controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, "failed").Set(float64(failed))
+	// Condition counts, reported whatever the reportAs...Abnormal settings are - the same reasoning
+	// as the per-volume conditions series. These overlap the statuses above rather than partitioning
+	// them: with the flags off a volume counted under no_quota is also counted as healthy.
+	for _, condition := range allVolumeConditions {
+		controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, condition).Set(float64(conditionCounts[condition]))
+	}
+	controllerMetrics.VolumeHealth.SweepDuration.WithLabelValues(driverName).Observe(duration.Seconds())
+	controllerMetrics.VolumeHealth.LastSweepTimestamp.WithLabelValues(driverName).Set(float64(time.Now().Unix()))
+
 	logger.Info().
 		Int("volumes", len(pvs)).
 		Int("cached", cached).
+		Int64("healthy", healthy).
 		Int64("abnormal", abnormal).
 		Int64("unknown", unknown).
 		Int64("failed", failed).
-		Int64("quotas_missing", quotaMissing).
-		Int64("quota_mismatches", quotaMismatch).
+		Int64("quotas_missing", conditionCounts[volumeConditionNoQuota]).
+		Int64("quota_mismatches", conditionCounts[volumeConditionQuotaMismatch]).
+		Int64("volumes_without_api_client", conditionCounts[volumeConditionNoApiClient]).
+		Int64("directories_missing", conditionCounts[volumeConditionDirectoryNotFound]).
+		Int64("filesystems_missing", conditionCounts[volumeConditionFilesystemNotFound]).
 		Int64("quotas_created", backfilled).
 		Int64("quotas_not_created", backfillSkipped).
-		Dur("duration", time.Since(started)).
+		Dur("duration", duration).
 		Msg("Volume health reconciliation completed")
 }
 

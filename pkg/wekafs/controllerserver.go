@@ -472,6 +472,29 @@ func (cs *ControllerServer) generateAccessibleTopology(topologyRequirements *csi
 	return result
 }
 
+// forgetVolumeHealthMetrics removes a deleted volume's weka_csi_volume_health_status series
+// immediately, rather than leaving it to the next reconciler sweep's retainOnly (which can lag by a
+// full volumeHealthReconcileInterval). conditionCache is nil unless volume health support is
+// advertised, so this is a no-op for the common case where nothing to remove was ever registered.
+//
+// There is a narrow, self-healing race here: a probe goroutine for this same handle that started
+// before the delete can still be in flight and call cache.store after this runs, resurrecting the
+// entry with stale labels. That window is bounded by one probe's API round trip, and the next sweep's
+// retainOnly rebuilds its "live" set from a fresh PV listing that no longer contains this volume, so
+// it prunes the resurrected entry again. That's worse than an immediate removal but far better than
+// always waiting for the next sweep, which is the status quo this is replacing.
+func (cs *ControllerServer) forgetVolumeHealthMetrics(ctx context.Context, handle string) {
+	if cs.conditionCache == nil {
+		return
+	}
+	labels := cs.conditionCache.forget(handle)
+	if labels == nil {
+		return
+	}
+	controllerMetrics.VolumeHealth.Status.DeleteLabelValues(labels...)
+	log.Ctx(ctx).Debug().Str("volume_id", handle).Msg("Removed volume health metric series for deleted volume")
+}
+
 func DeleteVolumeError(ctx context.Context, errorCode codes.Code, errorMessage string) (*csi.DeleteVolumeResponse, error) {
 	err := status.Error(errorCode, strings.ToLower(errorMessage))
 	log.Ctx(ctx).Err(err).CallerSkipFrame(1).Msg("Error deleting volume")
@@ -544,6 +567,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		result = "SUCCESS"
 		// Clean up pending reservation even if volume doesn't exist
 		cs.releaseCapacityReservation(volumeID)
+		cs.forgetVolumeHealthMetrics(ctx, volumeID)
 		return &csi.DeleteVolumeResponse{}, nil
 	}
 	// cleanup
@@ -556,6 +580,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	// Release capacity reservation after successful delete
 	cs.releaseCapacityReservation(volumeID)
+	cs.forgetVolumeHealthMetrics(ctx, volumeID)
 
 	result = "SUCCESS"
 	return &csi.DeleteVolumeResponse{}, nil
