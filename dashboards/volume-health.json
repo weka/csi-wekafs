@@ -747,6 +747,21 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "corrupt / snapshot_not_found"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#f2a33c"
+                }
+              }
+            ]
           }
         ]
       },
@@ -1931,6 +1946,10 @@
                       "legacy_volume": {
                         "color": "#8a8a8a",
                         "index": 5
+                      },
+                      "snapshot_not_found": {
+                        "color": "#f2a33c",
+                        "index": 6
                       }
                     }
                   }

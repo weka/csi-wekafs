@@ -50,6 +50,14 @@ func TestConditionsAreReportedIndependentlyOfAbnormal(t *testing.T) {
 			want:   []string{volumeConditionFilesystemRemoving},
 		},
 		{
+			// A snapshot-backed volume resolves through its snapshot, so a deleted snapshot fails the
+			// same lookup as a deleted directory. Reporting both the same way sends an operator to
+			// look at a directory that is perfectly fine.
+			name:   "snapshot gone",
+			health: abnormalVolumeHealth(volumeConditionSnapshotNotFound, volumeSnapshotMissingMessage),
+			want:   []string{volumeConditionSnapshotNotFound},
+		},
+		{
 			name:   "directory gone",
 			health: abnormalVolumeHealth(volumeConditionDirectoryNotFound, volumePathMissingMessage),
 			want:   []string{volumeConditionDirectoryNotFound},
@@ -140,7 +148,7 @@ func TestEveryConditionHasACategory(t *testing.T) {
 // group means the volume's data is gone, the other means it works but cannot be managed. Anything
 // that blurs those two makes an alert on "corrupt" either noisy or useless.
 func TestCategoriesSeparateDataLossFromEnforcement(t *testing.T) {
-	for _, c := range []string{volumeConditionDirectoryNotFound, volumeConditionFilesystemNotFound, volumeConditionFilesystemRemoving} {
+	for _, c := range []string{volumeConditionDirectoryNotFound, volumeConditionSnapshotNotFound, volumeConditionFilesystemNotFound, volumeConditionFilesystemRemoving} {
 		assert.Equal(t, volumeCategoryCorrupt, volumeConditionCategory(c), "%s means data is gone", c)
 	}
 	for _, c := range []string{volumeConditionNoQuota, volumeConditionQuotaMismatch, volumeConditionNoApiClient} {
