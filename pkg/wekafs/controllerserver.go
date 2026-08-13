@@ -83,22 +83,22 @@ func (cs *ControllerServer) getApiStore() *ApiStore {
 
 //goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) ControllerPublishVolume(c context.Context, request *csi.ControllerPublishVolumeRequest) (*csi.ControllerPublishVolumeResponse, error) {
-	panic("implement me")
+	return nil, status.Error(codes.Unimplemented, "ControllerPublishVolume is not supported: the driver does not advertise PUBLISH_UNPUBLISH_VOLUME")
 }
 
 //goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) ControllerUnpublishVolume(c context.Context, request *csi.ControllerUnpublishVolumeRequest) (*csi.ControllerUnpublishVolumeResponse, error) {
-	panic("implement me")
+	return nil, status.Error(codes.Unimplemented, "ControllerUnpublishVolume is not supported: the driver does not advertise PUBLISH_UNPUBLISH_VOLUME")
 }
 
 //goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) GetCapacity(c context.Context, request *csi.GetCapacityRequest) (*csi.GetCapacityResponse, error) {
-	panic("implement me")
+	return nil, status.Error(codes.Unimplemented, "GetCapacity is not supported: the driver does not advertise GET_CAPACITY")
 }
 
 //goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) ControllerModifyVolume(context.Context, *csi.ControllerModifyVolumeRequest) (*csi.ControllerModifyVolumeResponse, error) {
-	panic("implement me")
+	return nil, status.Error(codes.Unimplemented, "ControllerModifyVolume is not supported: the driver does not advertise MODIFY_VOLUME")
 }
 
 func NewControllerServer(nodeID string, api *ApiStore, mounter AnyMounter, config *DriverConfig, manager ctrl.Manager) *ControllerServer {
@@ -821,7 +821,7 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 
 //goland:noinspection GoUnusedParameter
 func (cs *ControllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
-	panic("Implement me")
+	return nil, status.Error(codes.Unimplemented, "ListSnapshots is not supported: the driver does not advertise LIST_SNAPSHOTS")
 }
 
 //goland:noinspection GoUnusedParameter
