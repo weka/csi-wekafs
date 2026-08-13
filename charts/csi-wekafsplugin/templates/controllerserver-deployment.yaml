@@ -242,6 +242,8 @@ spec:
             - "--v={{ .Values.logLevel | default 5 }}"
             - "--timeout=60s"
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--kube-api-qps={{ .Values.controller.kubeApiQps }}"
+            - "--kube-api-burst={{ .Values.controller.kubeApiBurst }}"
             {{- if .Values.metrics.enabled }}
             - "--http-endpoint=:{{ .Values.metrics.attacherPort | default 9095 }}"
             {{- end }}
@@ -282,6 +284,8 @@ spec:
             - "--timeout=60s"
             - "--prevent-volume-mode-conversion"
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--kube-api-qps={{ .Values.controller.kubeApiQps }}"
+            - "--kube-api-burst={{ .Values.controller.kubeApiBurst }}"
             - "--retry-interval-start=10s"
           {{- if .Values.metrics.enabled }}
             - "--http-endpoint=:{{ .Values.metrics.provisionerPort | default 9091 }}"
@@ -323,6 +327,8 @@ spec:
             - "--http-endpoint=:{{ .Values.metrics.resizerPort | default 9092 }}"
           {{- end }}
             - "--workers={{ .Values.controller.maxConcurrentRequests }}"
+            - "--kube-api-qps={{ .Values.controller.kubeApiQps }}"
+            - "--kube-api-burst={{ .Values.controller.kubeApiBurst }}"
             - "--retry-interval-start=10s"
           env:
             - name: ADDRESS
@@ -358,6 +364,8 @@ spec:
             - "--csi-address=$(ADDRESS)"
             - "--timeout=60s"
             - "--worker-threads={{ .Values.controller.maxConcurrentRequests }}"
+            - "--kube-api-qps={{ .Values.controller.kubeApiQps }}"
+            - "--kube-api-burst={{ .Values.controller.kubeApiBurst }}"
             - "--retry-interval-start=10s"
           {{- if .Values.metrics.enabled }}
             - "--http-endpoint=:{{ .Values.metrics.snapshotterPort | default 9093 }}"
@@ -405,6 +413,8 @@ spec:
                  Those paths read different flags, so set both from the same value. */}}
             - "--monitor-interval={{ .Values.controller.healthMonitor.monitorInterval }}"
             - "--list-volumes-interval={{ .Values.controller.healthMonitor.monitorInterval }}"
+            - "--kube-api-qps={{ .Values.controller.kubeApiQps }}"
+            - "--kube-api-burst={{ .Values.controller.kubeApiBurst }}"
           env:
             - name: ADDRESS
               value: unix:///csi/csi.sock
