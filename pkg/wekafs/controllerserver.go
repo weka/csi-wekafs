@@ -592,7 +592,20 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 			}
 		}
 
-		if err := volume.UpdateCapacity(ctx, nil, capacity); err != nil {
+		// The StorageClass parameters the volume was provisioned with win over whatever the quota
+		// currently looks like. They are persisted verbatim into the PersistentVolume's
+		// volumeAttributes, which is the only place to read them here: an expand request carries no
+		// volume context, and the lookup is served from the PV informer so it costs no API call.
+		//
+		// Only an explicit capacityEnforcement counts. Absent means the caller expressed no
+		// preference, and UpdateCapacity's nil then retains whatever the quota already has - so the
+		// default of hard cannot silently convert an existing soft quota.
+		enforceCapacity, err := cs.quotaEnforcementForExpand(ctx, volume, req.GetVolumeId())
+		if err != nil {
+			return ExpandVolumeError(ctx, codes.InvalidArgument, err.Error())
+		}
+
+		if err := volume.UpdateCapacity(ctx, enforceCapacity, capacity); err != nil {
 			return ExpandVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not update volume: %s", err.Error()))
 		}
 	}
@@ -852,4 +865,44 @@ func getControllerServiceCapabilities(cl []csi.ControllerServiceCapability_RPC_T
 	}
 
 	return csc
+}
+
+// quotaEnforcementForExpand reports the enforcement an expanded volume's quota should carry,
+// according to the StorageClass parameters persisted on its PersistentVolume.
+//
+// A nil result means the parameters say nothing about it, and the existing quota's enforcement
+// should be retained. capacityEnforcement is what decides: when it is set, the whole quota spec
+// comes from the parameters, grace period included - an absent quotaGracePeriod alongside an
+// explicit capacityEnforcement is a real value, the documented default of "advisory only", not a
+// gap to fill from the existing quota.
+//
+// A PersistentVolume that cannot be read is not an error: expansion should not fail because the
+// Kubernetes client is briefly unavailable, so the existing quota is retained instead.
+func (cs *ControllerServer) quotaEnforcementForExpand(ctx context.Context, volume *Volume, volumeID string) (*bool, error) {
+	logger := log.Ctx(ctx).With().Str("volume_id", volumeID).Logger()
+
+	pv, err := cs.getPersistentVolumeByHandle(ctx, volumeID)
+	if err != nil || pv.Spec.CSI == nil {
+		logger.Debug().Err(err).Msg("Could not read volume attributes, retaining the existing quota enforcement")
+		return nil, nil
+	}
+	attrs := pv.Spec.CSI.VolumeAttributes
+	if _, ok := attrs[capacityEnforcementParam]; !ok {
+		logger.Debug().Msg("No capacityEnforcement in volume attributes, retaining the existing quota enforcement")
+		return nil, nil
+	}
+
+	enforceCapacity, err := getCapacityEnforcementParam(attrs)
+	if err != nil {
+		return nil, err
+	}
+	graceSeconds, err := getQuotaGracePeriodParam(attrs)
+	if err != nil {
+		return nil, err
+	}
+	volume.quotaGracePeriodSeconds = graceSeconds
+
+	logger.Debug().Bool("enforce_capacity", enforceCapacity).Uint64("grace_seconds", graceSeconds).
+		Msg("Taking quota enforcement from the volume attributes")
+	return &enforceCapacity, nil
 }

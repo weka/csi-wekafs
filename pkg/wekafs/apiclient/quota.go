@@ -30,13 +30,25 @@ const (
 	MaxQuotaSize        uint64    = 9223372036854775807
 )
 
+// quotaEstablishTimeout bounds the wait for the cluster to acknowledge a newly created quota.
+//
+// This is a bound on the cluster *accepting* the quota, not on it finishing the QUOTA_COLORING walk
+// - see IsQuotaEstablished. Acceptance is near-immediate, so this only has to be long enough to
+// outlast a management node being briefly busy. The request context still wins when it expires
+// sooner, which is the usual case for a CSI RPC.
+const quotaEstablishTimeout = 2 * time.Minute
+
 type Quota struct {
 	FilesystemUid  uuid.UUID `json:"-"`
 	InodeId        uint64    `json:"inode_id,omitempty"`
 	TotalBytes     uint64    `json:"total_bytes,omitempty"`
 	HardLimitBytes uint64    `json:"hard_limit_bytes,omitempty"`
 	SoftLimitBytes uint64    `json:"soft_limit_bytes,omitempty"`
-	Status         string    `json:"status,omitempty"`
+	// GraceSeconds is how long a soft-limit breach is tolerated before the soft limit starts
+	// behaving as a hard one. Only meaningful for a soft quota; the cluster reports it as null for a
+	// hard one, which unmarshals as 0 rather than failing.
+	GraceSeconds uint64 `json:"grace_seconds,omitempty"`
+	Status       string `json:"status,omitempty"`
 }
 
 func (q *Quota) String() string {
@@ -217,16 +229,18 @@ func (qd *QuotaDeleteRequest) String() string {
 	return fmt.Sprintln("QuotaDeleteRequest(fsUid:", qd.filesystemUid, "inodeId:", qd.InodeId, ")")
 }
 
+// getApiUrl delegates to the Quota object rather than restating the path, the same way
+// QuotaCreateRequest does. Building it by hand here is what let it drift to "quotas" while create
+// and read used "quota".
 func (qd *QuotaDeleteRequest) getApiUrl(a *ApiClient) string {
-	url, err := url.JoinPath((&FileSystem{Uid: qd.filesystemUid}).GetApiUrl(a), "quotas", strconv.FormatUint(qd.InodeId, 10))
-	if err != nil {
-		return ""
-	}
-	return url
+	return qd.getRelatedObject().GetApiUrl(a)
 }
 
 func (qd *QuotaDeleteRequest) getRequiredFields() []string {
-	return []string{"filesystemUid", "inodeId"}
+	// "InodeId" is capitalised because the field on this struct is - unlike the create and update
+	// requests, whose inodeId really is unexported. The names here are looked up by reflection, so a
+	// mismatch is not a compile error.
+	return []string{"filesystemUid", "InodeId"}
 }
 
 func (qd *QuotaDeleteRequest) hasRequiredFields() bool {
@@ -262,20 +276,22 @@ func (a *ApiClient) CreateQuota(ctx context.Context, qr *QuotaCreateRequest, q *
 		if q.InodeId != qr.inodeId { // WEKAPP-240948
 			q.InodeId = qr.inodeId
 		}
-		return a.WaitForQuotaActive(ctx, q)
+		return a.WaitForQuotaEstablished(ctx, q)
 	}
 	return nil
 }
 
-func (a *ApiClient) WaitForQuotaActive(ctx context.Context, q *Quota) error {
+// WaitForQuotaEstablished blocks until the cluster has accepted the quota, or the context or
+// quotaEstablishTimeout expires.
+func (a *ApiClient) WaitForQuotaEstablished(ctx context.Context, q *Quota) error {
 	log.Ctx(ctx).Debug().Uint64("inode_id", q.InodeId).Str("filesystem_uid", q.FilesystemUid.String()).
-		Msg("Waiting for quota to become active")
-	f := wait.ConditionFunc(func() (bool, error) {
-		return a.IsQuotaActive(ctx, q)
-	})
-	err := wait.Poll(1*time.Second, time.Hour*24, f)
+		Msg("Waiting for quota to be established")
+	err := wait.PollUntilContextTimeout(ctx, time.Second, quotaEstablishTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			return a.IsQuotaEstablished(ctx, q)
+		})
 	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("")
+		log.Ctx(ctx).Error().Err(err).Uint64("inode_id", q.InodeId).Msg("Quota was not established")
 		return err
 	}
 	return nil
@@ -351,6 +367,38 @@ func (a *ApiClient) GetQuotaByFilter(ctx context.Context, query *Quota) (*Quota,
 	}
 	result := &(*rs)[0]
 	return result, nil
+}
+
+// IsQuotaEstablished reports whether the cluster has accepted the quota - that is, whether it is
+// applied (ACTIVE) or being applied (ADDING).
+//
+// Waiting for ACTIVE alone is wrong for any directory that already holds data. The cluster only
+// reaches ACTIVE once the QUOTA_COLORING task has walked the entire tree stamping the quota ID onto
+// every file, which on a large volume takes far longer than any request the driver serves - the
+// caller would time out on a quota that was created perfectly well. ADDING already means the quota
+// exists and applies from here on, which is what a caller actually needs to know.
+func (a *ApiClient) IsQuotaEstablished(ctx context.Context, query *Quota) (bool, error) {
+	fs := &FileSystem{
+		Uid: query.FilesystemUid,
+	}
+	q, err := a.GetQuotaByFileSystemAndInode(ctx, fs, query.InodeId)
+	if err != nil {
+		return false, err
+	}
+	if q == nil {
+		return false, nil
+	}
+	switch q.Status {
+	case QuotaStatusActive, QuotaStatusPending:
+		return true, nil
+	case QuotaStatusError:
+		// The cluster has already reported a permanent failure. Polling on would turn that into a
+		// timeout, which reads as "slow" rather than "broken".
+		return false, fmt.Errorf("quota on inode %d of filesystem %s is in %s state",
+			q.InodeId, q.FilesystemUid.String(), q.Status)
+	default:
+		return false, nil
+	}
 }
 
 func (a *ApiClient) IsQuotaActive(ctx context.Context, query *Quota) (done bool, err error) {

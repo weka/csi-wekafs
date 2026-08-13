@@ -13,7 +13,16 @@ const (
 	NodeRoleFrontend   = "FRONTEND"
 	NodeRoleDrive      = "DRIVES"
 	NodeRoleManagement = "MANAGEMENT"
-	NodeModeBackend    = "backend"
+	// NodeRoleDataServices is carried by the process running inside a data services container. That
+	// container is what runs QUOTA_COLORING: setting a quota on a directory that already holds data
+	// has to walk the whole tree stamping the quota ID onto every file, and without this the walk
+	// runs inline in a single process.
+	//
+	// This role is the ONLY way the WEKA API distinguishes such a container. The containers endpoint
+	// reports it as an ordinary "backend" - verified on WEKA 5.1.24, where adding one moved the
+	// backend count from 12 to 13 and added no new mode value.
+	NodeRoleDataServices = "DATASERV"
+	NodeModeBackend      = "backend"
 )
 
 type WekaNode struct {
@@ -84,6 +93,10 @@ func (n *WekaNode) isDrive() bool {
 	return n.hasRole(NodeRoleDrive)
 }
 
+func (n *WekaNode) isDataServices() bool {
+	return n.hasRole(NodeRoleDataServices)
+}
+
 func (a *ApiClient) GetNodes(ctx context.Context, nodes *[]WekaNode) error {
 	node := &WekaNode{}
 
@@ -117,4 +130,26 @@ func (a *ApiClient) GetNodeByUid(ctx context.Context, uid uuid.UUID, node *WekaN
 		return err
 	}
 	return nil
+}
+
+// HasDataServicesProcess reports whether the cluster runs a data services process, i.e. whether a
+// data services container is deployed and up.
+//
+// Only processes reporting status UP count. A container that exists but is down does not run the
+// coloring task, and treating it as present would have the driver hand work to something that will
+// never pick it up.
+func (a *ApiClient) HasDataServicesProcess(ctx context.Context) (bool, error) {
+	// Deliberately not GetNodesByRole: that helper swallows the fetch error and returns an empty
+	// list, which here would be indistinguishable from "the cluster has no data services container"
+	// - the one confusion this whole capability check exists to avoid.
+	nodes := &[]WekaNode{}
+	if err := a.GetNodes(ctx, nodes); err != nil {
+		return false, err
+	}
+	for _, n := range *nodes {
+		if n.isDataServices() && n.Status == "UP" {
+			return true, nil
+		}
+	}
+	return false, nil
 }

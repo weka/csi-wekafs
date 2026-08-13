@@ -742,7 +742,7 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 	}
 
 	// check if the quota already exists. If not - create it and exit
-	_, err = v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
+	existing, err := v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
 	if err != nil {
 		if err == apiclient.ObjectNotFoundError {
 			logger.Trace().Uint64("inode_id", inodeId).Msg("No quota entry for inode ID")
@@ -750,6 +750,34 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 			logger.Error().Err(err).Uint64("inode_id", inodeId).Msg("Failed to fetch quota object of the volume")
 			return status.Error(codes.Internal, err.Error())
 		}
+	}
+
+	// A nil enforceCapacity means RETAIN, as logged above: keep whatever enforcement the volume
+	// already has. Without this it fell through to setQuota's default of HARD, so expanding a volume
+	// provisioned with capacityEnforcement=SOFT silently converted its quota to hard - the caller
+	// asked to change the size, not the enforcement.
+	if enforceCapacity == nil && existing != nil {
+		// setQuota takes enforcement as a bool - true is a hard quota, false a soft one - so keeping
+		// what the volume already has means converting its type back into that bool.
+		//
+		// Note GetQuotaType infers the type from the limits rather than reading it: the driver writes
+		// a hard quota as hard == soft, and a soft one as soft == capacity with hard at the maximum.
+		// That round-trips exactly for any quota the driver created. A quota set externally with two
+		// distinct meaningful limits - which is what static volumes are documented to expect - is
+		// classified soft, and rewriting it here replaces its hard limit with the maximum. That was
+		// equally true before, when the same path forced it to hard instead; neither preserves a
+		// hand-made two-limit quota.
+		enforced := existing.GetQuotaType() == apiclient.QuotaTypeHard
+		enforceCapacity = &enforced
+		// The grace period has to be retained with it. setQuota reads it from the volume, and a
+		// volume built from an ID - which is every volume an expand or a reconciler sweep sees -
+		// never had the StorageClass parameters applied, so it carries 0. Without this, expanding a
+		// soft-quota volume would keep the quota soft and silently drop its grace period to 0,
+		// turning "block after the grace elapses" into "never block".
+		v.quotaGracePeriodSeconds = existing.GraceSeconds
+		logger.Debug().Str("retained_quota_type", string(existing.GetQuotaType())).
+			Uint64("retained_grace_seconds", existing.GraceSeconds).
+			Msg("Retaining the enforcement the volume already had")
 	}
 
 	_, err = v.setQuota(ctx, enforceCapacity, uint64(capacityLimit))

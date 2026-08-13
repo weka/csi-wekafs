@@ -170,7 +170,30 @@ const (
 	// matches the chart's default health monitor interval, so a full sweep of the cluster costs
 	// about one apiserver read per distinct Secret rather than one per volume.
 	volumeSecretCacheTTL = 5 * time.Minute
+	// capacityEnforcementParam is the StorageClass parameter naming the quota type, persisted
+	// verbatim into a PersistentVolume's volumeAttributes at provisioning time.
+	capacityEnforcementParam = "capacityEnforcement"
+
 	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
+
+	// The conditions below are surfaced to whoever can read events in the volume's namespace, which
+	// is not necessarily whoever administers the Weka cluster. They deliberately carry no filesystem
+	// name and no path inside the filesystem: a PersistentVolume is cluster-scoped and a namespace
+	// user cannot read one, so naming shared storage in a namespaced event would tell them something
+	// they otherwise have no way to see. The identifiers are logged instead, where an administrator
+	// reads them - see ProbeHealth.
+	volumeFilesystemMissingMessage  = "the Weka filesystem backing this volume no longer exists"
+	volumeFilesystemRemovingMessage = "the Weka filesystem backing this volume is being removed"
+	volumePathMissingMessage        = "the volume's directory no longer exists on the Weka cluster"
+	// volumeNoQuotaMessage is reported for a volume that exists but carries no quota. It is not an
+	// abnormal condition - the volume works - but nothing enforces its capacity, so the condition
+	// says so rather than calling it plainly healthy.
+	volumeNoQuotaMessage = "volume exists on the Weka cluster, but has no quota, so its capacity is not enforced"
+	// volumeNoApiClientMessage is reported for a volume the driver has no credentials for. Its
+	// condition is unknown rather than bad - nothing is known about it at all - so this is only
+	// used when an operator has asked for such volumes to be raised.
+	volumeNoApiClientMessage = "volume has no Weka API credentials, so the driver cannot determine its condition, " +
+		"enforce its capacity or expand it - reference an API secret from its StorageClass"
 
 	// listVolumesPageSize bounds a page when the CO does not set max_entries. Pages are served from
 	// the reconciler's cache, so this is only about response size, not about how much work one call

@@ -27,6 +27,7 @@ type config struct {
 	clusterVersion string
 	userRole       string
 	rotating       bool
+	dataServices   bool
 }
 
 // Option configures a Server at construction time.
@@ -50,6 +51,14 @@ func WithUserRole(role string) Option {
 // exercising that replacement under -race is the point of the concurrency race tests.
 func WithRotatingEndpoints() Option {
 	return func(c *config) { c.rotating = true }
+}
+
+// WithDataServicesProcess adds a process carrying the DATASERV role to the nodes/processes listing,
+// as a cluster with a data services container deployed reports. Note the containers listing is
+// deliberately left unchanged: a real cluster reports such a container as an ordinary "backend", and
+// the process role is the only place the distinction shows up.
+func WithDataServicesProcess() Option {
+	return func(c *config) { c.dataServices = true }
 }
 
 // Server is a fake Weka REST API. It is stateful: filesystems, NFS client groups, NFS permissions

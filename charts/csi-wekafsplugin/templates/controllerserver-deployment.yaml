@@ -124,6 +124,11 @@ spec:
             {{/* Tied to the sidecar: with nothing calling ControllerGetVolume, advertising the
                  capability would only make the driver watch every PV for no consumer. */}}
             - "--advertisevolumehealthsupport={{ .Values.controller.healthMonitor.enabled }}"
+            - "--backfillmissingquotas={{ .Values.controller.healthMonitor.backfillMissingQuotas }}"
+            - "--setquotaonstaticvolumes={{ .Values.controller.healthMonitor.setQuotaOnStaticVolumes }}"
+            - "--reportvolumeswithoutquotaasabnormal={{ .Values.controller.healthMonitor.reportVolumesWithoutQuotaAsAbnormal }}"
+            - "--reportvolumeswithoutapiclientasabnormal={{ .Values.controller.healthMonitor.reportVolumesWithoutApiClientAsAbnormal }}"
+            - "--reportvolumeswithquotamismatchasabnormal={{ .Values.controller.healthMonitor.reportVolumesWithQuotaMismatchAsAbnormal }}"
           {{- if .Values.pluginConfig.mountProtocol.useNfs | default false }}
             - "--usenfs"
           {{- end }}

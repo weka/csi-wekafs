@@ -68,6 +68,25 @@ func TestWekaCompatibilityMap_fillIn(t *testing.T) {
 			},
 		},
 		{
+			// v4.3 is where the data services container role appears, alongside ResolvePathToInode.
+			versionStr: "v4.3",
+			expected: WekaCompatibilityMap{
+				DirectoryAsCSIVolume:           true,
+				FilesystemAsCSIVolume:          true,
+				QuotaOnDirectoryVolume:         true,
+				QuotaOnSnapshot:                true,
+				UrlQueryParams:                 true,
+				SyncOnCloseMountOption:         true,
+				SingleClientMultipleClusters:   true,
+				NewNodeApiObjectPath:           true,
+				MountFilesystemsUsingAuthToken: true,
+				EncryptionWithNoKms:            true,
+				EncryptionWithClusterKey:       true,
+				ResolvePathToInode:             true,
+				DataServicesContainer:          true,
+			},
+		},
+		{
 			versionStr: "v9.99",
 			expected: WekaCompatibilityMap{
 				DirectoryAsCSIVolume:             true,
@@ -87,6 +106,7 @@ func TestWekaCompatibilityMap_fillIn(t *testing.T) {
 				ResolvePathToInode:               true,
 				ResolvePathToInodeCsiRole:        true,
 				SetSelfAsFilesystemOwnerOnCreate: true,
+				DataServicesContainer:            true,
 			},
 		},
 	}
