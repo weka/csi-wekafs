@@ -232,6 +232,11 @@ type ControllerVolumeHealthMetrics struct {
 	// Conditions is one series per volume per condition found, set to 1 while the condition holds
 	// and deleted once it clears - see volumeConditionNoQuota and friends for the values.
 	//
+	// category groups conditions by what they cost: corrupt for a volume whose data is gone,
+	// degraded for one that works but cannot be enforced or managed, unknown for an abnormal volume
+	// whose cause was not recorded. It is a label rather than a dashboard-side regex so an alert can
+	// page on corrupt without enumerating which conditions currently mean that.
+	//
 	// Separate from Status deliberately. Status mirrors what the driver told Kubernetes, so it moves
 	// with the reportAs...Abnormal settings and can be correlated with the events on a PVC. This
 	// reports what was actually found, whatever those settings are: gating a metric hides the
@@ -266,7 +271,7 @@ func NewControllerVolumeHealthMetrics() *ControllerVolumeHealthMetrics {
 		Conditions: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: MetricsPrefix, Subsystem: volumeHealthSubsystem, Name: "conditions",
 			Help: "Conditions found on a CSI volume by the volume health reconciler, 1 while the condition holds. Reported regardless of whether the driver is configured to raise it as an abnormal volume condition",
-		}, append(append([]string{}, LabelsForCsiVolumes...), "condition")),
+		}, append(append([]string{}, LabelsForCsiVolumes...), "condition", "category")),
 		Volumes: newGaugeVec(volumeHealthSubsystem, "volumes", "Number of volumes in each health status as of the last completed reconciliation sweep", CsiControllerVolumeHealthTallyMetricsLabels),
 		SweepDuration: newHistogramVec(volumeHealthSubsystem, "sweep_duration_seconds",
 			"Duration of a complete volume health reconciliation sweep in seconds", nil, HistogramDurationBuckets...),

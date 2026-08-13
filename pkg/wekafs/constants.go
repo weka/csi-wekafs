@@ -192,6 +192,22 @@ const (
 	volumeConditionNoQuota       = "no_quota"
 	volumeConditionQuotaMismatch = "quota_mismatch"
 	volumeConditionUnavailable   = "unavailable"
+	// The causes that are always abnormal - they have no setting, because a volume whose filesystem
+	// or directory is gone is broken however you configure the driver. Named separately because the
+	// fix differs: a missing directory may be restorable from a snapshot, a missing filesystem is
+	// not, and a filesystem mid-removal is someone else's deletion still in progress.
+	volumeConditionFilesystemNotFound = "filesystem_not_found"
+	volumeConditionFilesystemRemoving = "filesystem_removing"
+	volumeConditionDirectoryNotFound  = "directory_not_found"
+
+	// Categories group conditions by what they cost, because the response differs completely.
+	// corrupt means the volume's data is gone or going - nothing the driver can repair, and the
+	// workload using it is already broken. degraded means the volume works and its data is intact,
+	// but the driver cannot enforce or manage it - capacity is unenforced, or credentials are
+	// missing. unknown is an abnormal volume whose cause was not recorded.
+	volumeCategoryCorrupt  = "corrupt"
+	volumeCategoryDegraded = "degraded"
+	volumeCategoryUnknown  = "unknown"
 
 	// The conditions below are surfaced to whoever can read events in the volume's namespace, which
 	// is not necessarily whoever administers the Weka cluster. They deliberately carry no filesystem

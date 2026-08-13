@@ -143,16 +143,19 @@ func deleteVolumeConditionSeries(labels []string, conditions []string) {
 	}
 }
 
-// volumeConditionLabelValues copies rather than appending in place: labels is the slice held in the
-// cache entry, and append would write the condition into its spare capacity, so two conditions on
-// one volume would overwrite each other's series key.
+// volumeConditionLabelValues builds the full label values for one condition series: the volume's
+// labels, the condition, and the category it belongs to.
+//
+// It copies rather than appending in place - labels is the slice held in the cache entry, and append
+// would write into its spare capacity, so two conditions on one volume would overwrite each other's
+// series key.
 func volumeConditionLabelValues(labels []string, condition string) []string {
 	if labels == nil {
 		return nil
 	}
-	values := make([]string, 0, len(labels)+1)
+	values := make([]string, 0, len(labels)+2)
 	values = append(values, labels...)
-	return append(values, condition)
+	return append(values, condition, volumeConditionCategory(condition))
 }
 
 // classifyVolumeHealth turns a probe outcome into the weka_csi_volume_health_status value. It is the
@@ -281,7 +284,10 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 	filesystems := newFilesystemCache()
 	live := make(map[string]struct{}, len(pvs))
 
-	var healthy, abnormal, unknown, failed, quotaMissing, quotaMismatch, noApiClient, backfilled, backfillSkipped int64
+	var healthy, abnormal, unknown, failed, backfilled, backfillSkipped int64
+	// Counted by condition name rather than one variable per condition, so a condition added later is
+	// tallied without touching this loop or the reporting below.
+	conditionCounts := map[string]int64{}
 	var counters sync.Mutex
 
 	var probes errgroup.Group
@@ -338,14 +344,8 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 			// The quota tallies are independent of the health status above: a volume with no quota is
 			// reported abnormal only when the driver is configured to, so it can be counted here while
 			// still classifying as healthy.
-			if health != nil && health.QuotaMissing {
-				quotaMissing++
-			}
-			if health != nil && health.QuotaMismatch {
-				quotaMismatch++
-			}
-			if health != nil && health.NoApiClient {
-				noApiClient++
+			for _, condition := range entry.conditions {
+				conditionCounts[condition]++
 			}
 			switch {
 			case created:
@@ -380,9 +380,9 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 	// Condition counts, reported whatever the reportAs...Abnormal settings are - the same reasoning
 	// as the per-volume conditions series. These overlap the statuses above rather than partitioning
 	// them: with the flags off a volume counted under no_quota is also counted as healthy.
-	controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, volumeConditionNoQuota).Set(float64(quotaMissing))
-	controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, volumeConditionQuotaMismatch).Set(float64(quotaMismatch))
-	controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, volumeConditionNoApiClient).Set(float64(noApiClient))
+	for _, condition := range allVolumeConditions {
+		controllerMetrics.VolumeHealth.Volumes.WithLabelValues(driverName, condition).Set(float64(conditionCounts[condition]))
+	}
 	controllerMetrics.VolumeHealth.SweepDuration.WithLabelValues(driverName).Observe(duration.Seconds())
 	controllerMetrics.VolumeHealth.LastSweepTimestamp.WithLabelValues(driverName).Set(float64(time.Now().Unix()))
 
@@ -393,9 +393,11 @@ func (r *volumeHealthReconciler) reconcileOnce(ctx context.Context) {
 		Int64("abnormal", abnormal).
 		Int64("unknown", unknown).
 		Int64("failed", failed).
-		Int64("quotas_missing", quotaMissing).
-		Int64("quota_mismatches", quotaMismatch).
-		Int64("volumes_without_api_client", noApiClient).
+		Int64("quotas_missing", conditionCounts[volumeConditionNoQuota]).
+		Int64("quota_mismatches", conditionCounts[volumeConditionQuotaMismatch]).
+		Int64("volumes_without_api_client", conditionCounts[volumeConditionNoApiClient]).
+		Int64("directories_missing", conditionCounts[volumeConditionDirectoryNotFound]).
+		Int64("filesystems_missing", conditionCounts[volumeConditionFilesystemNotFound]).
 		Int64("quotas_created", backfilled).
 		Int64("quotas_not_created", backfillSkipped).
 		Dur("duration", duration).
