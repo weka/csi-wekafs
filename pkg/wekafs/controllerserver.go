@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -203,17 +204,47 @@ func (cs *ControllerServer) acquireSemaphore(ctx context.Context, op string) (er
 	cs.initializeSemaphore(ctx, op)
 	sem := cs.semaphores[op]
 
+	// select the concurrency gauge + wait-duration histogram matching this operation
+	var histogram *prometheus.HistogramVec
+	var gauge *prometheus.GaugeVec
+	var driverName string
+	switch op {
+	case "CreateVolume":
+		histogram, gauge = controllerMetrics.Concurrency.CreateVolumeWaitDuration, controllerMetrics.Concurrency.CreateVolume
+	case "DeleteVolume":
+		histogram, gauge = controllerMetrics.Concurrency.DeleteVolumeWaitDuration, controllerMetrics.Concurrency.DeleteVolume
+	case "ExpandVolume":
+		histogram, gauge = controllerMetrics.Concurrency.ExpandVolumeWaitDuration, controllerMetrics.Concurrency.ExpandVolume
+	case "CreateSnapshot":
+		histogram, gauge = controllerMetrics.Concurrency.CreateSnapshotWaitDuration, controllerMetrics.Concurrency.CreateSnapshot
+	case "DeleteSnapshot":
+		histogram, gauge = controllerMetrics.Concurrency.DeleteSnapshotWaitDuration, controllerMetrics.Concurrency.DeleteSnapshot
+	}
+	driverName = cs.getConfig().GetDriver().name
+
 	logger.Trace().Msg("Acquiring semaphore")
 	start := time.Now()
 	err := sem.Acquire(ctx, 1)
 	elapsed := time.Since(start)
 	if err == nil {
+		if gauge != nil {
+			gauge.WithLabelValues(driverName, "acquired").Inc()
+		}
+		if histogram != nil {
+			histogram.WithLabelValues(driverName, "success").Observe(elapsed.Seconds())
+		}
 		logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Successfully acquired semaphore")
 		return nil, func() {
 			elapsed = time.Since(start)
 			logger.Trace().Dur("total_operation_time", elapsed).Str("op", op).Msg("Releasing semaphore")
 			sem.Release(1)
+			if gauge != nil {
+				gauge.WithLabelValues(driverName, "acquired").Dec()
+			}
 		}
+	}
+	if histogram != nil {
+		histogram.WithLabelValues(driverName, "failure").Observe(elapsed.Seconds())
 	}
 	logger.Trace().Dur("acquire_duration", elapsed).Str("op", op).Msg("Failed to acquire semaphore")
 	return err, func() {}
@@ -252,11 +283,24 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	logger := log.Ctx(ctx)
 	logger.Info().Str("name", req.GetName()).Fields(params).Msg(">>>> Received request")
 
+	start := time.Now()
+	var backingType VolumeBackingType
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		// backingType is only known once the volume has been constructed, so a request that
+		// failed before that point has none. Record it as unknown rather than skipping the
+		// sample: dropping it would hide exactly the early failures these counters exist to
+		// surface.
+		bt := string(backingType)
+		if bt == "" {
+			bt = string(VolumeBackingTypeUnknown)
+		}
+		driverName := cs.getConfig().GetDriver().name
+		controllerMetrics.Operations.CreateVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(float64(req.GetCapacityRange().GetRequiredBytes()))
+		recordOperation(controllerMetrics.Operations.CreateVolumeCounter, controllerMetrics.Operations.CreateVolumeDuration, start, driverName, result, bt)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -282,6 +326,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	if volume == nil {
 		return CreateVolumeError(ctx, codes.Internal, "Could not initialize volume representation object from request")
 	}
+	backingType = volume.GetBackingType()
 
 	// check if with current API client state we can modify this volume or not
 	// (basically only legacy dirVolume with xAttr fallback can be operated without API client)
@@ -443,11 +488,23 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	logger.Info().Str("volume_id", volumeID).Msg(">>>> Received request")
+	start := time.Now()
+	var backingType VolumeBackingType
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		// backingType is only known once the volume has been constructed, so a request that
+		// failed before that point has none. Record it as unknown rather than skipping the
+		// sample: dropping it would hide exactly the early failures these counters exist to
+		// surface.
+		bt := string(backingType)
+		if bt == "" {
+			bt = string(VolumeBackingTypeUnknown)
+		}
+		driverName := cs.getConfig().GetDriver().name
+		recordOperation(controllerMetrics.Operations.DeleteVolumeCounter, controllerMetrics.Operations.DeleteVolumeDuration, start, driverName, result, bt)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -474,6 +531,7 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		result = "SUCCESS"
 		return &csi.DeleteVolumeResponse{}, nil
 	}
+	backingType = volume.GetBackingType()
 
 	if err := cs.validateControllerServiceRequest(csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME); err != nil {
 		logger.Warn().Err(err).Msg("invalid delete volume request")
@@ -526,11 +584,26 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 		capacity = capRange.GetRequiredBytes()
 	}
 	logger.Info().Int64("capacity", capacity).Msg(">>>> Received request")
+	start := time.Now()
+	var backingType VolumeBackingType
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		// backingType is only known once the volume has been constructed, so a request that
+		// failed before that point has none. Record it as unknown rather than skipping the
+		// sample: dropping it would hide exactly the early failures these counters exist to
+		// surface.
+		bt := string(backingType)
+		if bt == "" {
+			bt = string(VolumeBackingTypeUnknown)
+		}
+		driverName := cs.getConfig().GetDriver().name
+		if capacity > 0 {
+			controllerMetrics.Operations.ExpandVolumeTotalCapacity.WithLabelValues(driverName, result, bt).Add(float64(capacity))
+		}
+		recordOperation(controllerMetrics.Operations.ExpandVolumeCounter, controllerMetrics.Operations.ExpandVolumeDuration, start, driverName, result, bt)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -560,6 +633,7 @@ func (cs *ControllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	if err != nil {
 		return ExpandVolumeError(ctx, codes.NotFound, fmt.Sprintf("Volume with id %s does not exist", req.GetVolumeId()))
 	}
+	backingType = volume.GetBackingType()
 
 	maxStorageCapacity, err := volume.getMaxCapacity(ctx)
 	if err != nil {
@@ -634,11 +708,14 @@ func (cs *ControllerServer) CreateSnapshot(ctx context.Context, req *csi.CreateS
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	logger.Info().Str("src_volume_id", srcVolumeId).Str("name", snapName).Msg(">>>> Received request")
+	start := time.Now()
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		driverName := cs.getConfig().GetDriver().name
+		recordOperation(controllerMetrics.Operations.CreateSnapshotCounter, controllerMetrics.Operations.CreateSnapshotDuration, start, driverName, result)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
@@ -706,11 +783,14 @@ func (cs *ControllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 	logger := log.Ctx(ctx)
 	result := "FAILURE"
 	logger.Info().Str("snapshot_id", snapshotID).Msg(">>>> Received request")
+	start := time.Now()
 	defer func() {
 		level := zerolog.InfoLevel
 		if result != "SUCCESS" {
 			level = zerolog.ErrorLevel
 		}
+		driverName := cs.getConfig().GetDriver().name
+		recordOperation(controllerMetrics.Operations.DeleteSnapshotCounter, controllerMetrics.Operations.DeleteSnapshotDuration, start, driverName, result)
 		logger.WithLevel(level).Str("result", result).Msg("<<<< Completed processing request")
 	}()
 
