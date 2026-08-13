@@ -15,7 +15,10 @@ import (
 var (
 	// LabelsForCsiVolumes identifies one PersistentVolume. It is deliberately specific: the series
 	// are per volume by design, and the identifiers are what makes a volume's metrics findable.
-	LabelsForCsiVolumes    = []string{"csi_driver_name", "pv_name", "cluster_guid", "storage_class_name", "filesystem_name", "volume_type", "pvc_name", "pvc_namespace", "pvc_uid"}
+	// organization is the Weka tenant a volume belongs to, taken from the credentials its API client
+	// authenticated with. Every volume has exactly one, so it adds no series - it only makes the
+	// existing ones groupable by tenant.
+	LabelsForCsiVolumes    = []string{"csi_driver_name", "pv_name", "cluster_guid", "storage_class_name", "filesystem_name", "volume_type", "organization", "pvc_name", "pvc_namespace", "pvc_uid"}
 	LabelsForFilesystemOps = []string{"csi_driver_name", "cluster_guid", "filesystem_name"}
 
 	HistogramDurationBuckets = []float64{.01, .05, .1, .25, .5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000}
