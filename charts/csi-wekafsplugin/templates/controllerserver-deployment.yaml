@@ -259,7 +259,7 @@ spec:
           {{- if .Values.metrics.enabled }}
           ports:
             - containerPort: {{ .Values.metrics.attacherPort | default 9095 }}
-              name: pr-metrics
+              name: at-metrics
               protocol: TCP
           {{- end }}
           {{- if .Values.controller.resources.csiAttacher }}
