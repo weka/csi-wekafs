@@ -1071,29 +1071,6 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	return err, retUmountFunc
 }
 
-// UnmountUnderlyingFS decreases refCount / unmounts volume using specific mount options
-func (v *Volume) UnmountUnderlyingFS(ctx context.Context) error {
-	op := "UnmountUnderlyingFS"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-	logger := log.Ctx(ctx)
-
-	if v.server.getMounter() == nil {
-		Die("Volume unmount could not be done since mounter not defined on it")
-	}
-
-	mountOpts := v.getMountOptions(ctx)
-	err := v.server.getMounter().unmountWithOptions(ctx, v.FilesystemName, mountOpts)
-
-	if err == nil {
-		v.mountPath = ""
-	} else {
-		logger.Error().Err(err).Msg("Failed to unmount volume")
-	}
-	return err
-}
-
 // Exists returns true if the actual data representing volume object exists,e.g. filesystem, snapshot and innerPath
 func (v *Volume) Exists(ctx context.Context) (exists bool, retErr error) {
 	op := "VolumeExists"
