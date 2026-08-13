@@ -41,6 +41,9 @@ type ApiStore struct {
 	legacySecrets *map[string]string
 	config        *DriverConfig
 	Hostname      string
+	// driverName labels the API metrics recorded by clients this store creates. It is passed in
+	// rather than read from config.GetDriver(), which is still nil when the store is constructed.
+	driverName string
 }
 
 // getByHash returns pointer to existing API if found by hash, or nil
@@ -182,6 +185,7 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	newClient, err := apiclient.NewApiClient(ctx, credentials, apiclient.ApiClientOptions{
 		AllowInsecureHttps: api.config.allowInsecureHttps,
 		Hostname:           hostname,
+		DriverName:         api.driverName,
 	})
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
@@ -266,11 +270,12 @@ func (api *ApiStore) GetClientFromSecrets(ctx context.Context, secrets map[strin
 	return client, nil
 }
 
-func NewApiStore(config *DriverConfig, hostname string) *ApiStore {
+func NewApiStore(config *DriverConfig, hostname, driverName string) *ApiStore {
 	s := &ApiStore{
-		apis:     make(map[uint32]*apiclient.ApiClient),
-		config:   config,
-		Hostname: hostname,
+		apis:       make(map[uint32]*apiclient.ApiClient),
+		config:     config,
+		Hostname:   hostname,
+		driverName: driverName,
 	}
 	secrets, err := s.GetDefaultSecrets()
 	if err != nil {

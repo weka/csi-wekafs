@@ -352,6 +352,20 @@
                 "nodePort": {
                     "type": "integer"
                 },
+                "podMonitor": {
+                    "type": "object",
+                    "properties": {
+                        "additionalLabels": {
+                            "type": "object"
+                        },
+                        "enabled": {
+                            "type": "boolean"
+                        },
+                        "interval": {
+                            "type": "string"
+                        }
+                    }
+                },
                 "provisionerPort": {
                     "type": "integer"
                 },

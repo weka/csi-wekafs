@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -35,6 +36,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs"
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 func init() {
@@ -158,6 +160,9 @@ func main() {
 	log.Info().Str("csi_mode", string(csiMode)).Bool("selinux_mode", *selinuxSupport).Msg("Started CSI driver")
 
 	if enableMetrics != nil && *enableMetrics {
+		// The API client builds its collectors but does not register them, so that importing the
+		// package has no effect on any registry. Register them here, where /metrics is served.
+		prometheus.MustRegister(apiclient.Collectors()...)
 		go func() {
 			http.Handle("/metrics", promhttp.Handler())
 			if err := http.ListenAndServe(fmt.Sprintf(":%s", *metricsPort), nil); err != nil {
