@@ -49,42 +49,51 @@ exactly one thing — the API-less communication model.
 A `dir/v1` volume that references an API secret works in 3.0 exactly as it did in 2.x. Volume
 handles are unchanged, so nothing needs to be rewritten.
 
-## Volumes with no quota, and why capacity is still read from extended attributes
+## Capacity in extended attributes has been removed
 
 Capacity for a WEKA CSI volume belongs in a **directory quota** on the WEKA cluster. Extended
-attributes on the volume directory (`user.weka_capacity`) are a much older mechanism, kept only for
-clusters too old to support directory quotas as volumes.
+attributes on the volume directory (`user.weka_capacity`) were a much older mechanism, kept as a
+fallback for clusters too old to support directory quotas as volumes.
 
-3.0 still reads and writes those attributes. That is deliberate, and it is a stay of execution
-rather than a design decision:
+**3.0 no longer reads or writes them.** The quota is the only record of a volume's capacity.
 
-> **Some existing volumes have no quota on the WEKA cluster at all.** For those, the extended
-> attribute is the *only* record of their capacity. Removing extended-attribute support today would
-> break them — the plugin would have nothing left to read a capacity from.
+The attribute never enforced anything — it recorded a number and nothing checked it, so a volume
+whose capacity was "set" that way could grow past its declared size unnoticed. Keeping it meant the
+plugin could report a limit that nothing applied.
+
+> **This is the change most likely to affect you.** A volume with **no quota** on the WEKA cluster
+> has nothing left to report its capacity, and operations that need it — reading the capacity,
+> expanding the volume — will fail with a clear error rather than fall back.
 >
 > Statically provisioned volumes are the expected case: the plugin does not create them and does not
 > set their quota, which is documented behaviour. Dynamically provisioned volumes should all have
-> one.
+> one already.
 
-The attributes will be removed in a later release. Before that can happen, affected volumes have to
-be repaired, and the repair is not something the plugin can do on its own during an upgrade: it has
-to reconcile Kubernetes objects against WEKA cluster state.
+### Before upgrading: give every volume a quota
 
-### The fix
-
-The plugin repairs this itself, in the volume health reconciler that already sweeps every
-PersistentVolume of the driver. For each volume with no quota it creates one matching the capacity
-declared on the PersistentVolume. Volumes that already have a quota are untouched.
-
-It is off by default, because it writes to the WEKA cluster from a background loop:
+Do this on **2.10**, before you upgrade. The volume health reconciler sweeps every PersistentVolume
+of the driver and creates a quota, sized from the PersistentVolume, for any volume that lacks one.
+Volumes that already have a quota are untouched.
 
 ```yaml
 controller:
   healthMonitor:
+    # count volumes with no quota, without changing anything
+    reportVolumesWithoutQuotaAsAbnormal: true
+    # create the missing quotas
     backfillMissingQuotas: true
-    # Statically provisioned volumes are a separate decision - see below
+    # statically provisioned volumes are a separate decision - see below
     setQuotaOnStaticVolumes: false
 ```
+
+Start with reporting only. Each sweep logs `quotas_missing` whether or not anything is enabled, so
+you can size the problem before changing any storage:
+
+```
+Volume health reconciliation completed  volumes=4820 quotas_missing=37 quotas_created=0 ...
+```
+
+When `quotas_missing` reaches **0**, the fleet is ready for 3.0.
 
 `setQuotaOnStaticVolumes` is kept separate on purpose. A statically provisioned volume is yours: the
 plugin did not create it and never set its quota, and the documented behaviour is that you set one
@@ -92,21 +101,29 @@ yourself. Turning that setting on starts enforcing a capacity limit that was not
 before, using the size declared on the PersistentVolume — so check that the size is the one you want
 before enabling it.
 
-The extended attribute is **disregarded entirely**. The PersistentVolume is the source of truth for
-what the volume's capacity is supposed to be; the attribute is at best a copy of it and at worst
-stale.
+The extended attribute is **disregarded entirely** by the repair. The PersistentVolume is the source
+of truth for what the volume's capacity is supposed to be; the attribute is at best a copy of it and
+at worst stale. Nothing removes the attribute from disk — it is simply never read again.
 
-This needs a **data services container** on the WEKA cluster. Setting a quota on a directory that
-already holds data makes the cluster walk the whole tree to stamp the quota ID onto every file, and
-that container is what runs the walk in the background. Volumes that cannot be given a quota are
-logged with the reason and the fix that applies to them.
-
-Until every volume has a quota, treat any volume without one as depending on extended attributes,
-and do not assume a future release will keep reading them.
+Full detail, including what happens when a quota cannot be created: [Giving existing volumes their
+missing quota](quota-backfill.md).
 
 > The older `migration/migrate-legacy-csi-volumes.sh` does **not** do this job. It walks a filesystem
 > rather than the PersistentVolume list, takes its capacity from the extended attribute rather than
 > from the PersistentVolume, and drives the `weka` CLI rather than the REST API.
+
+### Minimum WEKA version
+
+Removing the fallback removes the only path that worked on clusters without directory-quota support,
+so those clusters are no longer supported. 3.0 requires:
+
+| Requirement | Minimum WEKA version |
+| --- | --- |
+| Directory quotas as volumes | **v3.13** |
+| Quotas on a filesystem in a non-default organization | **v3.14** |
+
+Below these, capacity operations fail with a message naming the version needed, rather than silently
+recording a limit that is not enforced.
 
 ## `debugPath` and dev mode have been removed
 
@@ -149,10 +166,4 @@ has to be rebuilt is the Kubernetes object describing it. Two options:
 | `legacyVolumeSecretName` | Helm value | Reference an API secret from each StorageClass |
 | `/legacy-volume-access` | Secret mount path | none |
 | `--debugpath` | Plugin command line flag | none |
-
-Still present in 3.0, but scheduled for removal — see [Volumes with no quota, and why capacity is
-still read from extended attributes](#volumes-with-no-quota-and-why-capacity-is-still-read-from-extended-attributes):
-
-| Retained for now | Why |
-| --- | --- |
-| `user.weka_capacity` extended attribute | The only capacity record for volumes created without a quota by an earlier CSI Plugin bug |
+| `user.weka_capacity` extended attribute | Capacity mechanism | A directory quota, created before upgrading — see [above](#capacity-in-extended-attributes-has-been-removed) |
