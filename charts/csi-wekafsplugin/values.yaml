@@ -271,6 +271,16 @@ metrics:
   snapshotterPort: 9093
   # -- Metrics port for Node Serer
   nodePort: 9094
+  # -- PodMonitor resources for the Prometheus Operator. Only rendered when the
+  #    monitoring.coreos.com/v1 CRDs are present in the cluster.
+  podMonitor:
+    # -- Create PodMonitors for the controller and node pods
+    enabled: true
+    # -- Scrape interval
+    interval: 30s
+    # -- Extra labels for the PodMonitor objects. Set this when your Prometheus selects PodMonitors
+    #    by label, e.g. `release: kube-prometheus-stack`, or the metrics will not be scraped.
+    additionalLabels: {}
   # -- Attacher metrics port
   attacherPort: 9095
 # -- Tracing URL (For Jaeger tracing engine / OpenTelemetry), optional

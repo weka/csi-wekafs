@@ -57,6 +57,7 @@ type ApiClient struct {
 	CompatibilityMap           *WekaCompatibilityMap
 	clientHash                 uint32
 	hostname                   string
+	driverName                 string
 	// nfsInterfaceGroups caches interface groups by name. It carries its own lock - see the type.
 	nfsInterfaceGroups    *interfaceGroups
 	ApiUserRole           ApiUserRole
@@ -83,6 +84,9 @@ type ApiClientOptions struct {
 	AllowInsecureHttps bool
 	// Hostname identifies this client to the Weka cluster.
 	Hostname string
+	// DriverName labels the metrics this client records, so several drivers scraped together stay
+	// distinguishable.
+	DriverName string
 }
 
 func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOptions) (*ApiClient, error) {
@@ -113,6 +117,7 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 		Credentials:        credentials,
 		CompatibilityMap:   &WekaCompatibilityMap{},
 		hostname:           opts.Hostname,
+		driverName:         opts.DriverName,
 		apiEndpoints:       NewApiEndPoints(),
 		nfsInterfaceGroups: newInterfaceGroups(),
 	}

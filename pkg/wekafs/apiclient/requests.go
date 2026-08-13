@@ -29,6 +29,23 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 		return &ApiResponse{}, uErr
 	}
 
+	// status is overwritten as soon as the outcome is known; the initial value only survives if the
+	// function returns through a path that sets none.
+	status := "error"
+	startTime := time.Now()
+	defer func() {
+		labels := []string{
+			a.driverName,
+			a.ClusterGuid.String(),
+			a.getEndpoint(ctx).IpAddress,
+			Method,
+			generalizeUrlPathForMetrics(Path),
+			status,
+		}
+		apiMetrics.requestCounters.WithLabelValues(labels...).Inc()
+		apiMetrics.requestDurations.WithLabelValues(labels...).Observe(time.Since(startTime).Seconds())
+	}()
+
 	//construct base request and add auth if exists
 	var body *bytes.Reader
 	if Payload != nil {
@@ -75,11 +92,13 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	if err != nil {
 		endpoint.transportErrCount.Add(1)
+		status = "transport_error"
 		return nil, &transportError{err}
 	}
 
 	if response == nil {
 		endpoint.noRespCount.Add(1)
+		status = "no_response_from_server"
 		return nil, &transportError{errors.New("received no response")}
 	}
 
@@ -93,6 +112,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	logger.Trace().Str("response", maskPayload(string(responseBody))).Msg("")
 	if err != nil {
 		endpoint.parseErrCount.Add(1)
+		status = "response_parse_error"
 		return nil, &ApiInternalError{
 			Err:         err,
 			Text:        fmt.Sprintf("Failed to parse response: %s", err.Error()),
@@ -112,6 +132,7 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	Response.parseErrorCodes()
 	if err != nil {
 		endpoint.parseErrCount.Add(1)
+		status = "response_parse_error"
 		logger.Error().Err(err).Int("http_status_code", Response.HttpStatusCode).Msg("Could not parse response JSON")
 		return nil, &ApiError{
 			Err:         err,
@@ -121,6 +142,10 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 			ApiResponse: Response,
 		}
 	}
+
+	// From here the HTTP status is known, so it becomes the metric's status. The switch below
+	// turns each code into a typed error, but they all share one label shape.
+	status = fmt.Sprintf("http_%d", response.StatusCode)
 
 	switch response.StatusCode {
 	case http.StatusOK: //200
