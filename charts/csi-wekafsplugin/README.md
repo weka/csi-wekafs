@@ -3,7 +3,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-![Version: 2.9.1](https://img.shields.io/badge/Version-2.9.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.9.1](https://img.shields.io/badge/AppVersion-v2.9.1-informational?style=flat-square)
+![Version: 2.9.2](https://img.shields.io/badge/Version-2.9.2-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.9.2](https://img.shields.io/badge/AppVersion-v2.9.2-informational?style=flat-square)
 
 ## Homepage
 https://github.com/weka/csi-wekafs
@@ -16,7 +16,7 @@ https://github.com/weka/csi-wekafs
 
 ## Source Code
 
-* <https://github.com/weka/csi-wekafs/tree/v2.9.1>
+* <https://github.com/weka/csi-wekafs/tree/v2.9.2>
 
 ## Pre-requisite
 - Kubernetes cluster of version 1.18 and up, 1.19 and up recommended
@@ -69,7 +69,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.9.1"` | CSI driver version |
+| csiDriverVersion | string | `"2.9.2"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.19.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.12.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v6.3.0"` | CSI provisioner sidecar image URL |
@@ -78,7 +78,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.6.0"` | CSI snapshotter sidecar image URL |
 | images.healthmonitorsidecar | string | `"registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.18.0"` | CSI external health monitor sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.9.1"` | CSI driver tag |
+| images.csidriverTag | string | `"2.9.2"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |

@@ -1,167 +1,132 @@
 ## What's Changed
 
+### Improvements
+* feat: allow a separate priorityClassName for controller and node components by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/778 [(more details)](#pr-778)
+
 ### Bug Fixes
-* fix: reject malformed API endpoints and secrets instead of failing later by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/758 [(more details)](#pr-758)
-
-### Documentation
-* fix(ci): point helm-docs at the root README template by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/754 [(more details)](#pr-754)
-
-### Miscellaneous
-* ci: draft release notes on main only by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/757 [(more details)](#pr-757)
-* chore(deps): update to Go 1.26 and current external libraries by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/759 [(more details)](#pr-759)
-* chore(deps): update the UBI base image by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/760 [(more details)](#pr-760)
-* chore(deps): update the CSI sidecars to their current releases by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/761 [(more details)](#pr-761)
-* ci: add make update-sidecars and repair the Renovate config by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/762 [(more details)](#pr-762)
-* ci: run the Go unit tests on every pull request by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/763 [(more details)](#pr-763)
+* fix(chart): use the configured logLevel for the csi-snapshotter sidecar by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/779 [(more details)](#pr-779)
+* fix: give every container port a name unique within its pod by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/792 [(more details)](#pr-792)
+* fix: stop the driver panicking when it cannot determine volume encryption by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/793 [(more details)](#pr-793)
+* docs: show a Source Code link on the chart page by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/794 [(more details)](#pr-794)
 
 ---
-## PR Details
+<details>
+<summary><b>PR Details</b></summary>
 
-### <a name="pr-754"></a>PR #754 - fix(ci): point helm-docs at the root README template
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/754
-
-> ### TL;DR
-> Restores the project README, which the v2.9.0 release overwrote with generated boilerplate.
-> 
-> ### What changed?
-> - Restored the README sections the release removed: pre-requisites, deployment, usage, volume health monitoring, additional documentation and build instructions
-> - Corrected the documentation-generator template path in the release, pull-request and push-dev workflows, so this cannot happen again
-> 
-> ### How to test?
-> 1. Open the README on this branch and confirm every section is present, with the 2.9.0 version badges and value table.
-> 2. On the next release, confirm the README changes only where the version and values changed.
-> 
-> ### Why make this change?
-> The documentation generator was pointed at a template path that does not exist in this repository. Rather than failing, it fell back to its own default template and wrote that over the README, deleting 54 lines of hand-written documentation. The v2.9.0 release was the first to run this workflow to completion, so this is the first time it happened. Nothing was permanently lost — the source template still held every section. Nothing changes for anyone running the driver.
-
-### <a name="pr-757"></a>PR #757 - ci: draft release notes on main only
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/757
+### <a name="pr-778"></a>PR #778 - feat: allow a separate priorityClassName for controller and node components
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/778
 
 > ### TL;DR
-> Release note drafts are now produced for the release branch only, instead of once per merged change.
+> The controller and the node pods can now be given different priority classes.
 > 
 > ### What changed?
-> - A draft release is generated when something lands on `main`, and no longer when something lands on `dev`
-> - Drafting any branch on demand still works, by running the workflow manually and naming the branch
+> - New chart values `controller.priorityClassName` and `node.priorityClassName`.
+> - Either one overrides the existing global `priorityClassName` for its own pods. Left unset, both inherit it, so nothing changes for an existing installation.
 > 
 > ### How to test?
-> 1. Merge a pull request into `dev` and confirm no draft release appears.
-> 2. Merge `dev` into `main` and confirm a draft release is created.
-> 3. Run the draft workflow manually against any branch and confirm it still produces a draft.
+> 1. Install with `--set controller.priorityClassName=system-cluster-critical --set node.priorityClassName=system-node-critical`.
+> 2. Confirm `kubectl get deploy,ds -n csi-wekafs -o custom-columns=NAME:.metadata.name,PC:.spec.template.spec.priorityClassName` shows the two different classes.
+> 3. Install with only the global `priorityClassName` set and confirm both components still use it.
 > 
 > ### Why make this change?
-> Development lands on `dev` continuously and is merged into `main` only when there is enough for a release. Drafting on every push to `dev` would create a draft release per merged pull request, burying the one that matters. Nothing changes for anyone running the driver.
+> Requested in issue #691. A controller Deployment and a node DaemonSet have different scheduling requirements — the usual pairing is `system-cluster-critical` for the controller and `system-node-critical` for the node — and a single global value could only ever express one of them. Setting a per-component value replaces the global one rather than being combined with it, since a priority class is a single name.
 
-### <a name="pr-758"></a>PR #758 - fix: reject malformed API endpoints and secrets instead of failing later
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/758
+### <a name="pr-779"></a>PR #779 - fix(chart): use the configured logLevel for the csi-snapshotter sidecar
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/779
 
 > ### TL;DR
-> A malformed or incomplete API secret is now rejected with a message naming the problem, instead of failing later with a generic error.
+> `logLevel` now applies to the snapshotter sidecar too, instead of it always logging at level 5.
 > 
 > ### What changed?
-> - An endpoint that includes a URL scheme, or that is not a valid address, is rejected rather than quietly skipped
-> - If no endpoint in a secret is usable, creating the API client fails immediately instead of producing a client with nothing to talk to
-> - `username`, `password` and `organization` are now required in the secret, and a missing one is named in the error
-> - Refreshing the endpoint list from the cluster will no longer replace a working set with an empty one
+> - The `csi-snapshotter` container's verbosity came from a value written into the template rather than from `logLevel`. It now follows `logLevel` like every other container.
+> - No change at the default: the hardcoded value and the default are both 5.
 > 
 > ### How to test?
-> 1. Create an API secret whose `endpoints` value includes a scheme, for example `https://1.2.3.4:14000`.
-> 2. Create a PVC using it, and confirm provisioning fails with an error naming the endpoint rather than a generic "no endpoints" message.
-> 3. Repeat with `username` omitted from the secret and confirm the error names the missing key.
+> 1. Install with `--set logLevel=2`.
+> 2. Run `kubectl get deploy <release>-controller -o yaml` and confirm the `csi-snapshotter` container is started with `--v=2`.
+> 3. Confirm its logs are correspondingly quieter.
 > 
 > ### Why make this change?
-> Endpoints that failed validation were skipped one by one, so a secret where every entry was malformed still produced an API client — just one with an empty endpoint list, which then failed at the first request, far from the secret that caused it. Missing credentials behaved the same way, defaulting to empty and surfacing later as an authentication failure. The error now arrives when the volume is created, and says which part of the secret is wrong.
-> 
-> 
-> This is a rework of the fixes originally made in #615 and #617, reimplemented against the endpoint
-> handling as it stands now, which was rewritten in the meantime. Neither of those pull requests
-> recorded a ticket.
+> Reported in issue #687. Turning `logLevel` down quieted every container except the snapshotter, which kept logging at 5 — and on a busy controller that was most of the remaining log volume. While fixing it we checked every other container in both charts; this was the only one whose log level was not configurable.
 
-### <a name="pr-759"></a>PR #759 - chore(deps): update to Go 1.26 and current external libraries
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/759
+### <a name="pr-792"></a>PR #792 - fix: give every container port a name unique within its pod
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/792
 
 > ### TL;DR
-> Updates the driver to Go 1.26 and refreshes every third-party library it depends on.
+> 
+> Fixes duplicate container port names in the node and controller pods, which could send metrics scrapes to the wrong sidecar.
 > 
 > ### What changed?
-> - Built with Go 1.26, in both the driver image and the test harness image
-> - Kubernetes client libraries, controller-runtime, gRPC, Prometheus and OpenTelemetry all moved to their current releases
-> - One Kubernetes library was a version behind the others and now matches them
+> 
+> - In the node DaemonSet, the two ports both named `healthz` are now `ns-healthz` (9899, node driver) and `reg-healthz` (9809, registrar).
+> - In the controller Deployment, the attacher metrics port is renamed from `pr-metrics` to `at-metrics`. The provisioner keeps `pr-metrics`.
+> - The liveness probes that referenced these ports by name were updated to match.
+> 
+> No ports, values or defaults change — only names.
 > 
 > ### How to test?
-> 1. Deploy the chart and confirm the driver starts and reports ready.
-> 2. Create a PVC, confirm it binds, then delete it.
-> 3. Take a snapshot and restore from it.
+> 
+> 1. Install or upgrade the chart with `metrics.enabled=true`.
+> 2. Run `kubectl get pod <node-pod> -o jsonpath='{.spec.containers[*].ports[*].name}'` and confirm `ns-healthz` and `reg-healthz` appear instead of `healthz` twice.
+> 3. Do the same for a controller pod and confirm `at-metrics` and `pr-metrics` are distinct.
+> 4. Confirm both pods stay healthy — the liveness probes resolve the renamed ports.
 > 
 > ### Why make this change?
-> Routine currency: newer releases carry security and bug fixes, and staying close to upstream keeps each future update small. The CSI specification itself is deliberately not updated here — the newest version removes an interface the volume health reporting depends on, which is a decision of its own rather than a dependency bump.
+> 
+> A port name must be unique across a whole pod, not just within one container. Two pods reused a name, so anything resolving a port by name — a Service `targetPort`, a `PodMonitor` port selector — would get whichever one the cluster happened to keep. Metrics could be scraped from the wrong sidecar, or missed. Nothing in the chart selects by these names today, which is why it went unnoticed, but it makes the ports unsafe to reference.
+> 
+> Original fix by @assafgi in #682, reworked with the shorter names already used in the 3.0 branch so a second set of names does not follow behind it.
 
-### <a name="pr-760"></a>PR #760 - chore(deps): update the UBI base image
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/760
+### <a name="pr-793"></a>PR #793 - fix: stop the driver panicking when it cannot determine volume encryption
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/793
 
 > ### TL;DR
-> Rebuilds the driver images on the current Red Hat base image.
+> 
+> Fixes a crash: the driver could panic when checking whether a volume is encrypted, taking the process down.
 > 
 > ### What changed?
-> - The UBI 9 minimal base image moves to its latest build, in both the released image and the one used by CI
+> 
+> - Checking encryption on a filesystem-backed volume with no API credentials bound now returns a clear error instead of crashing.
+> - The error says the encryption state could not be determined, and includes the underlying reason when there is one.
+> - Volume creation that needs this answer fails with an `Internal` error rather than continuing.
 > 
 > ### How to test?
-> 1. Pull the resulting image and confirm the driver runs.
-> 2. Confirm the base image build number in the image labels matches the one in the Dockerfile.
+> 
+> 1. Create a volume backed by a whole filesystem whose storage class has no API secret attached.
+> 2. Perform an operation that touches encryption on it — for example creating a volume from it.
+> 3. Confirm the driver reports an error and keeps running, rather than the controller pod restarting.
+> 
+> Automated coverage is included: the new test reproduces the crash against the unfixed code.
 > 
 > ### Why make this change?
-> The pinned base image had fallen behind the current build, so images were being produced on an older base carrying older system packages. Both Dockerfiles pin it separately and have to move together, or the image CI tests differs from the image that ships.
+> 
+> The check ended by reading a value that was not always set. For a filesystem-backed volume with no API client, the driver has no way to ask the cluster whether the volume is encrypted, so nothing filled that value in and reading it crashed the process.
+> 
+> Reporting an error is the safe answer rather than assuming "not encrypted". Callers use this to decide whether to apply encryption, so a volume whose state could not be read would otherwise be treated as one that had been read and found unencrypted.
+> 
+> Found by @kristina-solovyova in #692.
 
-### <a name="pr-761"></a>PR #761 - chore(deps): update the CSI sidecars to their current releases
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/761
+### <a name="pr-794"></a>PR #794 - docs: show a Source Code link on the chart page
+by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/794
 
 > ### TL;DR
-> Updates the Kubernetes CSI sidecar containers deployed alongside the driver.
+> 
+> The chart page now shows a **Source Code** link, pointing at the tag the chart was built from.
 > 
 > ### What changed?
-> - liveness probe, attacher, provisioner, node driver registrar, resizer, snapshotter and external health monitor all move to their current releases
-> - No configuration change is required: every option the chart passes still exists, and no new permissions are needed
+> 
+> - The chart README and the ArtifactHub listing render a `## Source Code` section, taken from the `sources` entry already in `Chart.yaml`.
+> - Fixed the source URL recorded by PR-built charts, which contained the literal text `$CHART_VERSION` instead of the version number. Released charts were not affected.
 > 
 > ### How to test?
-> 1. Upgrade the chart and confirm all controller and node pods reach Running.
-> 2. Create a PVC, expand it, snapshot it, and delete it.
-> 3. Confirm no sidecar container restarts.
+> 
+> 1. Open `charts/csi-wekafsplugin/README.md` and confirm a **Source Code** section appears under **Maintainers**, with a link ending in the chart version.
+> 2. On a PR build, run `helm show chart <chart>` and confirm the `sources` URL contains a version number rather than `$CHART_VERSION`.
 > 
 > ### Why make this change?
-> Routine currency, and these had drifted further behind than intended. Two things worth watching after upgrading: the provisioner now runs a periodic clean-up pass over snapshots in the cluster, which is new steady-state activity; and the external health monitor is at the last release that supports the volume health interface the driver implements today.
+> 
+> `Chart.yaml` has always recorded where the chart comes from, but nothing displayed it, so the published chart page gave no link back to the source at that version. Rendering it from `Chart.yaml` means it follows the value the release process already maintains, rather than becoming another thing to update by hand.
+> 
+> Both sections were originally raised by @ari in #582.
 
-### <a name="pr-762"></a>PR #762 - ci: add make update-sidecars and repair the Renovate config
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/762
-
-> ### TL;DR
-> Adds a command that reports which CSI sidecars are out of date, and repairs the automation that was supposed to be doing it.
-> 
-> ### What changed?
-> - `make update-sidecars` reports which sidecars are behind their latest release; `make update-sidecars APPLY=1` updates the chart
-> - Fixed the automatic dependency configuration, which pointed at a directory that no longer exists and so had stopped updating anything
-> - Added the two sidecars that were never covered by it
-> 
-> ### How to test?
-> 1. Run `make update-sidecars` and confirm it reports every sidecar as current.
-> 2. Edit one sidecar version in the chart to an older release and run it again; confirm it reports that one as behind and exits non-zero.
-> 
-> ### Why make this change?
-> The sidecars had fallen several releases behind with nothing flagging it. The cause was that the automatic updater was watching a path left over from before the chart moved, so it silently matched no files. This repairs that and adds a check that does not depend on that configuration being correct.
-
-### <a name="pr-763"></a>PR #763 - ci: run the Go unit tests on every pull request
-by @sergeyberezansky in https://github.com/weka/csi-wekafs/pull/763
-
-> ### TL;DR
-> The Go unit tests now run automatically on every pull request.
-> 
-> ### What changed?
-> - A new job runs the unit tests and the Go static checks on each pull request
-> - It starts at the same time as the build rather than waiting for it, so a test failure is reported early
-> - Tests run with the race detector enabled
-> 
-> ### How to test?
-> 1. Open a pull request and confirm a `test-go` check appears alongside the build.
-> 2. Push a commit that breaks a unit test and confirm the check fails.
-> 
-> ### Why make this change?
-> Only the end-to-end storage tests ran automatically; the unit tests covering volume identifiers, the WEKA API client, quota handling and mount reference counting were run by hand, so a broken one could reach the branch unnoticed. The race detector matters here because most of those tests guard concurrent access, and without it a data race passes silently. The tests need no WEKA cluster and take about ninety seconds. Nothing changes for anyone running the driver.
+</details>
