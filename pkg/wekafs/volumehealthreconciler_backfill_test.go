@@ -485,12 +485,20 @@ func TestDescribeVolumeReportsNoApiClientPerSetting(t *testing.T) {
 				secretCache: newSecretCache(time.Minute),
 			}
 
-			volume, condition, vol, health, _, err := cs.describeVolume(context.Background(), pv, nil)
+			volume, condition, vol, health, labels, err := cs.describeVolume(context.Background(), pv, nil)
 			assert.NoError(t, err)
 			assert.Nil(t, vol, "no volume can be built without an API client")
-			assert.Nil(t, health)
 			assert.Equal(t, int64(1)<<30, volume.CapacityBytes,
 				"the declared capacity is still reported when the condition is not known")
+
+			// The fact is recorded whatever the setting: the setting decides whether a namespace user
+			// gets a Kubernetes event, not whether the driver may notice, and the metric that lists
+			// affected volumes is built from this.
+			assert.NotNil(t, health, "the missing-credentials fact is recorded either way")
+			assert.True(t, health.NoApiClient)
+			assert.Equal(t, []string{volumeConditionNoApiClient}, health.Conditions())
+			assert.Len(t, labels, len(LabelsForCsiVolumes),
+				"a series can still be keyed on the volume, with the cluster-derived labels blank")
 
 			if tc.expectNil {
 				assert.Nil(t, condition, "unknown is a nil condition")

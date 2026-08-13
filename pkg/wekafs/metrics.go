@@ -229,6 +229,19 @@ type ControllerVolumeHealthMetrics struct {
 	// cannot be resolved gets no series at all, the same as the metrics server's per-volume metrics,
 	// since neither can build a label set without an API client.
 	Status *prometheus.GaugeVec
+	// Conditions is one series per volume per condition found, set to 1 while the condition holds
+	// and deleted once it clears - see volumeConditionNoQuota and friends for the values.
+	//
+	// Separate from Status deliberately. Status mirrors what the driver told Kubernetes, so it moves
+	// with the reportAs...Abnormal settings and can be correlated with the events on a PVC. This
+	// reports what was actually found, whatever those settings are: gating a metric hides the
+	// affected volumes from the only people who can act on them, and unlike a Kubernetes event a
+	// metric reaches nobody who did not go looking.
+	//
+	// The consequence worth knowing: with the flags off, a volume can be Status=healthy and still
+	// carry a no_quota condition. That is not a contradiction - it is the difference between "we did
+	// not raise this to your users" and "this is not happening".
+	Conditions *prometheus.GaugeVec
 	// Volumes is the per-sweep tally: one series per status among healthy/abnormal/unknown/failed,
 	// set once at the end of every completed sweep. "failed" counts probes that errored during the
 	// sweep, which is not one of the values Status ever takes - a failed probe leaves the previous
@@ -250,6 +263,10 @@ func NewControllerVolumeHealthMetrics() *ControllerVolumeHealthMetrics {
 			Namespace: MetricsPrefix, Subsystem: volumeHealthSubsystem, Name: "status",
 			Help: "Health condition of the CSI volume as last observed by the volume health reconciler: 1 = healthy, 0 = abnormal, -1 = unknown (including a probe result older than the reconciler's max age)",
 		}, LabelsForCsiVolumes),
+		Conditions: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: MetricsPrefix, Subsystem: volumeHealthSubsystem, Name: "conditions",
+			Help: "Conditions found on a CSI volume by the volume health reconciler, 1 while the condition holds. Reported regardless of whether the driver is configured to raise it as an abnormal volume condition",
+		}, append(append([]string{}, LabelsForCsiVolumes...), "condition")),
 		Volumes: newGaugeVec(volumeHealthSubsystem, "volumes", "Number of volumes in each health status as of the last completed reconciliation sweep", CsiControllerVolumeHealthTallyMetricsLabels),
 		SweepDuration: newHistogramVec(volumeHealthSubsystem, "sweep_duration_seconds",
 			"Duration of a complete volume health reconciliation sweep in seconds", nil, HistogramDurationBuckets...),
@@ -261,6 +278,7 @@ func NewControllerVolumeHealthMetrics() *ControllerVolumeHealthMetrics {
 func (m *ControllerVolumeHealthMetrics) Collectors() []prometheus.Collector {
 	return []prometheus.Collector{
 		m.Status,
+		m.Conditions,
 		m.Volumes,
 		m.SweepDuration,
 		m.LastSweepTimestamp,

@@ -186,6 +186,13 @@ const (
 
 	volumeHealthyMessage = "volume exists on the Weka cluster and is reachable via the Weka API"
 
+	// Values of the "condition" label on weka_csi_volume_health_conditions. Stable strings: a
+	// dashboard or alert selects on them, so renaming one silently breaks whatever selects it.
+	volumeConditionNoApiClient   = "no_api_client"
+	volumeConditionNoQuota       = "no_quota"
+	volumeConditionQuotaMismatch = "quota_mismatch"
+	volumeConditionUnavailable   = "unavailable"
+
 	// The conditions below are surfaced to whoever can read events in the volume's namespace, which
 	// is not necessarily whoever administers the Weka cluster. They deliberately carry no filesystem
 	// name and no path inside the filesystem: a PersistentVolume is cluster-scoped and a namespace
