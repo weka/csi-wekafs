@@ -101,22 +101,6 @@ func (m *nfsMounter) Mount(ctx context.Context, fs string, apiClient *apiclient.
 	return m.mountWithOptions(ctx, fs, getDefaultMountOptions(), apiClient)
 }
 
-func (m *nfsMounter) unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error {
-	options.setSelinux(m.getSelinuxStatus(ctx), MountProtocolNfs)
-	options = options.AsNfs()
-	options.Merge(options, m.exclusiveMountOptions)
-	log.Ctx(ctx).Trace().Strs("mount_options", options.Strings()).Str("filesystem", fsName).Msg("Received an unmount request")
-	mnt := m.NewMount(fsName, options).(*nfsMount)
-	// since we are not aware of the IP address of the mount, we need to find the mount point by listing the mounts
-	err := mnt.locateMountIP()
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msg("Failed to locate mount IP")
-		return err
-	}
-
-	return mnt.decRef(ctx)
-}
-
 func (m *nfsMounter) LogActiveMounts(ctx context.Context) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
