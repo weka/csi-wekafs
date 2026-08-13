@@ -1362,7 +1362,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "(sum(rate(weka_csi_controller_create_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_delete_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_expand_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_create_snapshot_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_delete_snapshot_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_get_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_list_volumes_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_validate_volume_capabilities_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))) or vector(0)",
+              "expr": "(sum(rate(weka_csi_controller_create_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_delete_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_expand_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_create_snapshot_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_delete_snapshot_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_get_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_list_volumes_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval])) + sum(rate(weka_csi_controller_validate_volume_capabilities_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))) or vector(0)",
               "legendFormat": "errors/sec",
               "range": true,
               "instant": false,
@@ -1430,7 +1430,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "(sum(rate(weka_csi_node_publish_volume_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_unpublish_volume_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_get_volume_stats_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_get_info_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))) or vector(0)",
+              "expr": "(sum(rate(weka_csi_node_publish_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_unpublish_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_get_volume_stats_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval])) + sum(rate(weka_csi_node_get_info_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))) or vector(0)",
               "legendFormat": "errors/sec",
               "range": true,
               "instant": false,
@@ -1549,7 +1549,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_create_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_create_volume_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "create_volume",
               "range": true,
               "instant": false,
@@ -1561,7 +1561,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_delete_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_delete_volume_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "delete_volume",
               "range": true,
               "instant": false,
@@ -1573,7 +1573,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_expand_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_expand_volume_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "expand_volume",
               "range": true,
               "instant": false,
@@ -1585,7 +1585,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_create_snapshot_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_create_snapshot_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "create_snapshot",
               "range": true,
               "instant": false,
@@ -1597,7 +1597,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_delete_snapshot_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_delete_snapshot_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "delete_snapshot",
               "range": true,
               "instant": false,
@@ -1609,7 +1609,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_get_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_get_volume_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "get_volume",
               "range": true,
               "instant": false,
@@ -1621,7 +1621,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_list_volumes_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_list_volumes_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "list_volumes",
               "range": true,
               "instant": false,
@@ -1633,7 +1633,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_validate_volume_capabilities_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_validate_volume_capabilities_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "validate_volume_capabilities",
               "range": true,
               "instant": false,
@@ -1738,7 +1738,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_create_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_create_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "create_volume",
               "range": true,
               "instant": false,
@@ -1750,7 +1750,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_delete_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_delete_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "delete_volume",
               "range": true,
               "instant": false,
@@ -1762,7 +1762,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_expand_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_expand_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "expand_volume",
               "range": true,
               "instant": false,
@@ -1774,7 +1774,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_create_snapshot_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_create_snapshot_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "create_snapshot",
               "range": true,
               "instant": false,
@@ -1786,7 +1786,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_delete_snapshot_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_delete_snapshot_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "delete_snapshot",
               "range": true,
               "instant": false,
@@ -1798,7 +1798,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_get_volume_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_get_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "get_volume",
               "range": true,
               "instant": false,
@@ -1810,7 +1810,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_list_volumes_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_list_volumes_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "list_volumes",
               "range": true,
               "instant": false,
@@ -1822,7 +1822,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_validate_volume_capabilities_total{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_validate_volume_capabilities_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "validate_volume_capabilities",
               "range": true,
               "instant": false,
@@ -1927,7 +1927,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum by (backing_type) (rate(weka_csi_controller_create_volume_total{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum by (backing_type) (rate(weka_csi_controller_create_volume_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "{{backing_type}}",
               "range": true,
               "instant": false,
@@ -2032,7 +2032,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_create_volume_total_capacity_bytes{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_create_volume_total_capacity_bytes{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "provisioned (create)",
               "range": true,
               "instant": false,
@@ -2044,7 +2044,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_expand_volume_total_capacity_bytes{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_expand_volume_total_capacity_bytes{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "provisioned (expand)",
               "range": true,
               "instant": false,
@@ -2149,7 +2149,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "create_volume",
               "range": true,
               "instant": false,
@@ -2161,7 +2161,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "delete_volume",
               "range": true,
               "instant": false,
@@ -2173,7 +2173,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "expand_volume",
               "range": true,
               "instant": false,
@@ -2185,7 +2185,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "create_snapshot",
               "range": true,
               "instant": false,
@@ -2197,7 +2197,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "delete_snapshot",
               "range": true,
               "instant": false,
@@ -2209,7 +2209,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "get_volume",
               "range": true,
               "instant": false,
@@ -2221,7 +2221,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "list_volumes",
               "range": true,
               "instant": false,
@@ -2233,7 +2233,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "validate_volume_capabilities",
               "range": true,
               "instant": false,
@@ -2338,7 +2338,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "create_volume",
               "range": true,
               "instant": false,
@@ -2350,7 +2350,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "delete_volume",
               "range": true,
               "instant": false,
@@ -2362,7 +2362,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "expand_volume",
               "range": true,
               "instant": false,
@@ -2374,7 +2374,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "create_snapshot",
               "range": true,
               "instant": false,
@@ -2386,7 +2386,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "delete_snapshot",
               "range": true,
               "instant": false,
@@ -2398,7 +2398,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "get_volume",
               "range": true,
               "instant": false,
@@ -2410,7 +2410,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "list_volumes",
               "range": true,
               "instant": false,
@@ -2422,7 +2422,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "validate_volume_capabilities",
               "range": true,
               "instant": false,
@@ -2527,7 +2527,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_create_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "create_volume",
               "range": true,
               "instant": false,
@@ -2539,7 +2539,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_delete_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "delete_volume",
               "range": true,
               "instant": false,
@@ -2551,7 +2551,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_expand_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "expand_volume",
               "range": true,
               "instant": false,
@@ -2563,7 +2563,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_create_snapshot_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "create_snapshot",
               "range": true,
               "instant": false,
@@ -2575,7 +2575,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_delete_snapshot_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "delete_snapshot",
               "range": true,
               "instant": false,
@@ -2587,7 +2587,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_get_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "get_volume",
               "range": true,
               "instant": false,
@@ -2599,7 +2599,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_list_volumes_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "list_volumes",
               "range": true,
               "instant": false,
@@ -2611,7 +2611,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_controller_validate_volume_capabilities_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "validate_volume_capabilities",
               "range": true,
               "instant": false,
@@ -2731,7 +2731,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(weka_csi_controller_concurrency_create_volume{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "expr": "sum(weka_csi_controller_concurrency_create_volume{csi_driver_name=~\"$csi_driver_name\", status=\"acquired\",pod=~\"$controller_pod\"})",
               "legendFormat": "create_volume",
               "range": true,
               "instant": false,
@@ -2743,7 +2743,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(weka_csi_controller_concurrency_delete_volume{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "expr": "sum(weka_csi_controller_concurrency_delete_volume{csi_driver_name=~\"$csi_driver_name\", status=\"acquired\",pod=~\"$controller_pod\"})",
               "legendFormat": "delete_volume",
               "range": true,
               "instant": false,
@@ -2755,7 +2755,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(weka_csi_controller_concurrency_expand_volume{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "expr": "sum(weka_csi_controller_concurrency_expand_volume{csi_driver_name=~\"$csi_driver_name\", status=\"acquired\",pod=~\"$controller_pod\"})",
               "legendFormat": "expand_volume",
               "range": true,
               "instant": false,
@@ -2767,7 +2767,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(weka_csi_controller_concurrency_create_snapshot{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "expr": "sum(weka_csi_controller_concurrency_create_snapshot{csi_driver_name=~\"$csi_driver_name\", status=\"acquired\",pod=~\"$controller_pod\"})",
               "legendFormat": "create_snapshot",
               "range": true,
               "instant": false,
@@ -2779,7 +2779,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(weka_csi_controller_concurrency_delete_snapshot{status=\"acquired\",pod=~\"$controller_pod\"})",
+              "expr": "sum(weka_csi_controller_concurrency_delete_snapshot{csi_driver_name=~\"$csi_driver_name\", status=\"acquired\",pod=~\"$controller_pod\"})",
               "legendFormat": "delete_snapshot",
               "range": true,
               "instant": false,
@@ -2884,7 +2884,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_create_volume_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_create_volume_wait_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "create_volume",
               "range": true,
               "instant": false,
@@ -2896,7 +2896,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_delete_volume_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_delete_volume_wait_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "delete_volume",
               "range": true,
               "instant": false,
@@ -2908,7 +2908,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_expand_volume_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_expand_volume_wait_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "expand_volume",
               "range": true,
               "instant": false,
@@ -2920,7 +2920,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_create_snapshot_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_create_snapshot_wait_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "create_snapshot",
               "range": true,
               "instant": false,
@@ -2932,7 +2932,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_delete_snapshot_wait_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_controller_concurrency_delete_snapshot_wait_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "delete_snapshot",
               "range": true,
               "instant": false,
@@ -3037,7 +3037,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_create_volume{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_create_volume{csi_driver_name=~\"$csi_driver_name\", status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "create_volume success",
               "range": true,
               "instant": false,
@@ -3049,7 +3049,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_delete_volume{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_delete_volume{csi_driver_name=~\"$csi_driver_name\", status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "delete_volume success",
               "range": true,
               "instant": false,
@@ -3061,7 +3061,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_expand_volume{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_expand_volume{csi_driver_name=~\"$csi_driver_name\", status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "expand_volume success",
               "range": true,
               "instant": false,
@@ -3073,7 +3073,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_create_snapshot{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_create_snapshot{csi_driver_name=~\"$csi_driver_name\", status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "create_snapshot success",
               "range": true,
               "instant": false,
@@ -3085,7 +3085,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_delete_snapshot{status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_delete_snapshot{csi_driver_name=~\"$csi_driver_name\", status=\"success\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "delete_snapshot success",
               "range": true,
               "instant": false,
@@ -3097,7 +3097,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_create_volume{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_create_volume{csi_driver_name=~\"$csi_driver_name\", status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "create_volume failure",
               "range": true,
               "instant": false,
@@ -3109,7 +3109,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_delete_volume{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_delete_volume{csi_driver_name=~\"$csi_driver_name\", status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "delete_volume failure",
               "range": true,
               "instant": false,
@@ -3121,7 +3121,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_expand_volume{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_expand_volume{csi_driver_name=~\"$csi_driver_name\", status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "expand_volume failure",
               "range": true,
               "instant": false,
@@ -3133,7 +3133,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_create_snapshot{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_create_snapshot{csi_driver_name=~\"$csi_driver_name\", status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "create_snapshot failure",
               "range": true,
               "instant": false,
@@ -3145,7 +3145,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_controller_concurrency_delete_snapshot{status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_controller_concurrency_delete_snapshot{csi_driver_name=~\"$csi_driver_name\", status=\"failure\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "delete_snapshot failure",
               "range": true,
               "instant": false,
@@ -3264,7 +3264,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_node_publish_volume_total{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_node_publish_volume_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "publish_volume",
               "range": true,
               "instant": false,
@@ -3276,7 +3276,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_node_unpublish_volume_total{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_node_unpublish_volume_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "unpublish_volume",
               "range": true,
               "instant": false,
@@ -3288,7 +3288,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_node_get_volume_stats_total{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_node_get_volume_stats_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "get_volume_stats",
               "range": true,
               "instant": false,
@@ -3300,7 +3300,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_node_get_info_total{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_node_get_info_total{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "get_info",
               "range": true,
               "instant": false,
@@ -3405,7 +3405,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_node_publish_volume_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_node_publish_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "publish_volume",
               "range": true,
               "instant": false,
@@ -3417,7 +3417,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_node_unpublish_volume_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_node_unpublish_volume_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "unpublish_volume",
               "range": true,
               "instant": false,
@@ -3429,7 +3429,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_node_get_volume_stats_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_node_get_volume_stats_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "get_volume_stats",
               "range": true,
               "instant": false,
@@ -3441,7 +3441,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(rate(weka_csi_node_get_info_total{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum(rate(weka_csi_node_get_info_total{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "get_info",
               "range": true,
               "instant": false,
@@ -3546,7 +3546,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "publish_volume",
               "range": true,
               "instant": false,
@@ -3558,7 +3558,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "unpublish_volume",
               "range": true,
               "instant": false,
@@ -3570,7 +3570,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "get_volume_stats",
               "range": true,
               "instant": false,
@@ -3582,7 +3582,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.5, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "get_info",
               "range": true,
               "instant": false,
@@ -3687,7 +3687,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "publish_volume",
               "range": true,
               "instant": false,
@@ -3699,7 +3699,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "unpublish_volume",
               "range": true,
               "instant": false,
@@ -3711,7 +3711,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "get_volume_stats",
               "range": true,
               "instant": false,
@@ -3723,7 +3723,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "get_info",
               "range": true,
               "instant": false,
@@ -3828,7 +3828,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_publish_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "publish_volume",
               "range": true,
               "instant": false,
@@ -3840,7 +3840,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_unpublish_volume_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "unpublish_volume",
               "range": true,
               "instant": false,
@@ -3852,7 +3852,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_get_volume_stats_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "get_volume_stats",
               "range": true,
               "instant": false,
@@ -3864,7 +3864,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(weka_csi_node_get_info_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "get_info",
               "range": true,
               "instant": false,
@@ -3984,7 +3984,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(weka_csi_node_concurrency_node_publish_volume{status=\"acquired\",pod=~\"$node_pod\"})",
+              "expr": "sum(weka_csi_node_concurrency_node_publish_volume{csi_driver_name=~\"$csi_driver_name\", status=\"acquired\",pod=~\"$node_pod\"})",
               "legendFormat": "node_publish_volume",
               "range": true,
               "instant": false,
@@ -3996,7 +3996,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum(weka_csi_node_concurrency_node_unpublish_volume{status=\"acquired\",pod=~\"$node_pod\"})",
+              "expr": "sum(weka_csi_node_concurrency_node_unpublish_volume{csi_driver_name=~\"$csi_driver_name\", status=\"acquired\",pod=~\"$node_pod\"})",
               "legendFormat": "node_unpublish_volume",
               "range": true,
               "instant": false,
@@ -4101,7 +4101,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_concurrency_node_publish_volume_wait_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_concurrency_node_publish_volume_wait_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "node_publish_volume",
               "range": true,
               "instant": false,
@@ -4113,7 +4113,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_concurrency_node_unpublish_volume_wait_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(weka_csi_node_concurrency_node_unpublish_volume_wait_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "node_unpublish_volume",
               "range": true,
               "instant": false,
@@ -4232,7 +4232,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum by (url) (rate(weka_csi_api_request_count{pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum by (url) (rate(weka_csi_api_request_count{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "{{url}}",
               "range": true,
               "instant": false,
@@ -4337,7 +4337,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum by (url) (rate(weka_csi_api_request_count{pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum by (url) (rate(weka_csi_api_request_count{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "{{url}}",
               "range": true,
               "instant": false,
@@ -4352,7 +4352,7 @@
           },
           "type": "timeseries",
           "title": "WEKA API request latency by URL, p95 (controller)",
-          "description": "p95 latency of WEKA REST API calls from controller pods, by URL template, via histogram_quantile over weka_csi_api_request_duration_seconds (buckets extend to 300s to capture slow long-poll/bulk-quota style calls).",
+          "description": "p95 latency of WEKA REST API calls from controller pods, by URL template, via histogram_quantile over weka_csi_api_request_duration_seconds{csi_driver_name=~\"$csi_driver_name\"} (buckets extend to 300s to capture slow long-poll/bulk-quota style calls).",
           "id": 128,
           "gridPos": {
             "h": 8,
@@ -4442,7 +4442,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le, url) (rate(weka_csi_api_request_duration_seconds_bucket{pod=~\"$controller_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le, url) (rate(weka_csi_api_request_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$controller_pod\"}[$__rate_interval])))",
               "legendFormat": "{{url}}",
               "range": true,
               "instant": false,
@@ -4547,7 +4547,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le, url) (rate(weka_csi_api_request_duration_seconds_bucket{pod=~\"$node_pod\"}[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le, url) (rate(weka_csi_api_request_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\", pod=~\"$node_pod\"}[$__rate_interval])))",
               "legendFormat": "{{url}}",
               "range": true,
               "instant": false,
@@ -4652,7 +4652,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum by (url) (rate(weka_csi_api_request_count{status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
+              "expr": "sum by (url) (rate(weka_csi_api_request_count{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$controller_pod\"}[$__rate_interval]))",
               "legendFormat": "{{url}}",
               "range": true,
               "instant": false,
@@ -4757,7 +4757,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "sum by (url) (rate(weka_csi_api_request_count{status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
+              "expr": "sum by (url) (rate(weka_csi_api_request_count{csi_driver_name=~\"$csi_driver_name\", status=\"FAILURE\",pod=~\"$node_pod\"}[$__rate_interval]))",
               "legendFormat": "{{url}}",
               "range": true,
               "instant": false,
@@ -4778,6 +4778,32 @@
   "templating": {
     "list": [
       {
+        "name": "csi_driver_name",
+        "label": "CSI driver",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": {
+          "query": "label_values(weka_csi_api_request_count{csi_driver_name=~\"$csi_driver_name\"}, csi_driver_name)",
+          "refId": "var"
+        },
+        "definition": "label_values(weka_csi_api_request_count{csi_driver_name=~\"$csi_driver_name\"}, csi_driver_name)",
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".+",
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "hide": 0
+      },
+      {
         "allowCustomValue": false,
         "current": {
           "text": [
@@ -4787,13 +4813,13 @@
             "$__all"
           ]
         },
-        "definition": "label_values(weka_csi_controller_create_volume_total,pod)",
+        "definition": "label_values(weka_csi_controller_create_volume_total{csi_driver_name=~\"$csi_driver_name\"},pod)",
         "label": "Controller pod",
         "name": "controller_pod",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(weka_csi_controller_create_volume_total,pod)",
+          "query": "label_values(weka_csi_controller_create_volume_total{csi_driver_name=~\"$csi_driver_name\"},pod)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery-controller_pod"
         },
         "refresh": 2,
@@ -4815,13 +4841,13 @@
             "$__all"
           ]
         },
-        "definition": "label_values(weka_csi_node_publish_volume_total,pod)",
+        "definition": "label_values(weka_csi_node_publish_volume_total{csi_driver_name=~\"$csi_driver_name\"},pod)",
         "label": "Node pod",
         "name": "node_pod",
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(weka_csi_node_publish_volume_total,pod)",
+          "query": "label_values(weka_csi_node_publish_volume_total{csi_driver_name=~\"$csi_driver_name\"},pod)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery-node_pod"
         },
         "refresh": 2,

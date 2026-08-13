@@ -174,7 +174,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 1) or vector(0)",
+          "expr": "count(weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 1) or vector(0)",
           "legendFormat": "Healthy",
           "range": false,
           "instant": true,
@@ -189,7 +189,7 @@
       },
       "type": "stat",
       "title": "Probe failures (last sweep)",
-      "description": "Probes that ERRORED during the last sweep. This is NOT a volume state and does NOT add to the other three tiles - it overlaps them: a failed probe leaves the volume's previous status in place rather than overwriting it with a guess. NOTE: this is the only tile that CANNOT honour the filters above - it comes from weka_csi_volume_health_volumes, which carries no per-volume labels. It is always fleet-wide.",
+      "description": "Probes that ERRORED during the last sweep. This is NOT a volume state and does NOT add to the other three tiles - it overlaps them: a failed probe leaves the volume's previous status in place rather than overwriting it with a guess. NOTE: this is the only tile that CANNOT honour the filters above - it comes from weka_csi_volume_health_volumes{csi_driver_name=~\"$csi_driver_name\"}, which carries no per-volume labels. It is always fleet-wide.",
       "id": 5,
       "gridPos": {
         "h": 4,
@@ -238,7 +238,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(last_over_time(weka_csi_volume_health_volumes{status=\"failed\"}[$value_max_age])) or vector(0)",
+          "expr": "sum(last_over_time(weka_csi_volume_health_volumes{csi_driver_name=~\"$csi_driver_name\", status=\"failed\"}[$value_max_age])) or vector(0)",
           "legendFormat": "Failed",
           "range": false,
           "instant": true,
@@ -305,7 +305,7 @@
           "instant": true,
           "range": false,
           "refId": "A",
-          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"corrupt\"})) or vector(0)"
+          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"corrupt\"})) or vector(0)"
         }
       ]
     },
@@ -368,7 +368,7 @@
           "instant": true,
           "range": false,
           "refId": "A",
-          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"degraded\"})) or vector(0)"
+          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"degraded\"})) or vector(0)"
         }
       ]
     },
@@ -431,7 +431,7 @@
           "instant": true,
           "range": false,
           "refId": "A",
-          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"unknown\"})) or vector(0)"
+          "expr": "count(count by (pv_name) (weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", category=\"unknown\"})) or vector(0)"
         }
       ]
     },
@@ -667,7 +667,7 @@
           "legendFormat": "healthy",
           "range": true,
           "instant": false,
-          "expr": "count(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}) - (count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})) or vector(0))"
+          "expr": "count(weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}) - (count(count by (pv_name) (weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})) or vector(0))"
         },
         {
           "datasource": {
@@ -679,7 +679,7 @@
           "legendFormat": "corrupt / directory_not_found",
           "range": true,
           "instant": false,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"directory_not_found\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"directory_not_found\"})"
         },
         {
           "datasource": {
@@ -691,7 +691,7 @@
           "legendFormat": "corrupt / snapshot_not_found",
           "range": true,
           "instant": false,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"snapshot_not_found\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"snapshot_not_found\"})"
         },
         {
           "datasource": {
@@ -703,7 +703,7 @@
           "legendFormat": "corrupt / filesystem_not_found",
           "range": true,
           "instant": false,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_not_found\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_not_found\"})"
         },
         {
           "datasource": {
@@ -715,7 +715,7 @@
           "legendFormat": "corrupt / filesystem_removing",
           "range": true,
           "instant": false,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_removing\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_removing\"})"
         },
         {
           "datasource": {
@@ -727,7 +727,7 @@
           "legendFormat": "degraded / no_quota",
           "range": true,
           "instant": false,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_quota\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_quota\"})"
         },
         {
           "datasource": {
@@ -739,7 +739,7 @@
           "legendFormat": "degraded / quota_mismatch",
           "range": true,
           "instant": false,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"quota_mismatch\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"quota_mismatch\"})"
         },
         {
           "datasource": {
@@ -751,7 +751,7 @@
           "legendFormat": "unknown / legacy_volume",
           "range": true,
           "instant": false,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"legacy_volume\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"legacy_volume\"})"
         }
       ]
     },
@@ -861,7 +861,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum by (le, csi_driver_name) (rate(weka_csi_volume_health_sweep_duration_seconds_bucket[$__rate_interval])))",
+              "expr": "histogram_quantile(0.50, sum by (le, csi_driver_name) (rate(weka_csi_volume_health_sweep_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\"}[$__rate_interval])))",
               "legendFormat": "p50 {{csi_driver_name}}",
               "range": true,
               "instant": false,
@@ -873,7 +873,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.95, sum by (le, csi_driver_name) (rate(weka_csi_volume_health_sweep_duration_seconds_bucket[$__rate_interval])))",
+              "expr": "histogram_quantile(0.95, sum by (le, csi_driver_name) (rate(weka_csi_volume_health_sweep_duration_seconds_bucket{csi_driver_name=~\"$csi_driver_name\"}[$__rate_interval])))",
               "legendFormat": "p95 {{csi_driver_name}}",
               "range": true,
               "instant": false,
@@ -888,7 +888,7 @@
           },
           "type": "stat",
           "title": "Time since last sweep",
-          "description": "time() minus weka_csi_volume_health_last_sweep_timestamp_seconds, per csi_driver_name. Looks back up to 6h (a fixed, deliberately generous window, not a rate() window) so the panel can still report a large staleness value if the reconciler has been down for a while, rather than going blank. Green under 10m, orange 10-30m, red beyond volumeHealthMaxAge (30m) \u2014 the point at which the reconciler itself starts marking entries unknown.",
+          "description": "time() minus weka_csi_volume_health_last_sweep_timestamp_seconds{csi_driver_name=~\"$csi_driver_name\"}, per csi_driver_name. Looks back up to 6h (a fixed, deliberately generous window, not a rate() window) so the panel can still report a large staleness value if the reconciler has been down for a while, rather than going blank. Green under 10m, orange 10-30m, red beyond volumeHealthMaxAge (30m) \u2014 the point at which the reconciler itself starts marking entries unknown.",
           "id": 17,
           "gridPos": {
             "h": 8,
@@ -944,7 +944,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "time() - max by (csi_driver_name) (last_over_time(weka_csi_volume_health_last_sweep_timestamp_seconds[6h]))",
+              "expr": "time() - max by (csi_driver_name) (last_over_time(weka_csi_volume_health_last_sweep_timestamp_seconds{csi_driver_name=~\"$csi_driver_name\"}[6h]))",
               "legendFormat": "{{csi_driver_name}}",
               "range": false,
               "instant": true,
@@ -1039,7 +1039,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "count by (filesystem_name) (weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0)",
+              "expr": "count by (filesystem_name) (weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0)",
               "legendFormat": "__auto",
               "range": false,
               "instant": true,
@@ -1052,7 +1052,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "count by (filesystem_name) (weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == -1)",
+              "expr": "count by (filesystem_name) (weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == -1)",
               "legendFormat": "__auto",
               "range": false,
               "instant": true,
@@ -1195,7 +1195,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "count by (storage_class_name) (weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0)",
+              "expr": "count by (storage_class_name) (weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0)",
               "legendFormat": "__auto",
               "range": false,
               "instant": true,
@@ -1208,7 +1208,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "count by (storage_class_name) (weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == -1)",
+              "expr": "count by (storage_class_name) (weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == -1)",
               "legendFormat": "__auto",
               "range": false,
               "instant": true,
@@ -1351,7 +1351,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "count by (organization) (weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0)",
+              "expr": "count by (organization) (weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == 0)",
               "legendFormat": "__auto",
               "range": false,
               "instant": true,
@@ -1364,7 +1364,7 @@
                 "uid": "${DS_PROMETHEUS}"
               },
               "editorMode": "code",
-              "expr": "count by (organization) (weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == -1)",
+              "expr": "count by (organization) (weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"} == -1)",
               "legendFormat": "__auto",
               "range": false,
               "instant": true,
@@ -1640,7 +1640,7 @@
           "legendFormat": "healthy",
           "range": false,
           "instant": true,
-          "expr": "count(weka_csi_volume_health_status{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}) - (count(count by (pv_name) (weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})) or vector(0))"
+          "expr": "count(weka_csi_volume_health_status{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}) - (count(count by (pv_name) (weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"})) or vector(0))"
         },
         {
           "datasource": {
@@ -1652,7 +1652,7 @@
           "legendFormat": "corrupt / directory_not_found",
           "range": false,
           "instant": true,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"directory_not_found\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"directory_not_found\"})"
         },
         {
           "datasource": {
@@ -1664,7 +1664,7 @@
           "legendFormat": "corrupt / snapshot_not_found",
           "range": false,
           "instant": true,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"snapshot_not_found\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"snapshot_not_found\"})"
         },
         {
           "datasource": {
@@ -1676,7 +1676,7 @@
           "legendFormat": "corrupt / filesystem_not_found",
           "range": false,
           "instant": true,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_not_found\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_not_found\"})"
         },
         {
           "datasource": {
@@ -1688,7 +1688,7 @@
           "legendFormat": "corrupt / filesystem_removing",
           "range": false,
           "instant": true,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_removing\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"filesystem_removing\"})"
         },
         {
           "datasource": {
@@ -1700,7 +1700,7 @@
           "legendFormat": "degraded / no_quota",
           "range": false,
           "instant": true,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_quota\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_quota\"})"
         },
         {
           "datasource": {
@@ -1712,7 +1712,7 @@
           "legendFormat": "degraded / quota_mismatch",
           "range": false,
           "instant": true,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"quota_mismatch\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"quota_mismatch\"})"
         },
         {
           "datasource": {
@@ -1724,7 +1724,7 @@
           "legendFormat": "unknown / legacy_volume",
           "range": false,
           "instant": true,
-          "expr": "count(weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"legacy_volume\"})"
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"legacy_volume\"})"
         }
       ]
     },
@@ -1798,7 +1798,7 @@
           "editorMode": "code",
           "format": "table",
           "instant": true,
-          "expr": "weka_csi_volume_health_conditions{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}",
+          "expr": "weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}",
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
@@ -1844,6 +1844,32 @@
   ],
   "templating": {
     "list": [
+      {
+        "name": "csi_driver_name",
+        "label": "CSI driver",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": {
+          "query": "label_values(weka_csi_volume_health_status, csi_driver_name)",
+          "refId": "var"
+        },
+        "definition": "label_values(weka_csi_volume_health_status, csi_driver_name)",
+        "multi": false,
+        "includeAll": true,
+        "allValue": ".+",
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": [],
+        "hide": 0
+      },
       {
         "name": "value_max_age",
         "label": "Value max age",
