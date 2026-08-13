@@ -8,7 +8,11 @@ import (
 )
 
 type AnyServer interface {
-	getMounter() AnyMounter
+	getMounter(ctx context.Context) AnyMounter
+	// getMounterByTransport returns the mounter for one specific transport, which is what unmounting
+	// an existing mount has to use: the transport a volume was mounted with is a property of that
+	// mount, not of whichever transport happens to be preferred now.
+	getMounterByTransport(ctx context.Context, transport DataTransport) AnyMounter
 	getApiStore() *ApiStore
 	getConfig() *DriverConfig
 	isInDevMode() bool
@@ -26,10 +30,14 @@ type AnyMounter interface {
 	schedulePeriodicMountGc(ctx context.Context)
 	getGarbageCollector() *innerPathVolGc
 	getTransport() DataTransport
+	// Enable and Disable gate a mounter at runtime. Both mounters exist for the whole process life
+	// so that one node can serve some volumes over wekafs and others over NFS, and Probe flips these
+	// as the Weka client comes and goes underneath.
+	Enable()
+	Disable()
+	isEnabled() bool
 }
 
-type nfsMountsMap map[string]int // we only follow the mountPath and number of references
-type wekafsMountsMap map[string]int
 type DataTransport string
 type UnmountFunc func() error
 
@@ -49,11 +57,11 @@ type AnyMount interface {
 	isMounted(ctx context.Context) bool
 	incRef(ctx context.Context, apiClient *apiclient.ApiClient) error
 	decRef(ctx context.Context) error
-	getRefCount() int
 	doUnmount(ctx context.Context) error
 	doMount(ctx context.Context, apiClient *apiclient.ApiClient, mountOptions MountOptions) error
 	getMountPoint() string
 	getMountOptions() MountOptions
+	getRefcountIdx() string
 	getLastUsed() time.Time
 }
 
