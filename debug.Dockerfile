@@ -1,4 +1,4 @@
-ARG UBI_HASH=9.8-1786380870
+ARG UBI_HASH=9.8-1788166357
 
 # Build Delve using Debian-based golang (compatible with UBI/glibc)
 FROM golang:1.26.5 AS delve-builder
