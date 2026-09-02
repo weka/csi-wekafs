@@ -1,7 +1,7 @@
 ARG UBI_HASH=9.8-1786380870
 
 # Build Delve using Debian-based golang (compatible with UBI/glibc)
-FROM golang:1.26.5 AS delve-builder
+FROM golang:1.27.1 AS delve-builder
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install -ldflags "-s -w -extldflags '-static'" github.com/go-delve/delve/cmd/dlv@latest
 
 FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH}
