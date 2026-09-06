@@ -311,19 +311,7 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 	}
 	apiResponse := &ApiResponse{}
 	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
-	if err != nil {
-		switch t := err.(type) {
-		case *ApiNotFoundError:
-			return ObjectNotFoundError
-		case *ApiBadRequestError:
-			for _, c := range t.ApiResponse.ErrorCodes {
-				if c == "FilesystemDoesNotExistException" {
-					return ObjectNotFoundError
-				}
-			}
-		}
-	}
-	return nil
+	return classifyDeleteError(err, "FilesystemDoesNotExistException")
 }
 
 func (a *ApiClient) EnsureNoNfsPermissionsForFilesystem(ctx context.Context, fsName string) error {
