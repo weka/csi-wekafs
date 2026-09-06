@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"slices"
@@ -195,9 +196,19 @@ func (ms *MetricsServer) PersistentVolumeStreamer(ctx context.Context) {
 		pvList := &v1.PersistentVolumeList{}
 
 		volumeLimit := MetricsServerVolumeLimit
-		// override the maximum count of PersistentVolumes to fetch from environment variable if set
+		// override the maximum count of PersistentVolumes to fetch from environment variable if set.
+		// A value that is unparseable, negative or wider than an int is reported and ignored rather
+		// than silently truncated into a nonsensical limit.
 		if maxCountStr := os.Getenv("MAXIMUM_PERSISTENT_VOLUME_COUNT"); maxCountStr != "" {
-			if maxCount, err := strconv.ParseInt(maxCountStr, 10, 64); err == nil {
+			maxCount, err := strconv.ParseInt(maxCountStr, 10, 64)
+			switch {
+			case err != nil:
+				logger.Warn().Err(err).Str("value", maxCountStr).
+					Msg("MAXIMUM_PERSISTENT_VOLUME_COUNT is not a number, keeping the default volume limit")
+			case maxCount <= 0 || maxCount > math.MaxInt32:
+				logger.Warn().Int64("value", maxCount).Int("default", MetricsServerVolumeLimit).
+					Msg("MAXIMUM_PERSISTENT_VOLUME_COUNT is out of range, keeping the default volume limit")
+			default:
 				volumeLimit = int(maxCount)
 			}
 		}
