@@ -840,7 +840,7 @@ func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool,
 
 func (v *Volume) Trash(ctx context.Context) error {
 	if v.requiresGc() {
-		return v.server.getMounter().getGarbageCollector().triggerGcVolume(ctx, v)
+		return v.server.getMounter(ctx).getGarbageCollector().triggerGcVolume(ctx, v)
 	}
 	return v.Delete(ctx)
 }
@@ -1087,13 +1087,13 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 	defer span.End()
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
-	if v.server.getMounter() == nil {
+	if v.server.getMounter(ctx) == nil {
 		return errors.New("could not mount volume, mounter not in context"), NoOpUnmount
 	}
 
 	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
 
-	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
+	mount, err, unmountFunc := v.server.getMounter(ctx).mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := NoOpUnmount
 	if err == nil {
 		v.mountPath = mount
@@ -1824,7 +1824,7 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 		return nil
 	}
 	if !fsObj.IsRemoving { // if filesystem is already removing, just wait
-		if v.server.getMounter().getTransport() == dataTransportNfs {
+		if v.server.getMounter(ctx).getTransport() == dataTransportNfs {
 			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
 			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
 			if err != nil {

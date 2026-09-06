@@ -110,7 +110,7 @@ type MetricsServer struct {
 // already turns a nil mounter into a clean error (see volume.go), so a volume whose inode cannot be
 // resolved through the API on a metrics-server-driven cluster simply reports "inode unknown"
 // instead of crashing the process.
-func (ms *MetricsServer) getMounter() AnyMounter {
+func (ms *MetricsServer) getMounter(ctx context.Context) AnyMounter {
 	return nil
 }
 

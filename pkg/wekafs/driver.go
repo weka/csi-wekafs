@@ -56,10 +56,13 @@ type WekaFsDriver struct {
 	mountMode         string
 	mockMount         bool
 
-	ids            *identityServer
-	ns             *NodeServer
-	cs             *ControllerServer
-	ms             *MetricsServer
+	ids *identityServer
+	ns  *NodeServer
+	cs  *ControllerServer
+	ms  *MetricsServer
+	// Shared by the controller and node servers, and re-evaluated by Probe as the Weka client comes
+	// and goes on the host.
+	mounters       *MounterGroup
 	api            *ApiStore
 	debugPath      string
 	csiMode        CsiPluginMode
@@ -144,10 +147,12 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	}
 
 	// Without a CSI gRPC surface there are no volumes to mount and no Identity service to answer, so
-	// skip building a real mounter and the IdentityServer.
-	var mounter AnyMounter
+	// skip building the mounters and the IdentityServer. One group is built for the whole process and
+	// shared by both servers, so a filesystem mounted by one is the same mount the other sees.
+	var mounters *MounterGroup
 	if driver.csiMode.servesCsiGrpc() {
-		mounter = driver.NewMounter(ctx)
+		mounters = NewMounterGroup(ctx, driver)
+		driver.mounters = mounters
 
 		// Create servers
 		log.Info().Msg("Loading IdentityServer")
@@ -162,7 +167,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 			log.Warn().Err(err).Msg("Failed to initialize Kubernetes manager, running without leader election")
 		}
 
-		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounter, driver.config, driver.manager)
+		driver.cs = NewControllerServer(driver.nodeID, driver.api, mounters, driver.config, driver.manager)
 	} else {
 		driver.cs = &ControllerServer{}
 	}
@@ -185,7 +190,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		}
 
 		log.Info().Msg("Loading NodeServer")
-		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounter, driver.config)
+		driver.ns = NewNodeServer(driver.nodeID, driver.maxVolumesPerNode, driver.api, mounters, driver.config)
 
 		// Read zone/region from node labels at startup so they are available
 		// when NodeGetInfo is called during registration (e.g. after CSI upgrade).
