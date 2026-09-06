@@ -19,6 +19,8 @@ package wekafs
 import (
 	"io/fs"
 	"time"
+
+	"github.com/wekafs/csi-wekafs/pkg/volumeid"
 )
 
 const (
@@ -31,10 +33,10 @@ const (
 )
 
 const (
-	VolumeTypeDirV1   VolumeType = "dir/v1"  // if specified in storage class, create directory quotas (as in legacy CSI volumes). FS name must be set in SC as well
-	VolumeTypeUnified VolumeType = "weka/v2" // no need to specify this in storageClass
-	VolumeTypeUNKNOWN VolumeType = "AMBIGUOUS_VOLUME_TYPE"
-	VolumeTypeEmpty   VolumeType = ""
+	VolumeTypeDirV1   = volumeid.TypeDirV1   // if specified in storage class, create directory quotas (as in legacy CSI volumes). FS name must be set in SC as well
+	VolumeTypeUnified = volumeid.TypeUnified // no need to specify this in storageClass
+	VolumeTypeUNKNOWN = volumeid.TypeUnknown
+	VolumeTypeEmpty   = volumeid.TypeEmpty
 
 	LegacySecretPath = "/legacy-volume-access"
 
@@ -54,7 +56,9 @@ func (mode CsiPluginMode) servesCsiGrpc() bool {
 
 var DefaultVolumePermissions fs.FileMode = 0750
 
-var KnownVolTypes = [...]VolumeType{VolumeTypeDirV1, VolumeTypeUnified}
+// KnownVolTypes aliases the list in pkg/volumeid rather than restating it, so that adding a
+// volume type cannot leave the driver and the handle parser disagreeing about what exists.
+var KnownVolTypes = volumeid.KnownTypes
 
 const (
 	deviceID                            = "deviceID"
