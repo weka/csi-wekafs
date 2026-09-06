@@ -4,7 +4,7 @@
 
 Kubernetes CSI (Container Storage Interface) driver for WekaFS, a high-performance distributed filesystem. Supports native Weka protocol and NFS transport, snapshots, encryption, dynamic/static provisioning, and observability via Prometheus metrics and OpenTelemetry tracing.
 
-**Current version**: 2.8.3
+**Current version**: 2.9.0
 **Language**: Go 1.26
 **Registry**: `quay.io/weka.io/csi-wekafs`
 **GitHub**: `github.com/weka/csi-wekafs`
@@ -15,7 +15,9 @@ Kubernetes CSI (Container Storage Interface) driver for WekaFS, a high-performan
 csi-wekafs/
 ├── cmd/
 │   ├── wekafsplugin/            # Main CSI driver binary entry point
+│   ├── metricsserver/           # Standalone metrics server binary (same code as --csimode=metricsserver)
 │   └── wait-for-leader/         # Leader election gate utility
+├── pkg/bootstrap/               # Process startup shared by the cmd/ binaries (logging, /metrics, tracing)
 ├── pkg/wekafs/                  # Core driver package
 │   ├── apiclient/               # Weka REST API client (auth, filesystem, snapshot, NFS, quota, KMS)
 │   ├── controllerserver.go      # CSI Controller (Create/Delete Volume, Snapshots, Expand)
@@ -30,6 +32,7 @@ csi-wekafs/
 │   ├── driverconfig.go          # Configuration management
 │   ├── gc.go                    # Garbage collection for orphaned data
 │   └── utilities.go             # Helpers (volume IDs, validation)
+├── charts/csi-metricsserver/    # Helm chart for the standalone metrics server Deployment
 ├── charts/csi-wekafsplugin/     # Helm chart for K8s deployment
 │   ├── Chart.yaml
 │   ├── values.yaml              # 100+ configurable options

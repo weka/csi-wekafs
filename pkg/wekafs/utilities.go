@@ -639,7 +639,8 @@ func GetCsiPluginMode(mode *string) CsiPluginMode {
 	switch ret {
 	case CsiModeNode,
 		CsiModeController,
-		CsiModeAll:
+		CsiModeAll,
+		CsiModeMetricsServer:
 		return ret
 	default:
 		log.Fatal().Str("required_plugin_mode", string(ret)).Msg("Unsupported plugin mode")
@@ -672,9 +673,16 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 			// volume look statically provisioned - silently, since a missing annotation is
 			// indistinguishable from an absent one.
 			Annotations: pv.ObjectMeta.Annotations,
+			// Needed by the metrics server (processSinglePersistentVolume) to skip a volume that is
+			// already being deleted rather than tracking it right before it disappears.
+			DeletionTimestamp: pv.ObjectMeta.DeletionTimestamp,
 		},
 		Spec: v1.PersistentVolumeSpec{
 			Capacity: pv.Spec.Capacity, // Need for capacity validation
+			// ClaimRef and StorageClassName are only read by the metrics server, to label the
+			// per-volume Prometheus series it reports (createPrometheusLabelsForMetric).
+			ClaimRef:         pv.Spec.ClaimRef,
+			StorageClassName: pv.Spec.StorageClassName,
 		},
 		Status: v1.PersistentVolumeStatus{
 			Phase: pv.Status.Phase, // Need to check if Bound or Released
@@ -694,7 +702,9 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 			// The StorageClass parameters a volume was provisioned with are persisted here, and are
 			// the only record of them once the StorageClass has moved on. capacityEnforcement and
 			// quotaGracePeriod decide what kind of quota a volume should have, so dropping these
-			// left every volume looking as though it asked for the defaults.
+			// left every volume looking as though it asked for the defaults. The metrics server
+			// also reads them (ensurePersistentVolumeValid), to check the volume type is one it
+			// knows how to report on.
 			VolumeAttributes: pv.Spec.CSI.VolumeAttributes,
 		}
 	}

@@ -43,41 +43,60 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 		}
 	}
 
-	// Add runnable that starts gRPC server when we become leader
-	err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		// This only runs when we are the leader
-		log.Info().Msg("Became leader - starting gRPC server")
-
-		s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
-
-		// Mark as leader for health checks
-		driver.isLeader.Store(true)
-
-		// Signal to sidecars that we are the leader
-		if err := createLeaderReadyFile(); err != nil {
-			log.Error().Err(err).Msg("Failed to create leader ready file")
+	// Register the metrics server's health checks and leadership-gated Runnable, same as the health
+	// reconciler above. Nil-guarded since it is only constructed for the modes that run one - under
+	// CsiModeAll it may legitimately be absent (see NewWekaFsDriver). Must happen before
+	// driver.manager.Start below - controller-runtime rejects Add calls once the manager is started.
+	// A failure is fatal in a dedicated metrics-server pod, whose only job this is, and tolerated under
+	// CsiModeAll, where the CSI services carry on without metrics (same split as in NewWekaFsDriver).
+	if driver.ms != nil {
+		if err := driver.ms.AddToManager(); err != nil {
+			if driver.csiMode == CsiModeMetricsServer {
+				log.Fatal().Err(err).Msg("Failed to register metrics server, nothing left for this pod to run")
+			}
+			log.Error().Err(err).Msg("Failed to register metrics server, metrics will not be available")
 		}
+	}
 
-		// Wait for context cancellation (leadership lost or shutdown)
-		<-ctx.Done()
+	// A mode with no CSI gRPC surface never registers the leader-gated gRPC runnable below; a
+	// metrics-server pod's work is driven entirely by the Runnable registered above.
+	if driver.csiMode.servesCsiGrpc() {
+		// Add runnable that starts gRPC server when we become leader
+		err := driver.manager.Add(manager.RunnableFunc(func(ctx context.Context) error {
+			// This only runs when we are the leader
+			log.Info().Msg("Became leader - starting gRPC server")
 
-		log.Info().Msg("Leadership lost or shutdown - stopping gRPC server")
+			s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 
-		// Mark as not leader for health checks
-		driver.isLeader.Store(false)
+			// Mark as leader for health checks
+			driver.isLeader.Store(true)
 
-		// Remove leader ready file before stopping gRPC
-		if err := removeLeaderReadyFile(); err != nil {
-			log.Error().Err(err).Msg("Failed to remove leader ready file")
+			// Signal to sidecars that we are the leader
+			if err := createLeaderReadyFile(); err != nil {
+				log.Error().Err(err).Msg("Failed to create leader ready file")
+			}
+
+			// Wait for context cancellation (leadership lost or shutdown)
+			<-ctx.Done()
+
+			log.Info().Msg("Leadership lost or shutdown - stopping gRPC server")
+
+			// Mark as not leader for health checks
+			driver.isLeader.Store(false)
+
+			// Remove leader ready file before stopping gRPC
+			if err := removeLeaderReadyFile(); err != nil {
+				log.Error().Err(err).Msg("Failed to remove leader ready file")
+			}
+
+			s.Stop() // GracefulStop blocks until in-flight RPCs complete
+			// Lease is held until this function returns (LeaderElectionReleaseOnCancel: true)
+
+			return nil
+		}))
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to add gRPC runnable to manager")
 		}
-
-		s.Stop() // GracefulStop blocks until in-flight RPCs complete
-		// Lease is held until this function returns (LeaderElectionReleaseOnCancel: true)
-
-		return nil
-	}))
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add gRPC runnable to manager")
 	}
 
 	// Handle termination signal
@@ -133,6 +152,8 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 		os.Exit(1)
 	}()
 
+	// CsiModeMetricsServer never reaches here: Run() treats a failed manager init as fatal in that mode,
+	// so the manager is always present and the driver takes the leader-election path instead.
 	s.Start(driver.endpoint, driver.ids, driver.cs, driver.ns)
 	s.Wait()
 }

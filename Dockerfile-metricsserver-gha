@@ -1,0 +1,29 @@
+#syntax=docker/dockerfile:1.17
+# CI counterpart to Dockerfile-metricsserver, packaging the binary that build-binaries already
+# produced rather than recompiling it. Same split as Dockerfile / Dockerfile-gha.
+ARG UBI_HASH=9.8-1786380870
+FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH} AS base
+
+LABEL maintainers="WekaIO, LTD"
+LABEL maintainer="csi@weka.io"
+LABEL name="WEKA CSI Metrics Server"
+LABEL vendor="weka.io"
+LABEL summary="This image is used by the WEKA CSI Metrics Server"
+LABEL description="Metrics server for WEKA CSI volumes, exporting per-volume capacity and performance to Prometheus"
+LABEL url="https://www.weka.io"
+
+ENTRYPOINT ["/metricsserver"]
+
+# The metrics server mounts nothing and shells out to nothing - it only talks to the Kubernetes and
+# WEKA APIs - so it needs none of the filesystem and SELinux tooling the CSI plugin image installs.
+RUN microdnf install -y jq procps less
+RUN microdnf clean all && rm -rf /var/cache/dnf
+
+FROM base
+
+ARG TARGETARCH
+ARG TARGETOS
+
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
+COPY --chmod=755 ./build/${TARGETOS}-${TARGETARCH}/metricsserver /metricsserver

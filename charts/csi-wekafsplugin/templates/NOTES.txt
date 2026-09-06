@@ -52,3 +52,12 @@ https://github.com/weka/csi-wekafs/tree/master/examples
 | IS NOT CONSIDERED SECURE, NOT SUPPORTED AND MAY LEAD TO DATA LOSS IN CASE OF A CLUSTER RECOVERY          |
 ------------------------------------------------------------------------------------------------------------
 {{- end }}
+{{- if .Values.metricsServer.enabled }}
+
+-------------------------------------------------- WARNING -------------------------------------------------
+| THE WEKA METRICS SERVER IS DEPLOYED AS PART OF THIS RELEASE.                                             |
+| IT ALSO SHIPS AS A SEPARATE CHART, csi-metricsserver. DO NOT RUN BOTH AGAINST THE SAME WEKA CLUSTER:     |
+| EACH COLLECTOR POLLS EVERY VOLUME'S QUOTA INDEPENDENTLY, SO A SECOND ONE DOUBLES THE WEKA API LOAD       |
+| WITHOUT REPORTING ANY ADDITIONAL DATA.                                                                   |
+------------------------------------------------------------------------------------------------------------
+{{- end }}
