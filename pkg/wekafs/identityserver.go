@@ -93,7 +93,7 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 	// without a restart. Mounts already made over the other transport are unaffected - they are
 	// unmounted through the mounter that made them, whatever is enabled now.
 	nfsReady := config.useNfs || config.allowNfsFailback
-	wekafsReady := !config.useNfs && (config.isInDevMode() || isWekaRunning(probeCtx))
+	wekafsReady := !config.useNfs && isWekaRunning(probeCtx)
 
 	if mounters := config.GetDriver().mounters; mounters != nil {
 		setMounterEnabled(mounters.nfs, nfsReady)
@@ -112,7 +112,7 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 			if ids.config.driverRef.csiMode == CsiModeNode {
 				ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
 			}
-		} else if !ids.getConfig().isInDevMode() {
+		} else {
 			ids.getConfig().GetDriver().SetNodeLabels(ctx, wekafsReady)
 		}
 	}

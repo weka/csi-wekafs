@@ -116,7 +116,7 @@ func NewVolumeFromControllerCreateRequest(ctx context.Context, req *csi.CreateVo
 
 // NewVolumeForBlankVolumeRequest can create a new volume of those types: new raw FS, snapshot of empty FS, directory on predefined filesystem
 func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRequest, dynamicVolPath string, cs *ControllerServer) (*Volume, error) {
-	// obtain API client (or no client for legacy)
+	// obtain the API client; a volume can no longer be provisioned without one
 	client, err := cs.api.GetClientFromSecrets(ctx, req.GetSecrets())
 	if err != nil {
 		return nil, err
@@ -149,10 +149,7 @@ func NewVolumeForBlankVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 			innerPath = generateInnerPathForDirBasedVol(dynamicVolPath, requestedVolumeName)
 		} else {
 			volType = VolumeTypeUnified
-			if client == nil && !cs.config.alwaysAllowSnapshotVolumes {
-				return nil, status.Error(codes.FailedPrecondition, "Quota enforcement is supported only with API-bound volumes")
-			}
-			if client != nil && !client.SupportsQuotaOnSnapshots() && !cs.config.alwaysAllowSnapshotVolumes {
+			if !client.SupportsQuotaOnSnapshots() && !cs.config.alwaysAllowSnapshotVolumes {
 				return nil, status.Error(codes.FailedPrecondition, "Quota enforcement is not supported for snapshot-backed volumes by current Weka software version, please upgrade Weka cluster")
 			}
 			snapName = generateWekaSnapNameForSnapBasedVol(cs.getConfig().VolumePrefix, requestedVolumeName)
@@ -204,7 +201,7 @@ func NewVolumeForCreateFromSnapshotRequest(ctx context.Context, req *csi.CreateV
 	}
 
 	if sourceSnap.hasInnerPath() && !server.getConfig().allowSnapshotsOfDirectoryVolumes {
-		// block creation of snapshots from legacy volumes, as it wastes space
+		// block creation of snapshots from directory-backed volumes, as it wastes space
 		return nil, status.Errorf(codes.FailedPrecondition, "Creation of snapshots is prohibited on directory-backed CSI volumes. Refer to Weka CSI plugin documentation")
 	}
 
@@ -288,7 +285,7 @@ func NewVolumeForCloneVolumeRequest(ctx context.Context, req *csi.CreateVolumeRe
 		return nil, status.Errorf(codes.NotFound, "Failed to validate source volume ID %s", sourceVolId)
 	}
 	if sourceVol.hasInnerPath() && !server.getConfig().allowSnapshotsOfDirectoryVolumes {
-		// block cloning of snapshots from legacy volumes, as it wastes space
+		// block cloning of snapshots from directory-backed volumes, as it wastes space
 		return nil, status.Errorf(codes.FailedPrecondition, "Cloning is prohibited for directory-backed volumes, refer to WEKA CSI Plugin documentation for additional information")
 	}
 

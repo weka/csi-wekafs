@@ -28,7 +28,7 @@ import (
 type Type string
 
 const (
-	// TypeDirV1 is the legacy directory-backed volume type. The filesystem name is supplied
+	// TypeDirV1 is the original directory-backed volume type. The filesystem name is supplied
 	// by the StorageClass and the volume is a directory (with a quota) inside it.
 	TypeDirV1 Type = "dir/v1"
 	// TypeUnified is the current volume type, covering filesystem-, directory- and

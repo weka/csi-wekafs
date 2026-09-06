@@ -65,10 +65,6 @@ func (cs *ControllerServer) getNodeId() string {
 	return cs.nodeID
 }
 
-func (cs *ControllerServer) isInDevMode() bool {
-	return cs.getConfig().isInDevMode()
-}
-
 func (cs *ControllerServer) getConfig() *DriverConfig {
 	return cs.config
 }
@@ -129,7 +125,7 @@ func NewControllerServer(nodeID string, api *ApiStore, mounters *MounterGroup, c
 	// PersistentVolume, so serving them needs both a Kubernetes client and a real backend.
 	// LIST_VOLUMES matters for scale: it lets a consumer sweep the whole fleet in pages rather
 	// than one ControllerGetVolume per volume.
-	if config.advertiseVolumeHealthSupport && manager != nil && !config.isInDevMode() {
+	if config.advertiseVolumeHealthSupport && manager != nil {
 		exposedCapabilities = append(exposedCapabilities,
 			csi.ControllerServiceCapability_RPC_GET_VOLUME,
 			csi.ControllerServiceCapability_RPC_LIST_VOLUMES,
@@ -341,7 +337,6 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	backingType = volume.GetBackingType()
 
 	// check if with current API client state we can modify this volume or not
-	// (basically only legacy dirVolume with xAttr fallback can be operated without API client)
 	if err := volume.CanBeOperated(); err != nil {
 		return CreateVolumeError(ctx, codes.InvalidArgument, err.Error())
 	}
