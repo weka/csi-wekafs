@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	qs "github.com/google/go-querystring/query"
@@ -66,6 +67,22 @@ var MountPermissionDenied = errors.New("Permission denied for filesystem")
 
 func (fs *FileSystem) String() string {
 	return fmt.Sprintln("FileSystem(fsUid:", fs.Uid, "name:", fs.Name, "capacity:", strconv.FormatInt(fs.TotalCapacity, 10), ")")
+}
+
+// GetFsIdAsInt returns the numeric filesystem id, which the stats endpoint keys its counters by.
+// The API reports Id as "FSId<0>", so the number has to be pulled back out of it. Returns -1 when
+// the id is missing or does not have that shape.
+func (fs *FileSystem) GetFsIdAsInt() int {
+	if fs.Id == "" {
+		return -1
+	}
+	idStr := strings.TrimSuffix(strings.TrimPrefix(fs.Id, "FSId<"), ">")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Error().Err(err).Str("id", fs.Id).Msg("Failed to convert filesystem Id to int")
+		return -1
+	}
+	return id
 }
 
 func (a *ApiClient) GetFileSystemByUid(ctx context.Context, uid uuid.UUID, fs *FileSystem, forceFresh bool) error {
