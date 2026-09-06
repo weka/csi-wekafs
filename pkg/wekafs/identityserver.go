@@ -113,7 +113,7 @@ func (ids *identityServer) Probe(ctx context.Context, req *csi.ProbeRequest) (*c
 				ids.getConfig().GetDriver().CleanupNodeLabels(ctx)
 			}
 		} else if !ids.getConfig().isInDevMode() {
-			ids.getConfig().GetDriver().SetNodeLabels(ctx)
+			ids.getConfig().GetDriver().SetNodeLabels(ctx, wekafsReady)
 		}
 	}
 	logger.Trace().Bool("ready", isReady).Msg("CSI Probe completed")

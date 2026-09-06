@@ -2,6 +2,7 @@ package wekafs
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
@@ -117,7 +118,7 @@ func TestSetNodeLabels_NilManagerDoesNotPanic(t *testing.T) {
 		}
 	}()
 
-	d.SetNodeLabels(context.Background())
+	d.SetNodeLabels(context.Background(), true)
 }
 
 func TestCleanupNodeLabels_NilManagerDoesNotPanic(t *testing.T) {
@@ -165,5 +166,49 @@ func TestRemoveNodeLabels_ClearsManagedLabelsOnly(t *testing.T) {
 	}
 	if got.Labels["unrelated"] != "keep-me" {
 		t.Errorf("expected unrelated label to survive, got %v", got.Labels)
+	}
+}
+
+// TestSetNodeLabels_UsesCallerSuppliedTransport covers the reason this takes a parameter at all.
+// SetNodeLabels used to call isWekaRunning itself, which re-read and re-parsed the driver's frontend
+// list on every probe even though Probe had just done exactly that - visible in the logs as "All
+// frontends connected" printed twice, a few milliseconds apart, every ten seconds on every node.
+//
+// It now labels from what the caller passes. Asserting both directions is what makes the parameter
+// load-bearing: if the value were ignored and the answer re-derived, one of these two cases would
+// disagree with the host it runs on rather than with the argument.
+func TestSetNodeLabels_UsesCallerSuppliedTransport(t *testing.T) {
+	for _, tt := range []struct {
+		name             string
+		allowNfsFailback bool
+		wekafsAvailable  bool
+		want             string
+	}{
+		{"weka up, failback allowed", true, true, "wekafs"},
+		{"weka down, failback allowed", true, false, "nfs"},
+		{"weka down, no failback - stays wekafs", false, false, "wekafs"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}}
+			fc := fakeClient.NewClientBuilder().WithObjects(node).Build()
+			d := &WekaFsDriver{
+				name:    "topology.example",
+				nodeID:  "node-1",
+				csiMode: CsiModeNode,
+				config:  &DriverConfig{allowNfsFailback: tt.allowNfsFailback},
+				manager: &fakeHealthReconcilerManager{client: fc},
+			}
+
+			d.SetNodeLabels(context.Background(), tt.wekafsAvailable)
+
+			got := &v1.Node{}
+			if err := fc.Get(context.Background(), runtimeclient.ObjectKey{Name: "node-1"}, got); err != nil {
+				t.Fatalf("failed to read the node back: %v", err)
+			}
+			label := fmt.Sprintf(TopologyLabelTransportPattern, d.name)
+			if got.Labels[label] != tt.want {
+				t.Fatalf("transport label = %q, want %q (labels: %v)", got.Labels[label], tt.want, got.Labels)
+			}
+		})
 	}
 }
