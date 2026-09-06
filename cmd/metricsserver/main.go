@@ -52,6 +52,9 @@ var (
 	tracingUrl         = flag.String("tracingurl", "", "OpenTelemetry / Jaeger endpoint")
 	allowInsecureHttps = flag.Bool("allowinsecurehttps", false, "Allow insecure HTTPS connection without cert validation")
 	usejsonlogging     = flag.Bool("usejsonlogging", false, "Use structured JSON logging rather than human-readable console log formatting")
+	// Higher than the plugin's default: a quota map fetch pulls every quota on a filesystem in one
+	// request, which on a large filesystem takes considerably longer than an ordinary call.
+	wekaApiTimeoutSeconds = flag.Int("wekaapitimeoutseconds", 180, "Timeout for a single Weka API request in seconds")
 
 	wekaMetricsFetchIntervalSeconds          = flag.Int("wekametricsfetchintervalseconds", 60, "Interval in seconds to fetch metrics from Weka cluster")
 	wekaMetricsFetchConcurrentRequests       = flag.Int("wekametricsfetchconcurrentrequests", 1, "Maximum concurrent requests to fetch metrics from Weka cluster")
@@ -96,9 +99,10 @@ func handle(ctx context.Context) {
 	// prefixes, per-operation concurrency - govern CSI request handling that this process never does,
 	// and NewDriverConfig supplies its own defaults for the metrics knobs left at zero.
 	config := wekafs.NewDriverConfig(wekafs.DriverConfigOptions{
-		Version:            version,
-		AllowInsecureHttps: *allowInsecureHttps,
-		TracingUrl:         *tracingUrl,
+		Version:               version,
+		AllowInsecureHttps:    *allowInsecureHttps,
+		WekaApiTimeoutSeconds: *wekaApiTimeoutSeconds,
+		TracingUrl:            *tracingUrl,
 
 		MetricsFetchIntervalSeconds:       *wekaMetricsFetchIntervalSeconds,
 		MetricsFetchConcurrentRequests:    *wekaMetricsFetchConcurrentRequests,
