@@ -10,20 +10,14 @@ func TestLeaderElectionIDIsSeparatePerRole(t *testing.T) {
 	const driver = "csi.weka.io"
 
 	controller := leaderElectionIDForMode(driver, CsiModeController)
-	all := leaderElectionIDForMode(driver, CsiModeAll)
 	metricsServer := leaderElectionIDForMode(driver, CsiModeMetricsServer)
 
 	if metricsServer == controller {
 		t.Errorf("metrics server and controller share the lease %q - they would compete for it", controller)
 	}
 
-	// A driver serving the controller service must keep the same lease whichever mode it runs in,
-	// or an "all" pod and a "controller" pod in one release would each elect their own leader.
-	if all != controller {
-		t.Errorf("CsiModeAll uses %q but CsiModeController uses %q - both serve the controller service", all, controller)
-	}
-
-	// Unchanged on purpose: renaming it would split leadership across a rolling upgrade.
+	// Unchanged on purpose: renaming it would split leadership across a rolling upgrade - old and new
+	// pods from the same release would each elect their own leader instead of one.
 	if controller != "csi.weka.io-controller-leader" {
 		t.Errorf("controller lease is %q, want csi.weka.io-controller-leader - renaming splits leadership mid-upgrade", controller)
 	}

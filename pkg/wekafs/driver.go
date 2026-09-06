@@ -113,7 +113,7 @@ func NewWekaFsDriver(
 
 	// The metrics server lists PersistentVolumes cluster-wide through the controller-runtime manager,
 	// so it is only ever constructed for the modes that run one - CsiModeMetricsServer (its own
-	// Deployment) or CsiModeAll. It must never be constructed merely because the controller or node
+	// Deployment). It must never be constructed merely because the controller or node
 	// service is running, and never for a node-only pod, which would otherwise list the same
 	// cluster-wide PVs from every node. Constructing it here rather than lazily in Run() lets main.go
 	// register its Prometheus collectors right after the driver is built, before Run() blocks for the
@@ -121,9 +121,9 @@ func NewWekaFsDriver(
 	//
 	// How a failure is handled depends on the mode. A CsiModeMetricsServer pod exists only to export
 	// metrics, so one that came up without a metrics server would sit there looking healthy while
-	// collecting nothing - fail instead, and let the Deployment surface it. Under CsiModeAll the CSI
+	// collecting nothing - fail instead, and let the Deployment surface it. Under the CSI
 	// services are the job and metrics are a bonus, so carry on without them.
-	if csiMode == CsiModeMetricsServer || csiMode == CsiModeAll {
+	if csiMode == CsiModeMetricsServer {
 		ms, err := NewMetricsServer(driver)
 		if err != nil {
 			if csiMode == CsiModeMetricsServer {
@@ -140,7 +140,7 @@ func NewWekaFsDriver(
 
 func (driver *WekaFsDriver) Run(ctx context.Context) {
 	// cleanup of stale leader file on container crash/restart
-	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+	if driver.csiMode == CsiModeController {
 		if err := removeLeaderReadyFile(); err != nil {
 			log.Warn().Err(err).Msg("Failed to remove stale leader ready file on startup")
 		}
@@ -159,7 +159,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		driver.ids = NewIdentityServer(driver.name, driver.version, driver.config)
 	}
 
-	if driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll {
+	if driver.csiMode == CsiModeController {
 		log.Info().Msg("Loading ControllerServer")
 
 		// Initialize manager with leader election
@@ -172,7 +172,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 		driver.cs = &ControllerServer{}
 	}
 
-	if driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll {
+	if driver.csiMode == CsiModeNode {
 		// only if we manage node labels, first clean up before starting node server
 		if driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Cleaning up node stale labels")
@@ -221,7 +221,7 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	// Controller/metrics-server mode with manager: use leader election
 	// Controller mode without manager (not in K8s): run without leader election
 	// Node-only mode: run without leader election
-	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeAll || driver.csiMode == CsiModeMetricsServer) && driver.manager != nil {
+	if (driver.csiMode == CsiModeController || driver.csiMode == CsiModeMetricsServer) && driver.manager != nil {
 		driver.runWithLeaderElection(ctx, termContext, s)
 	} else {
 		driver.runWithoutLeaderElection(ctx, termContext, s)
@@ -331,7 +331,7 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 	// Registering the index starts a PV informer, so only do it where it is actually used - keyed
 	// on the csiMode that serves the controller service, which is also what gates advertising the
 	// capability, rather than on leaderElection which merely happens to correlate today.
-	servesControllerService := d.csiMode == CsiModeController || d.csiMode == CsiModeAll
+	servesControllerService := d.csiMode == CsiModeController
 	if servesControllerService && d.config.advertiseVolumeHealthSupport {
 		if err := mgr.GetFieldIndexer().IndexField(ctx, &v1.PersistentVolume{}, pvIndexVolumeHandle,
 			func(obj runtimeclient.Object) []string {
@@ -426,7 +426,7 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		return
 	}
 
-	if d.csiMode != CsiModeNode && d.csiMode != CsiModeAll {
+	if d.csiMode != CsiModeNode {
 		return
 	}
 	config, err := rest.InClusterConfig()

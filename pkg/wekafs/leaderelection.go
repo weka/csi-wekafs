@@ -44,17 +44,13 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 	}
 
 	// Register the metrics server's health checks and leadership-gated Runnable, same as the health
-	// reconciler above. Nil-guarded since it is only constructed for the modes that run one - under
-	// CsiModeAll it may legitimately be absent (see NewWekaFsDriver). Must happen before
-	// driver.manager.Start below - controller-runtime rejects Add calls once the manager is started.
-	// A failure is fatal in a dedicated metrics-server pod, whose only job this is, and tolerated under
-	// CsiModeAll, where the CSI services carry on without metrics (same split as in NewWekaFsDriver).
+	// reconciler above. Nil-guarded since it is only constructed for the mode that runs it -
+	// CsiModeMetricsServer (see NewWekaFsDriver). Must happen before driver.manager.Start below -
+	// controller-runtime rejects Add calls once the manager is started. A failure is fatal in a
+	// dedicated metrics-server pod, whose only job this is.
 	if driver.ms != nil {
 		if err := driver.ms.AddToManager(); err != nil {
-			if driver.csiMode == CsiModeMetricsServer {
-				log.Fatal().Err(err).Msg("Failed to register metrics server, nothing left for this pod to run")
-			}
-			log.Error().Err(err).Msg("Failed to register metrics server, metrics will not be available")
+			log.Fatal().Err(err).Msg("Failed to register metrics server, nothing left for this pod to run")
 		}
 	}
 
@@ -104,11 +100,9 @@ func (driver *WekaFsDriver) runWithLeaderElection(ctx context.Context, termConte
 		<-termContext.Done()
 		log.Info().Msg("Received termination signal")
 
+		// This path only ever runs for CsiModeController or CsiModeMetricsServer (see Run in
+		// driver.go), neither of which owns node labels, so there is no node cleanup to do here.
 		shutdownOnce.Do(func() {
-			if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) &&
-				driver.config.manageNodeTopologyLabels {
-				driver.CleanupNodeLabels(ctx)
-			}
 			cancelRun()
 		})
 	}()
@@ -141,7 +135,7 @@ func (driver *WekaFsDriver) runWithoutLeaderElection(ctx context.Context, termCo
 
 	go func() {
 		<-termContext.Done()
-		if (driver.csiMode == CsiModeNode || driver.csiMode == CsiModeAll) &&
+		if driver.csiMode == CsiModeNode &&
 			driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Cleanup of node labels...")
 			driver.CleanupNodeLabels(ctx)
