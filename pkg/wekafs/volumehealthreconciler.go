@@ -112,15 +112,22 @@ func (c *volumeConditionCache) store(handle string, entry volumeConditionEntry) 
 // wait for the next reconciler sweep to be pruned. Returns the entry's labels so the caller can
 // delete the metric series, or nil if the handle was never cached or was cached without labels (a
 // probe that never resolved an API client for it, see volumeConditionEntry.labels).
-func (c *volumeConditionCache) forget(handle string) []string {
+// forget drops a volume from the cache and hands back everything needed to retire its series.
+//
+// The conditions come back alongside the labels because forget is the end of the line for this
+// volume: it removes the cache entry, so the retainOnly sweep - the only other thing that emits a
+// volume's conditions for deletion - can never see this handle again. A caller that cleared only
+// the status series would leave every condition series for the volume exported at 1 for the life
+// of the process.
+func (c *volumeConditionCache) forget(handle string) (labels []string, conditions []string) {
 	c.Lock()
 	defer c.Unlock()
 	entry, ok := c.entries[handle]
 	delete(c.entries, handle)
 	if !ok {
-		return nil
+		return nil, nil
 	}
-	return entry.labels
+	return entry.labels, entry.conditions
 }
 
 // setVolumeConditionSeries and deleteVolumeConditionSeries are the only places the condition label is

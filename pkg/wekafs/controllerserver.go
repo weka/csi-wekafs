@@ -493,11 +493,12 @@ func (cs *ControllerServer) forgetVolumeHealthMetrics(ctx context.Context, handl
 	if cs.conditionCache == nil {
 		return
 	}
-	labels := cs.conditionCache.forget(handle)
+	labels, conditions := cs.conditionCache.forget(handle)
 	if labels == nil {
 		return
 	}
 	controllerMetrics.VolumeHealth.Status.DeleteLabelValues(labels...)
+	deleteVolumeConditionSeries(labels, conditions)
 	log.Ctx(ctx).Debug().Str("volume_id", handle).Msg("Removed volume health metric series for deleted volume")
 }
 

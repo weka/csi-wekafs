@@ -78,27 +78,35 @@ func TestVolumeConditionCacheRetainOnlyDropsDeletedVolumes(t *testing.T) {
 }
 
 // forget is what DeleteVolume uses to remove a volume's cache entry immediately, instead of waiting
-// for the next sweep's retainOnly. It must hand back the labels that were cached (so the caller can
-// delete the corresponding metric series), and be a harmless no-op for a handle that was never
-// cached, or one cached without labels (a probe that never resolved an API client for it).
+// for the next sweep's retainOnly. It must hand back the labels AND the conditions that were cached
+// - the caller has to retire both the status series and one series per condition, and since forget
+// removes the entry, the sweep will never see this handle again to do it instead. It must also be a
+// harmless no-op for a handle that was never cached, or one cached without labels (a probe that
+// never resolved an API client for it).
 func TestVolumeConditionCacheForget(t *testing.T) {
 	c := newVolumeConditionCache()
 
-	if got := c.forget("never-cached"); got != nil {
-		t.Fatalf("expected forgetting an unknown handle to return nil, got %v", got)
+	if got, conds := c.forget("never-cached"); got != nil || conds != nil {
+		t.Fatalf("expected forgetting an unknown handle to return nil, got %v / %v", got, conds)
 	}
 
-	c.store("dir/v1/fs/a", volumeConditionEntry{known: true, probedAt: time.Now(), labels: []string{"csi.weka.io", "pv-a"}})
+	c.store("dir/v1/fs/a", volumeConditionEntry{known: true, probedAt: time.Now(), labels: []string{"csi.weka.io", "pv-a"}, conditions: []string{volumeConditionNoQuota}})
 	c.store("dir/v1/fs/b", volumeConditionEntry{known: false, probedAt: time.Now()}) // never got labels
 
-	if got := c.forget("dir/v1/fs/a"); len(got) != 2 || got[0] != "csi.weka.io" || got[1] != "pv-a" {
+	got, conds := c.forget("dir/v1/fs/a")
+	if len(got) != 2 || got[0] != "csi.weka.io" || got[1] != "pv-a" {
 		t.Fatalf("expected the stored labels back, got %v", got)
+	}
+	// Without these the caller cannot retire the condition series, and since the entry is now gone
+	// the sweep will never return them either.
+	if len(conds) != 1 || conds[0] != volumeConditionNoQuota {
+		t.Fatalf("expected the stored conditions back, got %v", conds)
 	}
 	if _, ok := c.lookup("dir/v1/fs/a"); ok {
 		t.Fatal("expected the entry to be gone after forget")
 	}
 
-	if got := c.forget("dir/v1/fs/b"); got != nil {
+	if got, _ := c.forget("dir/v1/fs/b"); got != nil {
 		t.Fatalf("expected forgetting a label-less entry to return nil, got %v", got)
 	}
 	if _, ok := c.lookup("dir/v1/fs/b"); ok {
@@ -106,8 +114,8 @@ func TestVolumeConditionCacheForget(t *testing.T) {
 	}
 
 	// Forgetting twice is a no-op the second time, not an error.
-	if got := c.forget("dir/v1/fs/a"); got != nil {
-		t.Fatalf("expected a repeat forget to return nil, got %v", got)
+	if got, conds := c.forget("dir/v1/fs/a"); got != nil || conds != nil {
+		t.Fatalf("expected a repeat forget to return nil, got %v / %v", got, conds)
 	}
 }
 
