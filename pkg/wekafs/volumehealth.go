@@ -88,6 +88,13 @@ var allVolumeConditions = []string{
 // volumeConditionCategories maps each condition to what it costs. Kept as one table rather than
 // spread across the call sites, so a condition added without a category is a compile-time gap in one
 // place rather than a series that quietly reports no category at all.
+//
+// Both no_api_client and legacy_volume are unknown for the same reason: nothing was inspected. They
+// are not degraded, which asserts that the volume works and its data is intact - true of a volume
+// with no quota, but not of one the driver has no credentials for, whose filesystem could be gone
+// without the probe ever seeing it. This is the same call the status metric already makes for such a
+// volume, and keeping the two axes consistent means a volume is not simultaneously reported as
+// undetermined and as known-but-degraded.
 var volumeConditionCategories = map[string]string{
 	volumeConditionDirectoryNotFound:  volumeCategoryCorrupt,
 	volumeConditionSnapshotNotFound:   volumeCategoryCorrupt,
@@ -95,13 +102,14 @@ var volumeConditionCategories = map[string]string{
 	volumeConditionFilesystemRemoving: volumeCategoryCorrupt,
 	volumeConditionNoQuota:            volumeCategoryDegraded,
 	volumeConditionQuotaMismatch:      volumeCategoryDegraded,
-	volumeConditionNoApiClient:        volumeCategoryDegraded,
+	volumeConditionNoApiClient:        volumeCategoryUnknown,
 	volumeConditionUnavailable:        volumeCategoryUnknown,
 }
 
 // volumeConditionCategory returns the category for a condition, or unknown for one with no mapping -
 // which is a gap in the table above rather than a property of the volume, and is worth surfacing
-// rather than labelling blank.
+// rather than labelling blank. Unknown is the right landing place for it either way: a condition
+// nothing has classified is one more thing the driver cannot tell you the cost of.
 func volumeConditionCategory(condition string) string {
 	if category, ok := volumeConditionCategories[condition]; ok {
 		return category

@@ -226,16 +226,18 @@ func (c *ControllerConcurrencyMetrics) Collectors() []prometheus.Collector {
 type ControllerVolumeHealthMetrics struct {
 	// Status is one series per volume - see LabelsForCsiVolumes - holding the last value the
 	// reconciler determined: volumeHealthStatusHealthy/Abnormal/Unknown. A volume whose credentials
-	// cannot be resolved gets no series at all, the same as the metrics server's per-volume metrics,
-	// since neither can build a label set without an API client.
+	// cannot be resolved still gets a series, valued unknown: it is labelled from the
+	// PersistentVolume alone, leaving the dimensions that need an API client - cluster, filesystem,
+	// volume type, organization - blank. Dropping it instead would hide the volumes nobody can see
+	// from the only people who can fix that.
 	Status *prometheus.GaugeVec
 	// Conditions is one series per volume per condition found, set to 1 while the condition holds
 	// and deleted once it clears - see volumeConditionNoQuota and friends for the values.
 	//
 	// category groups conditions by what they cost: corrupt for a volume whose data is gone,
-	// degraded for one that works but cannot be enforced or managed, unknown for an abnormal volume
-	// whose cause was not recorded. It is a label rather than a dashboard-side regex so an alert can
-	// page on corrupt without enumerating which conditions currently mean that.
+	// degraded for one that works but cannot be enforced or managed as declared, unknown for one the
+	// driver could not determine the condition of at all. It is a label rather than a dashboard-side
+	// regex so an alert can page on corrupt without enumerating which conditions currently mean that.
 	//
 	// Separate from Status deliberately. Status mirrors what the driver told Kubernetes, so it moves
 	// with the reportAs...Abnormal settings and can be correlated with the events on a PVC. This

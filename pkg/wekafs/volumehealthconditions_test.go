@@ -130,29 +130,31 @@ func TestConditionCacheClearsResolvedConditions(t *testing.T) {
 	assert.Equal(t, labels, removed[0].labels)
 }
 
-// TestEveryConditionHasACategory is the guard on the mapping table: a condition added without one
-// would report as "unknown", quietly landing in the category meant for causes nobody recorded.
+// TestEveryConditionHasACategory is the guard on the mapping table: a condition added without an
+// entry still reports a category, because the lookup falls back to "unknown" - so the omission is
+// invisible in the metric and only this test can catch it.
 func TestEveryConditionHasACategory(t *testing.T) {
+	valid := []string{volumeCategoryCorrupt, volumeCategoryDegraded, volumeCategoryUnknown}
 	for _, condition := range allVolumeConditions {
-		if condition == volumeConditionUnavailable {
-			continue // the one condition that legitimately means "cause not recorded"
-		}
 		category, ok := volumeConditionCategories[condition]
-		assert.True(t, ok, "condition %q has no category", condition)
-		assert.NotEqual(t, volumeCategoryUnknown, category,
-			"condition %q must name a real category", condition)
+		assert.True(t, ok, "condition %q has no entry in volumeConditionCategories", condition)
+		assert.Contains(t, valid, category, "condition %q has a category nothing recognises", condition)
 	}
 }
 
-// TestCategoriesSeparateDataLossFromEnforcement pins the distinction the categories exist for: one
-// group means the volume's data is gone, the other means it works but cannot be managed. Anything
-// that blurs those two makes an alert on "corrupt" either noisy or useless.
+// TestCategoriesSeparateDataLossFromEnforcement pins the distinction the categories exist for: data
+// that is gone, a volume that works but cannot be managed as declared, and a volume the driver never
+// managed to inspect. Anything that blurs those makes an alert on "corrupt" either noisy or useless,
+// and makes "degraded" claim the data is intact when nobody has looked.
 func TestCategoriesSeparateDataLossFromEnforcement(t *testing.T) {
 	for _, c := range []string{volumeConditionDirectoryNotFound, volumeConditionSnapshotNotFound, volumeConditionFilesystemNotFound, volumeConditionFilesystemRemoving} {
 		assert.Equal(t, volumeCategoryCorrupt, volumeConditionCategory(c), "%s means data is gone", c)
 	}
-	for _, c := range []string{volumeConditionNoQuota, volumeConditionQuotaMismatch, volumeConditionNoApiClient} {
+	for _, c := range []string{volumeConditionNoQuota, volumeConditionQuotaMismatch} {
 		assert.Equal(t, volumeCategoryDegraded, volumeConditionCategory(c), "%s leaves the data intact", c)
+	}
+	for _, c := range []string{volumeConditionNoApiClient, volumeConditionUnavailable} {
+		assert.Equal(t, volumeCategoryUnknown, volumeConditionCategory(c), "%s means nothing was inspected", c)
 	}
 	assert.Equal(t, volumeCategoryUnknown, volumeConditionCategory("something-new"),
 		"an unmapped condition must not be silently filed as corrupt or degraded")

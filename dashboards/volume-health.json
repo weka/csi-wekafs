@@ -316,7 +316,7 @@
       },
       "type": "stat",
       "title": "Degraded volumes",
-      "description": "Volumes that work and whose data is intact, but which the driver cannot fully manage: no quota enforcing their capacity, a quota that disagrees with the PersistentVolume, or no API credentials. Not urgent, but they will not behave as declared.",
+      "description": "Volumes that work and whose data is intact, but which the driver cannot fully manage: no quota enforcing their capacity, or a quota that disagrees with the PersistentVolume. Not urgent, but they will not behave as declared.",
       "id": 26,
       "gridPos": {
         "h": 4,
@@ -378,8 +378,8 @@
         "uid": "${DS_PROMETHEUS}"
       },
       "type": "stat",
-      "title": "Unknown / Legacy Volumes (No API Binding)",
-      "description": "Volumes the driver could not classify - in practice API-unbound legacy volumes, which it cannot inspect well enough to say more. Not data loss, but not verifiable either.",
+      "title": "Undetermined volumes",
+      "description": "Volumes the driver could not classify at all, because it never got to inspect them: no Weka API credentials could be resolved, or the volume is an API-unbound legacy one. Not data loss - but not verifiable either, and a volume nobody can see is one nobody can enforce, expand or report on.",
       "id": 27,
       "gridPos": {
         "h": 4,
@@ -623,6 +623,21 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "unknown / no_api_client"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#b5b5b5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "corrupt / snapshot_not_found"
             },
             "properties": [
@@ -752,6 +767,18 @@
           "range": true,
           "instant": false,
           "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"legacy_volume\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "I",
+          "legendFormat": "unknown / no_api_client",
+          "range": true,
+          "instant": false,
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_api_client\"})"
         }
       ]
     },
@@ -1457,7 +1484,7 @@
       "type": "barchart",
       "title": "Condition breakdown",
       "id": 24,
-      "description": "How many volumes carry each condition right now. Colour carries severity: reds are data loss, yellow and orange the quota conditions, grey unclassified. Counted per volume, honouring the filters above. A condition nobody has does not appear.",
+      "description": "How many volumes carry each condition right now. Colour carries severity: reds are data loss, yellow and orange the quota conditions, greys the volumes the driver could not determine. Counted per volume, honouring the filters above. A condition nobody has does not appear.",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -1595,6 +1622,21 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "unknown / no_api_client"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#b5b5b5"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "corrupt / snapshot_not_found"
             },
             "properties": [
@@ -1725,6 +1767,18 @@
           "range": false,
           "instant": true,
           "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"legacy_volume\"})"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "refId": "I",
+          "legendFormat": "unknown / no_api_client",
+          "range": false,
+          "instant": true,
+          "expr": "count(weka_csi_volume_health_conditions{csi_driver_name=~\"$csi_driver_name\", organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\", condition=\"no_api_client\"})"
         }
       ]
     },

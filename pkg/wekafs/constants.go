@@ -204,8 +204,10 @@ const (
 	// Categories group conditions by what they cost, because the response differs completely.
 	// corrupt means the volume's data is gone or going - nothing the driver can repair, and the
 	// workload using it is already broken. degraded means the volume works and its data is intact,
-	// but the driver cannot enforce or manage it - capacity is unenforced, or credentials are
-	// missing. unknown is an abnormal volume whose cause was not recorded.
+	// but the driver cannot enforce or manage it as declared - capacity is unenforced, or a quota
+	// disagrees with the PersistentVolume. unknown means the driver could not determine the volume's
+	// condition at all - no API credentials, or a legacy volume it cannot inspect - so it is
+	// asserting neither health nor breakage.
 	volumeCategoryCorrupt  = "corrupt"
 	volumeCategoryDegraded = "degraded"
 	volumeCategoryUnknown  = "unknown"
