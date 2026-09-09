@@ -4,6 +4,43 @@ entries:
   - annotations:
       artifacthub.io/category: storage
       artifacthub.io/changes: |-
+        - kind: fixed
+          description: 'fix(CSI-353): take the actual SELinux state rather than the desired one'
+          links:
+            - name: 'PR #733'
+              url: https://github.com/weka/csi-wekafs/pull/733
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/signKey: |
+        fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
+        url: https://weka.github.io/csi-wekafs/csi-public.gpg
+    apiVersion: v2
+    appVersion: v2.9.3
+    created: "2026-09-09T21:20:44.46543908Z"
+    description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI)
+      plugin for WekaFS - the world fastest filesystem
+    digest: 473cb76e8887521c316ae02077a1e45a721237ab863c255e347c3cceacf4d4ab
+    home: https://github.com/weka/csi-wekafs
+    icon: https://weka.github.io/csi-wekafs/logo.png
+    keywords:
+    - storage
+    - filesystem
+    - HPC
+    maintainers:
+    - email: csi@weka.io
+      name: WekaIO, Inc.
+      url: https://weka.io
+    name: csi-wekafsplugin
+    sources:
+    - https://github.com/weka/csi-wekafs/tree/v2.9.3
+    type: application
+    urls:
+    - https://github.com/weka/csi-wekafs/releases/download/v2.9.3/csi-wekafsplugin-2.9.3.tgz
+    version: 2.9.3
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |-
         - kind: changed
           description: 'feat: allow a separate priorityClassName for controller and node components'
           links:
@@ -1585,4 +1622,4 @@ entries:
     urls:
     - https://weka.github.io/csi-wekafs/csi-wekafsplugin-0.6.2-0.tgz
     version: 0.6.2-0
-generated: "2026-08-13T09:45:49.229930925Z"
+generated: "2026-09-09T21:20:44.465704828Z"
