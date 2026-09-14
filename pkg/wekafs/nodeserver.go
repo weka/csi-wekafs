@@ -392,8 +392,7 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	readOnly := req.GetReadonly()
 	// create a readonly mount
 	if readOnly {
-		roMountOptions := NewMountOptions([]string{"ro"})
-		roMountOptions.excludeOptions = []string{"rw"}
+		roMountOptions := NewMountOptions([]string{"ro"}).ExcludeOption("rw")
 		volume.mountOptions.Merge(roMountOptions, ns.getConfig().mutuallyExclusiveOptions)
 		innerMountOpts = append(innerMountOpts, "ro")
 	}

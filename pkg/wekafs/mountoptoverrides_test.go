@@ -338,3 +338,73 @@ func TestMountOptionOverride_ApplyToOptions_OverwriteValuedOption(t *testing.T) 
 		t.Errorf("Expected 'readahead_kb' value to be updated to '32768', got '%s'", result.getOptionValue("readahead_kb"))
 	}
 }
+
+// TestApplyToOptions_RemovalSurvivesDefaultsMerge is the case the exclusion mechanism exists for.
+// The node defaults are merged UNDERNEATH the volume's options at mount time, so a "-opt" that
+// only deleted the option from the volume's own set would be handed straight back by the defaults.
+func TestApplyToOptions_RemovalSurvivesDefaultsMerge(t *testing.T) {
+	defaults := NewMountOptionsFromString(NodeServerAdditionalMountOptions)
+	if !defaults.hasOption(MountOptionSyncOnClose) {
+		t.Fatalf("precondition: node defaults should carry %s, got '%s'", MountOptionSyncOnClose, defaults.String())
+	}
+
+	opts := NewMountOptionsFromString("readcache")
+	opts = MountOptionOverride("-"+MountOptionSyncOnClose).ApplyToOptions(opts, nil)
+
+	final := defaults.MergedWith(opts, nil)
+	if final.hasOption(MountOptionSyncOnClose) {
+		t.Errorf("Expected '%s' to stay removed after the defaults merge, got '%s'", MountOptionSyncOnClose, final.String())
+	}
+	if !final.hasOption(MountOptionWriteCache) {
+		t.Errorf("Expected the other default '%s' to be kept, got '%s'", MountOptionWriteCache, final.String())
+	}
+}
+
+// TestApplyToOptions_ReAddAfterRemovalWins covers "-opt" then "+opt", e.g. a PVC annotation
+// removing an option and the pod annotation putting it back.
+func TestApplyToOptions_ReAddAfterRemovalWins(t *testing.T) {
+	defaults := NewMountOptionsFromString(NodeServerAdditionalMountOptions)
+
+	opts := NewMountOptionsFromString("readcache")
+	opts = MountOptionOverride("-"+MountOptionSyncOnClose).ApplyToOptions(opts, nil)
+	opts = MountOptionOverride("+"+MountOptionSyncOnClose).ApplyToOptions(opts, nil)
+
+	final := defaults.MergedWith(opts, nil)
+	if !final.hasOption(MountOptionSyncOnClose) {
+		t.Errorf("Expected '%s' to be re-added by the later '+', got '%s'", MountOptionSyncOnClose, final.String())
+	}
+}
+
+// TestApplyToOptions_RemovalDoesNotLeakToSource guards the shared excludeOptions slice: an
+// exclusion recorded on a derived value must not appear on the value it was derived from.
+func TestApplyToOptions_RemovalDoesNotLeakToSource(t *testing.T) {
+	base := NewMountOptionsFromString("readcache," + MountOptionSyncOnClose)
+	derived := MountOptionOverride("-"+MountOptionSyncOnClose).ApplyToOptions(base, nil)
+
+	if !base.hasOption(MountOptionSyncOnClose) {
+		t.Errorf("Expected the source options to be untouched, got '%s'", base.String())
+	}
+	if derived.hasOption(MountOptionSyncOnClose) {
+		t.Errorf("Expected the derived options to have dropped '%s', got '%s'", MountOptionSyncOnClose, derived.String())
+	}
+	if len(base.excludeOptions) != 0 {
+		t.Errorf("Expected no exclusions recorded on the source, got %v", base.excludeOptions)
+	}
+}
+
+// TestApplyToOptions_ValuedOptionRoundTrip checks the "=" split is respected by the exclusion
+// bookkeeping, which keys on the option name rather than the whole "name=value" string.
+func TestApplyToOptions_ValuedOptionRoundTrip(t *testing.T) {
+	opts := NewMountOptionsFromString("inode_bits=32")
+	opts = MountOptionOverride("-inode_bits").ApplyToOptions(opts, nil)
+	if opts.hasOption("inode_bits") {
+		t.Fatalf("Expected inode_bits removed, got '%s'", opts.String())
+	}
+	opts = MountOptionOverride("inode_bits=64").ApplyToOptions(opts, nil)
+	if got := opts.getOptionValue("inode_bits"); got != "64" {
+		t.Errorf("Expected inode_bits=64 after re-add, got '%s' (opts '%s')", got, opts.String())
+	}
+	if final := NewMountOptionsFromString("inode_bits=32").MergedWith(opts, nil); final.getOptionValue("inode_bits") != "64" {
+		t.Errorf("Expected the re-added value to win the defaults merge, got '%s'", final.String())
+	}
+}
