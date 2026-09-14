@@ -101,24 +101,47 @@ func (v *Volume) initMountOptions(ctx context.Context) {
 }
 
 func (v *Volume) pruneUnsupportedMountOptions(ctx context.Context) {
+	v.mountOptions = v.withRejectedCustomMountOptionsPruned(ctx, v.withUnsupportedMountOptionsPruned(ctx, v.mountOptions))
+}
+
+// withUnsupportedMountOptionsPruned returns opts without the options this Weka cluster cannot
+// accept. It turns on cluster capability alone and not on where the option came from, so it is
+// safe to run on the fully merged set at mount time - which it has to be: the defaults are
+// merged underneath the volume's options there and carry sync_on_close themselves, so pruning
+// the volume's own set alone leaves the option to be handed straight back.
+func (v *Volume) withUnsupportedMountOptionsPruned(ctx context.Context, opts MountOptions) MountOptions {
 	logger := log.Ctx(ctx)
-	if v.mountOptions.hasOption(MountOptionSyncOnClose) {
+	if opts.hasOption(MountOptionSyncOnClose) {
 		if v.apiClient != nil && !v.apiClient.SupportsSyncOnCloseMountOption() {
 			logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Mount option not supported by current Weka cluster version and is dropped.")
-			v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
+			opts = opts.RemoveOption(MountOptionSyncOnClose)
 		} else if v.apiClient == nil {
 			logger.Debug().Str("mount_option", MountOptionSyncOnClose).Msg("Cannot determine current Weka cluster version, dropping mount option.")
-			v.mountOptions = v.mountOptions.RemoveOption(MountOptionSyncOnClose)
+			opts = opts.RemoveOption(MountOptionSyncOnClose)
 		}
 	}
-	if v.mountOptions.hasOption(MountOptionReadOnly) {
+	return opts
+}
+
+// withRejectedCustomMountOptionsPruned returns opts without the options that are never accepted
+// from user-supplied mount options.
+//
+// Unlike the cluster capability pruning above, this one depends on where the option came from,
+// so it must run on the user's own options and never on the merged set: the driver adds "ro"
+// itself for a readonly attachment (see NodeServer.NodePublishVolume), and by mount time that is
+// indistinguishable from a user having asked for it. Pruning it there would quietly mount the
+// filesystem writable for every readonly volume.
+func (v *Volume) withRejectedCustomMountOptionsPruned(ctx context.Context, opts MountOptions) MountOptions {
+	logger := log.Ctx(ctx)
+	if opts.hasOption(MountOptionReadOnly) {
 		logger.Error().Str("mount_option", MountOptionReadOnly).Msg("Mount option is not supported via custom mount options, use readOnly volume attachments instead")
-		v.mountOptions = v.mountOptions.RemoveOption(MountOptionReadOnly)
+		opts = opts.RemoveOption(MountOptionReadOnly)
 	}
-	if v.mountOptions.hasOption(MountOptionContainerName) {
+	if opts.hasOption(MountOptionContainerName) {
 		logger.Error().Str("mount_option", MountOptionContainerName).Msg("Mount option is not supported via custom mount options, container name should only be set via API secret")
-		v.mountOptions = v.mountOptions.RemoveOption(MountOptionContainerName)
+		opts = opts.RemoveOption(MountOptionContainerName)
 	}
+	return opts
 }
 
 //goland:noinspection GoUnusedParameter
@@ -1022,7 +1045,7 @@ func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
 		return errors.New("could not mount volume, mounter not in context"), NoOpUnmount
 	}
 
-	mountOpts := v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions)
+	mountOpts := v.withUnsupportedMountOptionsPruned(ctx, v.server.getDefaultMountOptions().MergedWith(v.getMountOptions(ctx), v.server.getConfig().mutuallyExclusiveOptions))
 
 	mount, err, unmountFunc := v.server.getMounter().mountWithOptions(ctx, v.FilesystemName, mountOpts, v.apiClient)
 	retUmountFunc := NoOpUnmount
