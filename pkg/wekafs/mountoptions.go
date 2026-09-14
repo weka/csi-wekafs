@@ -3,6 +3,7 @@ package wekafs
 import (
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -124,6 +125,36 @@ func (opts MountOptions) RemoveOption(optstring string) MountOptions {
 	opt := newMountOptionFromString(optstring)
 	delete(ret.customOptions, opt.option)
 	return ret
+}
+
+// ExcludeOption removes the option and records the removal, so that it survives a later Merge
+// whose base carries the option. RemoveOption alone is not enough for that: the node and
+// controller defaults are merged UNDERNEATH the volume's options at mount time (see
+// Volume.MountUnderlyingFS), and an option merely absent from the volume's set comes straight
+// back from the defaults. Merge applies excludeOptions as deletions against the base, so a
+// recorded removal is the only kind that sticks.
+func (opts MountOptions) ExcludeOption(optstring string) MountOptions {
+	o := newMountOptionFromString(optstring)
+	ret := opts.RemoveOption(o.option)
+	// clone rather than append in place: derived MountOptions share the excludeOptions slice,
+	// so appending to it would also mutate the value this was derived from. A repeated
+	// exclusion of the same option is harmless, since Merge applies these as deletions.
+	ret.excludeOptions = append(slices.Clone(opts.excludeOptions), o.option)
+	return ret
+}
+
+// UnexcludeOption drops a removal previously recorded by ExcludeOption, so that adding an
+// option back undoes an earlier removal. Without it, "-opt" followed by "+opt" would put the
+// option in customOptions while leaving the exclusion in place, and the exclusion wins at
+// merge time - the re-add would silently disappear.
+func (opts MountOptions) UnexcludeOption(optstring string) MountOptions {
+	o := newMountOptionFromString(optstring)
+	return MountOptions{
+		customOptions: opts.cloneCustomOptions(),
+		excludeOptions: slices.DeleteFunc(slices.Clone(opts.excludeOptions), func(e string) bool {
+			return e == o.option
+		}),
+	}
 }
 
 func (opts MountOptions) hasOption(optstring string) bool {
