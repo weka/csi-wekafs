@@ -408,3 +408,150 @@ func TestApplyToOptions_ValuedOptionRoundTrip(t *testing.T) {
 		t.Errorf("Expected the re-added value to win the defaults merge, got '%s'", final.String())
 	}
 }
+
+// exclusiveCacheOptions is the mutually exclusive set the driver falls back to when the chart
+// configures none - see NewDriverConfig.
+func exclusiveCacheOptions() []mutuallyExclusiveMountOptionSet {
+	return []mutuallyExclusiveMountOptionSet{{MountOptionWriteCache, MountOptionCoherent, MountOptionReadCache}}
+}
+
+// mountOptionPipeline mirrors the order NodePublishVolume assembles mount options in, so a test
+// can state a StorageClass setting plus annotation overrides and assert on what would actually
+// be mounted:
+//
+//  1. the volume's options start from the volume context, i.e. the StorageClass mountOptions
+//  2. the PVC override is applied, then the Pod override
+//  3. the node defaults are merged UNDERNEATH all of it at mount time, in MountUnderlyingFS
+func mountOptionPipeline(storageClassOpts string, overrides []string, exclusives []mutuallyExclusiveMountOptionSet) MountOptions {
+	opts := getDefaultMountOptions()
+	opts.Merge(NewMountOptionsFromString(storageClassOpts), exclusives)
+	for _, o := range overrides {
+		opts = MountOptionOverride(o).ApplyToOptions(opts, exclusives)
+	}
+	nodeDefaults := getDefaultMountOptions().MergedWith(NewMountOptionsFromString(NodeServerAdditionalMountOptions), exclusives)
+	return nodeDefaults.MergedWith(opts, exclusives)
+}
+
+// TestMountOptionPipeline_MutualExclusivity pins down how the mutually exclusive cache options
+// behave across the whole assembly: the driver default is writecache, a StorageClass or an
+// override can displace it, and whichever of the three is applied last must be the only one left.
+func TestMountOptionPipeline_MutualExclusivity(t *testing.T) {
+	exclusives := exclusiveCacheOptions()
+
+	for _, tc := range []struct {
+		name         string
+		storageClass string
+		overrides    []string
+		wantPresent  []string
+		wantAbsent   []string
+	}{
+		{
+			name:        "node default applies when nothing else asks",
+			wantPresent: []string{MountOptionWriteCache, MountOptionSyncOnClose},
+			wantAbsent:  []string{MountOptionReadCache, MountOptionCoherent},
+		},
+		{
+			name:         "storageclass readcache displaces the default writecache",
+			storageClass: MountOptionReadCache,
+			wantPresent:  []string{MountOptionReadCache, MountOptionSyncOnClose},
+			wantAbsent:   []string{MountOptionWriteCache, MountOptionCoherent},
+		},
+		{
+			name:         "pod +writecache wins back over the storageclass readcache",
+			storageClass: MountOptionReadCache,
+			overrides:    []string{"+" + MountOptionWriteCache},
+			wantPresent:  []string{MountOptionWriteCache},
+			wantAbsent:   []string{MountOptionReadCache, MountOptionCoherent},
+		},
+		{
+			name:         "pod -readcache drops the storageclass choice and falls back to the default",
+			storageClass: MountOptionReadCache,
+			overrides:    []string{"-" + MountOptionReadCache},
+			wantPresent:  []string{MountOptionWriteCache},
+			wantAbsent:   []string{MountOptionReadCache, MountOptionCoherent},
+		},
+		{
+			name:         "-readcache,+writecache in one override",
+			storageClass: MountOptionReadCache,
+			overrides:    []string{"-" + MountOptionReadCache + ",+" + MountOptionWriteCache},
+			wantPresent:  []string{MountOptionWriteCache},
+			wantAbsent:   []string{MountOptionReadCache, MountOptionCoherent},
+		},
+		{
+			name:         "+writecache,-readcache is order independent",
+			storageClass: MountOptionReadCache,
+			overrides:    []string{"+" + MountOptionWriteCache + ",-" + MountOptionReadCache},
+			wantPresent:  []string{MountOptionWriteCache},
+			wantAbsent:   []string{MountOptionReadCache, MountOptionCoherent},
+		},
+		{
+			name:         "pod override wins over the pvc override",
+			storageClass: MountOptionReadCache,
+			overrides:    []string{"+" + MountOptionCoherent, "+" + MountOptionWriteCache},
+			wantPresent:  []string{MountOptionWriteCache},
+			wantAbsent:   []string{MountOptionReadCache, MountOptionCoherent},
+		},
+		{
+			name:         "pod +readcache displaces a storageclass writecache",
+			storageClass: MountOptionWriteCache,
+			overrides:    []string{"+" + MountOptionReadCache},
+			wantPresent:  []string{MountOptionReadCache},
+			wantAbsent:   []string{MountOptionWriteCache, MountOptionCoherent},
+		},
+		{
+			name:        "-writecache removes the default and leaves no cache option at all",
+			overrides:   []string{"-" + MountOptionWriteCache},
+			wantPresent: []string{MountOptionSyncOnClose},
+			wantAbsent:  []string{MountOptionWriteCache, MountOptionReadCache, MountOptionCoherent},
+		},
+		{
+			name:        "-writecache,+writecache puts the default back",
+			overrides:   []string{"-" + MountOptionWriteCache + ",+" + MountOptionWriteCache},
+			wantPresent: []string{MountOptionWriteCache},
+			wantAbsent:  []string{MountOptionReadCache, MountOptionCoherent},
+		},
+		{
+			name:        "-writecache,+readcache swaps the default for another of the set",
+			overrides:   []string{"-" + MountOptionWriteCache + ",+" + MountOptionReadCache},
+			wantPresent: []string{MountOptionReadCache},
+			wantAbsent:  []string{MountOptionWriteCache, MountOptionCoherent},
+		},
+		{
+			name:        "+coherent then -coherent falls back to the node default",
+			overrides:   []string{"+" + MountOptionCoherent, "-" + MountOptionCoherent},
+			wantPresent: []string{MountOptionWriteCache},
+			wantAbsent:  []string{MountOptionCoherent, MountOptionReadCache},
+		},
+		{
+			name:         "an exclusive option must not resurrect an excluded one",
+			storageClass: MountOptionReadCache,
+			overrides:    []string{"-" + MountOptionWriteCache + ",+" + MountOptionCoherent},
+			wantPresent:  []string{MountOptionCoherent},
+			wantAbsent:   []string{MountOptionWriteCache, MountOptionReadCache},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mountOptionPipeline(tc.storageClass, tc.overrides, exclusives)
+			for _, want := range tc.wantPresent {
+				if !got.hasOption(want) {
+					t.Errorf("Expected '%s' to be present, got '%s'", want, got.String())
+				}
+			}
+			for _, notWant := range tc.wantAbsent {
+				if got.hasOption(notWant) {
+					t.Errorf("Expected '%s' to be absent, got '%s'", notWant, got.String())
+				}
+			}
+			// whichever cache option survived, it must be the only one of the set
+			var surviving []string
+			for _, o := range []string{MountOptionWriteCache, MountOptionCoherent, MountOptionReadCache} {
+				if got.hasOption(o) {
+					surviving = append(surviving, o)
+				}
+			}
+			if len(surviving) > 1 {
+				t.Errorf("Expected at most one of the mutually exclusive set, got %v in '%s'", surviving, got.String())
+			}
+		})
+	}
+}
