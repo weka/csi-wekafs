@@ -331,6 +331,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		if mountOptions, ok := params["mountOptions"]; ok {
 			logger.Trace().Str("mount_options", mountOptions).Msg("Updating volume mount options")
 			volume.setMountOptions(ctx, NewMountOptionsFromString(mountOptions))
+			// Early prune, so an unsupported option is reported against what the user actually
+			// asked for. It is not the safety net: the overrides below run after it, and the
+			// defaults are merged in later still, so MountUnderlyingFS prunes again on the
+			// fully merged set.
 			volume.pruneUnsupportedMountOptions(ctx)
 		}
 	}
@@ -388,6 +392,11 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	} else {
 		logger.Debug().Msg("Cannot apply per-pod mount option overrides as Kubernetes client is not initialized")
 	}
+
+	// Prune again now the overrides have been applied, so an annotation cannot smuggle in an
+	// option that is refused from user-supplied mount options. This has to happen before the
+	// readonly attachment adds its own "ro" below, which is legitimate and must survive.
+	volume.pruneUnsupportedMountOptions(ctx)
 
 	readOnly := req.GetReadonly()
 	// create a readonly mount

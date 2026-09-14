@@ -260,3 +260,68 @@ func TestVolumeId(t *testing.T) {
 	testPattern("weka/v1/filesystem:snapshotname/dirascii-some_dirName")
 	testPattern("weka/v1/filesystem/dirascii-some_dirName")
 }
+
+// TestWithUnsupportedMountOptionsPruned_PrunesTheMergedSet covers the case the volume's own
+// options never showed: sync_on_close arrives from the node defaults, which are merged
+// underneath the volume's options at mount time. Pruning only the volume's set left it in.
+func TestWithUnsupportedMountOptionsPruned_PrunesTheMergedSet(t *testing.T) {
+	ctx := context.Background()
+	// apiClient nil means the cluster version cannot be determined, which drops the option
+	v := &Volume{}
+
+	defaults := NewMountOptionsFromString(NodeServerAdditionalMountOptions)
+	volumeOpts := NewMountOptionsFromString("readcache")
+	if volumeOpts.hasOption(MountOptionSyncOnClose) {
+		t.Fatalf("precondition: the volume's own options should not carry %s", MountOptionSyncOnClose)
+	}
+
+	merged := defaults.MergedWith(volumeOpts, nil)
+	if !merged.hasOption(MountOptionSyncOnClose) {
+		t.Fatalf("precondition: the defaults merge should have supplied %s, got '%s'", MountOptionSyncOnClose, merged.String())
+	}
+
+	pruned := v.withUnsupportedMountOptionsPruned(ctx, merged)
+	if pruned.hasOption(MountOptionSyncOnClose) {
+		t.Errorf("Expected '%s' to be pruned from the merged options, got '%s'", MountOptionSyncOnClose, pruned.String())
+	}
+	if !pruned.hasOption(MountOptionWriteCache) {
+		t.Errorf("Expected supported default '%s' to survive, got '%s'", MountOptionWriteCache, pruned.String())
+	}
+}
+
+// TestWithRejectedCustomMountOptionsPruned_DropsRejectedOptions covers the options that are
+// never accepted from user-supplied mount options, regardless of cluster version.
+func TestWithRejectedCustomMountOptionsPruned_DropsRejectedOptions(t *testing.T) {
+	ctx := context.Background()
+	v := &Volume{}
+
+	pruned := v.withRejectedCustomMountOptionsPruned(ctx, NewMountOptionsFromString("readcache,"+MountOptionReadOnly+","+MountOptionContainerName+"=foo"))
+	if pruned.hasOption(MountOptionReadOnly) {
+		t.Errorf("Expected '%s' to be dropped, got '%s'", MountOptionReadOnly, pruned.String())
+	}
+	if pruned.hasOption(MountOptionContainerName) {
+		t.Errorf("Expected '%s' to be dropped, got '%s'", MountOptionContainerName, pruned.String())
+	}
+	if !pruned.hasOption(MountOptionReadCache) {
+		t.Errorf("Expected 'readcache' to survive, got '%s'", pruned.String())
+	}
+}
+
+// TestWithUnsupportedMountOptionsPruned_KeepsReadonlyAttachment guards the split between the two
+// prunings: "ro" added by a readonly attachment reaches the mount-time prune as an ordinary
+// option, and must survive it. Pruning it there would mount the filesystem writable for every
+// readonly volume.
+func TestWithUnsupportedMountOptionsPruned_KeepsReadonlyAttachment(t *testing.T) {
+	ctx := context.Background()
+	v := &Volume{}
+
+	// what volume.mountOptions holds after the readonly branch of NodePublishVolume
+	volumeOpts := NewMountOptionsFromString("readcache").MergedWith(
+		NewMountOptions([]string{MountOptionReadOnly}).ExcludeOption("rw"), nil)
+	merged := NewMountOptionsFromString(NodeServerAdditionalMountOptions).MergedWith(volumeOpts, nil)
+
+	pruned := v.withUnsupportedMountOptionsPruned(ctx, merged)
+	if !pruned.hasOption(MountOptionReadOnly) {
+		t.Errorf("Expected '%s' from a readonly attachment to survive the mount-time prune, got '%s'", MountOptionReadOnly, pruned.String())
+	}
+}
