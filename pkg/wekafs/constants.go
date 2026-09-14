@@ -121,10 +121,15 @@ const (
 	PvcMountOptionOverrideAnnotation = "weka.io/mount-options-override"
 
 	// Order of application:
-	// 1. StorageClass default options
-	// 2. Node Publish default options
+	// 1. StorageClass default options (arriving in the volume context)
+	// 2. VolumeCapability mount flags
 	// 3. PvcMountOptionOverrideAnnotation
 	// 4. PodMountOptionOverrideAnnotation (first matching pattern wins)
+	// 5. "ro", for a readonly attachment
+	// 6. Node / controller default options, merged UNDERNEATH all of the above at mount
+	//    time (Volume.MountUnderlyingFS). A later source therefore overrides a default by
+	//    supplying its own value, and removes one with "-opt", which is recorded as an
+	//    exclusion so that it survives this merge.
 )
 
 const (

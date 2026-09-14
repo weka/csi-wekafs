@@ -39,15 +39,23 @@ func (mo MountOptionOverride) ApplyToOptions(opts MountOptions, exclusives []mut
 		}
 		switch {
 		case strings.HasPrefix(part, "+"):
-			toAdd := NewMountOptionsFromString(strings.TrimPrefix(part, "+"))
-			opts.Merge(toAdd, exclusives)
+			opts = addOverride(opts, strings.TrimPrefix(part, "+"), exclusives)
 		case strings.HasPrefix(part, "-"):
-			opts = opts.RemoveOption(strings.TrimPrefix(part, "-"))
+			// ExcludeOption rather than RemoveOption, so the removal also survives the
+			// defaults that are merged underneath these options at mount time.
+			opts = opts.ExcludeOption(strings.TrimPrefix(part, "-"))
 		default:
-			toAdd := NewMountOptionsFromString(part)
-			opts.Merge(toAdd, exclusives)
+			opts = addOverride(opts, part, exclusives)
 		}
 	}
+	return opts
+}
+
+// addOverride adds an option, first clearing any exclusion an earlier "-opt" recorded for it,
+// so that "-opt,+opt" ends up adding the option rather than being cancelled at merge time.
+func addOverride(opts MountOptions, optstring string, exclusives []mutuallyExclusiveMountOptionSet) MountOptions {
+	opts = opts.UnexcludeOption(optstring)
+	opts.Merge(NewMountOptionsFromString(optstring), exclusives)
 	return opts
 }
 
