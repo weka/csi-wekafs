@@ -137,6 +137,12 @@ func (v *Volume) withRejectedCustomMountOptionsPruned(ctx context.Context, opts 
 		logger.Error().Str("mount_option", MountOptionReadOnly).Msg("Mount option is not supported via custom mount options, use readOnly volume attachments instead")
 		opts = opts.RemoveOption(MountOptionReadOnly)
 	}
+	// "-ro" is user input about "ro" just as much as "+ro" is, and is refused the same way.
+	// Left in place, its exclusion outlives this step: the readonly attachment path adds "ro"
+	// afterwards, but exclusions are applied after additions, so the defaults merge at mount
+	// time would delete it again and mount the underlying filesystem writable for a volume the
+	// user asked to be readonly.
+	opts = opts.UnexcludeOption(MountOptionReadOnly)
 	if opts.hasOption(MountOptionContainerName) {
 		logger.Error().Str("mount_option", MountOptionContainerName).Msg("Mount option is not supported via custom mount options, container name should only be set via API secret")
 		opts = opts.RemoveOption(MountOptionContainerName)
