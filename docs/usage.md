@@ -436,21 +436,120 @@ coherent                 # Add coherent option
 - `dentry_max_age_positive=<secs>` - Positive dentry cache TTL (e.g., `dentry_max_age_positive=600`)
 - `dentry_max_age_negative=<secs>` - Negative dentry cache TTL (e.g., `dentry_max_age_negative=10`)
 
+**Data integrity**:
+- `sync_on_close` - Flush data synchronously when a file is closed. Applied by default to every
+  volume, and removable only through a PVC or Pod override. Read
+  [The `sync_on_close` option](#the-sync_on_close-option) before removing it.
+
 ### Application Order
 
-Mount options are applied sequentially, with later configurations overriding earlier ones:
+Mount options are applied in the following order, with later configurations overriding earlier
+ones:
 
-1. **StorageClass default options** - Base configuration
-2. **Node Publish default options** - Hardcoded defaults, controlled by WEKA
-3. **PVC annotation options** (`weka.io/mount-options-override`) - Shared base overrides
-4. **Pod annotation options** (`weka.io/mount-options-overrides`) - Pod-specific overrides (highest priority)
+1. **StorageClass options** - base configuration, from both the driver `parameters` and the
+   native `mountOptions` field
+2. **PVC annotation options** (`weka.io/mount-options-override`) - shared base overrides
+3. **Pod annotation options** (`weka.io/mount-options-overrides`) - pod-specific overrides
+   (highest priority)
+4. **`ro`** - added by the driver itself for a read-only attachment
+5. **Node default options** - controlled by WEKA, merged *underneath* everything above at mount
+   time
+
+The node defaults are merged underneath rather than applied first. A later source therefore
+overrides a default by supplying its own value, and removes one with `-option` - the removal is
+recorded so that it still applies once the defaults are merged in.
 
 Example sequence:
 ```
-StorageClass defaults:      coherent, noatime
-PVC annotation:             -coherent, +readcache      → Result: readcache, noatime
-Pod annotation:             -readcache, +writecache    → Final: writecache, noatime
+StorageClass options:        coherent, noatime
+PVC annotation:              -coherent, +readcache     → readcache, noatime
+Pod annotation:              -readcache, +writecache   → writecache, noatime
+Node defaults merged under:  writecache, sync_on_close → Final: writecache, noatime, sync_on_close
 ```
+
+### The `sync_on_close` Option
+
+`sync_on_close` is applied by the driver to every volume it mounts. It is the one default you
+should think carefully about before removing.
+
+#### What it protects against
+
+Without `sync_on_close`, a `write()` can return success even though the backing filesystem or
+the volume's own quota is already full. The out-of-space condition is reported out of band,
+after the write call has already succeeded, so the file ends up truncated or malformed and
+**the application is never told**. A job can complete cleanly, report success, and leave
+incomplete data behind.
+
+`sync_on_close` makes the flush at `close()` synchronous, so the failure is returned to the
+application while it can still act on it, and the workload fails loudly instead of silently.
+
+#### Why the CSI plugin enables it when Weka does not
+
+Weka does not set this flag by default. It is a default here because Kubernetes makes the same
+failure considerably more damaging:
+
+- **One exhausted filesystem affects every volume on it.** Directory-backed and
+  snapshot-backed PVs share the capacity of their backing filesystem, so exhaustion is not a
+  single-workload event - every workload on that filesystem is writing into the same full
+  container at the same time.
+- **Kubernetes encourages many small volumes.** It is common to see hundreds of PVCs of tens
+  or hundreds of megabytes sharing one filesystem, rather than a few large workloads whose
+  capacity is watched individually.
+- **The warning often reaches the wrong team.** Filesystem exhaustion is reported to storage
+  administrators, who in many organizations are not the people running the Kubernetes cluster.
+  The alert may not reach the workload owners in time to act on it.
+
+Together these make silent truncation both more likely and more widespread than the equivalent
+risk outside Kubernetes.
+
+#### It can be removed only per-PVC or per-Pod
+
+`sync_on_close` cannot be turned off in a StorageClass. This is by design, and it holds for
+both ways a StorageClass can carry mount options:
+
+- **StorageClass `parameters`** - the driver strips `sync_on_close` from the mount options it
+  propagates to the node, so setting it there has no effect in either direction.
+- **StorageClass `mountOptions`** (the native Kubernetes field) - this is a list of literal
+  option names, not modifiers. The `+` and `-` prefixes are understood only in the override
+  annotations, so a removal cannot be expressed here at all.
+
+The only supported way to remove it is a PVC-level or Pod-level override annotation:
+
+```yaml
+# PVC-level - applies to every pod using this claim
+metadata:
+  annotations:
+    weka.io/mount-options-override: "-sync_on_close"
+```
+
+```yaml
+# Pod-level - applies only to the matching PVCs of this pod
+metadata:
+  annotations:
+    weka.io/mount-options-overrides: |
+      scratch-.*: -sync_on_close
+```
+
+#### Before you remove it
+
+Removing `sync_on_close` is a supported tuning option, but the consequences are the customer's
+responsibility. Only consider it when **both** of the following hold:
+
+1. **The data is scratch or reproducible.** A truncated file must be recoverable simply by
+   rerunning the job. Never remove `sync_on_close` for data whose loss or corruption cannot be
+   detected and repaired that way.
+2. **You monitor capacity constantly and proactively.** You must actively watch both the
+   consumed capacity of the PVCs and the free capacity of the underlying Weka filesystems, and
+   act on exhaustion before it is reached. Without `sync_on_close` there is no other signal -
+   the application will not report the error, so monitoring is the only thing standing between
+   a full filesystem and silently corrupted output.
+
+If you cannot commit to both, leave the default in place.
+
+> **Note**: `sync_on_close` requires Weka cluster version 4.2 or later. On older clusters the
+> driver drops the option automatically and the protection described above is not available.
+> The same applies to any volume for which the driver cannot reach the Weka API, since it
+> cannot then determine the cluster version.
 
 ### Practical Examples
 
