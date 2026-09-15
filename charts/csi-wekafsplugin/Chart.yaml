@@ -6,12 +6,12 @@ maintainers:
     email: csi@weka.io
     url: https://weka.io
 sources:
-  - https://github.com/weka/csi-wekafs/tree/v2.9.3
+  - https://github.com/weka/csi-wekafs/tree/v2.9.4
 home: https://github.com/weka/csi-wekafs
 icon: https://weka.github.io/csi-wekafs/logo.png
 type: application
-version: 2.9.3
-appVersion: v2.9.3
+version: 2.9.4
+appVersion: v2.9.4
 keywords: [storage, filesystem, HPC]
 annotations:
   artifacthub.io/category: "storage"
@@ -23,7 +23,12 @@ annotations:
     url: https://weka.github.io/csi-wekafs/csi-public.gpg
   artifacthub.io/changes: |-
     - kind: fixed
-      description: 'fix(CSI-353): take the actual SELinux state rather than the desired one'
+      description: 'fix: make "-option" mount overrides actually remove the option'
       links:
-        - name: 'PR #733'
-          url: https://github.com/weka/csi-wekafs/pull/733
+        - name: 'PR #818'
+          url: https://github.com/weka/csi-wekafs/pull/818
+    - kind: changed
+      description: 'docs: explain sync_on_close, and correct the order mount options are applied in'
+      links:
+        - name: 'PR #820'
+          url: https://github.com/weka/csi-wekafs/pull/820
