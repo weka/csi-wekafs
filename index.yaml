@@ -5,6 +5,48 @@ entries:
       artifacthub.io/category: storage
       artifacthub.io/changes: |-
         - kind: fixed
+          description: 'fix: make "-option" mount overrides actually remove the option'
+          links:
+            - name: 'PR #818'
+              url: https://github.com/weka/csi-wekafs/pull/818
+        - kind: changed
+          description: 'docs: explain sync_on_close, and correct the order mount options are applied in'
+          links:
+            - name: 'PR #820'
+              url: https://github.com/weka/csi-wekafs/pull/820
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/signKey: |
+        fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
+        url: https://weka.github.io/csi-wekafs/csi-public.gpg
+    apiVersion: v2
+    appVersion: v2.9.4
+    created: "2026-09-15T14:28:27.71699148Z"
+    description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI)
+      plugin for WekaFS - the world fastest filesystem
+    digest: eba76d59aeee763dc5de68c1f2d057a0a51c07c84c9876c79184abd9dd60e7d8
+    home: https://github.com/weka/csi-wekafs
+    icon: https://weka.github.io/csi-wekafs/logo.png
+    keywords:
+    - storage
+    - filesystem
+    - HPC
+    maintainers:
+    - email: csi@weka.io
+      name: WekaIO, Inc.
+      url: https://weka.io
+    name: csi-wekafsplugin
+    sources:
+    - https://github.com/weka/csi-wekafs/tree/v2.9.4
+    type: application
+    urls:
+    - https://github.com/weka/csi-wekafs/releases/download/v2.9.4/csi-wekafsplugin-2.9.4.tgz
+    version: 2.9.4
+  - annotations:
+      artifacthub.io/category: storage
+      artifacthub.io/changes: |-
+        - kind: fixed
           description: 'fix(CSI-353): take the actual SELinux state rather than the desired one'
           links:
             - name: 'PR #733'
@@ -1622,4 +1664,4 @@ entries:
     urls:
     - https://weka.github.io/csi-wekafs/csi-wekafsplugin-0.6.2-0.tgz
     version: 0.6.2-0
-generated: "2026-09-09T21:20:44.465704828Z"
+generated: "2026-09-15T14:28:27.717185547Z"
