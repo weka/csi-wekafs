@@ -2,11 +2,16 @@ package wekafs
 
 import (
 	"context"
+	"reflect"
+	"sort"
 	"testing"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakeClient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
 // TestGetPodMountOptionsOverride_MissingPod tests behavior when pod doesn't exist
@@ -554,4 +559,327 @@ func TestMountOptionPipeline_MutualExclusivity(t *testing.T) {
 			}
 		})
 	}
+}
+
+// --- TestMountOptionPipeline_FullPublishScenario -----------------------------------------------
+//
+// mountOptionPipeline above models only the merges. It never calls pruneUnsupportedMountOptions,
+// so it cannot show whether "ro" supplied via an override is actually refused, or whether
+// sync_on_close capability pruning would mask a "-sync_on_close" exclusion. This test drives the
+// REAL methods NodePublishVolume calls, in the same order, against a real *Volume/*NodeServer:
+//
+//  1. volume.setMountOptions(scOpts) then volume.pruneUnsupportedMountOptions
+//  2. volume.mountOptions.Merge(VolumeCapability mount flags) - empty in this scenario
+//  3. ns.applyMountOptionsOverridesToVolume (PVC override then Pod override), via the actual
+//     function reading actual PVC/Pod objects out of a fake controller-runtime client
+//  4. volume.pruneUnsupportedMountOptions again (this is where a "ro" override must be refused)
+//  5. if readOnly: volume.mountOptions.Merge(NewMountOptions([]string{"ro"}).ExcludeOption("rw"))
+//  6. the MountUnderlyingFS line: withUnsupportedMountOptionsPruned(defaults.MergedWith(volume options))
+//
+// No production code is modified or reimplemented here beyond gluing these real calls together in
+// the real order; step 6 stops short of calling MountUnderlyingFS itself only because that also
+// invokes the mounter, which would require a full AnyMounter fake with real mount side effects.
+func newFullPublishScenarioNodeServer() *NodeServer {
+	return &NodeServer{config: &DriverConfig{mutuallyExclusiveOptions: exclusiveCacheOptions()}}
+}
+
+// fullPublishScenarioParams bundles what varies across the scenarios below.
+type fullPublishScenarioParams struct {
+	storageClassOpts string
+	pvcOverride      string // annotation value for weka.io/mount-options-override (applies to all pods)
+	podOverride      string // modifiers only; wrapped as "test-pvc: <podOverride>" for weka.io/mount-options-overrides
+	apiClient        *apiclient.ApiClient
+	readOnly         bool
+}
+
+// runFullPublishScenario builds a real *NodeServer and *Volume and pushes them through the exact
+// 6-step sequence NodeServer.NodePublishVolume uses (nodeserver.go ~331-407), calling the real
+// production methods at each step, and returns the MountOptions that would actually be passed to
+// the mounter.
+func runFullPublishScenario(t *testing.T, p fullPublishScenarioParams) MountOptions {
+	t.Helper()
+	ctx := context.Background()
+	ns := newFullPublishScenarioNodeServer()
+
+	volume := &Volume{
+		mountOptions: getDefaultMountOptions(),
+		apiClient:    p.apiClient,
+		server:       ns,
+	}
+	// mirrors initMountOptions (volumeconstructors.go), which every real Volume goes through
+	volume.pruneUnsupportedMountOptions(ctx)
+
+	// --- step 1: nodeserver.go ~331-339 ---
+	volume.setMountOptions(ctx, NewMountOptionsFromString(p.storageClassOpts))
+	volume.pruneUnsupportedMountOptions(ctx)
+
+	// --- step 2: nodeserver.go ~373-374 (no VolumeCapability mount flags in this scenario) ---
+	volume.mountOptions.Merge(NewMountOptionsFromString(""), ns.getConfig().mutuallyExclusiveOptions)
+
+	// --- step 3: nodeserver.go ~376-394, via the real applyMountOptionsOverridesToVolume ---
+	const pvcNamespace, pvcName = "default", "test-pvc"
+	const podNamespace, podName = "default", "test-pod"
+
+	pvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: pvcName, Namespace: pvcNamespace},
+	}
+	if p.pvcOverride != "" {
+		pvc.Annotations = map[string]string{PvcMountOptionOverrideAnnotation: p.pvcOverride}
+	}
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: podNamespace},
+	}
+	if p.podOverride != "" {
+		pod.Annotations = map[string]string{PodMountOptionOverrideAnnotation: pvcName + ": " + p.podOverride}
+	}
+	crClient := fakeClient.NewClientBuilder().WithObjects(pvc, pod).Build()
+
+	req := &csi.NodePublishVolumeRequest{
+		VolumeContext: map[string]string{
+			"mountOptions":               p.storageClassOpts,
+			VolumeContextPvcNameKey:      pvcName,
+			VolumeContextPvcNamespaceKey: pvcNamespace,
+			VolumeContextPodNameKey:      podName,
+			VolumeContextPodNamespaceKey: podNamespace,
+		},
+	}
+	if err := ns.applyMountOptionsOverridesToVolume(ctx, req, volume, crClient); err != nil {
+		t.Fatalf("applyMountOptionsOverridesToVolume returned an error: %v", err)
+	}
+
+	// --- step 4: nodeserver.go ~399 ---
+	volume.pruneUnsupportedMountOptions(ctx)
+
+	// --- step 5: nodeserver.go ~401-407 ---
+	if p.readOnly {
+		roMountOptions := NewMountOptions([]string{"ro"}).ExcludeOption("rw")
+		volume.mountOptions.Merge(roMountOptions, ns.getConfig().mutuallyExclusiveOptions)
+	}
+
+	// --- step 6: the MountUnderlyingFS line (volume.go:1048) ---
+	final := volume.withUnsupportedMountOptionsPruned(ctx,
+		ns.getDefaultMountOptions().MergedWith(volume.getMountOptions(ctx), ns.getConfig().mutuallyExclusiveOptions))
+	return final
+}
+
+// supportingApiClient returns an *apiclient.ApiClient whose compatibility map reports
+// sync_on_close as supported, without any live cluster connection: CompatibilityMap is populated
+// directly, exactly as fetchClusterInfo would populate it after a real login.
+func supportingApiClient() *apiclient.ApiClient {
+	return &apiclient.ApiClient{CompatibilityMap: &apiclient.WekaCompatibilityMap{SyncOnCloseMountOption: true}}
+}
+
+func TestMountOptionPipeline_FullPublishScenario(t *testing.T) {
+	assertExpected := func(t *testing.T, final MountOptions, present, absent []string) {
+		t.Helper()
+		t.Logf("final mount options: %q", final.String())
+		for _, want := range present {
+			if !final.hasOption(want) {
+				t.Errorf("Expected %q to be present, got %q", want, final.String())
+			}
+		}
+		for _, notWant := range absent {
+			if final.hasOption(notWant) {
+				t.Errorf("Expected %q to be absent, got %q", notWant, final.String())
+			}
+		}
+	}
+
+	// The exact user scenario, expressed in every equivalent way it can arrive: the whole
+	// override on the PVC annotation or split across PVC+Pod, and each of those in bare form
+	// (as the user actually wrote it) and in the fully "+"-prefixed form. All four must produce
+	// the identical final mounted set.
+	scenarioVariants := map[string]fullPublishScenarioParams{
+		"bare_single_pvc": {
+			storageClassOpts: MountOptionWriteCache,
+			pvcOverride:      "-sync_on_close,ro,readcache",
+			apiClient:        supportingApiClient(),
+		},
+		"prefixed_single_pvc": {
+			storageClassOpts: MountOptionWriteCache,
+			pvcOverride:      "-sync_on_close,+ro,+readcache",
+			apiClient:        supportingApiClient(),
+		},
+		"bare_split_pvc_pod": {
+			storageClassOpts: MountOptionWriteCache,
+			pvcOverride:      "-sync_on_close",
+			podOverride:      "ro,readcache",
+			apiClient:        supportingApiClient(),
+		},
+		"prefixed_split_pvc_pod": {
+			storageClassOpts: MountOptionWriteCache,
+			pvcOverride:      "-sync_on_close",
+			podOverride:      "+ro,+readcache",
+			apiClient:        supportingApiClient(),
+		},
+	}
+
+	var referenceFinal string
+	for _, name := range []string{"bare_single_pvc", "prefixed_single_pvc", "bare_split_pvc_pod", "prefixed_split_pvc_pod"} {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			final := runFullPublishScenario(t, scenarioVariants[name])
+			assertExpected(t, final,
+				[]string{MountOptionReadCache},
+				[]string{MountOptionWriteCache, MountOptionCoherent, MountOptionSyncOnClose, MountOptionReadOnly})
+			if referenceFinal == "" {
+				referenceFinal = final.String()
+			} else if final.String() != referenceFinal {
+				t.Errorf("Expected the same final mount options regardless of override form/placement: got %q, want %q (reference case)", final.String(), referenceFinal)
+			}
+		})
+	}
+
+	// Control (c): a genuine readonly attachment with NO override must still end up with "ro" -
+	// proving the refusal in step 4 (which drops a USER-supplied "ro") does not clobber the "ro"
+	// the driver adds itself in step 5, which runs after it.
+	t.Run("control_readonly_attachment_without_override", func(t *testing.T) {
+		final := runFullPublishScenario(t, fullPublishScenarioParams{
+			storageClassOpts: MountOptionWriteCache,
+			apiClient:        supportingApiClient(),
+			readOnly:         true,
+		})
+		assertExpected(t, final, []string{MountOptionReadOnly, MountOptionWriteCache}, nil)
+	})
+
+	// Control (d): isolate the exclusion mechanism from capability pruning. The apiClient here
+	// DOES support sync_on_close (SupportsSyncOnCloseMountOption() == true), so
+	// withUnsupportedMountOptionsPruned would NOT drop it on capability grounds. If sync_on_close
+	// is still absent from the final set, that is only because the "-sync_on_close" override's
+	// ExcludeOption survived the defaults merge - the mechanism under test, not a side effect of
+	// an unsupported cluster version. This was feasible: apiclient.ApiClient.CompatibilityMap is a
+	// plain exported field, so a "supporting" client needs no live cluster or login.
+	t.Run("control_exclusion_isolated_with_supporting_apiclient", func(t *testing.T) {
+		final := runFullPublishScenario(t, fullPublishScenarioParams{
+			storageClassOpts: MountOptionWriteCache,
+			pvcOverride:      "-sync_on_close",
+			apiClient:        supportingApiClient(),
+		})
+		assertExpected(t, final, []string{MountOptionWriteCache}, []string{MountOptionSyncOnClose})
+	})
+
+	// Sanity companion to control (d): same supporting apiClient, no override at all - proves
+	// sync_on_close is normally present with this fixture, so its absence above is caused by the
+	// exclusion and not by some accident of the "supporting" apiClient fixture itself.
+	t.Run("sanity_supporting_apiclient_keeps_sync_on_close_without_override", func(t *testing.T) {
+		final := runFullPublishScenario(t, fullPublishScenarioParams{
+			storageClassOpts: MountOptionWriteCache,
+			apiClient:        supportingApiClient(),
+		})
+		assertExpected(t, final, []string{MountOptionWriteCache, MountOptionSyncOnClose}, nil)
+	})
+
+	// Contrast for control (d): with apiClient == nil (cluster version unknown), sync_on_close is
+	// dropped by CAPABILITY pruning alone, with no override involved at all. This is the mechanism
+	// control (d) is designed to rule out as the explanation for the exclusion's effect.
+	t.Run("contrast_capability_pruning_drops_sync_on_close_without_any_override", func(t *testing.T) {
+		final := runFullPublishScenario(t, fullPublishScenarioParams{
+			storageClassOpts: MountOptionWriteCache,
+			apiClient:        nil,
+		})
+		assertExpected(t, final, []string{MountOptionWriteCache}, []string{MountOptionSyncOnClose})
+	})
+}
+
+// --- TestMountOptionOverride_BarePrefixEquivalence ---------------------------------------------
+//
+// Pins down, as a guaranteed contract rather than an incidental observation, that a bare option
+// and its "+"-prefixed form are indistinguishable in every respect: ApplyToOptions routes both
+// through the exact same addOverride call. This compares the full resulting MountOptions (both
+// the customOptions map and the excludeOptions bookkeeping) rather than merely checking that both
+// contain the option, so a future divergence between the two branches would be caught even if it
+// only affected exclusion bookkeeping rather than the visible option set.
+func assertMountOptionsIdentical(t *testing.T, bare, prefixed MountOptions, label string) {
+	t.Helper()
+	bareExclude := append([]string(nil), bare.excludeOptions...)
+	prefixedExclude := append([]string(nil), prefixed.excludeOptions...)
+	sort.Strings(bareExclude)
+	sort.Strings(prefixedExclude)
+
+	if !reflect.DeepEqual(bare.customOptions, prefixed.customOptions) {
+		t.Errorf("%s: customOptions differ:\n  bare:     %v\n  prefixed: %v", label, bare.customOptions, prefixed.customOptions)
+	}
+	if !reflect.DeepEqual(bareExclude, prefixedExclude) {
+		t.Errorf("%s: excludeOptions differ:\n  bare:     %v\n  prefixed: %v", label, bareExclude, prefixedExclude)
+	}
+	// Belt-and-suspenders: the normalized String() form must also match.
+	if bare.String() != prefixed.String() {
+		t.Errorf("%s: String() differs: bare=%q prefixed=%q", label, bare.String(), prefixed.String())
+	}
+}
+
+func TestMountOptionOverride_BarePrefixEquivalence(t *testing.T) {
+	exclusives := exclusiveCacheOptions()
+
+	for _, tc := range []struct {
+		name     string
+		start    MountOptions
+		bare     string
+		prefixed string
+	}{
+		{
+			name:     "plain option",
+			start:    NewMountOptionsFromString("readcache"),
+			bare:     MountOptionReadCache,
+			prefixed: "+" + MountOptionReadCache,
+		},
+		{
+			name:     "option carrying a value",
+			start:    NewMountOptionsFromString(""),
+			bare:     "inode_bits=64",
+			prefixed: "+inode_bits=64",
+		},
+		{
+			name:     "mixed with a removal, override order 1 (- then bare/+)",
+			start:    NewMountOptionsFromString(NodeServerAdditionalMountOptions), // writecache,sync_on_close
+			bare:     "-sync_on_close,readcache",
+			prefixed: "-sync_on_close,+readcache",
+		},
+		{
+			name:     "mixed with a removal, override order 2 (bare/+ then -)",
+			start:    NewMountOptionsFromString(NodeServerAdditionalMountOptions),
+			bare:     "readcache,-sync_on_close",
+			prefixed: "+readcache,-sync_on_close",
+		},
+		{
+			name:     "re-add after removal (UnexcludeOption path)",
+			start:    NewMountOptionsFromString(MountOptionWriteCache),
+			bare:     "-writecache,writecache",
+			prefixed: "-writecache,+writecache",
+		},
+		{
+			name:     "mutually exclusive set: displacing writecache",
+			start:    NewMountOptionsFromString(MountOptionWriteCache),
+			bare:     MountOptionCoherent,
+			prefixed: "+" + MountOptionCoherent,
+		},
+		{
+			name:     "whitespace tolerance around the modifier",
+			start:    NewMountOptionsFromString(""),
+			bare:     " readcache ",
+			prefixed: " +readcache ",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bareResult := MountOptionOverride(tc.bare).ApplyToOptions(tc.start, exclusives)
+			prefixedResult := MountOptionOverride(tc.prefixed).ApplyToOptions(tc.start, exclusives)
+			assertMountOptionsIdentical(t, bareResult, prefixedResult, tc.name)
+
+			// Sanity: this pair must actually add the option, so the comparison above isn't
+			// trivially passing on two empty/unaffected results.
+			if !bareResult.hasOption("readcache") && !bareResult.hasOption("inode_bits") &&
+				!bareResult.hasOption("writecache") && !bareResult.hasOption("coherent") {
+				t.Fatalf("%s: test setup did not actually exercise an add - bareResult = %q", tc.name, bareResult.String())
+			}
+		})
+	}
+
+	// The exact user scenario override, compared end to end: the whole string as the user wrote
+	// it (one bare modifier, two bare options) versus every modifier explicitly "+"-prefixed.
+	t.Run("full user scenario string, bare vs fully prefixed", func(t *testing.T) {
+		start := NewMountOptionsFromString(NodeServerAdditionalMountOptions) // writecache,sync_on_close
+		bareResult := MountOptionOverride("-sync_on_close,ro,readcache").ApplyToOptions(start, exclusives)
+		prefixedResult := MountOptionOverride("-sync_on_close,+ro,+readcache").ApplyToOptions(start, exclusives)
+		assertMountOptionsIdentical(t, bareResult, prefixedResult, "full user scenario string")
+	})
 }
