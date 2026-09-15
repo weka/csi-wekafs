@@ -1,0 +1,85 @@
+# Removing sync_on_close from selected volumes.
+#
+# sync_on_close is applied by the driver to every volume it mounts. It makes the flush at
+# close() synchronous, so that a write which failed because the filesystem or the volume quota
+# was full is reported back to the application. Without it that error arrives out of band and
+# the file is silently truncated or malformed, with the workload reporting success.
+#
+# Remove it ONLY when both of the following hold:
+#   1. the data is scratch or reproducible - a truncated file must be recoverable by rerunning
+#   2. you monitor PVC consumption and the free capacity of the backing Weka filesystem
+#      continuously, since without the option that monitoring is the only remaining signal
+#
+# It cannot be removed in a StorageClass. The driver strips sync_on_close from StorageClass
+# parameters, and the native StorageClass mountOptions field has no syntax for a removal.
+# A PVC or Pod override annotation is the only supported way.
+#
+# See docs/usage.md, "The sync_on_close option".
+
+---
+# Scratch data: reproducible intermediate output, safe to give up the protection for.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scratch-intermediate
+  # Applies to every pod that mounts this claim.
+  annotations:
+    weka.io/mount-options-override: -sync_on_close, +writecache
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-fs-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Durable output: keeps sync_on_close. No annotation, so the default applies.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: results-final
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: storageclass-wekafs-fs-api
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# The pod-level form does the same thing per PVC, matched by regex against the claim name.
+# It takes precedence over the PVC annotation above, and is the way to drop the option for one
+# workload without changing it for every other consumer of the claim.
+kind: Pod
+apiVersion: v1
+metadata:
+  name: csi-app-sync-on-close-override
+  annotations:
+    weka.io/mount-options-overrides: |
+      scratch-.*: -sync_on_close
+      results-.*: +readcache
+spec:
+  # make sure that pod is scheduled only on node having weka CSI node running
+  nodeSelector:
+    topology.csi.weka.io/global: "true"
+  containers:
+    - name: my-frontend
+      image: ubuntu
+      volumeMounts:
+        - mountPath: "/scratch"
+          name: scratch-volume
+        - mountPath: "/results"
+          name: results-volume
+      command: ["/bin/sh"]
+      # mount -t wekafs shows sync_on_close present on /results and absent on /scratch
+      args: ["-c", "while true; do mount -t wekafs; sleep 30; done"]
+  volumes:
+    - name: scratch-volume
+      persistentVolumeClaim:
+        claimName: scratch-intermediate
+    - name: results-volume
+      persistentVolumeClaim:
+        claimName: results-final
