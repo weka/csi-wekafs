@@ -73,7 +73,15 @@ Common mount options for Weka filesystem include:
 - `noatime` / `atime`
 - `readahead_kb=<size>`
 - `dentry_max_age_positive=<seconds>`
+- `sync_on_close` / `-sync_on_close` - applied by default; read the warning below before removing it
 - And others as supported by your Weka cluster
+
+> **`sync_on_close` is not an ordinary tunable.** It is applied by the driver to every volume so
+> that a write failing because the filesystem or quota is full is reported to the application.
+> Without it the error arrives out of band and data is silently truncated. It cannot be removed
+> in a StorageClass - only through a PVC or Pod override - and it should only be removed for
+> scratch or reproducible data, while capacity is actively monitored. See
+> `sync-on-close-override.yaml` and the "The `sync_on_close` option" section of `docs/usage.md`.
 
 # Workflow
 
@@ -135,6 +143,18 @@ Comprehensive example showing:
 
 This demonstrates how mount option overrides enable flexible, workload-specific optimization.
 
+## Removing sync_on_close for Scratch Data
+> See `sync-on-close-override.yaml`
+
+Shows how to drop the default `sync_on_close` for reproducible intermediate data while keeping
+it on the volume holding the durable output:
+1. PVC-level removal, applying to every pod that mounts the claim
+2. Pod-level removal by PVC name regex, affecting one workload only
+3. A second claim left unannotated, so it keeps the protection
+
+Verify with `mount -t wekafs` inside the pod: `sync_on_close` is absent on `/scratch` and
+present on `/results`.
+
 ## Additional Resources
 
 - **MOUNT_OPTION_OVERRIDES.md** - Comprehensive guide with syntax, examples, troubleshooting, and best practices
@@ -142,4 +162,5 @@ This demonstrates how mount option overrides enable flexible, workload-specific 
 - **pvc-annotation-override.yaml** - Simple PVC-level annotation example
 - **pod-and-pvc-annotation-combined.yaml** - Combined annotation example showing precedence
 - **real-world-deployment.yaml** - Production-like multi-tier deployment example
+- **sync-on-close-override.yaml** - Removing the default `sync_on_close`, and when not to
 
