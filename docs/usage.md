@@ -648,6 +648,85 @@ spec:
       claimName: app-data
 ```
 
+**Example 3: Removing `sync_on_close` for a scratch workload**
+
+Read [The `sync_on_close` option](#the-sync_on_close-option) first - removing it means the
+application will no longer be told when a write failed because the filesystem or the quota was
+full. Only do this for data a rerun can reproduce, and only while actively monitoring capacity.
+
+Removing it for every pod that uses a claim, with the PVC annotation:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scratch-data
+  annotations:
+    # Applies to all pods mounting this PVC
+    weka.io/mount-options-override: "-sync_on_close"
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: wekafs-storage
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scratch-job
+spec:
+  nodeSelector:
+    topology.csi.weka.io/global: "true"
+  containers:
+  - name: app
+    image: myapp:latest
+    volumeMounts:
+    - name: scratch
+      mountPath: /scratch
+  volumes:
+  - name: scratch
+    persistentVolumeClaim:
+      claimName: scratch-data
+```
+
+Removing it for one pod only, leaving the claim's other consumers protected. The key is a regex
+matched against the PVC name, so a single annotation can cover a family of scratch claims:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scratch-job
+  annotations:
+    weka.io/mount-options-overrides: |
+      scratch-.*: -sync_on_close, +writecache
+      results-.*: +readcache
+spec:
+  nodeSelector:
+    topology.csi.weka.io/global: "true"
+  containers:
+  - name: app
+    image: myapp:latest
+    volumeMounts:
+    - name: scratch
+      mountPath: /scratch
+    - name: results
+      mountPath: /results
+  volumes:
+  - name: scratch
+    persistentVolumeClaim:
+      claimName: scratch-intermediate
+  - name: results
+    persistentVolumeClaim:
+      claimName: results-final
+```
+
+Here `scratch-intermediate` is mounted without `sync_on_close`, while `results-final` keeps it -
+the durable output of the job stays protected while only the reproducible intermediate data
+gives it up.
+
 ### Verification
 
 To verify that mount option overrides are applied correctly:
