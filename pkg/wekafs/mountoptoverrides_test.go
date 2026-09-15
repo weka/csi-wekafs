@@ -742,6 +742,45 @@ func TestMountOptionPipeline_FullPublishScenario(t *testing.T) {
 		assertExpected(t, final, []string{MountOptionReadOnly, MountOptionWriteCache}, nil)
 	})
 
+	// A readonly attachment combined with a "-ro" override must STILL mount readonly. This is the
+	// companion to control (c), and the case that control (c) alone does not reach: "-ro" records
+	// an exclusion of "ro", and because Merge applies exclusions after additions, that exclusion
+	// outlived the refusal step and deleted the "ro" the readonly path had added - at the defaults
+	// merge, after every assertion a publish-time test would naturally make. The underlying
+	// filesystem was then mounted writable. The refusal step clears the exclusion as well as the
+	// option, so both forms of user input about "ro" are refused in the one place that owns that
+	// policy.
+	for name, override := range map[string]fullPublishScenarioParams{
+		"readonly_attachment_with_pvc_ro_removal": {pvcOverride: "-" + MountOptionReadOnly},
+		"readonly_attachment_with_pod_ro_removal": {podOverride: "-" + MountOptionReadOnly},
+		"readonly_attachment_with_ro_removal_alongside_another_modifier": {
+			pvcOverride: "-" + MountOptionReadOnly + ",+" + MountOptionReadCache,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			final := runFullPublishScenario(t, fullPublishScenarioParams{
+				storageClassOpts: MountOptionWriteCache,
+				pvcOverride:      override.pvcOverride,
+				podOverride:      override.podOverride,
+				apiClient:        supportingApiClient(),
+				readOnly:         true,
+			})
+			assertExpected(t, final, []string{MountOptionReadOnly}, nil)
+		})
+	}
+
+	// The mirror of the above: with no readonly attachment, a "-ro" override must NOT leave "ro"
+	// behind. Clearing the exclusion must not amount to granting the "ro" that step 4 refuses.
+	t.Run("ro_removal_without_a_readonly_attachment_adds_no_ro", func(t *testing.T) {
+		final := runFullPublishScenario(t, fullPublishScenarioParams{
+			storageClassOpts: MountOptionWriteCache,
+			pvcOverride:      "-" + MountOptionReadOnly,
+			apiClient:        supportingApiClient(),
+			readOnly:         false,
+		})
+		assertExpected(t, final, []string{MountOptionWriteCache}, []string{MountOptionReadOnly})
+	})
+
 	// Control (d): isolate the exclusion mechanism from capability pruning. The apiClient here
 	// DOES support sync_on_close (SupportsSyncOnCloseMountOption() == true), so
 	// withUnsupportedMountOptionsPruned would NOT drop it on capability grounds. If sync_on_close
