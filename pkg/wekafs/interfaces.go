@@ -20,7 +20,6 @@ type AnyMounter interface {
 	NewMount(fsName string, options MountOptions) AnyMount
 	mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc)
 	Mount(ctx context.Context, fs string, apiClient *apiclient.ApiClient) (string, error, UnmountFunc)
-	unmountWithOptions(ctx context.Context, fsName string, options MountOptions) error
 	LogActiveMounts(ctx context.Context)
 	gcInactiveMounts(ctx context.Context)
 	schedulePeriodicMountGc(ctx context.Context)
