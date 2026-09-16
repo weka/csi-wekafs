@@ -98,7 +98,7 @@ func NewWekaFsDriver(
 		version:           vendorVersion,
 		endpoint:          endpoint,
 		maxVolumesPerNode: maxVolumesPerNode,
-		api:               NewApiStore(config, nodeID),
+		api:               NewApiStore(config, nodeID, driverName),
 		debugPath:         debugPath,
 		csiMode:           csiMode, // either "controller", "node", "all"
 		selinuxSupport:    selinuxSupport,

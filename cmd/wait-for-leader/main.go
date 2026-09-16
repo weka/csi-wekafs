@@ -9,6 +9,10 @@ then starts the real sidecar as a child process. While the sidecar is running, i
 monitors the leader ready file; if leadership is lost, it terminates the sidecar
 and returns to waiting.
 
+While the sidecar is not running, it answers HTTP on the sidecar's own metrics port
+so that scrapes of a standby replica succeed with no metrics, rather than being
+refused. See standbyMetricsServer.
+
 Usage: wait-for-leader <command> [args...]
 
 Environment variables:
@@ -26,6 +30,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -105,6 +110,98 @@ func waitForSocket(ctx context.Context, socketPath, leaderFile string) error {
 	}
 }
 
+// standbyEndpointFromArgs finds the address the gated sidecar would serve its metrics on, so the
+// port is discovered from the command line already being passed rather than configured twice. The
+// four scraped sidecars are given "--http-endpoint=:<port>"; the health monitor is given none, and
+// is not scraped, so it correctly gets no standby listener.
+func standbyEndpointFromArgs(args []string) string {
+	const flagName = "--http-endpoint"
+	for i, arg := range args {
+		if strings.HasPrefix(arg, flagName+"=") {
+			return strings.TrimPrefix(arg, flagName+"=")
+		}
+		if arg == flagName && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+// standbyMetricsServer answers on the gated sidecar's metrics port for as long as that sidecar is
+// not running - which, on a standby replica, is its whole life.
+//
+// The controller PodMonitor scrapes every replica's sidecar ports, but the sidecars only start once
+// leadership is acquired. Nothing listens on the standby, so Prometheus holds a refused target per
+// sidecar per standby replica, indefinitely, and any alert written on "up == 0" fires on a cluster
+// that is behaving exactly as designed. An empty 200 is the honest answer: the target is reachable
+// and has no metrics, because the process that would produce them is not meant to run here.
+//
+// The port is held by exactly one of the two at a time - stop() is called before the child starts,
+// and start() again only after it has been reaped.
+type standbyMetricsServer struct {
+	addr   string
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+// start is idempotent, and never blocks: gating the sidecar is this binary's real job, so a port
+// that cannot be bound is reported and retried rather than allowed to hold up leadership.
+func (s *standbyMetricsServer) start() {
+	if s.addr == "" || s.cancel != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+	s.done = make(chan struct{})
+
+	go func() {
+		defer close(s.done)
+
+		mux := http.NewServeMux()
+		// Every path, not just /metrics: the same endpoint serves the sidecars' own health checks,
+		// and a standby answering 200 there is as true as it is for the metrics path.
+		mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+		})
+
+		for {
+			listener, err := net.Listen("tcp", s.addr)
+			if err != nil {
+				// Usually the sidecar we just stopped still holding the port. Retry, so this does
+				// not become a permanent hole for the rest of the standby period.
+				fmt.Fprintf(os.Stderr, "wait-for-leader: standby listener on %s not up yet: %v\n", s.addr, err)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(time.Second):
+					continue
+				}
+			}
+
+			server := &http.Server{Handler: mux}
+			go func() {
+				<-ctx.Done()
+				_ = server.Close()
+			}()
+			fmt.Printf("wait-for-leader: standby, answering scrapes on %s\n", s.addr)
+			_ = server.Serve(listener)
+			return
+		}
+	}()
+}
+
+// stop releases the port and waits until it is actually free, so the child can bind it.
+func (s *standbyMetricsServer) stop() {
+	if s.cancel == nil {
+		return
+	}
+	s.cancel()
+	<-s.done
+	s.cancel = nil
+	s.done = nil
+}
+
 func startChild(binary string, args []string) (*exec.Cmd, <-chan error, error) {
 	cmd := exec.Command(binary, args...)
 	cmd.Stdout = os.Stdout
@@ -180,7 +277,13 @@ func main() {
 		leaderLossDebounce.String(),
 	)
 
+	standby := &standbyMetricsServer{addr: standbyEndpointFromArgs(args)}
+
 	for {
+		// Held for exactly as long as the sidecar is not running, including every return trip
+		// through this loop after a lost leadership. Idempotent, so the continue below is safe.
+		standby.start()
+
 		fmt.Printf("wait-for-leader: waiting for leader file: %s\n", leaderFile)
 		if err := waitForLeaderFile(termCtx, leaderFile, pollInterval); err != nil {
 			os.Exit(0)
@@ -193,6 +296,10 @@ func main() {
 			}
 			os.Exit(0)
 		}
+
+		// Released before the child is started, and only then, so the sidecar can bind its own
+		// port. stop() waits for the listener to actually close rather than just asking it to.
+		standby.stop()
 
 		fmt.Printf("wait-for-leader: leader is ready, starting: %s\n", binary)
 		cmd, childDone, err := startChild(binary, args)

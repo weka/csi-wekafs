@@ -131,6 +131,9 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | metrics.snapshotterPort | int | `9093` | Snapshotter metrics port |
 | metrics.nodePort | int | `9094` | Metrics port for Node Serer |
 | metrics.attacherPort | int | `9095` | Attacher metrics port |
+| metrics.podMonitor.enabled | bool | `true` | Create PodMonitors for the controller and node pods |
+| metrics.podMonitor.interval | string | `"30s"` | Scrape interval |
+| metrics.podMonitor.additionalLabels | object | `{}` | Extra labels for the PodMonitor objects. Set this when your Prometheus selects PodMonitors by label, e.g. `release: kube-prometheus-stack`, or the metrics will not be scraped. |
 | hostNetwork | bool | `false` | Set to true to use host networking. Will be always set to true when using NFS mount protocol |
 | pluginConfig.fsGroupPolicy | string | `"File"` | WARNING: Changing this value might require uninstall and re-install of the plugin |
 | pluginConfig.allowInsecureHttps | bool | `false` | Allow insecure HTTPS (skip TLS certificate verification) |
