@@ -54,6 +54,12 @@
                 "labels": {
                     "type": "object"
                 },
+                "kubeApiBurst": {
+                    "type": "integer"
+                },
+                "kubeApiQps": {
+                    "type": "integer"
+                },
                 "maxConcurrentRequests": {
                     "type": "integer"
                 },
