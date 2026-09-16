@@ -1,0 +1,285 @@
+package wekafs
+
+import (
+	"slices"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+var (
+	CsiCommonLabels                             = []string{"csi_driver_name"}
+	CsiControllerConcurrencyMetricsLabels       = []string{"status"}
+	CsiControllerVolumeOperationMetricsLabels   = []string{"status", "backing_type"}
+	CsiControllerSnapshotOperationMetricsLabels = []string{"status"}
+	CsiNodeConcurrencyMetricsLabels             = []string{"status"}
+	CsiNodeVolumeOperationMetricsLabels         = []string{"status"}
+)
+
+const MetricsPrefix = "weka_csi"
+
+// There is one controller server and one node server per process, so the metrics they record are
+// process-wide, exactly like the API client's. Constructing them has no side effect; nothing is
+// exported until something registers the collectors, which is what ControllerCollectors and
+// NodeCollectors are for. Registering only the role this process actually serves keeps a node pod
+// from exporting a permanently-zero set of controller series, and vice versa.
+var (
+	controllerMetrics = NewControllerServerMetrics()
+	nodeMetrics       = NewNodeServerMetrics()
+)
+
+// The metric declarations below differ only in name, help and which labels they carry, so the
+// shared opts live here rather than being spelled out 32 times.
+func newCounterVec(subsystem, name, help string, labels []string) *prometheus.CounterVec {
+	return prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: MetricsPrefix, Subsystem: subsystem, Name: name, Help: help,
+	}, slices.Concat(CsiCommonLabels, labels))
+}
+
+// csiDurationBuckets covers the range CSI operations actually occupy. The Prometheus defaults stop
+// at 10s, while grpcRequestTimeout alone defaults to 30s, so every slow create, delete, publish and
+// semaphore wait - the samples these histograms exist to expose - would land together in +Inf and a
+// 12s create would be indistinguishable from one that timed out. Matches the range the Weka API
+// request histograms already use, so the two can be read on the same axis.
+var csiDurationBuckets = []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 7.5, 10, 15, 30, 60, 120, 300}
+
+func newHistogramVec(subsystem, name, help string, labels []string) *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: MetricsPrefix, Subsystem: subsystem, Name: name, Help: help,
+		Buckets: csiDurationBuckets,
+	}, slices.Concat(CsiCommonLabels, labels))
+}
+
+func newGaugeVec(subsystem, name, help string, labels []string) *prometheus.GaugeVec {
+	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: MetricsPrefix, Subsystem: subsystem, Name: name, Help: help,
+	}, slices.Concat(CsiCommonLabels, labels))
+}
+
+// recordOperation records one finished operation: its outcome on the counter and how long it took
+// on the histogram, under the same labels. The two always move together, and keeping them in one
+// place stops the pair drifting apart across the handlers that record them.
+func recordOperation(counter *prometheus.CounterVec, duration *prometheus.HistogramVec, start time.Time, labels ...string) {
+	counter.WithLabelValues(labels...).Inc()
+	duration.WithLabelValues(labels...).Observe(time.Since(start).Seconds())
+}
+
+// pluginInfo is exported by every plugin process from the moment it starts, before it has served a
+// single RPC.
+//
+// Every other metric here is a CounterVec or GaugeVec, and those export nothing at all until a
+// label set is first observed - so on a fresh install, or after a rollout or a leader failover on a
+// quiet cluster, there is no series naming the process. Anything asking "which pods and namespaces
+// is this driver running in" - dashboard variables above all - then gets an empty answer and
+// silently queries nothing, which renders as a healthy zero rather than as no data.
+//
+// The mode label states the role once, as a label. The CSI operation metrics already imply it in
+// their names - the subsystem is "controller" or "node", so weka_csi_node_publish_volume_total comes
+// only from a node process, the leading "node" there being the subsystem and the one in
+// "node_publish_volume" being part of the RPC name. But that only holds for metrics that exist per
+// role: the Weka API request metrics are the same series from either, so nothing in them says which
+// process made the call. A label answers uniformly, for both.
+var pluginInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Namespace: MetricsPrefix, Name: "plugin_info",
+	Help: "Always 1, exported once per plugin process so that the process is discoverable before it serves any request",
+}, slices.Concat(CsiCommonLabels, []string{"mode", "version"}))
+
+// SetPluginInfo publishes the one always-present series for this process. Called once at startup.
+func SetPluginInfo(driverName string, mode CsiPluginMode, version string) {
+	pluginInfo.WithLabelValues(driverName, string(mode), version).Set(1)
+}
+
+// PluginInfoCollector is registered in every mode, unlike the controller and node collectors.
+func PluginInfoCollector() prometheus.Collector { return pluginInfo }
+
+// ControllerCollectors returns the controller server metrics for the caller to register.
+func ControllerCollectors() []prometheus.Collector { return controllerMetrics.Collectors() }
+
+// NodeCollectors returns the node server metrics for the caller to register.
+func NodeCollectors() []prometheus.Collector { return nodeMetrics.Collectors() }
+
+type ControllerOperationMetrics struct {
+	CreateVolumeCounter       *prometheus.CounterVec
+	CreateVolumeDuration      *prometheus.HistogramVec
+	CreateVolumeTotalCapacity *prometheus.CounterVec
+	DeleteVolumeCounter       *prometheus.CounterVec
+	DeleteVolumeDuration      *prometheus.HistogramVec
+	ExpandVolumeCounter       *prometheus.CounterVec
+	ExpandVolumeDuration      *prometheus.HistogramVec
+	ExpandVolumeTotalCapacity *prometheus.CounterVec
+	CreateSnapshotCounter     *prometheus.CounterVec
+	CreateSnapshotDuration    *prometheus.HistogramVec
+	DeleteSnapshotCounter     *prometheus.CounterVec
+	DeleteSnapshotDuration    *prometheus.HistogramVec
+}
+
+// Collectors returns the metrics for the caller to register.
+func (c *ControllerOperationMetrics) Collectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		c.CreateVolumeCounter,
+		c.CreateVolumeDuration,
+		c.CreateVolumeTotalCapacity,
+		c.DeleteVolumeCounter,
+		c.DeleteVolumeDuration,
+		c.ExpandVolumeCounter,
+		c.ExpandVolumeDuration,
+		c.ExpandVolumeTotalCapacity,
+		c.CreateSnapshotCounter,
+		c.CreateSnapshotDuration,
+		c.DeleteSnapshotCounter,
+		c.DeleteSnapshotDuration,
+	}
+}
+
+func NewControllerOperationMetrics(volumeLabels, snapshotLabels []string) *ControllerOperationMetrics {
+	return &ControllerOperationMetrics{
+		CreateVolumeCounter:       newCounterVec("controller", "create_volume_total", "Total number of ControllerCreateVolume calls", volumeLabels),
+		CreateVolumeDuration:      newHistogramVec("controller", "create_volume_duration_seconds", "Duration of ControllerCreateVolume calls in seconds", volumeLabels),
+		CreateVolumeTotalCapacity: newCounterVec("controller", "create_volume_total_capacity_bytes", "Total capacity of volumes created by ControllerCreateVolume in bytes", volumeLabels),
+		DeleteVolumeCounter:       newCounterVec("controller", "delete_volume_total", "Total number of ControllerDeleteVolume calls", volumeLabels),
+		DeleteVolumeDuration:      newHistogramVec("controller", "delete_volume_duration_seconds", "Duration of ControllerDeleteVolume calls in seconds", volumeLabels),
+		ExpandVolumeCounter:       newCounterVec("controller", "expand_volume_total", "Total number of ControllerExpandVolume calls", volumeLabels),
+		ExpandVolumeDuration:      newHistogramVec("controller", "expand_volume_duration_seconds", "Duration of ControllerExpandVolume calls in seconds", volumeLabels),
+		ExpandVolumeTotalCapacity: newCounterVec("controller", "expand_volume_total_capacity_bytes", "Total capacity of volumes expanded by ControllerExpandVolume in bytes", volumeLabels),
+		CreateSnapshotCounter:     newCounterVec("controller", "create_snapshot_total", "Total number of ControllerCreateSnapshot calls", snapshotLabels),
+		CreateSnapshotDuration:    newHistogramVec("controller", "create_snapshot_duration_seconds", "Duration of ControllerCreateSnapshot calls in seconds", snapshotLabels),
+		DeleteSnapshotCounter:     newCounterVec("controller", "delete_snapshot_total", "Total number of ControllerDeleteSnapshot calls", snapshotLabels),
+		DeleteSnapshotDuration:    newHistogramVec("controller", "delete_snapshot_duration_seconds", "Duration of ControllerDeleteSnapshot calls in seconds", snapshotLabels),
+	}
+}
+
+type ControllerConcurrencyMetrics struct {
+	CreateVolume               *prometheus.GaugeVec
+	DeleteVolume               *prometheus.GaugeVec
+	ExpandVolume               *prometheus.GaugeVec
+	CreateSnapshot             *prometheus.GaugeVec
+	DeleteSnapshot             *prometheus.GaugeVec
+	CreateVolumeWaitDuration   *prometheus.HistogramVec
+	DeleteVolumeWaitDuration   *prometheus.HistogramVec
+	ExpandVolumeWaitDuration   *prometheus.HistogramVec
+	CreateSnapshotWaitDuration *prometheus.HistogramVec
+	DeleteSnapshotWaitDuration *prometheus.HistogramVec
+}
+
+func NewControllerConcurrencyMetrics(labels []string) *ControllerConcurrencyMetrics {
+	return &ControllerConcurrencyMetrics{
+		CreateVolume:               newGaugeVec("controller", "concurrency_create_volume", "Current number of concurrent ControllerCreateVolume operations", labels),
+		DeleteVolume:               newGaugeVec("controller", "concurrency_delete_volume", "Current number of concurrent ControllerDeleteVolume operations", labels),
+		ExpandVolume:               newGaugeVec("controller", "concurrency_expand_volume", "Current number of concurrent ControllerExpandVolume operations", labels),
+		CreateSnapshot:             newGaugeVec("controller", "concurrency_create_snapshot", "Current number of concurrent ControllerCreateSnapshot operations", labels),
+		DeleteSnapshot:             newGaugeVec("controller", "concurrency_delete_snapshot", "Current number of concurrent ControllerDeleteSnapshot operations", labels),
+		CreateVolumeWaitDuration:   newHistogramVec("controller", "concurrency_create_volume_wait_duration_seconds", "Duration of waiting for ControllerCreateVolume semaphore in seconds", labels),
+		DeleteVolumeWaitDuration:   newHistogramVec("controller", "concurrency_delete_volume_wait_duration_seconds", "Duration of waiting for ControllerDeleteVolume semaphore in seconds", labels),
+		ExpandVolumeWaitDuration:   newHistogramVec("controller", "concurrency_expand_volume_wait_duration_seconds", "Duration of waiting for ControllerExpandVolume semaphore in seconds", labels),
+		CreateSnapshotWaitDuration: newHistogramVec("controller", "concurrency_create_snapshot_wait_duration_seconds", "Duration of waiting for ControllerCreateSnapshot semaphore in seconds", labels),
+		DeleteSnapshotWaitDuration: newHistogramVec("controller", "concurrency_delete_snapshot_wait_duration_seconds", "Duration of waiting for ControllerDeleteSnapshot semaphore in seconds", labels),
+	}
+}
+
+// Collectors returns the metrics for the caller to register.
+func (c *ControllerConcurrencyMetrics) Collectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		c.CreateVolume,
+		c.DeleteVolume,
+		c.ExpandVolume,
+		c.CreateSnapshot,
+		c.DeleteSnapshot,
+		c.CreateVolumeWaitDuration,
+		c.DeleteVolumeWaitDuration,
+		c.ExpandVolumeWaitDuration,
+		c.CreateSnapshotWaitDuration,
+		c.DeleteSnapshotWaitDuration,
+	}
+}
+
+type ControllerServerMetrics struct {
+	Concurrency *ControllerConcurrencyMetrics
+	Operations  *ControllerOperationMetrics
+}
+
+func NewControllerServerMetrics() *ControllerServerMetrics {
+	return &ControllerServerMetrics{
+		Operations:  NewControllerOperationMetrics(CsiControllerVolumeOperationMetricsLabels, CsiControllerSnapshotOperationMetricsLabels),
+		Concurrency: NewControllerConcurrencyMetrics(CsiControllerConcurrencyMetricsLabels),
+	}
+}
+
+// Collectors returns every controller metric for the caller to register.
+func (m *ControllerServerMetrics) Collectors() []prometheus.Collector {
+	return append(m.Operations.Collectors(), m.Concurrency.Collectors()...)
+}
+
+type NodeServerConcurrencyMetrics struct {
+	PublishVolume               *prometheus.GaugeVec
+	UnpublishVolume             *prometheus.GaugeVec
+	PublishVolumeWaitDuration   *prometheus.HistogramVec
+	UnpublishVolumeWaitDuration *prometheus.HistogramVec
+}
+
+// Collectors returns the metrics for the caller to register.
+func (m *NodeServerConcurrencyMetrics) Collectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		m.PublishVolume,
+		m.UnpublishVolume,
+		m.PublishVolumeWaitDuration,
+		m.UnpublishVolumeWaitDuration,
+	}
+}
+
+func NewNodeConcurrencyMetrics(labels []string) *NodeServerConcurrencyMetrics {
+	return &NodeServerConcurrencyMetrics{
+		PublishVolume:               newGaugeVec("node", "concurrency_node_publish_volume", "Current number of concurrent NodePublishVolume operations", labels),
+		UnpublishVolume:             newGaugeVec("node", "concurrency_node_unpublish_volume", "Current number of concurrent NodeUnpublishVolume operations", labels),
+		PublishVolumeWaitDuration:   newHistogramVec("node", "concurrency_node_publish_volume_wait_duration_seconds", "Duration of waiting for NodePublishVolume semaphore in seconds", labels),
+		UnpublishVolumeWaitDuration: newHistogramVec("node", "concurrency_node_unpublish_volume_wait_duration_seconds", "Duration of waiting for NodeUnpublishVolume semaphore in seconds", labels),
+	}
+}
+
+type NodeServerOperationMetrics struct {
+	PublishVolume           *prometheus.CounterVec
+	PublishVolumeDuration   *prometheus.HistogramVec
+	UnpublishVolume         *prometheus.CounterVec
+	UnpublishVolumeDuration *prometheus.HistogramVec
+	GetVolumeStats          *prometheus.CounterVec
+	GetVolumeStatsDuration  *prometheus.HistogramVec
+}
+
+// Collectors returns the metrics for the caller to register.
+func (m *NodeServerOperationMetrics) Collectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		m.PublishVolume,
+		m.UnpublishVolume,
+		m.PublishVolumeDuration,
+		m.UnpublishVolumeDuration,
+		m.GetVolumeStats,
+		m.GetVolumeStatsDuration,
+	}
+}
+
+func NewNodeOperationMetrics(volumeLabels []string) *NodeServerOperationMetrics {
+	return &NodeServerOperationMetrics{
+		PublishVolume:           newCounterVec("node", "publish_volume_total", "Total number of NodePublishVolume calls", volumeLabels),
+		PublishVolumeDuration:   newHistogramVec("node", "publish_volume_duration_seconds", "Duration of NodePublishVolume calls in seconds", volumeLabels),
+		UnpublishVolume:         newCounterVec("node", "unpublish_volume_total", "Total number of NodeUnpublishVolume calls", volumeLabels),
+		UnpublishVolumeDuration: newHistogramVec("node", "unpublish_volume_duration_seconds", "Duration of NodeUnpublishVolume calls in seconds", volumeLabels),
+		GetVolumeStats:          newCounterVec("node", "get_volume_stats_total", "Total number of NodeGetVolumeStats calls", volumeLabels),
+		GetVolumeStatsDuration:  newHistogramVec("node", "get_volume_stats_duration_seconds", "Duration of NodeGetVolumeStats calls in seconds", volumeLabels),
+	}
+}
+
+type NodeServerMetrics struct {
+	Concurrency *NodeServerConcurrencyMetrics
+	Operations  *NodeServerOperationMetrics
+}
+
+func NewNodeServerMetrics() *NodeServerMetrics {
+	return &NodeServerMetrics{
+		Operations:  NewNodeOperationMetrics(CsiNodeVolumeOperationMetricsLabels),
+		Concurrency: NewNodeConcurrencyMetrics(CsiNodeConcurrencyMetricsLabels),
+	}
+}
+
+// Collectors returns every node metric for the caller to register.
+func (m *NodeServerMetrics) Collectors() []prometheus.Collector {
+	return append(m.Operations.Collectors(), m.Concurrency.Collectors()...)
+}
