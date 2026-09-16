@@ -2,6 +2,7 @@ package apiclient
 
 import (
 	"context"
+	stderrors "errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -343,5 +344,42 @@ func TestApiClientRequest(t *testing.T) {
 				assert.Equal(t, tt.expectedStatus, apiErr.StatusCode)
 			}
 		})
+	}
+}
+
+// A cancelled request must not keep backing off. The too-many-tasks waits are long by design and
+// can outlast grpcRequestTimeout, so an uninterruptible sleep would hold the caller's semaphore past
+// its own deadline and then issue further Weka API calls for a request that no longer exists.
+func TestRetryBackoffStopsWhenTheRequestIsCancelled(t *testing.T) {
+	a := &ApiClient{}
+
+	var calls int
+	cancelAfterFirstAttempt, cancel := context.WithCancel(context.Background())
+	f := func() apiError {
+		calls++
+		cancel() // the caller's deadline passes while the first backoff is in flight
+		return &ApiInternalError{Text: "transient"}
+	}
+
+	start := time.Now()
+	err := a.retryBackoff(cancelAfterFirstAttempt, ApiRetryMaxCount, time.Second*time.Duration(ApiRetryIntervalSeconds), f)
+	elapsed := time.Since(start)
+
+	if !stderrors.Is(err, context.Canceled) {
+		t.Errorf("expected the cancellation to be returned, got %v", err)
+	}
+	// request() type-asserts whatever retryBackoff returns to apiError on its way out. A bare
+	// context error does not implement it, so returning one panics the controller on exactly the
+	// path this interruptible backoff exists to take.
+	if _, ok := err.(apiError); !ok {
+		t.Errorf("expected the cancellation to satisfy apiError so request() can return it, got %T", err)
+	}
+	if calls != 1 {
+		t.Errorf("expected no further attempts after cancellation, got %d calls", calls)
+	}
+	// The first backoff alone is ApiRetryIntervalSeconds plus jitter. Returning well inside that is
+	// what proves the wait was interrupted rather than slept through.
+	if elapsed >= time.Second*time.Duration(ApiRetryIntervalSeconds) {
+		t.Errorf("expected the backoff to be cut short by cancellation, waited %s", elapsed)
 	}
 }

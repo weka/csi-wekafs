@@ -16,11 +16,54 @@ type ApiObject interface {
 
 // ApiResponse returned by Request method
 type ApiResponse struct {
-	Data           json.RawMessage `json:"data"` // Data, may be either object, dict or list
-	ErrorCodes     []string        `json:"data.exceptionClass,omitempty"`
-	Message        string          `json:"message,omitempty"`    // Optional, can have error message
-	NextToken      string          `json:"next_token,omitempty"` // For paginated objects
+	Data json.RawMessage `json:"data"` // Data, may be either object, dict or list
+	// ErrorCodes is derived from Data by parseErrorCodes rather than unmarshalled directly. It
+	// carried the tag `data.exceptionClass`, which encoding/json treats as a literal key name and
+	// never traverses, so it stayed empty on every response - silently disabling every
+	// exceptionClass check in this package.
+	ErrorCodes     []string `json:"-"`
+	Message        string   `json:"message,omitempty"`    // Optional, can have error message
+	NextToken      string   `json:"next_token,omitempty"` // For paginated objects
 	HttpStatusCode int
+}
+
+// parseErrorCodes lifts the exception classes the backend nests inside data onto the response, so
+// callers can branch on the specific failure rather than only on the HTTP status.
+//
+// A failure body looks like:
+//
+//	{"message":"Operation cannot start because there are already 32 tasks running",
+//	 "data":{"tasks_num":32,"exceptionClass":["CannotStartOperationTooManyTasks",...]}}
+//
+// Data is kept as RawMessage because it is otherwise decoded into whatever type the caller asked
+// for, so the classes have to be read out separately. A body that does not carry them - every
+// success, and any error shaped differently - simply leaves ErrorCodes empty.
+func (r *ApiResponse) parseErrorCodes() {
+	if len(r.Data) == 0 {
+		return
+	}
+	var payload struct {
+		ExceptionClass []string `json:"exceptionClass"`
+	}
+	if err := json.Unmarshal(r.Data, &payload); err != nil {
+		// Data is frequently a list or a scalar rather than an object, which is not an error here:
+		// it just means there are no exception classes to lift.
+		return
+	}
+	r.ErrorCodes = payload.ExceptionClass
+}
+
+// HasErrorCode reports whether the backend returned the named exception class.
+func (r *ApiResponse) HasErrorCode(code string) bool {
+	if r == nil {
+		return false
+	}
+	for _, c := range r.ErrorCodes {
+		if c == code {
+			return true
+		}
+	}
+	return false
 }
 
 // ApiObjectResponse is implemented by response types the backend may return across several pages.
