@@ -7,8 +7,6 @@ RUN apk add --no-cache libc6-compat gcc musl-dev
 COPY go.mod /src/go.mod
 COPY go.sum /src/go.sum
 WORKDIR /src
-ARG LOCAR_VERSION=0.5.0
-ADD --chmod=655 https://github.com/weka/locar/releases/download/$LOCAR_VERSION/locar-$LOCAR_VERSION-$TARGETOS-$TARGETARCH locar
 RUN go mod download
 ARG VERSION
 RUN echo Building binaries version $VERSION for architecture $TARGETARCH
@@ -51,7 +49,6 @@ LABEL description="Container Storage Interface (CSI) plugin for WEKA - the data 
 LABEL url="https://www.weka.io"
 COPY --from=go-builder /bin/wekafsplugin /wekafsplugin
 COPY --from=go-builder /bin/wait-for-leader /wait-for-leader
-COPY --from=go-builder /src/locar /locar
 ARG binary=/bin/wekafsplugin
 EXPOSE 2049 111/tcp 111/udp
 ENTRYPOINT ["/wekafsplugin"]

@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -170,17 +169,29 @@ func (gc *innerPathVolGc) purgeLeftovers(ctx context.Context, fs string, apiClie
 	}
 	volumeTrashLoc := filepath.Join(path, garbagePath)
 
-	// locar empties the trash far faster than a single-threaded walk, but --delete-all only
+	// locar empties the trash far faster than a single-threaded walk, but its delete-all only
 	// removes what it finds inside the directory, never the directory itself. Skip it when there
 	// is no trash yet, since locar treats a missing path as an error.
-	if fileExists("/locar") && PathExists(volumeTrashLoc) {
-		logger.Debug().Msg("Using locar for fast deletion")
-		output, err := exec.CommandContext(opCtx, "/locar", "--delete-all", volumeTrashLoc).CombinedOutput()
+	if PathExists(volumeTrashLoc) {
+		driverName := gc.config.GetDriver().name
+		start := time.Now()
+		entries, err := emptyDirectory(opCtx, volumeTrashLoc)
+		elapsed := time.Since(start)
+
+		result := "SUCCESS"
 		if err != nil {
-			logger.Error().Err(err).Str("output", string(output)).Msg("Error running locar")
+			result = "FAILURE"
+		}
+		garbageCollectionMetrics.Runs.WithLabelValues(driverName, result).Inc()
+		garbageCollectionMetrics.Duration.WithLabelValues(driverName, result).Observe(elapsed.Seconds())
+		garbageCollectionMetrics.Entries.WithLabelValues(driverName).Add(float64(entries))
+
+		if err != nil {
+			logger.Error().Err(err).Int64("entries", entries).Dur("elapsed", elapsed).
+				Msg("Failed to empty volume trash")
 			return
 		}
-		logger.Trace().Str("output", string(output)).Msg("Locar output")
+		logger.Debug().Int64("entries", entries).Dur("elapsed", elapsed).Msg("Emptied volume trash")
 	}
 
 	// Removes just the emptied trash directory after a locar pass, or the whole tree without one.
