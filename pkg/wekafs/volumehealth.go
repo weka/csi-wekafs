@@ -46,12 +46,26 @@ type VolumeHealth struct {
 	Abnormal bool
 	Message  string
 	// Capacity is the volume size in bytes as reported by the backend, or 0 when the backend
-	// does not track it (legacy volumes that keep their size in an extended attribute).
+	// does not track it (volumes that keep their size in an extended attribute).
 	Capacity int64
+	// QuotaMissing records that the volume resolved but carries no quota, so nothing enforces its
+	// capacity. Established as a by-product of the probe, which has to fetch the quota anyway -
+	// asking again separately would repeat the inode resolution and the quota fetch for every
+	// volume in a sweep.
+	QuotaMissing bool
+	// QuotaMismatch records that the quota's capacity differs from the one declared on the
+	// PersistentVolume. Established only when the driver is asked to look for it.
+	QuotaMismatch bool
+	// InodeId is the inode the volume's path resolved to, and the key a quota is created against.
+	// Carried so a caller acting on QuotaMissing does not have to resolve the path a second time.
+	InodeId uint64
 }
 
-func abnormalVolumeHealth(format string, args ...interface{}) *VolumeHealth {
-	return &VolumeHealth{Abnormal: true, Message: fmt.Sprintf(format, args...)}
+// abnormalVolumeHealth builds an abnormal condition. The message reaches a Kubernetes event, so it
+// takes a fixed string rather than a format: identifiers belong in the log line at the call site,
+// not in something a namespace user reads.
+func abnormalVolumeHealth(message string) *VolumeHealth {
+	return &VolumeHealth{Abnormal: true, Message: message}
 }
 
 // ProbeHealth inspects the volume using the Weka REST API only, never mounting the filesystem,
@@ -79,10 +93,12 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 		return nil, err
 	}
 	if fsObj == nil {
-		return abnormalVolumeHealth("filesystem %s does not exist on the Weka cluster", v.FilesystemName), nil
+		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Filesystem backing the volume does not exist on the Weka cluster")
+		return abnormalVolumeHealth(volumeFilesystemMissingMessage), nil
 	}
 	if fsObj.IsRemoving {
-		return abnormalVolumeHealth("filesystem %s is being removed", v.FilesystemName), nil
+		logger.Warn().Str("filesystem", v.FilesystemName).Msg("Filesystem backing the volume is being removed")
+		return abnormalVolumeHealth(volumeFilesystemRemovingMessage), nil
 	}
 
 	// Every volume type is a path inside the filesystem - the filesystem root for filesystem-backed
@@ -97,7 +113,9 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 	inodeId, err := v.apiClient.ResolvePathToInode(ctx, fsObj, relativePath)
 	if err != nil {
 		if errors.Is(err, apiclient.ObjectNotFoundError) {
-			return abnormalVolumeHealth("path %s does not exist on filesystem %s", relativePath, v.FilesystemName), nil
+			logger.Warn().Str("filesystem", v.FilesystemName).Str("path", relativePath).
+				Msg("Volume directory does not exist on the Weka cluster")
+			return abnormalVolumeHealth(volumePathMissingMessage), nil
 		}
 		return nil, err
 	}
@@ -107,12 +125,21 @@ func (v *Volume) ProbeHealth(ctx context.Context) (*VolumeHealth, error) {
 		if errors.Is(err, apiclient.ObjectNotFoundError) {
 			// A volume without a quota is not broken - legacy volumes never had one. The inode
 			// resolved, so the volume is there; its size just cannot come from the API.
+			// Abnormal only when asked for. Such a volume works - what it lacks is enforcement - and
+			// on a fleet mid-repair, or one with statically provisioned volumes that have no quota
+			// by design, reporting every one as abnormal would bury the genuinely broken volumes the
+			// flag exists to surface.
 			logger.Debug().Str("path", relativePath).Msg("Volume has no quota, capacity is not known from API")
-			return &VolumeHealth{Message: volumeHealthyMessage}, nil
+			return &VolumeHealth{
+				Message:      volumeNoQuotaMessage,
+				Abnormal:     v.server.getConfig().reportNoQuotaAsAbnormal,
+				QuotaMissing: true,
+				InodeId:      inodeId,
+			}, nil
 		}
 		return nil, err
 	}
-	return &VolumeHealth{Message: volumeHealthyMessage, Capacity: int64(quota.GetCapacityLimit())}, nil
+	return &VolumeHealth{Message: volumeHealthyMessage, Capacity: int64(quota.GetCapacityLimit()), InodeId: inodeId}, nil
 }
 
 func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
@@ -144,7 +171,7 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 		return nil, err
 	}
 
-	volume, condition, err := cs.describeVolume(ctx, pv, nil)
+	volume, condition, _, _, err := cs.describeVolume(ctx, pv, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +185,12 @@ func (cs *ControllerServer) ControllerGetVolume(ctx context.Context, req *csi.Co
 // ControllerGetVolume and ListVolumes. A nil condition with a nil error means the condition could
 // not be established, which callers must report as unknown rather than as abnormal.
 // The filesystems cache may be nil, in which case every lookup goes to the Weka API.
-func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (*csi.Volume, *csi.VolumeCondition, error) {
+// describeVolume probes one PersistentVolume and reports what it found.
+//
+// It also returns the constructed Volume and the raw health result, which are nil whenever the probe
+// could not get that far. The reconciler needs both to act on the volume - rebuilding them there
+// would repeat the API calls this function has already made.
+func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.PersistentVolume, filesystems *filesystemCache) (*csi.Volume, *csi.VolumeCondition, *Volume, *VolumeHealth, error) {
 	volumeID := pv.Spec.CSI.VolumeHandle
 	logger := log.Ctx(ctx).With().Str("volume_id", volumeID).Logger()
 
@@ -168,16 +200,27 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 
 	client, err := cs.apiClientFromPersistentVolume(ctx, pv)
 	if err != nil {
-		return volume, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
+		return volume, nil, nil, nil, status.Errorf(codes.Unavailable, "could not reach the Weka API for volume %s: %v", volumeID, err)
 	}
 	if client == nil {
+		// Unknown by default, and deliberately: without credentials the driver cannot reach the
+		// cluster to find out anything about this volume, so it has no basis for calling it either
+		// healthy or broken - and unknown says precisely that. Reporting abnormal would assert a
+		// problem with the volume, when the problem is that nobody can look.
+		//
+		// It is still worth being able to surface: a volume the driver cannot see is one it cannot
+		// enforce capacity on, expand, or report on, so an operator may well want it raised.
+		if cs.getConfig().reportNoApiClientAsAbnormal {
+			logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as abnormal")
+			return volume, &csi.VolumeCondition{Abnormal: true, Message: volumeNoApiClientMessage}, nil, nil, nil
+		}
 		logger.Warn().Str("pv", pv.Name).Msg("No Weka API credentials available for volume, reporting condition as unknown")
-		return volume, nil, nil
+		return volume, nil, nil, nil, nil
 	}
 
 	vol, err := NewVolumeFromId(ctx, volumeID, client, cs)
 	if err != nil {
-		return volume, nil, err
+		return volume, nil, nil, nil, err
 	}
 	// Seed the volume with an already-resolved filesystem, and publish whatever it resolved so the
 	// next volume on the same filesystem can skip the lookup.
@@ -188,18 +231,38 @@ func (cs *ControllerServer) describeVolume(ctx context.Context, pv *v1.Persisten
 	if err != nil {
 		if errors.Is(err, ErrVolumeHealthUndetermined) {
 			logger.Warn().Err(err).Msg("Reporting volume condition as unknown")
-			return volume, nil, nil
+			return volume, nil, vol, nil, nil
 		}
-		return volume, nil, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
+		return volume, nil, vol, nil, status.Errorf(codes.Internal, "failed to determine condition of volume %s: %v", volumeID, err)
 	}
 
 	if health.Capacity > 0 {
 		volume.CapacityBytes = health.Capacity
 	}
+
+	// A quota that does not match the capacity Kubernetes declared. Reported only - the quota is
+	// never changed here.
+	//
+	// Correcting it automatically is the wrong call in the direction that matters. A quota larger
+	// than the PersistentVolume is usually an administrator having raised it deliberately, and the
+	// volume may already hold more than the declared capacity - which is why they raised it.
+	// Shrinking a hard quota back would put the volume instantly over quota and block its writes,
+	// from a background loop, on a workload that was fine a moment earlier.
+	//
+	// Skipped when the volume has no quota at all: that is a different condition with its own
+	// message, and 0 is not a mismatch.
+	declared := pvCapacityBytes(pv)
+	if cs.getConfig().reportQuotaMismatchAsAbnormal && !health.QuotaMissing &&
+		health.Capacity > 0 && declared > 0 && health.Capacity != declared {
+		health.QuotaMismatch = true
+		health.Abnormal = true
+		health.Message = quotaMismatchMessage(health.Capacity, declared)
+	}
+
 	if health.Abnormal {
 		logger.Warn().Str("condition", health.Message).Msg("Volume is abnormal")
 	}
-	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, nil
+	return volume, &csi.VolumeCondition{Abnormal: health.Abnormal, Message: health.Message}, vol, health, nil
 }
 
 func (cs *ControllerServer) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (*csi.ListVolumesResponse, error) {
@@ -514,4 +577,13 @@ func (sc *secretCache) store(key string, secrets map[string]string) {
 	sc.Lock()
 	defer sc.Unlock()
 	sc.entries[key] = secretCacheEntry{secrets: secrets, fetchedAt: time.Now()}
+}
+
+// quotaMismatchMessage explains a quota that does not match the declared capacity, and names the
+// fix. Expanding the claim is the fix in both directions: it re-runs the capacity update, which
+// rewrites the quota from the PersistentVolume, and it is also how an administrator makes a
+// deliberately raised quota official.
+func quotaMismatchMessage(quotaBytes, declaredBytes int64) string {
+	return fmt.Sprintf("the quota on the Weka cluster allows %d bytes, but the PersistentVolume declares %d - "+
+		"expand the PersistentVolumeClaim to bring them into line", quotaBytes, declaredBytes)
 }

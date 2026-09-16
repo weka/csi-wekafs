@@ -193,7 +193,7 @@ func (s *Server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}/resolvePath", s.handleResolvePath)
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaGet)
 	mux.HandleFunc("PUT /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaPut)
-	mux.HandleFunc("DELETE /api/v2/fileSystems/{uid}/quotas/{inode}", s.handleQuotaDelete)
+	mux.HandleFunc("DELETE /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaDelete)
 
 	mux.HandleFunc("GET /api/v2/interfaceGroups", s.handleInterfaceGroups)
 
@@ -269,7 +269,13 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 // internal endpoint map with - the condition the concurrency race tests need.
 func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 	if !s.cfg.rotating {
-		writeData(w, []map[string]any{s.nodeWire("node-0", []string{"127.0.0.1"})})
+		nodes := []map[string]any{s.nodeWire("node-0", []string{"127.0.0.1"})}
+		if s.cfg.dataServices {
+			ds := s.nodeWire("node-dataserv", []string{"127.0.0.1"})
+			ds["roles"] = []string{"DATASERV"}
+			nodes = append(nodes, ds)
+		}
+		writeData(w, nodes)
 		return
 	}
 
@@ -286,9 +292,14 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 	default:
 		ips = aliases
 	}
-	nodes := make([]map[string]any, 0, len(ips))
+	nodes := make([]map[string]any, 0, len(ips)+1)
 	for _, ip := range ips {
 		nodes = append(nodes, s.nodeWire(fmt.Sprintf("node-%d", gen), []string{ip}))
+	}
+	if s.cfg.dataServices {
+		ds := s.nodeWire("node-dataserv", aliases[:1])
+		ds["roles"] = []string{"DATASERV"}
+		nodes = append(nodes, ds)
 	}
 	writeData(w, nodes)
 }
@@ -384,6 +395,18 @@ func (s *Server) handleQuotaPut(w http.ResponseWriter, r *http.Request) {
 	s.quotas[key] = q
 	s.mu.Unlock()
 	writeData(w, q.toWire())
+}
+
+// SetQuotaStatus overrides the status of an already-created quota, so a test can drive the states a
+// real cluster passes through - ADDING while QUOTA_COLORING walks the tree, or ERROR - which the
+// PUT handler alone never produces.
+func (s *Server) SetQuotaStatus(fsUid string, inodeId uint64, status string) {
+	key := s.quotaKey(fsUid, strconv.FormatUint(inodeId, 10))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if q, ok := s.quotas[key]; ok {
+		q.Status = status
+	}
 }
 
 func (s *Server) handleQuotaDelete(w http.ResponseWriter, r *http.Request) {

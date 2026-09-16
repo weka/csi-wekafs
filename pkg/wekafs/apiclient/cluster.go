@@ -27,6 +27,14 @@ const ApiPathClusterInfo = "cluster"
 
 const ApiPathContainersInfo = "containers"
 
+// ContainerModeBackend is the mode the containers API reports for every backend container.
+//
+// Note it does NOT distinguish a data services container: the WEKA API reports one as an ordinary
+// backend, and only the process listing carries the DATASERV role. The "data-services" spelling
+// belongs to the Kubernetes operator's WekaContainer CRD, not to this API - see
+// HasDataServicesProcess.
+const ContainerModeBackend = "backend"
+
 const ApiPathWhoami = "users/whoami"
 
 // ProcFsPath is the path to the wekafs interface file (variable for testing)
@@ -554,7 +562,7 @@ func filterFrontendContainers(ctx context.Context, containerList []Container, pr
 		}
 
 		// at this stage we have a container that matches our procfs containers and has a local IP address, while hostname is not a good match.
-		if container.Mode == "backend" {
+		if container.Mode == ContainerModeBackend {
 			if container.FrontendDedicatedCores >= 1 && allowProtocolContainers {
 				logger.Trace().Str("container_hostname", container.Hostname).Msg("Found a backend container with frontend cores, will use it as a frontend container")
 				ret = append(ret, container)
