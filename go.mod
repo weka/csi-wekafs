@@ -14,6 +14,7 @@ require (
 	github.com/rs/zerolog v1.35.1
 	github.com/showa-93/go-mask v0.6.2
 	github.com/stretchr/testify v1.11.1
+	github.com/tigrawap/locar v0.0.0-20260521063300-651dfc225362
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0
 	go.opentelemetry.io/otel/sdk v1.45.0
@@ -55,6 +56,7 @@ require (
 	github.com/go-openapi/swag/stringutils v0.28.0 // indirect
 	github.com/go-openapi/swag/typeutils v0.28.0 // indirect
 	github.com/go-openapi/swag/yamlutils v0.28.0 // indirect
+	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

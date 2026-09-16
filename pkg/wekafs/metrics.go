@@ -133,6 +133,48 @@ func netExpansion(succeeded bool, previousCapacity, capacity int64) float64 {
 	return float64(capacity - previousCapacity)
 }
 
+// GarbageCollectionMetrics covers emptying a filesystem's volume trash.
+//
+// No subsystem prefix, unlike the controller and node metric groups: the garbage collector lives on
+// the mounter, so a purge runs in whichever mode holds one rather than belonging to a single role.
+type GarbageCollectionMetrics struct {
+	Runs     *prometheus.CounterVec
+	Duration *prometheus.HistogramVec
+	Entries  *prometheus.CounterVec
+}
+
+func (g *GarbageCollectionMetrics) Collectors() []prometheus.Collector {
+	return []prometheus.Collector{g.Runs, g.Duration, g.Entries}
+}
+
+var garbageCollectionMetrics = &GarbageCollectionMetrics{
+	Runs: prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: MetricsPrefix, Name: "garbage_collection_total",
+		Help: "Number of volume trash purges, by outcome",
+	}, slices.Concat(CsiCommonLabels, []string{"status"})),
+	Duration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: MetricsPrefix, Name: "garbage_collection_duration_seconds",
+		// Its own buckets rather than csiDurationBuckets: a purge is background work bounded by
+		// garbageCollectionTimeout, not a request a caller is waiting on, so the range that matters
+		// runs well past the 300s those stop at.
+		Help:    "Duration of a volume trash purge in seconds, by outcome",
+		Buckets: []float64{1, 5, 15, 30, 60, 300, 600, 1800, 3600},
+	}, slices.Concat(CsiCommonLabels, []string{"status"})),
+	Entries: prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: MetricsPrefix, Name: "garbage_collection_entries_total",
+		// What locar found and queued for deletion. It counts confirmed deletions and failures
+		// internally but exports no accessor for either, so this is the closest observable figure -
+		// see emptyDirectory.
+		Help: "Number of trash entries accounted for during volume trash purges",
+	}, CsiCommonLabels),
+}
+
+// GarbageCollectionCollectors returns the garbage collection metrics for the caller to register.
+// Registered in every mode, since the collector runs wherever a mounter does.
+func GarbageCollectionCollectors() []prometheus.Collector {
+	return garbageCollectionMetrics.Collectors()
+}
+
 // ControllerCollectors returns the controller server metrics for the caller to register.
 func ControllerCollectors() []prometheus.Collector { return controllerMetrics.Collectors() }
 
