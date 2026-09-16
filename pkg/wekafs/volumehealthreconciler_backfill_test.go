@@ -557,7 +557,13 @@ func TestStripUnnecessaryPVFieldsKeepsWhatTheDriverReads(t *testing.T) {
 			Annotations: map[string]string{provisionedByAnnotation: "csi.weka.io"},
 		},
 		Spec: v1.PersistentVolumeSpec{
-			Capacity: v1.ResourceList{v1.ResourceStorage: resource.MustParse("1Gi")},
+			Capacity:         v1.ResourceList{v1.ResourceStorage: resource.MustParse("1Gi")},
+			StorageClassName: "wekafs-storage",
+			ClaimRef: &v1.ObjectReference{
+				Name:      "my-claim",
+				Namespace: "my-namespace",
+				UID:       "11111111-2222-3333-4444-555555555555",
+			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{CSI: &v1.CSIPersistentVolumeSource{
 				Driver:       "csi.weka.io",
 				VolumeHandle: "dir/v1/testfs/csi-volumes/pvc-1234",
@@ -590,4 +596,21 @@ func TestStripUnnecessaryPVFieldsKeepsWhatTheDriverReads(t *testing.T) {
 	// And the capacity a repaired quota is sized from.
 	assert.Equal(t, int64(1)<<30, pvCapacityBytes(stripped))
 	assert.Equal(t, "dir/v1/testfs/csi-volumes/pvc-1234", stripped.Spec.CSI.VolumeHandle)
+
+	// The identity every per-volume metric series is labelled with. Same failure shape as the two
+	// above: dropped, these do not error, they come back as the empty string, so storage_class_name
+	// and every pvc_* label go blank for the whole fleet and the volume dashboards lose what they
+	// group and filter by. Asserted through csiVolumeLabelValues rather than on the struct, because
+	// that is the consumer that would go quietly blank.
+	labels := csiVolumeLabelValues("csi.weka.io", stripped, "guid", "testfs", "dir/v1", "Root")
+	byName := map[string]string{}
+	for i, name := range LabelsForCsiVolumes {
+		if i < len(labels) {
+			byName[name] = labels[i]
+		}
+	}
+	assert.Equal(t, "wekafs-storage", byName["storage_class_name"], "storage class must survive caching")
+	assert.Equal(t, "my-claim", byName["pvc_name"], "claim name must survive caching")
+	assert.Equal(t, "my-namespace", byName["pvc_namespace"], "claim namespace must survive caching")
+	assert.Equal(t, "11111111-2222-3333-4444-555555555555", byName["pvc_uid"], "claim uid must survive caching")
 }
