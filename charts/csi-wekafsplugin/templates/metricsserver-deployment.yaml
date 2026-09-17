@@ -39,6 +39,20 @@ spec:
       {{- $_ := include "helm-toolkit.utils.merge" (tuple $metricsServerAffinity .Values.metricsServer.affinity .Values.affinity) }}
       affinity:
         {{- toYaml $metricsServerAffinity | nindent 8 }}
+      {{- else if and .Values.hostNetwork (gt (int (.Values.metricsServer.replicas | default 1)) 1) }}
+      # Under hostNetwork every replica binds the metrics and health ports on its own node, so two
+      # of them cannot share one. Required rather than preferred: a colocated replica does not run
+      # degraded, it fails to bind and crash loops, and a pod left Pending says so plainly. Set
+      # metricsServer.affinity yourself to take this over completely.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: {{ .Release.Name }}-metrics-server
+                  component: {{ .Release.Name }}-metrics-server
+                  release: {{ .Release.Name }}
       {{- end }}
       {{- if or .Values.nodeSelector .Values.metricsServer.nodeSelector }}
       {{- $nodeSelector := dict -}}

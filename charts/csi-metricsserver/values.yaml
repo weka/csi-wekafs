@@ -19,6 +19,10 @@ metricsServer:
   #    which keeps exactly one of them collecting while the rest stand by.
   #    A standby is not free: controller-runtime starts its cache on every replica, so each standby
   #    holds a full PersistentVolume informer cache and a watch against the API server while idle
+  #    Under hostNetwork each replica binds the metrics and health ports on its own node, so the
+  #    chart adds a required pod anti-affinity keeping them on separate nodes. With more replicas
+  #    than nodes the extra ones stay Pending, which is the honest outcome - without it they would
+  #    fail to bind and crash loop. Setting metricsServer.affinity replaces this entirely.
   replicas: 2
   # -- optional nodeSelector for metrics server only
   nodeSelector: {}
