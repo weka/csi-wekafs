@@ -823,9 +823,9 @@
         "type": "query",
         "multi": true,
         "includeAll": true,
-        "allValue": ".*",
+        "allValue": null,
         "sort": 1,
-        "description": "Metrics server pods. Defaults to All on purpose: the collector is leader-elected, so a standby publishes no Weka API or fetch metrics and selecting one shows empty panels."
+        "description": "Metrics server pods. Defaults to All on purpose: the collector is leader-elected, so a standby publishes no Weka API or fetch metrics and selecting one shows empty panels. All expands to the pods this variable resolved, not to .* - the API metrics are exported by the controller and node plugins too, and .* would pull their traffic into these panels."
       }
     ]
   },
