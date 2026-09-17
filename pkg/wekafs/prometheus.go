@@ -309,7 +309,7 @@ func NewPrometheusMetrics() *PrometheusMetrics {
 	m.server.PersistentVolumeRemovalsCount = newServerCounter("pv_removals_count_total", "Total number of PersistentVolumes removed from metrics collection")
 
 	// metrics for PersistentVolumes currently monitored by the metrics server
-	m.server.MonitoredPersistentVolumesGauge = newServerGauge("monitored_persistent_volumes_gauge", "Total number of PersistentVolumes currently monitored by the metrics server, should eventually be equal to the number of PVs in the metrics server cache")
+	m.server.MonitoredPersistentVolumesGauge = newServerGauge("monitored_persistent_volumes", "Total number of PersistentVolumes currently monitored by the metrics server, should eventually be equal to the number of PVs in the metrics server cache")
 
 	// metrics for pruning volumes batch
 	m.server.PruneVolumesBatchInvokeCount = newServerCounter("prune_volumes_batch_invoke_count_total", "Total number of prune volumes batch operations invoked")

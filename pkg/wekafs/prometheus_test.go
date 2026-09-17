@@ -364,3 +364,38 @@ func TestNoMetricFamilyUsesTwoPrefixes(t *testing.T) {
 		}
 	}
 }
+
+// A metric name must not carry its own type. monitored_persistent_volumes_gauge did, and it was the
+// only one in the set - every other gauge here names the thing it measures. Prometheus treats the
+// name as a published contract, so the suffix would have been stuck there after the first release.
+//
+// _count is deliberately not in this list: it is a legitimate part of a name (operation counts, and
+// the histogram's own _count series), unlike the bare type names below.
+func TestMetricNamesDoNotCarryTheirType(t *testing.T) {
+	m := NewPrometheusMetrics()
+	ch := make(chan *prometheus.Desc, 512)
+	go func() {
+		for _, c := range m.Collectors() {
+			c.Describe(ch)
+		}
+		close(ch)
+	}()
+
+	var offenders []string
+	seen := 0
+	for d := range ch {
+		name := between(d.String(), `fqName: "`, `"`)
+		seen++
+		for _, suffix := range []string{"_gauge", "_counter", "_histogram", "_summary"} {
+			if strings.HasSuffix(name, suffix) {
+				offenders = append(offenders, name)
+			}
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no metrics were described - the convention would pass vacuously")
+	}
+	if len(offenders) != 0 {
+		t.Errorf("expected no metric name to end in its own type, these do: %v", offenders)
+	}
+}
