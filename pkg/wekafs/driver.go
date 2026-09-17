@@ -106,33 +106,27 @@ func NewWekaFsDriver(
 		maxVolumesPerNode: maxVolumesPerNode,
 		api:               NewApiStore(config, nodeID, driverName),
 		debugPath:         debugPath,
-		csiMode:           csiMode, // either "controller", "node", "all"
+		csiMode:           csiMode, // either "controller", "node" or "metricsserver"
 		selinuxSupport:    selinuxSupport,
 		config:            config,
 	}
 
 	// The metrics server lists PersistentVolumes cluster-wide through the controller-runtime manager,
-	// so it is only ever constructed for the modes that run one - CsiModeMetricsServer (its own
-	// Deployment). It must never be constructed merely because the controller or node
-	// service is running, and never for a node-only pod, which would otherwise list the same
-	// cluster-wide PVs from every node. Constructing it here rather than lazily in Run() lets main.go
-	// register its Prometheus collectors right after the driver is built, before Run() blocks for the
-	// lifetime of the process.
+	// so it is only ever constructed for CsiModeMetricsServer, which has its own Deployment. It must
+	// never be constructed merely because the controller or node service is running, and never for a
+	// node pod, which would otherwise list the same cluster-wide PVs from every node. Constructing
+	// it here rather than lazily in Run() lets main.go register its Prometheus collectors right
+	// after the driver is built, before Run() blocks for the lifetime of the process.
 	//
-	// How a failure is handled depends on the mode. A CsiModeMetricsServer pod exists only to export
-	// metrics, so one that came up without a metrics server would sit there looking healthy while
-	// collecting nothing - fail instead, and let the Deployment surface it. Under the CSI
-	// services are the job and metrics are a bonus, so carry on without them.
+	// A failure here is fatal: such a pod exists only to export metrics, so one that came up without
+	// a metrics server would sit there looking healthy while collecting nothing. Failing lets the
+	// Deployment surface it.
 	if csiMode == CsiModeMetricsServer {
 		ms, err := NewMetricsServer(driver)
 		if err != nil {
-			if csiMode == CsiModeMetricsServer {
-				return nil, fmt.Errorf("failed to initialize metrics server: %w", err)
-			}
-			log.Warn().Err(err).Msg("Failed to initialize metrics server, continuing without it")
-		} else {
-			driver.ms = ms
+			return nil, fmt.Errorf("failed to initialize metrics server: %w", err)
 		}
+		driver.ms = ms
 	}
 
 	return driver, nil
