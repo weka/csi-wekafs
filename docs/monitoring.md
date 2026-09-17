@@ -191,16 +191,27 @@ For a plain Prometheus, lift its `groups:` block into your own rule file.
 
 | Rule | Severity | Fires when |
 |---|---|---|
-| `WekaCsiVolumeAlmostFull` | warning | A volume is between 85% and 95% full for 15m |
-| `WekaCsiVolumeFull` | critical | A volume is at or above 95% full for 15m |
+| `WekaCsiVolumeAlmostFull` | warning | A volume is at or above 85% full for 20m |
+| `WekaCsiVolumeFull` | critical | A volume is at or above 95% full for 20m |
 | `WekaCsiVolumeMetricsStale` | warning | Fewer than 90% of monitored volumes have reported in 15m |
+| `WekaCsiMetricsServerNotReporting` | critical | Nothing has arrived from the metrics server for 15m |
 
-`WekaCsiVolumeMetricsStale` is what makes the other two trustworthy. If collection stops, utilisation
-freezes at its last value instead of going missing, and a volume can fill without either capacity
-alert ever firing.
+`WekaCsiVolumeAlmostFull` has no upper bound, so a volume above 95% raises **both** capacity alerts.
+That is deliberate - bounding the warning at 95% would have resolved it just as the volume became
+most at risk, while the critical alert was still waiting out its `for:`. Add an Alertmanager
+`inhibit_rule` on `severity` if you would rather see only the critical one.
 
-All three use a 15m window and a 15m `for:`, both comfortably larger than the default 300s quota
-cache. **Raise them if you raise `quotaCacheValiditySeconds`**, or the alerts will flap.
+The last two are what make the capacity alerts trustworthy: if collection stops, utilisation freezes
+at its last value instead of going missing, and a volume can fill without either capacity alert ever
+firing. They split the work because the stale rule compares against the monitored-volumes gauge, and
+that comparison cannot outlive the gauge - once the metrics server has been down longer than the
+gauge's lookback, `WekaCsiVolumeMetricsStale` resolves. `WekaCsiMetricsServerNotReporting` keys off
+the gauge being **absent** rather than off its value, so it keeps firing for as long as collection is
+down. Remove the rule file if you are retiring the metrics server.
+
+The windows and `for:` durations are all comfortably larger than the default 300s quota cache, and
+the capacity alerts' `for:` is larger than the recording rule's 15m window so that a single reading
+cannot fire them. **Raise them if you raise `quotaCacheValiditySeconds`**, or the alerts will flap.
 
 ---
 
