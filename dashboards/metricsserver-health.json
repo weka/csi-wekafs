@@ -1786,7 +1786,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_pv_reported_capacity_bytes[$value_max_age]))\n",
+          "expr": "count(count by (pv_name) (count_over_time(weka_csi_volume_pv_reported_capacity_bytes[$value_max_age])))",
           "hide": false,
           "legendFormat": "From PV spec ($value_max_age)",
           "range": true,
@@ -1798,7 +1798,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes[$value_max_age]))\n",
+          "expr": "count(count by (pv_name) (count_over_time(weka_csi_volume_used_bytes[$value_max_age])))",
           "hide": false,
           "instant": false,
           "legendFormat": "From WEKA Stats ($value_max_age)",
@@ -1811,7 +1811,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes[30m]))\n",
+          "expr": "count(count by (pv_name) (count_over_time(weka_csi_volume_used_bytes[30m])))",
           "hide": false,
           "instant": false,
           "legendFormat": "From WEKA Stats (30m)",
@@ -1824,7 +1824,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes[10m]))\n",
+          "expr": "count(count by (pv_name) (count_over_time(weka_csi_volume_used_bytes[10m])))",
           "hide": false,
           "instant": false,
           "legendFormat": "From WEKA Stats (10m)",
@@ -1834,7 +1834,7 @@
       ],
       "title": "PersistentVolumes reporting capacity",
       "type": "timeseries",
-      "description": "How many volumes produced a fresh capacity reading inside the window. \"From PV spec\" comes from the Kubernetes PersistentVolume object and should equal the number of valid PVs at all times. The \"From WEKA Stats\" series come from the WEKA API and carry the timestamp of their own measurement, so each volume yields roughly one sample per quotaCacheValiditySeconds - a window at or below that value undercounts, and the series appears to lose volumes periodically."
+      "description": "Counted by pv_name rather than by series, so one volume is one entry however many series carry it. How many volumes produced a fresh capacity reading inside the window. \"From PV spec\" comes from the Kubernetes PersistentVolume object and should equal the number of valid PVs at all times. The \"From WEKA Stats\" series come from the WEKA API and carry the timestamp of their own measurement, so each volume yields roughly one sample per quotaCacheValiditySeconds - a window at or below that value undercounts, and the series appears to lose volumes periodically."
     },
     {
       "datasource": {
