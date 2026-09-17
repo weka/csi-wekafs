@@ -10,7 +10,6 @@ func TestDriverConfigOptionsMapping(t *testing.T) {
 		AdvertiseVolumeHealthSupport: true,
 		GrpcRequestTimeoutSeconds:    10,
 		MaxCreateVolumeReqs:          3,
-		DebugPath:                    "/tmp/dbg",
 		EnforceDirVolTotalCapacity:   true,
 	})
 	if dc.advertiseSnapshotSupport {
@@ -27,9 +26,6 @@ func TestDriverConfigOptionsMapping(t *testing.T) {
 	}
 	if dc.maxConcurrencyPerOp["CreateVolume"] != 3 {
 		t.Errorf("concurrency map wrong: %v", dc.maxConcurrencyPerOp)
-	}
-	if !dc.isInDevMode() {
-		t.Error("DebugPath must put the driver in dev mode")
 	}
 	// An empty MutuallyExclusiveMountOptions must still get the built-in default set.
 	if len(dc.mutuallyExclusiveOptions) != 1 || len(dc.mutuallyExclusiveOptions[0]) != 3 {

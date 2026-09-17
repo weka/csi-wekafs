@@ -669,6 +669,13 @@ func supportingApiClient() *apiclient.ApiClient {
 	return &apiclient.ApiClient{CompatibilityMap: &apiclient.WekaCompatibilityMap{SyncOnCloseMountOption: true}}
 }
 
+// nonSupportingApiClient is a client for a Weka cluster too old to accept sync_on_close. Since
+// every volume is bound to an API client, this - rather than a nil client - is what the capability
+// pruning actually turns on.
+func nonSupportingApiClient() *apiclient.ApiClient {
+	return &apiclient.ApiClient{CompatibilityMap: &apiclient.WekaCompatibilityMap{SyncOnCloseMountOption: false}}
+}
+
 func TestMountOptionPipeline_FullPublishScenario(t *testing.T) {
 	assertExpected := func(t *testing.T, final MountOptions, present, absent []string) {
 		t.Helper()
@@ -808,13 +815,13 @@ func TestMountOptionPipeline_FullPublishScenario(t *testing.T) {
 		assertExpected(t, final, []string{MountOptionWriteCache, MountOptionSyncOnClose}, nil)
 	})
 
-	// Contrast for control (d): with apiClient == nil (cluster version unknown), sync_on_close is
+	// Contrast for control (d): against a cluster too old to accept sync_on_close, the option is
 	// dropped by CAPABILITY pruning alone, with no override involved at all. This is the mechanism
 	// control (d) is designed to rule out as the explanation for the exclusion's effect.
 	t.Run("contrast_capability_pruning_drops_sync_on_close_without_any_override", func(t *testing.T) {
 		final := runFullPublishScenario(t, fullPublishScenarioParams{
 			storageClassOpts: MountOptionWriteCache,
-			apiClient:        nil,
+			apiClient:        nonSupportingApiClient(),
 		})
 		assertExpected(t, final, []string{MountOptionWriteCache}, []string{MountOptionSyncOnClose})
 	})

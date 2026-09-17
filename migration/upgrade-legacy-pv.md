@@ -1,5 +1,17 @@
 # Upgrade legacy persistent volumes for capacity enforcement
 
+> **This procedure applies to WEKA CSI Plugin 2.x only, and must be completed *before* upgrading to
+> 3.0.**
+>
+> Version 3.0 removed the legacy, API-less communication model entirely, and **migration of legacy
+> volumes into 3.0 is not supported** — the script below has no effect there, because 3.0 has no
+> legacy code path left for a migrated volume to leave behind.
+>
+> If you are already on 3.0, or would rather not run this procedure, rebuild each legacy volume as a
+> static one instead. The data stays in place: see
+> [Recreate a legacy PersistentVolume as a static volume](recreate-legacy-pv-as-static.md) and
+> [Breaking changes in WEKA CSI Plugin 3.0](../docs/breaking-changes-3.0.md).
+
 ## Bind legacy volumes to API
 
 Capacity enforcement and integration with the WEKA filesystem directory quotas require the following prerequisites:
