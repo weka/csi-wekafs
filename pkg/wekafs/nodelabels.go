@@ -31,9 +31,9 @@ import (
 // cache for the Node type is scoped to this node alone (see initManager in driver.go), so this Get costs
 // no API round trip once the informer has synced - safe to call on every 10s Probe. Exactly one Get, and
 // at most one Update.
-func applyNodeLabels(ctx context.Context, client runtimeclient.Client, nodeName string, desired map[string]string) error {
+func applyNodeLabels(ctx context.Context, reader runtimeclient.Reader, writer runtimeclient.Writer, nodeName string, desired map[string]string) error {
 	node := &v1.Node{}
-	if err := client.Get(ctx, runtimeclient.ObjectKey{Name: nodeName}, node); err != nil {
+	if err := reader.Get(ctx, runtimeclient.ObjectKey{Name: nodeName}, node); err != nil {
 		return fmt.Errorf("failed to get node object from Kubernetes: %w", err)
 	}
 
@@ -54,7 +54,7 @@ func applyNodeLabels(ctx context.Context, client runtimeclient.Client, nodeName 
 		return nil
 	}
 
-	if err := client.Update(ctx, node); err != nil {
+	if err := writer.Update(ctx, node); err != nil {
 		return fmt.Errorf("failed to update node labels: %w", err)
 	}
 	log.Info().Msg("Successfully updated labels on node")
@@ -85,8 +85,33 @@ func removeNodeLabels(ctx context.Context, reader runtimeclient.Reader, writer r
 	return nil
 }
 
-// SetNodeLabels applies this node's topology/transport labels via the controller-runtime manager's
-// cached client. It is a no-op - logged, not panicking - if the manager was never initialized (e.g.
+// cacheThenLive reads from the manager's informer cache and falls back to a direct API read.
+//
+// The manager is started in a background goroutine while the gRPC server comes up immediately, so
+// the first CSI Probe can arrive before the cache has synced - and a cached read then fails outright
+// rather than waiting. Falling back keeps that window correct without making every later Probe,
+// which arrives every ten seconds on every node, a direct API call.
+type cacheThenLive struct {
+	cached runtimeclient.Reader
+	live   runtimeclient.Reader
+}
+
+func (r cacheThenLive) Get(ctx context.Context, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {
+	if err := r.cached.Get(ctx, key, obj, opts...); err == nil {
+		return nil
+	}
+	return r.live.Get(ctx, key, obj, opts...)
+}
+
+func (r cacheThenLive) List(ctx context.Context, list runtimeclient.ObjectList, opts ...runtimeclient.ListOption) error {
+	if err := r.cached.List(ctx, list, opts...); err == nil {
+		return nil
+	}
+	return r.live.List(ctx, list, opts...)
+}
+
+// SetNodeLabels applies this node's topology/transport labels through the controller-runtime
+// manager. It is a no-op - logged, not panicking - if the manager was never initialized (e.g.
 // initManager failed and only logged a warning; see Run() in driver.go).
 func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 	if d.config.isInDevMode() {
@@ -116,7 +141,8 @@ func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
 		log.Ctx(ctx).Error().Str("node", d.nodeID).Msg("No transport available, leaving the transport label unchanged")
 	}
 
-	if err := applyNodeLabels(ctx, d.manager.GetClient(), d.nodeID, desired); err != nil {
+	reader := cacheThenLive{cached: d.manager.GetClient(), live: d.manager.GetAPIReader()}
+	if err := applyNodeLabels(ctx, reader, d.manager.GetClient(), d.nodeID, desired); err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to set node labels")
 	}
 }
