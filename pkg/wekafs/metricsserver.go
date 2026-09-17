@@ -855,7 +855,9 @@ func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclie
 			// of them from reporting - silently, since nothing else on this path counts a failure.
 			// Falling back keeps batch mode a superset of the per-volume path, at a cost bounded by
 			// the number of volumes the map cannot serve, which is normally zero.
-			ms.reportVolumesMissingFromQuotaMap(ctx, qm, inodeId)
+			if err := ms.reportVolumesMissingFromQuotaMap(ctx, qm, inodeId); err != nil {
+				return
+			}
 			continue
 		}
 		stats := &PvStats{Usage: quotaToUsageStats(q, qm.LastUpdate)}
@@ -874,11 +876,15 @@ func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclie
 // The per-volume fetch it falls back to is cached for quotaCacheValidityDuration exactly as it is on
 // the non-batch path, so a volume permanently absent from the map costs one API request per cache
 // period rather than one per cycle.
-func (ms *MetricsServer) reportVolumesMissingFromQuotaMap(ctx context.Context, qm *apiclient.QuotaMap, inodeId uint64) {
+//
+// It returns the context's error once that context is done, so the caller stops its own walk. This
+// path makes an API call per volume, and a pass that carried on after shutdown or a lost leadership
+// lease would keep making them.
+func (ms *MetricsServer) reportVolumesMissingFromQuotaMap(ctx context.Context, qm *apiclient.QuotaMap, inodeId uint64) error {
 	logger := log.Ctx(ctx)
 	targets := ms.volumeMetrics.ForInode(qm.FileSystemUid, inodeId)
 	if len(targets) == 0 {
-		return
+		return nil
 	}
 	// LabelsForFilesystemOps, the same three the other quota-map counters carry: driver, cluster,
 	// filesystem. WithLabelValues panics on a count mismatch rather than returning an error, and
@@ -893,6 +899,11 @@ func (ms *MetricsServer) reportVolumesMissingFromQuotaMap(ctx context.Context, q
 			WithLabelValues(ms.driver.name, clusterGuid, target.volume.FilesystemName).Inc()
 		usage, err := ms.fetchPvUsageStatsFromWekaWithCache(ctx, target)
 		if err != nil {
+			// A fetch that failed because the context is done is not a volume-level problem, and
+			// carrying on would make an API call for every remaining volume.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
 			// Logged with the PersistentVolume name, not just the inode: an inode ID on its own
 			// cannot be traced back to a volume without querying the cluster.
 			logger.Warn().Err(err).Uint64("inode_id", inodeId).Str("pv_name", target.pvName()).
@@ -900,9 +911,10 @@ func (ms *MetricsServer) reportVolumesMissingFromQuotaMap(ctx context.Context, q
 			continue
 		}
 		if err := ms.publishVolumeMetric(ctx, target, &PvStats{Usage: usage}); err != nil {
-			return
+			return err
 		}
 	}
+	return nil
 }
 
 // MetricsReportStreamer reads freshly fetched statistics off volumeMetricsChan and reports them to

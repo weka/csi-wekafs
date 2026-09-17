@@ -2,6 +2,8 @@ package wekafs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -201,6 +203,66 @@ func TestFetchPvUsageStatsFromWekaWithCacheFetchesOncePerExpiry(t *testing.T) {
 		if got[i] == nil || got[i].Used != used {
 			t.Errorf("pass %d got %v, want the fetched reading", i, got[i])
 		}
+	}
+}
+
+// This path makes an API call per volume, so a pass that kept walking after shutdown or a lost
+// leadership lease would keep making them. A cancelled context has to stop the enclosing
+// GetMetricsFromQuotaMap walk, not just the inode being worked on.
+//
+// The channel is unbuffered and nothing reads it, so publishing cannot proceed and the select in
+// publishVolumeMetric can only take the ctx.Done() branch - with a buffered channel both cases
+// would be ready and Go would pick one at random.
+func TestReportVolumesMissingFromQuotaMapStopsOnCancelledContext(t *testing.T) {
+	const driverName, fsName = "csi.weka.io.test", "snapvols"
+	fsUid, inodeId := uuid.New(), uint64(196592046571531)
+
+	ms := newQuotaMapMissTestServer(t, driverName, 0)
+	ms.volumeMetrics.Add(types.UID("2f1b0c6e-0000-4000-8000-000000000004"),
+		volumeKey{filesystemUid: fsUid, inodeId: inodeId},
+		&VolumeMetric{
+			persistentVolume: &v1.PersistentVolume{ObjectMeta: metav1.ObjectMeta{Name: "pvc-snap-8gi"}},
+			volume: &Volume{FilesystemName: fsName,
+				lastUsageStats: &UsageStats{Capacity: 8 << 30, Used: 4096, Timestamp: time.Now()}},
+		})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := ms.reportVolumesMissingFromQuotaMap(ctx, &apiclient.QuotaMap{FileSystemUid: fsUid}, inodeId)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("got %v, want context.Canceled - the caller cannot stop its walk without it", err)
+	}
+}
+
+// And the caller must actually act on it: with two inodes the map cannot serve, a cancelled context
+// must stop the walk after the first rather than falling back for every remaining inode. The miss
+// counter is incremented once per volume before the fetch, so it says how far the walk got.
+func TestGetMetricsFromQuotaMapStopsWalkingOnCancelledContext(t *testing.T) {
+	const driverName, fsName = "csi.weka.io.test", "snapvols"
+	fsUid := uuid.New()
+
+	ms := newQuotaMapMissTestServer(t, driverName, 0)
+	for i, inodeId := range []uint64{196592046571532, 196592046571533} {
+		ms.volumeMetrics.Add(types.UID(fmt.Sprintf("2f1b0c6e-0000-4000-8000-00000000001%d", i)),
+			volumeKey{filesystemUid: fsUid, inodeId: inodeId},
+			&VolumeMetric{
+				persistentVolume: &v1.PersistentVolume{
+					ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pvc-snap-%d", i)}},
+				volume: &Volume{FilesystemName: fsName,
+					lastUsageStats: &UsageStats{Capacity: 8 << 30, Used: 4096, Timestamp: time.Now()}},
+			})
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// An empty quota map, so every inode falls back.
+	ms.GetMetricsFromQuotaMap(ctx, &apiclient.QuotaMap{FileSystemUid: fsUid})
+
+	if got := counterValue(t, ms.prometheusMetrics.server.QuotaMapMissCount,
+		driverName, "", fsName); got != 1 {
+		t.Errorf("fell back for %v volumes, want 1 - the walk carried on after cancellation", got)
 	}
 }
 
