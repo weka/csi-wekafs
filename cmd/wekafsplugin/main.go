@@ -174,6 +174,9 @@ func main() {
 		// process has at least one series naming it from the moment it is first scraped.
 		prometheus.MustRegister(wekafs.PluginInfoCollector())
 		wekafs.SetPluginInfo(*driverName, csiMode, version)
+		// Also mode-independent: the garbage collector hangs off the mounter, so a purge can run in
+		// either role.
+		prometheus.MustRegister(wekafs.GarbageCollectionCollectors()...)
 		if csiMode == wekafs.CsiModeController || csiMode == wekafs.CsiModeAll {
 			prometheus.MustRegister(wekafs.ControllerCollectors()...)
 		}
