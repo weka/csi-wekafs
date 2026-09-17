@@ -243,13 +243,13 @@ func NewPrometheusMetrics() *PrometheusMetrics {
 
 	m.volumes.ReadBytesTotal = newVolumeCounter("read_bytes_total", "Total READ BYTES from the WEKA PersistentVolume")
 
-	m.volumes.ReadDurationUs = newVolumeCounter("read_duration_us", "Total READ DURATION from the WEKA PersistentVolume in microseconds")
+	m.volumes.ReadDurationUs = newVolumeCounter("read_duration_us_total", "Total READ DURATION from the WEKA PersistentVolume in microseconds")
 
 	m.volumes.WritesTotal = newVolumeCounter("writes_total", "Total WRITE Operations of the WEKA PersistentVolume")
 
 	m.volumes.WriteBytes = newVolumeCounter("write_bytes_total", "Total WRITE BYTES to the WEKA PersistentVolume")
 
-	m.volumes.WriteDurationUs = newVolumeCounter("write_duration_us", "Total WRITE DURATION to the WEKA PersistentVolume in microseconds")
+	m.volumes.WriteDurationUs = newVolumeCounter("write_duration_us_total", "Total WRITE DURATION to the WEKA PersistentVolume in microseconds")
 
 	// metricsserver own metrics
 

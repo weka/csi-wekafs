@@ -217,40 +217,66 @@ func pvWithoutClaim() *v1.PersistentVolume {
 	}
 }
 
-// Every invoke counter in this set ends with _total, and one did not - the odd one out was
-// fetch_pv_batch_operations_invoke_count. Metric names are a published contract, so an
-// inconsistency is cheap to fix now and expensive once a release has exported the series.
+// Every counter ends with _total. Two did not - read_duration_us and write_duration_us, the only
+// counters in the set without the suffix. Under OpenMetrics exposition client_golang appends _total
+// to a counter that lacks it, so the series name operators bind to would have depended on the
+// scrape format. Metric names are a published contract: cheap to fix now, not fixable once a
+// release has exported the series.
 //
-// Pinned as a convention rather than as a list of names, so a counter added later is held to it
-// without anyone having to remember.
-func TestInvokeCounterNamesEndWithTotal(t *testing.T) {
+// This walks the struct by field type rather than matching name fragments. An earlier version of
+// this test only looked at names containing _invoke_count, which is exactly how the two duration
+// counters passed it - they are neither invoke counters nor *_duration_seconds.
+func TestCounterNamesEndWithTotal(t *testing.T) {
 	m := NewPrometheusMetrics()
-	ch := make(chan *prometheus.Desc, 512)
-	go func() {
-		for _, c := range m.Collectors() {
-			c.Describe(ch)
-		}
-		close(ch)
-	}()
 
 	var offenders []string
 	seen := 0
-	for d := range ch {
-		name := between(d.String(), `fqName: "`, `"`)
-		if !strings.Contains(name, "_invoke_count") {
+	v := reflect.ValueOf(m).Elem()
+	for i := 0; i < v.NumField(); i++ { // .volumes and .server
+		group := v.Field(i)
+		if group.Kind() != reflect.Struct {
 			continue
 		}
-		seen++
-		if !strings.HasSuffix(name, "_total") {
-			offenders = append(offenders, name)
+		for j := 0; j < group.NumField(); j++ {
+			field := group.Field(j)
+			if !field.CanInterface() {
+				field = reflect.NewAt(field.Type(), field.Addr().UnsafePointer()).Elem()
+			}
+			collector, ok := field.Interface().(prometheus.Collector)
+			if !ok || field.IsZero() {
+				continue
+			}
+			if !isCounterType(field.Type()) {
+				continue
+			}
+			ch := make(chan *prometheus.Desc, 8)
+			go func() { collector.Describe(ch); close(ch) }()
+			for d := range ch {
+				name := between(d.String(), `fqName: "`, `"`)
+				seen++
+				if !strings.HasSuffix(name, "_total") {
+					offenders = append(offenders, name)
+				}
+			}
 		}
 	}
 	if seen == 0 {
-		t.Fatal("no invoke counters were described - the convention would pass vacuously")
+		t.Fatal("no counters were described - the convention would pass vacuously")
 	}
 	if len(offenders) != 0 {
-		t.Errorf("expected every invoke counter to end with _total, these do not: %v", offenders)
+		t.Errorf("expected every counter to end with _total, these do not: %v", offenders)
 	}
+}
+
+// isCounterType reports whether a metrics-struct field holds a counter, by type rather than by name,
+// so the convention above covers a counter added later without anyone remembering to list it.
+func isCounterType(t reflect.Type) bool {
+	switch t.String() {
+	case "*wekafs.TimedCounter", "*wekafs.TimedCounterVec",
+		"prometheus.Counter", "*prometheus.CounterVec":
+		return true
+	}
+	return false
 }
 
 // Prometheus convention, which the rest of this repo follows: the histogram owns the plain
