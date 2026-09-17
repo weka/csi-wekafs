@@ -674,6 +674,28 @@ func (ms *MetricsServer) FetchPvStats(ctx context.Context, vm *VolumeMetric) (*P
 	return ms.FetchPvStatsFromWeka(ctx, vm)
 }
 
+// publishVolumeMetric hands one volume's reading to MetricsReportStreamer.
+//
+// It publishes a copy rather than assigning to the shared VolumeMetric the indexes hold.
+// batchRefreshQuotaMaps launches GetMetricsFromQuotaMap with `go` and returns without waiting for
+// it, while PeriodicQuotaMapUpdater ticks every minute regardless, so two passes can be reporting
+// the same volume at once - and whichever assigned last would decide what the streamer reported.
+// The streamer only reads the value it receives, so a shallow copy is all it needs.
+//
+// The one-by-one path (fetchSingleMetric) still sends the indexed VolumeMetric itself. Only one of
+// the two loops is ever started, by useQuotaMapsForMetrics, and that one is already serialised
+// against its own overlap by capacityFetchRunning.
+func (ms *MetricsServer) publishVolumeMetric(ctx context.Context, vm *VolumeMetric, stats *PvStats) error {
+	reported := *vm
+	reported.metrics = stats
+	select {
+	case ms.volumeMetricsChan <- &reported:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // fetchSingleMetric fetches statistics for one tracked volume and, on success, hands it to
 // MetricsReportStreamer over volumeMetricsChan.
 func (ms *MetricsServer) fetchSingleMetric(ctx context.Context, vm *VolumeMetric) error {
@@ -810,10 +832,7 @@ func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclie
 		stats := &PvStats{Usage: quotaToUsageStats(q, qm.LastUpdate)}
 
 		for _, target := range ms.volumeMetrics.ForInode(qm.FileSystemUid, inodeId) {
-			target.metrics = stats
-			select {
-			case ms.volumeMetricsChan <- target:
-			case <-ctx.Done():
+			if err := ms.publishVolumeMetric(ctx, target, stats); err != nil {
 				return
 			}
 		}
