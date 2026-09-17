@@ -147,6 +147,11 @@ func TestTimedVecLifecycle(t *testing.T) {
 	if got := v.Len(); got != 2 {
 		t.Fatalf("Len() = %d, want 2", got)
 	}
+	// A child is indexed as soon as it is asked for, but only exported once it holds a value: an
+	// unwritten series would be stamped at scrape time and make the first real measurement look
+	// out of order. Write to both, so the counts below are about the index rather than that rule.
+	first.Set(1)
+	v.WithLabelValues("pv-2", "c-1").Set(2)
 	if got := len(collect(t, v)); got != 2 {
 		t.Errorf("collected %d series, want 2", got)
 	}
@@ -427,14 +432,16 @@ func TestTimedGaugeValueAndTimestampStayPaired(t *testing.T) {
 	for range 2000 {
 		ch := make(chan prometheus.Metric, 1)
 		g.Collect(ch)
+		close(ch)
+		metric, ok := <-ch
+		if !ok {
+			continue // nothing written yet, so nothing is exported
+		}
 		var m dto.Metric
-		if err := (<-ch).Write(&m); err != nil {
+		if err := metric.Write(&m); err != nil {
 			t.Fatalf("write metric: %v", err)
 		}
 		v := m.GetGauge().GetValue()
-		if v == 0 {
-			continue // never-written window before the writer's first store
-		}
 		want := base.Add(time.Duration(int64(v)) * time.Millisecond).UnixMilli()
 		if got := m.GetTimestampMs(); got != want {
 			close(stop)
@@ -471,14 +478,16 @@ func TestTimedCounterValueAndTimestampStayPaired(t *testing.T) {
 	for range 2000 {
 		ch := make(chan prometheus.Metric, 1)
 		c.Collect(ch)
+		close(ch)
+		metric, ok := <-ch
+		if !ok {
+			continue // nothing written yet, so nothing is exported
+		}
 		var m dto.Metric
-		if err := (<-ch).Write(&m); err != nil {
+		if err := metric.Write(&m); err != nil {
 			t.Fatalf("write metric: %v", err)
 		}
 		v := m.GetCounter().GetValue()
-		if v == 0 {
-			continue
-		}
 		want := base.Add(time.Duration(int64(v)) * time.Millisecond).UnixMilli()
 		if got := m.GetTimestampMs(); got != want {
 			close(stop)
@@ -488,4 +497,30 @@ func TestTimedCounterValueAndTimestampStayPaired(t *testing.T) {
 	}
 	close(stop)
 	wg.Wait()
+}
+
+// A metric that has never been written must not be exported at all. Exporting a zero would have it
+// stamped at scrape time, and the first real value - measured before that scrape, which is the
+// reason these types exist - would then be older than the ingested sample and dropped as out of
+// order under honor_timestamps. The first cached reading would vanish rather than arrive late.
+func TestUnwrittenTimedMetricsExportNothing(t *testing.T) {
+	g := NewTimedGauge(prometheus.GaugeOpts{Namespace: "weka", Name: "unwritten_g", Help: "h"})
+	c := NewTimedCounter(prometheus.CounterOpts{Namespace: "weka", Name: "unwritten_c", Help: "h"})
+	h := NewTimedHistogram(prometheus.HistogramOpts{Namespace: "weka", Name: "unwritten_h", Help: "h"})
+
+	for name, collector := range map[string]prometheus.Collector{"gauge": g, "counter": c, "histogram": h} {
+		if got := len(collect(t, collector)); got != 0 {
+			t.Errorf("%s: exported %d series before any write, want 0", name, got)
+		}
+	}
+
+	// And each starts exporting as soon as it holds something.
+	g.Set(1)
+	c.Inc()
+	h.Observe(1)
+	for name, collector := range map[string]prometheus.Collector{"gauge": g, "counter": c, "histogram": h} {
+		if got := len(collect(t, collector)); got != 1 {
+			t.Errorf("%s: exported %d series after a write, want 1", name, got)
+		}
+	}
 }

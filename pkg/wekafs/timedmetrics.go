@@ -59,8 +59,14 @@ func (t *atomicTime) Load() time.Time {
 // prometheus.NewMetricWithTimestamp.
 //
 // Writing a value without supplying a time records it as measured now, so the sample still carries
-// one. Only a metric that has never been written is exported untimestamped, leaving Prometheus to
-// stamp it at scrape time as usual.
+// one.
+//
+// A metric that has never been written is not exported at all. Exporting it as a zero would leave
+// Prometheus to stamp that zero at scrape time, and the first real value - measured before that
+// scrape, which is the whole point of these types - would then be older than the sample already
+// ingested and dropped as out of order under honor_timestamps. The series appearing only once
+// there is something to report is also how the vector variants already behave, since a child is
+// created on first write.
 //
 // Note this requires the scrape config to honor timestamps, which is the default.
 
@@ -106,14 +112,13 @@ func (tg *TimedGauge) SetWithTimestamp(v float64, ts time.Time) *prometheus.Desc
 func (tg *TimedGauge) Describe(ch chan<- *prometheus.Desc) { ch <- tg.desc }
 
 func (tg *TimedGauge) Collect(ch chan<- prometheus.Metric) {
-	var v float64
-	var ts time.Time
-	if s := tg.sample.Load(); s != nil {
-		v, ts = s.val, s.ts
+	s := tg.sample.Load()
+	if s == nil {
+		return // never written: see the note above on out-of-order samples
 	}
 	ch <- withTimestamp(
-		prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, v, tg.labels...),
-		ts,
+		prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, s.val, tg.labels...),
+		s.ts,
 	)
 }
 
@@ -175,14 +180,13 @@ func (tc *TimedCounter) SetWithTimestamp(v float64, ts time.Time) *prometheus.De
 func (tc *TimedCounter) Describe(ch chan<- *prometheus.Desc) { ch <- tc.desc }
 
 func (tc *TimedCounter) Collect(ch chan<- prometheus.Metric) {
-	var v float64
-	var ts time.Time
-	if s := tc.sample.Load(); s != nil {
-		v, ts = s.val, s.ts
+	s := tc.sample.Load()
+	if s == nil {
+		return // never written: see the note above on out-of-order samples
 	}
 	ch <- withTimestamp(
-		prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, v, tc.labels...),
-		ts,
+		prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, s.val, tc.labels...),
+		s.ts,
 	)
 }
 
@@ -268,6 +272,9 @@ func (th *TimedHistogram) Collect(ch chan<- prometheus.Metric) {
 	count, sum, ts := th.count.Load(), th.sum.Load(), th.lastTs.Load()
 	th.snapshot.Unlock()
 
+	if ts.IsZero() {
+		return // never observed into: see the note above on out-of-order samples
+	}
 	ch <- withTimestamp(
 		prometheus.MustNewConstHistogram(th.desc, count, sum, buckets, th.labels...),
 		ts,
