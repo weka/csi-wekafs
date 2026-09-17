@@ -281,7 +281,9 @@ metricsServer:
   #    than nodes the extra ones stay Pending, which is the honest outcome - without it they would
   #    fail to bind and crash loop. Setting metricsServer.affinity replaces this entirely.
   replicas: 2
-  # -- optional log level for metrics server only (defaults to the chart-wide logLevel)
+  # -- log level for the metrics server only. Defaults to 4 rather than inheriting the
+  #    chart-wide logLevel: at 5 the collector logs a line per PersistentVolume per cycle,
+  #    which on a fleet of thousands is tens of thousands of lines a minute
   logLevel: ~
   # -- optional nodeSelector for metrics server only (merged over the chart-wide nodeSelector)
   nodeSelector: {}
