@@ -174,6 +174,15 @@ against the default 300s cache; keep roughly that ratio if you change either.
 Utilisation panels mark 85% and 95%, matching the alert rules below.
 
 ### metricsserver-health.json
+Two rows: Kubernetes workload health from **kube-state-metrics**, and the metrics server's own WEKA
+API and PersistentVolume collection panels. They are separate rows so that collapsing the
+Kubernetes one does not take the collection panels with it.
+
+Every dashboard here links to the others, carrying the current filters across - except between this
+dashboard and `plugin-health.json`, where `$namespace` means the metrics server's namespace on one
+side and the plugin's on the other. Those two links deliberately carry no variables, since the
+standalone `csi-metricsserver` chart can run in a different namespace from the plugin.
+
 Scoped to a single metrics-server pod through its `$pod` variable, which resolves only to
 metrics-server pods. It carries **no `allValue`**, so "All" expands to the pods it resolved rather
 than to `.*`: the Weka API metrics are registered in every plugin mode, and the controller and node
