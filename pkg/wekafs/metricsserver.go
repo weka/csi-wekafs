@@ -103,6 +103,14 @@ type MetricsServer struct {
 	// rather than piling another full fetch on top of it. It is an atomic.Bool because it is read and
 	// written from more than one goroutine.
 	capacityFetchRunning atomic.Bool
+
+	// fetchUsageStats is the per-volume Weka fetch that fetchPvUsageStatsFromWekaWithCache caches.
+	// It is nil in production, where the fetch is fetchPvUsageStatsFromWeka. The real fetch resolves
+	// an inode, which falls back to mounting the filesystem when the cluster cannot resolve a path
+	// through the API, so nothing that depends on it is reachable from a unit test. Tests set this
+	// to exercise the cache and the lock around it - including the cache *write*, which only happens
+	// when a fetch succeeds.
+	fetchUsageStats func(ctx context.Context, vm *VolumeMetric) (*UsageStats, error)
 }
 
 // getMounter satisfies AnyServer. The metrics server never mounts a filesystem directly - it only
@@ -566,10 +574,11 @@ func (ms *MetricsServer) InvalidateSecret(ctx context.Context, secretName, secre
 // Free is derived rather than reported by the API, since a quota describes a hard limit rather than
 // a used/free split.
 func quotaToUsageStats(q *apiclient.Quota, ts time.Time) *UsageStats {
+	used := q.UsedBytes
 	return &UsageStats{
 		Capacity:  int64(q.HardLimitBytes),
-		Used:      int64(q.TotalBytes),
-		Free:      int64(q.HardLimitBytes - q.TotalBytes),
+		Used:      int64(used),
+		Free:      int64(q.HardLimitBytes - used),
 		Timestamp: ts,
 	}
 }
@@ -609,8 +618,22 @@ func (ms *MetricsServer) fetchPvUsageStatsFromWeka(ctx context.Context, vm *Volu
 // memory instead of costing another API round trip.
 func (ms *MetricsServer) fetchPvUsageStatsFromWekaWithCache(ctx context.Context, vm *VolumeMetric) (*UsageStats, error) {
 	v := vm.volume
+	// Held across the fetch, not just around the field: two overlapping passes over the same volume
+	// would otherwise both see an expired cache and both call the API. The lock is per volume, so
+	// different volumes still fetch concurrently.
+	//
+	// It is also what serialises the inodeId fill inside the fetch, and this is the only path that
+	// resolves an inode on a volume the indexes already hand out - processSinglePersistentVolume
+	// resolves it on a freshly built volume, before that volume is tracked. Narrowing this to the
+	// cache field alone would put that write back in play.
+	v.usageStatsLock.Lock()
+	defer v.usageStatsLock.Unlock()
+	fetch := ms.fetchPvUsageStatsFromWeka
+	if ms.fetchUsageStats != nil {
+		fetch = ms.fetchUsageStats
+	}
 	if v.lastUsageStats == nil || time.Since(v.lastUsageStats.Timestamp) > ms.getConfig().quotaCacheValidityDuration {
-		usageStats, err := ms.fetchPvUsageStatsFromWeka(ctx, vm)
+		usageStats, err := fetch(ctx, vm)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch usage stats from Weka for PersistentVolume %s: %w", vm.pvName(), err)
 		}
@@ -826,7 +849,15 @@ func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclie
 
 		q := qm.GetQuotaForInodeId(inodeId)
 		if q == nil {
-			logger.Warn().Uint64("inode_id", inodeId).Msg("No quota entry found for inode ID in quota map, skipping")
+			// Not necessarily an error: a quota that lives in a snapshot view is absent from the
+			// filesystem-wide quota list, while a direct per-inode lookup still finds it. That is
+			// exactly the shape of a snapshot-backed volume, so skipping here would drop every one
+			// of them from reporting - silently, since nothing else on this path counts a failure.
+			// Falling back keeps batch mode a superset of the per-volume path, at a cost bounded by
+			// the number of volumes the map cannot serve, which is normally zero.
+			if err := ms.reportVolumesMissingFromQuotaMap(ctx, qm, inodeId); err != nil {
+				return
+			}
 			continue
 		}
 		stats := &PvStats{Usage: quotaToUsageStats(q, qm.LastUpdate)}
@@ -837,6 +868,53 @@ func (ms *MetricsServer) GetMetricsFromQuotaMap(ctx context.Context, qm *apiclie
 			}
 		}
 	}
+}
+
+// reportVolumesMissingFromQuotaMap fetches, one at a time, the volumes sitting at an inode the
+// filesystem's quota map has no entry for, and hands them to MetricsReportStreamer.
+//
+// The per-volume fetch it falls back to is cached for quotaCacheValidityDuration exactly as it is on
+// the non-batch path, so a volume permanently absent from the map costs one API request per cache
+// period rather than one per cycle.
+//
+// It returns the context's error once that context is done, so the caller stops its own walk. This
+// path makes an API call per volume, and a pass that carried on after shutdown or a lost leadership
+// lease would keep making them.
+func (ms *MetricsServer) reportVolumesMissingFromQuotaMap(ctx context.Context, qm *apiclient.QuotaMap, inodeId uint64) error {
+	logger := log.Ctx(ctx)
+	targets := ms.volumeMetrics.ForInode(qm.FileSystemUid, inodeId)
+	if len(targets) == 0 {
+		return nil
+	}
+	// LabelsForFilesystemOps, the same three the other quota-map counters carry: driver, cluster,
+	// filesystem. WithLabelValues panics on a count mismatch rather than returning an error, and
+	// this path only runs when a map is actually missing an entry, so a wrong count here is a crash
+	// that no amount of ordinary running would reveal.
+	clusterGuid := ""
+	if apiClient := ms.observedFilesystems.GetApiClient(qm.FileSystemUid); apiClient != nil {
+		clusterGuid = apiClient.ClusterGuid.String()
+	}
+	for _, target := range targets {
+		ms.prometheusMetrics.server.QuotaMapMissCount.
+			WithLabelValues(ms.driver.name, clusterGuid, target.volume.FilesystemName).Inc()
+		usage, err := ms.fetchPvUsageStatsFromWekaWithCache(ctx, target)
+		if err != nil {
+			// A fetch that failed because the context is done is not a volume-level problem, and
+			// carrying on would make an API call for every remaining volume.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+			// Logged with the PersistentVolume name, not just the inode: an inode ID on its own
+			// cannot be traced back to a volume without querying the cluster.
+			logger.Warn().Err(err).Uint64("inode_id", inodeId).Str("pv_name", target.pvName()).
+				Msg("Volume is absent from its filesystem's quota map and could not be fetched directly")
+			continue
+		}
+		if err := ms.publishVolumeMetric(ctx, target, &PvStats{Usage: usage}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // MetricsReportStreamer reads freshly fetched statistics off volumeMetricsChan and reports them to

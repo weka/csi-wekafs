@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -72,12 +73,18 @@ type Volume struct {
 	// the metrics server, which polls quotas by inode) don't re-resolve or re-mount for it every time.
 	inodeId uint64
 
-	// lastUsageStats caches the metrics server's last one-by-one Weka fetch for this volume (only
-	// used on the useQuotaMapsForMetrics=false path), so a fetch cycle that runs before
-	// quotaCacheValidityDuration has elapsed can serve the cached reading instead of hitting the API
-	// again. There is no equivalent for the quota-map path: a filesystem's quota map is already
-	// cached at the filesystem level by QuotaMapsPerFilesystem, so caching it a second time here
-	// would buy nothing.
+	// lastUsageStats caches the metrics server's last per-volume Weka fetch for this volume, so a
+	// fetch that runs before quotaCacheValidityDuration has elapsed can serve the cached reading
+	// instead of hitting the API again. The one-by-one path (useQuotaMapsForMetrics=false) uses it,
+	// and so does the quota-map path's fallback for volumes a quota map has no entry for -
+	// snapshot-backed volumes, whose quota lives in a snapshot view the listing does not return.
+	// Volumes the quota map does cover need no equivalent: the map is already cached per filesystem
+	// by QuotaMapsPerFilesystem.
+	//
+	// usageStatsLock guards it. The one-by-one path is serialised by capacityFetchRunning, but the
+	// quota-map fallback runs in goroutines nobody waits for, so a slow pass can still be running
+	// when the next one starts and reach this same volume.
+	usageStatsLock sync.Mutex
 	lastUsageStats *UsageStats
 }
 
