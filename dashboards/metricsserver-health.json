@@ -1390,6 +1390,7 @@
         "y": 35
       },
       "id": 2,
+      "interval": "1m",
       "options": {
         "legend": {
           "calcs": [
@@ -1417,7 +1418,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=~\"$pod\"}[$__rate_interval]) / rate(weka_csi_api_request_duration_seconds_count{pod=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=~\"$pod\"}[$__rate_interval])) / sum by(url) (rate(weka_csi_api_request_duration_seconds_count{pod=~\"$pod\"}[$__rate_interval]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -1426,7 +1427,7 @@
           "useBackend": false
         }
       ],
-      "title": "API Request Latency ???",
+      "title": "API Request Latency (mean)",
       "type": "timeseries"
     },
     {
@@ -1487,33 +1488,7 @@
           },
           "unit": "iops"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "fileSystems/{guid}/quota/{id}",
-                  "fileSystems/{guid}/resolvePath"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -1522,6 +1497,7 @@
         "y": 43
       },
       "id": 1,
+      "interval": "1m",
       "options": {
         "legend": {
           "calcs": [
@@ -1651,6 +1627,7 @@
         "y": 43
       },
       "id": 7,
+      "interval": "1m",
       "options": {
         "legend": {
           "calcs": [
@@ -1760,32 +1737,7 @@
             ]
           }
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "From PV spec"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -1822,7 +1774,7 @@
           "editorMode": "code",
           "expr": "count(count_over_time(weka_csi_volume_pv_reported_capacity_bytes[$value_max_age]))\n",
           "hide": false,
-          "legendFormat": "From PV spec",
+          "legendFormat": "From PV spec ($value_max_age)",
           "range": true,
           "refId": "A"
         },
@@ -2057,6 +2009,10 @@
           ]
         },
         "definition": "label_values(weka_csi_metricsserver_quota_cache_validity_seconds,pod)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "label": "monitorserver pod",
         "name": "pod",
         "options": [],
@@ -2085,6 +2041,10 @@
           ]
         },
         "definition": "label_values(kube_deployment_spec_replicas{deployment=~\".*-metrics-server\"}, namespace)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "label": "Metrics server namespace",
         "name": "namespace",
         "options": [],
@@ -2112,6 +2072,10 @@
           ]
         },
         "definition": "label_values(kube_deployment_spec_replicas{deployment=~\".*-metrics-server\", namespace=~\"$namespace\"}, deployment)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "label": "Metrics server deployment",
         "name": "deployment",
         "options": [],
