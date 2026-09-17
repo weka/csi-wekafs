@@ -5,7 +5,7 @@
 #
 # For a plain Prometheus, lift the `groups:` block into your own rule file.
 #
-# Two things about these expressions are deliberate:
+# Three things about these expressions are deliberate:
 #
 #   * last_over_time over 15m, not an instant selector. A reading carries the timestamp of its own
 #     measurement, and the metrics server serves a quota from cache for quotaCacheValiditySeconds
@@ -15,6 +15,11 @@
 #
 #   * clamp_min on the denominator. A volume whose capacity reads zero would otherwise divide by
 #     zero and evaluate to +Inf, firing every alert here at once.
+#
+#   * `or vector(0)` around the count in WekaCsiVolumeMetricsStale. count() of an empty vector is
+#     empty, not zero, so without it the rule goes silent in exactly the case it exists to catch -
+#     every volume ageing out of the window at once, which is what a total collection failure looks
+#     like in batch mode, where a filesystem's volumes share one timestamp and drop together.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -35,7 +40,11 @@ spec:
               / clamp_min(last_over_time(weka_csi_volume_capacity_bytes[15m]), 1)
 
         - alert: WekaCsiVolumeAlmostFull
-          expr: weka_csi_volume:used_ratio >= 85 < 95
+          # No upper bound. Bounding this at < 95 would resolve the warning the moment the volume
+          # crossed 95%, while WekaCsiVolumeFull still has 15m to wait - leaving the fullest
+          # volumes with no alert firing at all. Both fire above 95% instead; suppress the warning
+          # with an Alertmanager inhibit_rule on severity if the duplicate is unwanted.
+          expr: weka_csi_volume:used_ratio >= 85
           # Longer than the quota cache validity, so a single stale or transient reading cannot
           # fire this on its own.
           for: 15m
@@ -71,8 +80,8 @@ spec:
         # missing, and a volume can fill without either alert ever firing.
         - alert: WekaCsiVolumeMetricsStale
           expr: |
-            count(count_over_time(weka_csi_volume_used_bytes[15m]))
-              < 0.9 * max(weka_csi_metricsserver_monitored_persistent_volumes_gauge)
+            (count(count_over_time(weka_csi_volume_used_bytes[15m])) or vector(0))
+              < 0.9 * max(last_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[1h]))
           for: 15m
           labels:
             severity: warning
