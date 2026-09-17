@@ -118,11 +118,20 @@ class CsiWekafs:
                             helm_repository: str = "images.scalar.dev.weka.io:5002/helm",
                             version: Optional[str] = None,
                             gh_token: Optional[dagger.Secret] = None,
+                            registry_secret: Optional[dagger.Secret] = None, # same format as build_scalar's; without it the chart push to a private registry is unauthenticated and fails
                             cachebuster: Optional[str] = None,
                             ) -> str:
         """Deploy metrics server using Helm charts"""
         from apps.metricsserver import install_helm_chart
-        metricsserver_helm = await self.build_scalar(csi, sock, repository, helm_repository, version, gh_token)
+        # By keyword, not position: passing these positionally is what dropped registry_secret, and
+        # the chart push then went to the private registry with no login at all.
+        metricsserver_helm = await self.build_scalar(csi, sock,
+                                                     repository=repository,
+                                                     helm_repository=helm_repository,
+                                                     version=version,
+                                                     gh_token=gh_token,
+                                                     registry_secret=registry_secret,
+                                                     )
         install = await install_helm_chart(
             image=metricsserver_helm,
             kubeconfig=kubeconfig,
