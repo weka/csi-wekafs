@@ -13,8 +13,10 @@
 #     per scrape. An instant query would evaluate against gaps and the alert would flap. The window
 #     must stay comfortably larger than quotaCacheValiditySeconds - raise it if you raise that.
 #
-#   * clamp_min on the denominator. A volume whose capacity reads zero would otherwise divide by
-#     zero and evaluate to +Inf, firing every alert here at once.
+#   * `> 0` on the denominator rather than clamp_min. A volume whose capacity reads zero has no
+#     threshold to be a percentage of, and clamping the divisor to 1 did not avoid the problem it
+#     was written for - it turned +Inf into 100 * used_bytes, which is just as far over 95% and
+#     fires both capacity alerts just as hard. Comparing instead drops those series.
 #
 #   * `or vector(0)` around the count in WekaCsiVolumeMetricsStale. count() of an empty vector is
 #     empty, not zero, so without it the rule goes silent in exactly the case it exists to catch -
@@ -37,7 +39,7 @@ spec:
           expr: |
             100
               * last_over_time(weka_csi_volume_used_bytes[15m])
-              / clamp_min(last_over_time(weka_csi_volume_capacity_bytes[15m]), 1)
+              / (last_over_time(weka_csi_volume_capacity_bytes[15m]) > 0)
 
         - alert: WekaCsiVolumeAlmostFull
           # No upper bound. Bounding this at < 95 would resolve the warning the moment the volume
@@ -83,13 +85,19 @@ spec:
         # trustworthy: if the metrics server stops collecting, utilisation freezes at its last value
         # instead of going missing, and a volume can fill without either alert ever firing.
         #
-        # They split the job because the comparison below cannot outlive its own right-hand side.
         # WekaCsiVolumeMetricsStale catches a partial loss - some volumes stopped reporting while
-        # the server still runs - and also a total one, but only while the monitored-volumes gauge
-        # is still inside its lookback. Once the server has been down longer than that the gauge is
-        # gone, the comparison is empty and this rule resolves, which is why
-        # WekaCsiMetricsServerNotReporting exists: it keys off the gauge being absent rather than
-        # off its value, so it does not decay.
+        # the server still runs. It compares against the monitored-volumes gauge, so it cannot
+        # outlive that gauge, and it says nothing useful once collection has stopped altogether.
+        # WekaCsiVolumeCapacityNotCollected is the one that covers that, and it keys off the volume
+        # readings themselves rather than off the gauge. The gauge is the wrong signal for "is
+        # anything collecting": it is a plain Gauge registered by every replica, so a standby that
+        # has never collected anything still publishes it as 0 on every scrape and it never goes
+        # absent while any pod is scrapeable.
+        #
+        # Note that both of these page after roughly 30 minutes, not 15: the range in the expression
+        # has to empty out before the expression turns true, and `for:` only starts counting then.
+        # That is deliberate for the partial-loss rule, which should not fire on one missed cycle;
+        # the rule below carries no `for:` precisely because its range already is the wait.
         - alert: WekaCsiVolumeMetricsStale
           expr: |
             (count(count_over_time(weka_csi_volume_used_bytes[15m])) or vector(0))
@@ -105,17 +113,32 @@ spec:
               weka_csi_metricsserver_fetch_* failure counters and its ability to reach the Weka
               API.
 
-        - alert: WekaCsiMetricsServerNotReporting
-          expr: absent_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[15m])
-          for: 15m
+        # Two ways for collection to stop, and both have to be covered.
+        #
+        # The first disjunct is the leader having stopped collecting while the pods are still up and
+        # scrapeable. The volume readings carry the timestamp of their own measurement, so once the
+        # leader stops producing them no new samples land and the range empties out. It is guarded
+        # on volumes having been monitored at some point in the last day, so that a cluster with no
+        # Weka PersistentVolumes at all does not alert forever.
+        #
+        # The second is no metrics-server replica being scrapeable at all - pods gone, crash
+        # looping, or the PodMonitor no longer matching. That one cannot decay, which is what makes
+        # it worth keeping alongside the first.
+        - alert: WekaCsiVolumeCapacityNotCollected
+          expr: |
+            (
+              absent_over_time(weka_csi_volume_used_bytes[15m])
+                and on()
+              (max(max_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[24h])) > 0)
+            )
+            or absent_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[15m])
           labels:
             severity: critical
           annotations:
-            summary: The Weka CSI metrics server is not reporting
+            summary: Weka CSI volume capacity is not being collected
             description: >-
-              No metrics have arrived from the metrics server for 15 minutes, so every volume's
-              capacity reading is frozen at its last value and the capacity alerts above cannot
-              fire. Check that the metrics-server Deployment is running, that one of its replicas
-              holds the leader lease, and that its PodMonitor still matches it. This alert stays
-              firing for as long as collection is down; remove this rule file if the metrics server
-              is being retired.
+              No volume capacity readings have arrived for 15 minutes, so every volume's reading is
+              frozen at its last value and the capacity alerts above cannot fire. Check that the
+              metrics-server Deployment is running, that one of its replicas holds the leader lease,
+              and that its PodMonitor still matches it. Remove this rule file if the metrics server
+              is being retired, or this will keep firing.
