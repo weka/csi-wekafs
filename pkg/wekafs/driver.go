@@ -166,17 +166,19 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	}
 
 	if driver.csiMode == CsiModeNode {
-		// only if we manage node labels, first clean up before starting node server
-		if driver.config.manageNodeTopologyLabels {
-			log.Info().Msg("Cleaning up node stale labels")
-			driver.CleanupNodeLabels(ctx)
-		}
-
 		// The controller block above didn't run in node mode, so the manager (and its embedded K8s
 		// client) is not yet initialized. Initialize it now without leader election – the node server
 		// only needs the client to read PVC/Pod annotations for per-pod mount option overrides.
 		if err := driver.initManager(ctx, false); err != nil {
 			log.Warn().Err(err).Msg("Failed to initialize Kubernetes client for node mode, per-pod mount option overrides will be unavailable")
+		}
+
+		// Stale labels are cleaned up before the node server starts serving, but only once the
+		// manager exists: label access now goes through it, so running this ahead of initManager
+		// left it looking at a nil manager and skipping silently.
+		if driver.config.manageNodeTopologyLabels {
+			log.Info().Msg("Cleaning up node stale labels")
+			driver.CleanupNodeLabels(ctx)
 		}
 
 		log.Info().Msg("Loading NodeServer")
