@@ -175,7 +175,10 @@ Utilisation panels mark 85% and 95%, matching the alert rules below.
 
 ### metricsserver-health.json
 Scoped to a single metrics-server pod through its `$pod` variable, which resolves only to
-metrics-server pods. The CSI controller and node servers are not visible in it, and on an idle
+metrics-server pods. It carries **no `allValue`**, so "All" expands to the pods it resolved rather
+than to `.*`: the Weka API metrics are registered in every plugin mode, and the controller and node
+PodMonitors do not strip the `pod` label from them, so `.*` would pull plugin API traffic into these
+panels. The CSI controller and node servers are not visible in it, and on an idle
 cluster most provisioning counters are silent - a `CounterVec` with no observed labels exports
 nothing at all, so a panel reads as broken rather than as zero.
 
