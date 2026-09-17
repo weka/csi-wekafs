@@ -257,7 +257,7 @@ volume. The `quota_map_*` metrics are the exception: they are labeled per filesy
 |---|---|---|---|
 | `weka_csi_metricsserver_pv_additions_count_total` | Counter | none | PersistentVolumes newly tracked |
 | `weka_csi_metricsserver_pv_removals_count_total` | Counter | none | PersistentVolumes pruned (no longer in the PV list) |
-| `weka_csi_metricsserver_monitored_persistent_volumes_gauge` | Gauge | none | Currently tracked PersistentVolume count |
+| `weka_csi_metricsserver_monitored_persistent_volumes` | Gauge | none | Currently tracked PersistentVolume count |
 
 ### Pruning stale volumes
 
@@ -417,7 +417,7 @@ own rule file) built entirely on family 5:
 |---|---|---|
 | `WekaCsiVolumeAlmostFull` | warning | A volume is 85–95% full for 15m |
 | `WekaCsiVolumeFull` | critical | A volume is ≥95% full for 15m |
-| `WekaCsiVolumeMetricsStale` | warning | Fewer than 90% of monitored volumes have reported `weka_csi_volume_used_bytes` in 15m, compared against `weka_csi_metricsserver_monitored_persistent_volumes_gauge` |
+| `WekaCsiVolumeMetricsStale` | warning | Fewer than 90% of monitored volumes have reported `weka_csi_volume_used_bytes` in 15m, compared against `weka_csi_metricsserver_monitored_persistent_volumes` |
 
 All three rules use a 15-minute window and `for:`, comfortably larger than the 300s Helm-chart
 default for `quotaCacheValiditySeconds` — raise them if you raise that setting, or the alerts will
