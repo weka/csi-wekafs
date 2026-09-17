@@ -89,6 +89,13 @@ spec:
             - "--mutuallyexclusivemountoptions={{ . }}"
             {{- end }}
           {{- end }}
+          {{- /* Its own condition, not nested inside the gRPC one. The two timeouts are unrelated -
+                 one bounds a CSI request waiting in the queue, the other bounds a call to the WEKA
+                 API - and nesting meant an unset or zero grpcRequestTimeoutSeconds silently dropped
+                 the API timeout as well. The metricsServer template already has it as a sibling. */}}
+          {{- if .Values.apiTimeoutSeconds }}
+            - "--wekaapitimeoutseconds={{ .Values.apiTimeoutSeconds }}"
+          {{- end }}
           {{- if .Values.node.grpcRequestTimeoutSeconds }}
             - "--grpcrequesttimeoutseconds={{ .Values.node.grpcRequestTimeoutSeconds | default "5" }}"
           {{- end }}
