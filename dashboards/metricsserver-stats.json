@@ -578,7 +578,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_pv_reported_capacity_bytes{pod=~\"$pod\"}[$value_max_age]))\n",
+          "expr": "count(count by (pv_name) (count_over_time(weka_csi_volume_pv_reported_capacity_bytes{pod=~\"$pod\"}[$value_max_age])))",
           "hide": false,
           "legendFormat": "From PV spec ($value_max_age)",
           "range": true,
@@ -590,7 +590,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes{pod=~\"$pod\"}[$value_max_age]))\n",
+          "expr": "count(count by (pv_name) (count_over_time(weka_csi_volume_used_bytes{pod=~\"$pod\"}[$value_max_age])))",
           "hide": false,
           "instant": false,
           "legendFormat": "From WEKA Stats ($value_max_age)",
@@ -603,7 +603,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes{pod=~\"$pod\"}[30m]))\n",
+          "expr": "count(count by (pv_name) (count_over_time(weka_csi_volume_used_bytes{pod=~\"$pod\"}[30m])))",
           "hide": false,
           "instant": false,
           "legendFormat": "From WEKA Stats (30m)",
@@ -616,7 +616,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count(count_over_time(weka_csi_volume_used_bytes{pod=~\"$pod\"}[10m]))\n",
+          "expr": "count(count by (pv_name) (count_over_time(weka_csi_volume_used_bytes{pod=~\"$pod\"}[10m])))",
           "hide": false,
           "instant": false,
           "legendFormat": "From WEKA Stats (10m)",
@@ -625,7 +625,8 @@
         }
       ],
       "title": "Number of PV capacities reported, by lookback window",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "How many distinct PersistentVolumes produced a capacity reading inside each window. Counted by pv_name rather than by series: these metrics still carry the scrape's pod label, so a metrics-server rollout or failover puts two pods' samples in the window and counting series would report every volume twice until the old ones age out."
     },
     {
       "datasource": {
