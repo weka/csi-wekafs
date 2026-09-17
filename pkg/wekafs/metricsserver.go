@@ -103,6 +103,14 @@ type MetricsServer struct {
 	// rather than piling another full fetch on top of it. It is an atomic.Bool because it is read and
 	// written from more than one goroutine.
 	capacityFetchRunning atomic.Bool
+
+	// fetchUsageStats is the per-volume Weka fetch that fetchPvUsageStatsFromWekaWithCache caches.
+	// It is nil in production, where the fetch is fetchPvUsageStatsFromWeka. The real fetch resolves
+	// an inode, which falls back to mounting the filesystem when the cluster cannot resolve a path
+	// through the API, so nothing that depends on it is reachable from a unit test. Tests set this
+	// to exercise the cache and the lock around it - including the cache *write*, which only happens
+	// when a fetch succeeds.
+	fetchUsageStats func(ctx context.Context, vm *VolumeMetric) (*UsageStats, error)
 }
 
 // getMounter satisfies AnyServer. The metrics server never mounts a filesystem directly - it only
@@ -610,8 +618,22 @@ func (ms *MetricsServer) fetchPvUsageStatsFromWeka(ctx context.Context, vm *Volu
 // memory instead of costing another API round trip.
 func (ms *MetricsServer) fetchPvUsageStatsFromWekaWithCache(ctx context.Context, vm *VolumeMetric) (*UsageStats, error) {
 	v := vm.volume
+	// Held across the fetch, not just around the field: two overlapping passes over the same volume
+	// would otherwise both see an expired cache and both call the API. The lock is per volume, so
+	// different volumes still fetch concurrently.
+	//
+	// It is also what serialises the inodeId fill inside the fetch, and this is the only path that
+	// resolves an inode on a volume the indexes already hand out - processSinglePersistentVolume
+	// resolves it on a freshly built volume, before that volume is tracked. Narrowing this to the
+	// cache field alone would put that write back in play.
+	v.usageStatsLock.Lock()
+	defer v.usageStatsLock.Unlock()
+	fetch := ms.fetchPvUsageStatsFromWeka
+	if ms.fetchUsageStats != nil {
+		fetch = ms.fetchUsageStats
+	}
 	if v.lastUsageStats == nil || time.Since(v.lastUsageStats.Timestamp) > ms.getConfig().quotaCacheValidityDuration {
-		usageStats, err := ms.fetchPvUsageStatsFromWeka(ctx, vm)
+		usageStats, err := fetch(ctx, vm)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch usage stats from Weka for PersistentVolume %s: %w", vm.pvName(), err)
 		}
@@ -877,10 +899,7 @@ func (ms *MetricsServer) reportVolumesMissingFromQuotaMap(ctx context.Context, q
 				Msg("Volume is absent from its filesystem's quota map and could not be fetched directly")
 			continue
 		}
-		target.metrics = &PvStats{Usage: usage}
-		select {
-		case ms.volumeMetricsChan <- target:
-		case <-ctx.Done():
+		if err := ms.publishVolumeMetric(ctx, target, &PvStats{Usage: usage}); err != nil {
 			return
 		}
 	}
