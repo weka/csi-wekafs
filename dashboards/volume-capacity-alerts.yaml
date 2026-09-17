@@ -45,9 +45,11 @@ spec:
           # volumes with no alert firing at all. Both fire above 95% instead; suppress the warning
           # with an Alertmanager inhibit_rule on severity if the duplicate is unwanted.
           expr: weka_csi_volume:used_ratio >= 85
-          # Longer than the quota cache validity, so a single stale or transient reading cannot
-          # fire this on its own.
-          for: 15m
+          # Longer than the recording rule's last_over_time window, not just longer than the quota
+          # cache validity. One reading keeps the recorded series true for the whole 15m window, so
+          # `for: 15m` would have been satisfiable by a single sample - which is what it exists to
+          # prevent. At 20m the volume has to still be over the threshold on a later reading.
+          for: 20m
           labels:
             severity: warning
           annotations:
@@ -62,7 +64,9 @@ spec:
 
         - alert: WekaCsiVolumeFull
           expr: weka_csi_volume:used_ratio >= 95
-          for: 15m
+          # Same reasoning as WekaCsiVolumeAlmostFull: longer than the 15m window, so one reading
+          # cannot fire it.
+          for: 20m
           labels:
             severity: critical
           annotations:
@@ -75,9 +79,17 @@ spec:
               $labels.organization }}, has used {{ $value | printf "%.1f" }}% of its capacity.
               Writes will start failing when it reaches the quota's hard limit.
 
-        # Not a capacity threshold, but the alert that makes the two above trustworthy: if the
-        # metrics server stops collecting, utilisation freezes at its last value instead of going
-        # missing, and a volume can fill without either alert ever firing.
+        # Neither of the next two is a capacity threshold. They are what make the two above
+        # trustworthy: if the metrics server stops collecting, utilisation freezes at its last value
+        # instead of going missing, and a volume can fill without either alert ever firing.
+        #
+        # They split the job because the comparison below cannot outlive its own right-hand side.
+        # WekaCsiVolumeMetricsStale catches a partial loss - some volumes stopped reporting while
+        # the server still runs - and also a total one, but only while the monitored-volumes gauge
+        # is still inside its lookback. Once the server has been down longer than that the gauge is
+        # gone, the comparison is empty and this rule resolves, which is why
+        # WekaCsiMetricsServerNotReporting exists: it keys off the gauge being absent rather than
+        # off its value, so it does not decay.
         - alert: WekaCsiVolumeMetricsStale
           expr: |
             (count(count_over_time(weka_csi_volume_used_bytes[15m])) or vector(0))
@@ -92,3 +104,18 @@ spec:
               number the metrics server believes it is monitoring. Check the metrics server's
               weka_csi_metricsserver_fetch_* failure counters and its ability to reach the Weka
               API.
+
+        - alert: WekaCsiMetricsServerNotReporting
+          expr: absent_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[15m])
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: The Weka CSI metrics server is not reporting
+            description: >-
+              No metrics have arrived from the metrics server for 15 minutes, so every volume's
+              capacity reading is frozen at its last value and the capacity alerts above cannot
+              fire. Check that the metrics-server Deployment is running, that one of its replicas
+              holds the leader lease, and that its PodMonitor still matches it. This alert stays
+              firing for as long as collection is down; remove this rule file if the metrics server
+              is being retired.
