@@ -238,7 +238,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[1m]) / rate(weka_csi_api_request_duration_seconds_count{pod=\"$pod\"}[1m]))",
+          "expr": "sum by(url) (rate(weka_csi_api_request_duration_seconds_sum{pod=\"$pod\"}[1m])) / sum by(url) (rate(weka_csi_api_request_duration_seconds_count{pod=\"$pod\"}[1m]))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -247,7 +247,7 @@
           "useBackend": false
         }
       ],
-      "title": "API Request Latency ???",
+      "title": "API Request Latency (mean)",
       "type": "timeseries"
     },
     {
@@ -308,33 +308,7 @@
           },
           "unit": "iops"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "fileSystems/{guid}/quota/{id}",
-                  "fileSystems/{guid}/resolvePath"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -571,32 +545,7 @@
             ]
           }
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "From PV spec"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 8,
@@ -628,7 +577,7 @@
           "editorMode": "code",
           "expr": "count(count_over_time(weka_csi_volume_pv_reported_capacity_bytes{pod=\"$pod\"}[$value_max_age]))\n",
           "hide": false,
-          "legendFormat": "From PV spec",
+          "legendFormat": "From PV spec ($value_max_age)",
           "range": true,
           "refId": "A"
         },
@@ -654,7 +603,7 @@
           "expr": "count(count_over_time(weka_csi_volume_used_bytes{pod=\"$pod\"}[30m]))\n",
           "hide": false,
           "instant": false,
-          "legendFormat": "From WEKA Stats (20m)",
+          "legendFormat": "From WEKA Stats (30m)",
           "range": true,
           "refId": "C"
         },
@@ -672,7 +621,7 @@
           "refId": "D"
         }
       ],
-      "title": "Number of PV capacities reported in last 5 minutes",
+      "title": "Number of PV capacities reported, by lookback window",
       "type": "timeseries"
     },
     {
@@ -850,6 +799,10 @@
         "allowCustomValue": false,
         "current": {},
         "definition": "label_values(weka_csi_metricsserver_quota_cache_validity_seconds,pod)",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
         "label": "monitorserver pod",
         "name": "pod",
         "options": [],
