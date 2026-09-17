@@ -38,6 +38,7 @@ csi-wekafs/
 │   ├── values.yaml              # 100+ configurable options
 │   ├── values.schema.json
 │   └── templates/               # Deployment, DaemonSet, RBAC, CSIDriver
+├── dashboards/                  # Grafana dashboards (export format) + PrometheusRule alerts
 ├── examples/                    # Usage examples (dynamic, static, snapshots, encryption)
 ├── tests/csi-sanity/            # CSI sanity test suite (docker-compose based)
 ├── .github/workflows/           # CI/CD (sanity tests, release, dev builds, PR lint)
@@ -85,6 +86,10 @@ Key components deployed:
 - Volume IDs encode filesystem/snapshot/path info - see `utilities.go`
 - Mount operations have separate implementations: native Weka (`wekafsmount.go`) and NFS (`nfsmount.go`)
 - Controller-side Kubernetes access goes through the controller-runtime manager: `manager.GetClient()` for cached PV reads (indexed by `spec.csi.volumeHandle`), `manager.GetAPIReader()` for Secrets, so no Secret informer is started
+- Volume capacity metrics are published with `SetWithTimestamp` carrying the *measurement* time, not
+  the scrape time, and quotas are cached for `quotaCacheValiditySeconds`. Prometheus (with
+  `honorTimestamps`) drops repeats of the same timestamp, so a volume emits ~1 sample per cache
+  period. Any dashboard or alert window over these metrics must exceed that cache validity
 - Tests colocated with source files (`*_test.go`)
 
 ## Workflow Rules
