@@ -150,7 +150,7 @@ func TestRemoveNodeLabels_ClearsManagedLabelsOnly(t *testing.T) {
 	node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", Labels: labels}}
 	client := fakeClient.NewClientBuilder().WithObjects(node).Build()
 
-	if err := removeNodeLabels(context.Background(), client, "node-1", managed); err != nil {
+	if err := removeNodeLabels(context.Background(), client, client, "node-1", managed); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -166,4 +166,55 @@ func TestRemoveNodeLabels_ClearsManagedLabelsOnly(t *testing.T) {
 	if got.Labels["unrelated"] != "keep-me" {
 		t.Errorf("expected unrelated label to survive, got %v", got.Labels)
 	}
+}
+
+// The startup cleanup runs once the manager exists but before its informer cache is started, so it
+// reads through GetAPIReader and writes through GetClient. This pins that split: the node exists
+// only in the reader, and an implementation that read through the writer instead would not find it.
+// Collapsing the two back onto the cached client is what made the startup cleanup a silent no-op.
+func TestRemoveNodeLabels_ReadsThroughTheReaderNotTheWriter(t *testing.T) {
+	driverName := "wekafs.csi.k8s.io"
+	managed := managedNodeLabelKeys(driverName)
+
+	labels := map[string]string{"unrelated": "keep-me"}
+	for _, key := range managed {
+		labels[key] = "some-value"
+	}
+
+	reader := fakeClient.NewClientBuilder().
+		WithObjects(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1", Labels: labels}}).Build()
+	// A writer that knows nothing about the node, standing in for a client whose cache has not
+	// synced. Only the update it receives matters.
+	writer := &recordingNodeWriter{}
+
+	if err := removeNodeLabels(context.Background(), reader, writer, "node-1", managed); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if writer.updated == nil {
+		t.Fatal("no update was issued, so nothing would have been cleaned up")
+	}
+	for _, key := range managed {
+		if _, ok := writer.updated.Labels[key]; ok {
+			t.Errorf("expected managed label %q to be removed, got %v", key, writer.updated.Labels)
+		}
+	}
+	if writer.updated.Labels["unrelated"] != "keep-me" {
+		t.Errorf("expected unrelated label to survive, got %v", writer.updated.Labels)
+	}
+}
+
+// recordingNodeWriter captures the Update it is handed and implements nothing else.
+type recordingNodeWriter struct {
+	runtimeclient.Writer
+	updated *v1.Node
+}
+
+func (w *recordingNodeWriter) Update(_ context.Context, obj runtimeclient.Object, _ ...runtimeclient.UpdateOption) error {
+	node, ok := obj.(*v1.Node)
+	if !ok {
+		return nil
+	}
+	w.updated = node.DeepCopy()
+	return nil
 }

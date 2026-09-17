@@ -64,9 +64,13 @@ func applyNodeLabels(ctx context.Context, client runtimeclient.Client, nodeName 
 // removeNodeLabels fetches nodeName through client and deletes labelsToRemove from it, always issuing an
 // Update - this runs on start/stop, not per Probe, so correctness (removing stale labels even if some
 // were already gone) matters more here than shaving off an Update.
-func removeNodeLabels(ctx context.Context, client runtimeclient.Client, nodeName string, labelsToRemove []string) error {
+// removeNodeLabels reads through reader and writes through writer, because its one caller runs
+// during startup: the manager exists by then but its informer cache does not, so the read has to be
+// a direct one (GetAPIReader) while the write can go through the ordinary client, whose writes never
+// went through the cache anyway.
+func removeNodeLabels(ctx context.Context, reader runtimeclient.Reader, writer runtimeclient.Writer, nodeName string, labelsToRemove []string) error {
 	node := &v1.Node{}
-	if err := client.Get(ctx, runtimeclient.ObjectKey{Name: nodeName}, node); err != nil {
+	if err := reader.Get(ctx, runtimeclient.ObjectKey{Name: nodeName}, node); err != nil {
 		return fmt.Errorf("failed to get node: %w", err)
 	}
 
@@ -75,7 +79,7 @@ func removeNodeLabels(ctx context.Context, client runtimeclient.Client, nodeName
 		log.Info().Str("label", label).Str("node", node.Name).Msg("Removing label from node")
 	}
 
-	if err := client.Update(ctx, node); err != nil {
+	if err := writer.Update(ctx, node); err != nil {
 		return fmt.Errorf("failed to update node labels: %w", err)
 	}
 	return nil
@@ -142,7 +146,7 @@ func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
 		return
 	}
 
-	if err := removeNodeLabels(ctx, d.manager.GetClient(), d.nodeID, managedNodeLabelKeys(d.name)); err != nil {
+	if err := removeNodeLabels(ctx, d.manager.GetAPIReader(), d.manager.GetClient(), d.nodeID, managedNodeLabelKeys(d.name)); err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Failed to remove node labels")
 		return
 	}
