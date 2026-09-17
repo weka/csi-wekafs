@@ -41,7 +41,7 @@ func TestGetMetricsFromQuotaMapPublishesPerPass(t *testing.T) {
 
 	qm := &apiclient.QuotaMap{
 		FileSystemUid: fsUid,
-		Quotas:        map[uint64]*apiclient.Quota{inodeId: {HardLimitBytes: hard, TotalBytes: used}},
+		Quotas:        map[uint64]*apiclient.Quota{inodeId: {HardLimitBytes: hard, UsedBytes: used}},
 		LastUpdate:    time.Now(),
 	}
 
