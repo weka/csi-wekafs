@@ -206,14 +206,25 @@ at its last value instead of going missing, and a volume can fill without either
 firing. They split the work by failure shape. `WekaCsiVolumeMetricsStale` catches a **partial** loss,
 some volumes having stopped reporting while the server still runs, by comparing against the
 monitored-volumes gauge. `WekaCsiVolumeCapacityNotCollected` catches collection having stopped
-**altogether**, and it deliberately does not use that gauge: the gauge is published by every replica,
-so a standby that has never collected anything still reports it as 0 and it never goes absent while
-any pod is scrapeable. It keys off the volume readings instead, and separately off no replica being
-scrapeable at all. Remove the rule file if you are retiring the metrics server, or the second of
-those will keep firing.
+**altogether**, and it deliberately does not test that gauge's value for "is anything collecting":
+the gauge is published by every replica, so a standby that has never collected anything still
+reports it as 0 and it never goes absent while any pod is scrapeable. It keys off the volume
+readings instead, and separately off no replica being scrapeable at all. Remove the rule file if you
+are retiring the metrics server, or the second of those will keep firing.
 
-A volume whose capacity reads zero is **excluded** rather than reported: there is no threshold for a
-percentage to be of, and treating the divisor as 1 instead would report it as thousands of percent
+It does read the gauge for one thing: whether any volumes are being monitored **right now**. An empty
+fleet - every Weka PersistentVolume deleted - reports zero and no capacity readings, which is healthy
+and must not page. The check is deliberately against the current value rather than a high-water mark
+over some past window, since the latter would keep paging for the length of that window after the
+last volume went away. The residual gap is a leader that has died while a standby stays up and has
+not yet been elected: the gauge then reads 0 from the standby and neither condition fires, until the
+lease is taken and collection resumes.
+
+A volume whose capacity reads zero is **excluded** rather than reported, in the alerts and in every
+panel that expresses a percentage - including the filesystem and tenant rollups, which drop those
+volumes before summing rather than after, so one of them cannot inflate a whole group's figure.
+There is no threshold for a percentage to be of, and treating the divisor as 1 instead would report
+it as thousands of percent
 full and fire both capacity alerts.
 
 Both collection alerts page after roughly **30 minutes**, not 15 - the expression's own range has to

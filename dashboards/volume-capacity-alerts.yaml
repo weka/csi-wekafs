@@ -118,8 +118,10 @@ spec:
         # The first disjunct is the leader having stopped collecting while the pods are still up and
         # scrapeable. The volume readings carry the timestamp of their own measurement, so once the
         # leader stops producing them no new samples land and the range empties out. It is guarded
-        # on volumes having been monitored at some point in the last day, so that a cluster with no
-        # Weka PersistentVolumes at all does not alert forever.
+        # on the monitored-volumes gauge reading above zero *now*, not at any point in some past
+        # window: a fleet whose last Weka volume was deleted is a healthy empty fleet, and a guard
+        # looking back over hours would keep paging about it for hours. The leader keeps publishing
+        # its last count while it is up, so the guard holds for the case this is meant to catch.
         #
         # The second is no metrics-server replica being scrapeable at all - pods gone, crash
         # looping, or the PodMonitor no longer matching. That one cannot decay, which is what makes
@@ -129,7 +131,7 @@ spec:
             (
               absent_over_time(weka_csi_volume_used_bytes[15m])
                 and on()
-              (max(max_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[24h])) > 0)
+              (max(last_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[15m])) > 0)
             )
             or absent_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[15m])
           labels:
