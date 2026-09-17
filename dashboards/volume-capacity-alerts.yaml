@@ -101,7 +101,7 @@ spec:
         - alert: WekaCsiVolumeMetricsStale
           expr: |
             (count(count_over_time(weka_csi_volume_used_bytes[15m])) or vector(0))
-              < 0.9 * max(last_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[1h]))
+              < 0.9 * max(last_over_time(weka_csi_metricsserver_monitored_persistent_volumes[1h]))
           for: 15m
           labels:
             severity: warning
@@ -131,9 +131,9 @@ spec:
             (
               absent_over_time(weka_csi_volume_used_bytes[15m])
                 and on()
-              (max(last_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[15m])) > 0)
+              (max(last_over_time(weka_csi_metricsserver_monitored_persistent_volumes[15m])) > 0)
             )
-            or absent_over_time(weka_csi_metricsserver_monitored_persistent_volumes_gauge[15m])
+            or absent_over_time(weka_csi_metricsserver_monitored_persistent_volumes[15m])
           labels:
             severity: critical
           annotations:

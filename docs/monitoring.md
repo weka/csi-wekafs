@@ -250,7 +250,7 @@ PodMonitor relabeling is missing or because the metrics are scraped some other w
 away, or add the relabeling.
 
 **A volume is monitored but never reports.** Compare
-`weka_csi_metricsserver_monitored_persistent_volumes_gauge` against
+`weka_csi_metricsserver_monitored_persistent_volumes` against
 `count(weka_csi_volume_capacity_bytes)`. A gap means the volume was discovered but its quota could
 not be read - check `weka_csi_metricsserver_fetch_single_pv_metrics_failure_count_total` and the
 collector's logs for that PersistentVolume name.
