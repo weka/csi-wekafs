@@ -307,7 +307,7 @@
               }
             ]
           },
-          "unit": "iops"
+          "unit": "reqps"
         },
         "overrides": []
       },
