@@ -577,10 +577,11 @@ func (a *ApiClient) DeleteNfsClientGroup(ctx context.Context, r *NfsClientGroupD
 	}
 	apiResponse := &ApiResponse{}
 	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
-	// FilesystemDoesNotExistException is what the previous implementation looked for here. It reads
-	// like a copy from the filesystem handler rather than the code a client group deletion returns,
-	// but it is kept so this change alters only which errors are reported, not which are forgiven.
-	return classifyDeleteError(err, "FilesystemDoesNotExistException")
+	// ClientGroupDoesNotExistException is what the API returns for an absent client group, as
+	// GetNfsClientGroupByUid already relies on. FilesystemDoesNotExistException is what the previous
+	// implementation looked for - a copy from the filesystem handler - and is kept so nothing that
+	// used to be forgiven starts failing.
+	return classifyDeleteError(err, "ClientGroupDoesNotExistException", "FilesystemDoesNotExistException")
 }
 
 type NfsClientGroupRule struct {

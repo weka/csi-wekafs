@@ -106,3 +106,26 @@ func TestDeleteErrorCodesAreScopedToTheObject(t *testing.T) {
 		t.Error("permission handler forgave a filesystem-absent code - the codes must be scoped per object")
 	}
 }
+
+// DeleteNfsClientGroup passes two codes: the one the API actually returns for an absent client
+// group, and the filesystem code the previous implementation looked for, kept so that nothing which
+// used to be forgiven starts failing. Either one must mean "already gone", and an unrelated code
+// must still fail.
+func TestDeleteErrorAcceptsAnyOfSeveralAbsentCodes(t *testing.T) {
+	const (
+		clientGroupAbsent = "ClientGroupDoesNotExistException"
+		filesystemAbsent  = "FilesystemDoesNotExistException"
+	)
+
+	for _, code := range []string{clientGroupAbsent, filesystemAbsent} {
+		err := &ApiBadRequestError{ApiResponse: &ApiResponse{ErrorCodes: []string{code}}}
+		if got := classifyDeleteError(err, clientGroupAbsent, filesystemAbsent); !errors.Is(got, ObjectNotFoundError) {
+			t.Errorf("%s gave %v, want ObjectNotFoundError", code, got)
+		}
+	}
+
+	unrelated := &ApiBadRequestError{ApiResponse: &ApiResponse{ErrorCodes: []string{"SomethingElse"}}}
+	if got := classifyDeleteError(unrelated, clientGroupAbsent, filesystemAbsent); got == nil || errors.Is(got, ObjectNotFoundError) {
+		t.Errorf("unrelated code gave %v, want a real error", got)
+	}
+}
