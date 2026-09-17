@@ -288,6 +288,36 @@ func IsTooManyTasksError(err error) bool {
 	return responseOf(err).HasErrorCode(ExceptionClassTooManyTasks)
 }
 
+// ExceptionClassFilesystemInUseByNfs is returned by the cluster when a filesystem still has NFS
+// permissions attached and therefore cannot be removed. The accompanying message names the
+// filesystem and the permission holding it, and one is raised per blocking permission.
+//
+// The bare class name is what reaches the wire, in the exceptionClass array with the concrete class
+// first - the same shape as the task-queue class matched above. Verified against the cluster source
+// and unchanged since 4.2, so the constant holds for every version this driver supports.
+//
+// Matched exactly, and deliberately not by prefix, because the neighbouring
+// FilesystemInUseByConfigNFSException means something different: that filesystem is the cluster's
+// own internal NFS configuration filesystem. Deleting permissions cannot release it, so retrying
+// there would be a wasted round trip against a deletion that is never going to succeed.
+//
+// Like the task-queue class this arrives as an HTTP 400, which is why the status code alone cannot
+// be read as "the filesystem is already gone".
+const ExceptionClassFilesystemInUseByNfs = "FilesystemInUseByNFSException"
+
+// IsFilesystemInUseByNfsError reports whether err is the cluster refusing to remove a filesystem
+// because NFS permissions still reference it.
+//
+// Worth matching precisely rather than retrying on any failure: the cleanup is a list plus a delete
+// per permission, and a wekafs-only cluster - most of them - never creates one, so it should not be
+// paid for on unrelated failures.
+func IsFilesystemInUseByNfsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return responseOf(err).HasErrorCode(ExceptionClassFilesystemInUseByNfs)
+}
+
 // responseOf digs the API response out of an error, whichever concrete type it happens to be, so
 // callers can inspect what the backend actually said. Returns nil when the error carries no
 // response, which HasErrorCode handles.
