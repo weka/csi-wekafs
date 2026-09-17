@@ -183,10 +183,11 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	logger.Trace().Str("api_client", credentials.String()).Msg("Creating new Weka API client")
 	// doing this to fetch a client hash
 	newClient, err := apiclient.NewApiClient(ctx, credentials, apiclient.ApiClientOptions{
-		AllowInsecureHttps: api.config.allowInsecureHttps,
-		Hostname:           hostname,
-		DriverName:         api.driverName,
-		ApiTimeout:         api.config.wekaApiTimeout,
+		AllowInsecureHttps:          api.config.allowInsecureHttps,
+		Hostname:                    hostname,
+		DriverName:                  api.driverName,
+		ApiTimeout:                  api.config.wekaApiTimeout,
+		RotateEndpointOnEachRequest: api.config.rotateApiEndpointOnEachRequest,
 	})
 	if err != nil {
 		return nil, errors.New("could not create API client object from supplied params")
