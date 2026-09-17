@@ -19,7 +19,7 @@ func TestApplyNodeLabels_AppliesToNodeWithNoLabels(t *testing.T) {
 	client := fakeClient.NewClientBuilder().WithObjects(node).Build()
 	desired := map[string]string{"topology.example/node": "node-1", "topology.example/accessible": "true"}
 
-	if err := applyNodeLabels(context.Background(), client, "node-1", desired); err != nil {
+	if err := applyNodeLabels(context.Background(), client, client, "node-1", desired); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -46,7 +46,7 @@ func TestApplyNodeLabels_AlreadyCorrectMakesNoUpdateCall(t *testing.T) {
 	}
 	rvBefore := before.ResourceVersion
 
-	if err := applyNodeLabels(context.Background(), client, "node-1", desired); err != nil {
+	if err := applyNodeLabels(context.Background(), client, client, "node-1", desired); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -67,7 +67,7 @@ func TestApplyNodeLabels_ExternallyChangedLabelIsCorrected(t *testing.T) {
 	client := fakeClient.NewClientBuilder().WithObjects(node).Build()
 	desired := map[string]string{"topology.example/node": "node-1"}
 
-	if err := applyNodeLabels(context.Background(), client, "node-1", desired); err != nil {
+	if err := applyNodeLabels(context.Background(), client, client, "node-1", desired); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -89,7 +89,7 @@ func TestApplyNodeLabels_TransportLabelReflectsChangedDesiredValue(t *testing.T)
 
 	// Transport flips - e.g. NFS failback.
 	desired := map[string]string{"topology.example/transport": "nfs"}
-	if err := applyNodeLabels(context.Background(), client, "node-1", desired); err != nil {
+	if err := applyNodeLabels(context.Background(), client, client, "node-1", desired); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -217,4 +217,57 @@ func (w *recordingNodeWriter) Update(_ context.Context, obj runtimeclient.Object
 	}
 	w.updated = node.DeepCopy()
 	return nil
+}
+
+// The first Probe can land before the manager's cache has synced, and a cached read fails outright
+// then rather than waiting. cacheThenLive covers that window: the node is only in the live reader
+// here, standing in for an unsynced cache, and the labels must still be applied.
+func TestApplyNodeLabels_FallsBackToLiveReadWhenCacheIsNotReady(t *testing.T) {
+	live := fakeClient.NewClientBuilder().
+		WithObjects(&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}}).Build()
+	// An empty cache, which is what a cached Get hits before the informers have synced.
+	cold := fakeClient.NewClientBuilder().Build()
+	writer := &recordingNodeWriter{}
+
+	desired := map[string]string{"topology.example/node": "node-1"}
+	reader := cacheThenLive{cached: cold, live: live}
+	if err := applyNodeLabels(context.Background(), reader, writer, "node-1", desired); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if writer.updated == nil {
+		t.Fatal("no update was issued, so the labels would stay missing until a later Probe")
+	}
+	if writer.updated.Labels["topology.example/node"] != "node-1" {
+		t.Errorf("expected the label to be applied, got %v", writer.updated.Labels)
+	}
+}
+
+// Once the cache is warm it must be the one serving reads: a direct API call per Probe, on every
+// node every ten seconds, is what the cached client exists to avoid.
+func TestApplyNodeLabels_PrefersTheCacheWhenItIsWarm(t *testing.T) {
+	warm := fakeClient.NewClientBuilder().
+		WithObjects(&v1.Node{ObjectMeta: metav1.ObjectMeta{
+			Name:   "node-1",
+			Labels: map[string]string{"from": "cache"},
+		}}).Build()
+	live := fakeClient.NewClientBuilder().
+		WithObjects(&v1.Node{ObjectMeta: metav1.ObjectMeta{
+			Name:   "node-1",
+			Labels: map[string]string{"from": "live"},
+		}}).Build()
+	writer := &recordingNodeWriter{}
+
+	reader := cacheThenLive{cached: warm, live: live}
+	if err := applyNodeLabels(context.Background(), reader, writer,
+		"node-1", map[string]string{"topology.example/node": "node-1"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if writer.updated == nil {
+		t.Fatal("no update was issued")
+	}
+	if got := writer.updated.Labels["from"]; got != "cache" {
+		t.Errorf("read came from %q, want the cache", got)
+	}
 }
