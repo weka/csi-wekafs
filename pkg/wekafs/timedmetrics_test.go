@@ -398,3 +398,94 @@ func TestTimedHistogramCollectsAConsistentSnapshot(t *testing.T) {
 	close(stop)
 	wg.Wait()
 }
+
+// A value and its measurement time have to be exported as a pair that was actually recorded. Held
+// in two separate atomics they were not: a Collect landing between the two stores read a new value
+// with the old timestamp, or the reverse. -race does not catch it - both halves were atomic - so
+// this pins the invariant instead, by writing values whose timestamp is derived from the value and
+// checking every collected sample still satisfies that relation.
+func TestTimedGaugeValueAndTimestampStayPaired(t *testing.T) {
+	base := time.Unix(1700000000, 0)
+	g := NewTimedGauge(prometheus.GaugeOpts{Namespace: "weka", Subsystem: "test", Name: "paired_gauge"})
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 1; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			// ts is a pure function of val, so any mismatch is a torn pair.
+			g.SetWithTimestamp(float64(i), base.Add(time.Duration(i)*time.Millisecond))
+		}
+	}()
+
+	for range 2000 {
+		ch := make(chan prometheus.Metric, 1)
+		g.Collect(ch)
+		var m dto.Metric
+		if err := (<-ch).Write(&m); err != nil {
+			t.Fatalf("write metric: %v", err)
+		}
+		v := m.GetGauge().GetValue()
+		if v == 0 {
+			continue // never-written window before the writer's first store
+		}
+		want := base.Add(time.Duration(int64(v)) * time.Millisecond).UnixMilli()
+		if got := m.GetTimestampMs(); got != want {
+			close(stop)
+			wg.Wait()
+			t.Fatalf("value %v exported with timestamp %d, want %d - the pair was torn", v, got, want)
+		}
+	}
+	close(stop)
+	wg.Wait()
+}
+
+// The counter's Add is a read-modify-write, so its pairing needs a compare-and-swap rather than
+// two stores. Same invariant: the timestamp must be the one recorded with that total.
+func TestTimedCounterValueAndTimestampStayPaired(t *testing.T) {
+	base := time.Unix(1700000000, 0)
+	c := NewTimedCounter(prometheus.CounterOpts{Namespace: "weka", Subsystem: "test", Name: "paired_counter"})
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 1; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			// Each Add takes the total to i, and stamps it with a time derived from i.
+			c.AddWithTimestamp(1, base.Add(time.Duration(i)*time.Millisecond))
+		}
+	}()
+
+	for range 2000 {
+		ch := make(chan prometheus.Metric, 1)
+		c.Collect(ch)
+		var m dto.Metric
+		if err := (<-ch).Write(&m); err != nil {
+			t.Fatalf("write metric: %v", err)
+		}
+		v := m.GetCounter().GetValue()
+		if v == 0 {
+			continue
+		}
+		want := base.Add(time.Duration(int64(v)) * time.Millisecond).UnixMilli()
+		if got := m.GetTimestampMs(); got != want {
+			close(stop)
+			wg.Wait()
+			t.Fatalf("total %v exported with timestamp %d, want %d - the pair was torn", v, got, want)
+		}
+	}
+	close(stop)
+	wg.Wait()
+}

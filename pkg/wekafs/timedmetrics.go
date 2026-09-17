@@ -64,11 +64,23 @@ func (t *atomicTime) Load() time.Time {
 //
 // Note this requires the scrape config to honor timestamps, which is the default.
 
+// timedValue is a value together with the time it was measured, so that a scrape always reads a
+// pair that was actually recorded. Holding the two in separate atomics allowed a Collect landing
+// between the two stores to export a new value under the previous measurement time, or the old
+// value under the new one - and under honor_timestamps a newer value carrying an older timestamp is
+// dropped as out of order, so the sample is lost rather than merely misdated.
+//
+// A zero ts means no measurement time was recorded, and a nil *timedValue means nothing has been
+// written at all: both leave Prometheus to stamp the sample at scrape time.
+type timedValue struct {
+	val float64
+	ts  time.Time
+}
+
 // TimedGauge is a gauge that remembers when its value was measured.
 type TimedGauge struct {
 	desc   *prometheus.Desc
-	val    atomicFloat64
-	lastTs atomicTime
+	sample atomic.Pointer[timedValue]
 	labels []string
 }
 
@@ -87,25 +99,28 @@ func (tg *TimedGauge) Set(v float64) {
 
 // SetWithTimestamp records a value along with the time it was measured. A zero ts means "now".
 func (tg *TimedGauge) SetWithTimestamp(v float64, ts time.Time) *prometheus.Desc {
-	tg.val.Store(v)
-	tg.lastTs.Store(orNow(ts))
+	tg.sample.Store(&timedValue{val: v, ts: orNow(ts)})
 	return tg.desc
 }
 
 func (tg *TimedGauge) Describe(ch chan<- *prometheus.Desc) { ch <- tg.desc }
 
 func (tg *TimedGauge) Collect(ch chan<- prometheus.Metric) {
+	var v float64
+	var ts time.Time
+	if s := tg.sample.Load(); s != nil {
+		v, ts = s.val, s.ts
+	}
 	ch <- withTimestamp(
-		prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, tg.val.Load(), tg.labels...),
-		tg.lastTs.Load(),
+		prometheus.MustNewConstMetric(tg.desc, prometheus.GaugeValue, v, tg.labels...),
+		ts,
 	)
 }
 
 // TimedCounter is a counter that remembers when its value was measured.
 type TimedCounter struct {
 	desc   *prometheus.Desc
-	val    atomicFloat64
-	lastTs atomicTime
+	sample atomic.Pointer[timedValue]
 	labels []string
 }
 
@@ -119,15 +134,25 @@ func NewTimedCounter(opts prometheus.CounterOpts) *TimedCounter {
 
 func (tc *TimedCounter) Inc() { tc.Add(1) }
 
-func (tc *TimedCounter) Add(v float64) {
-	tc.val.Add(v)
-	tc.lastTs.Store(time.Now())
-}
+func (tc *TimedCounter) Add(v float64) { tc.add(v, time.Now()) }
 
 // AddWithTimestamp increases the counter and records when the increase was observed.
-func (tc *TimedCounter) AddWithTimestamp(v float64, ts time.Time) {
-	tc.val.Add(v)
-	tc.lastTs.Store(orNow(ts))
+func (tc *TimedCounter) AddWithTimestamp(v float64, ts time.Time) { tc.add(v, orNow(ts)) }
+
+// add applies a delta and its observation time together. The read-modify-write needs the loop that
+// an atomic float's Add did on its own; carrying the timestamp with it is what makes the pair
+// consistent for a concurrent Collect.
+func (tc *TimedCounter) add(delta float64, ts time.Time) {
+	for {
+		old := tc.sample.Load()
+		current := 0.0
+		if old != nil {
+			current = old.val
+		}
+		if tc.sample.CompareAndSwap(old, &timedValue{val: current + delta, ts: ts}) {
+			return
+		}
+	}
 }
 
 // Set overwrites the counter instead of increasing it.
@@ -143,17 +168,21 @@ func (tc *TimedCounter) Set(v float64) {
 
 // SetWithTimestamp overwrites the counter and records when the value was measured. See Set.
 func (tc *TimedCounter) SetWithTimestamp(v float64, ts time.Time) *prometheus.Desc {
-	tc.val.Store(v)
-	tc.lastTs.Store(orNow(ts))
+	tc.sample.Store(&timedValue{val: v, ts: orNow(ts)})
 	return tc.desc
 }
 
 func (tc *TimedCounter) Describe(ch chan<- *prometheus.Desc) { ch <- tc.desc }
 
 func (tc *TimedCounter) Collect(ch chan<- prometheus.Metric) {
+	var v float64
+	var ts time.Time
+	if s := tc.sample.Load(); s != nil {
+		v, ts = s.val, s.ts
+	}
 	ch <- withTimestamp(
-		prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, tc.val.Load(), tc.labels...),
-		tc.lastTs.Load(),
+		prometheus.MustNewConstMetric(tc.desc, prometheus.CounterValue, v, tc.labels...),
+		ts,
 	)
 }
 
