@@ -840,7 +840,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(kube_pod_container_status_ready{namespace=~\"$namespace\", pod=~\"($deployment)-.*\"} == 0) or vector(0)",
+          "expr": "count(kube_pod_container_status_ready{namespace=~\"$namespace\", pod=~\"($deployment)-.*\"} == 0) or vector(0)",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -849,7 +849,7 @@
       ],
       "title": "Containers Not Ready",
       "type": "stat",
-      "description": "This Deployment intentionally ships with NO readinessProbe (PR #740), so a container's ready state here just tracks the container being started, not real request-serving health, and cannot distinguish the active leader from standby replicas. See the Leader identity panel to find who is actually serving. A non-zero count still means a container failed to start (e.g. crash, image pull), which IS a fault."
+      "description": "Containers reporting not ready. Counted rather than summed: the `== 0` filter keeps the series whose value is already zero, so adding them up would always total zero no matter how many containers were down."
     },
     {
       "datasource": {
