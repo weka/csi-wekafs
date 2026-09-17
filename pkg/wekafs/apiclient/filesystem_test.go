@@ -72,10 +72,10 @@ func TestClassifyFilesystemDeleteErrorKeepsUnrecognisedFailures(t *testing.T) {
 		{name: "anything else is returned unchanged", err: other, want: other},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, classifyFilesystemDeleteError(tc.err))
+			assert.Equal(t, tc.want, classifyDeleteError(tc.err, "FilesystemDoesNotExistException"))
 		})
 	}
 
 	// And the error the caller keys its retry on is still recognisable after classification.
-	assert.True(t, IsFilesystemInUseByNfsError(classifyFilesystemDeleteError(nfsBlock)))
+	assert.True(t, IsFilesystemInUseByNfsError(classifyDeleteError(nfsBlock, "FilesystemDoesNotExistException")))
 }
