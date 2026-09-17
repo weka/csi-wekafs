@@ -190,7 +190,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "kube_deployment_spec_replicas{deployment=~\"$deployment\", namespace=~\"$namespace\"}",
+          "expr": "sum(kube_deployment_spec_replicas{deployment=~\"$deployment\", namespace=~\"$namespace\"})",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -260,7 +260,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "kube_deployment_status_replicas_available{deployment=~\"$deployment\", namespace=~\"$namespace\"}",
+          "expr": "sum(kube_deployment_status_replicas_available{deployment=~\"$deployment\", namespace=~\"$namespace\"})",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -330,7 +330,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "kube_deployment_status_replicas_unavailable{deployment=~\"$deployment\", namespace=~\"$namespace\"}",
+          "expr": "sum(kube_deployment_status_replicas_unavailable{deployment=~\"$deployment\", namespace=~\"$namespace\"})",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -400,7 +400,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "kube_deployment_status_replicas_updated{deployment=~\"$deployment\", namespace=~\"$namespace\"}",
+          "expr": "sum(kube_deployment_status_replicas_updated{deployment=~\"$deployment\", namespace=~\"$namespace\"})",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -482,7 +482,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "kube_deployment_status_replicas_updated{deployment=~\"$deployment\", namespace=~\"$namespace\"} < bool kube_deployment_spec_replicas{deployment=~\"$deployment\", namespace=~\"$namespace\"}",
+          "expr": "clamp_max(sum(kube_deployment_status_replicas_updated{deployment=~\"$deployment\", namespace=~\"$namespace\"}) < bool sum(kube_deployment_spec_replicas{deployment=~\"$deployment\", namespace=~\"$namespace\"}), 1)",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -564,7 +564,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "kube_deployment_status_observed_generation{deployment=~\"$deployment\", namespace=~\"$namespace\"} < bool kube_deployment_metadata_generation{deployment=~\"$deployment\", namespace=~\"$namespace\"}",
+          "expr": "clamp_max(sum(kube_deployment_status_observed_generation{deployment=~\"$deployment\", namespace=~\"$namespace\"}) < bool sum(kube_deployment_metadata_generation{deployment=~\"$deployment\", namespace=~\"$namespace\"}), 1)",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
