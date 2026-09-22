@@ -99,7 +99,7 @@ jobs:
             *)    echo 'transports=${{ inputs.transports }}' >> "$GITHUB_OUTPUT" ;;
           esac
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - uses: azure/setup-kubectl@v4
 
       - name: Install bliss
@@ -206,7 +206,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-${{ github.run_id }}
           path: _artifacts/
