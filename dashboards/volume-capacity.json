@@ -1345,7 +1345,7 @@
       },
       "type": "table",
       "title": "Top tenants",
-      "description": "Volumes aggregated per Weka organization, taken from the credentials each volume's API client authenticated with. Ranked by usage; the Capacity column ranks by size.",
+      "description": "Grouped by cluster as well as tenant. A WEKA organization name is only unique within its cluster - \"Root\" exists on every one - so summing by tenant alone collapsed same-named organizations from different clusters into a single row, and neither the usage nor the 85/95% colouring then described any one tenant.",
       "id": 11,
       "gridPos": {
         "h": 12,
@@ -1505,7 +1505,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+          "expr": "topk(100, sum by (cluster_guid, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -1518,7 +1518,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+          "expr": "sum by (cluster_guid, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (cluster_guid, organization) topk(100, sum by (cluster_guid, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -1531,7 +1531,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "count by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+          "expr": "count by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))) and on (cluster_guid, organization) topk(100, sum by (cluster_guid, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -1544,7 +1544,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "100 * sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) and on (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) > 0)) / sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) > 0) and on (organization) topk(100, sum by (organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
+          "expr": "100 * sum by (cluster_guid, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) and on (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) > 0)) / sum by (cluster_guid, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_capacity_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age])) > 0) and on (cluster_guid, organization) topk(100, sum by (cluster_guid, organization) (max by (csi_driver_name, pv_name, cluster_guid, storage_class_name, filesystem_name, volume_type, organization, pvc_name, pvc_namespace, pvc_uid) (last_over_time(weka_csi_volume_used_bytes{organization=~\"$organization\", filesystem_name=~\"$filesystem_name\", storage_class_name=~\"$storage_class_name\", pvc_namespace=~\"$pvc_namespace\", pv_name=~\"$pv_name\"}[$value_max_age]))))",
           "legendFormat": "__auto",
           "range": false,
           "instant": true,
@@ -1562,6 +1562,7 @@
           "options": {
             "include": {
               "names": [
+                "cluster_guid",
                 "organization",
                 "Value #A",
                 "Value #B",
@@ -1580,14 +1581,16 @@
               "Value #A": "Used",
               "Value #B": "Capacity",
               "Value #C": "Volumes",
-              "Value #D": "Used %"
+              "Value #D": "Used %",
+              "cluster_guid": "Cluster"
             },
             "indexByName": {
-              "organization": 0,
-              "Value #A": 1,
-              "Value #B": 2,
-              "Value #C": 3,
-              "Value #D": 4
+              "cluster_guid": 0,
+              "organization": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5
             }
           }
         },
