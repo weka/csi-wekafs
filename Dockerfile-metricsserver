@@ -1,0 +1,44 @@
+ARG UBI_HASH=9.8-1786380870
+FROM golang:1.26-alpine AS go-builder
+ARG TARGETARCH
+ARG TARGETOS
+# https://stackoverflow.com/questions/36279253/go-compiled-binary-wont-run-in-an-alpine-docker-container-on-ubuntu-host
+RUN apk add --no-cache libc6-compat gcc musl-dev
+COPY go.mod /src/go.mod
+COPY go.sum /src/go.sum
+WORKDIR /src
+RUN go mod download
+ARG VERSION
+RUN echo Building metrics server version $VERSION for architecture $TARGETARCH
+# Need to add true in between to avoid "failed to get layer"
+# https://stackoverflow.com/questions/51115856/docker-failed-to-export-image-failed-to-create-image-failed-to-get-layer
+ADD go.mod /src/go.mod
+RUN true
+ADD go.sum /src/go.sum
+RUN true
+ADD pkg /src/pkg
+RUN true
+ADD cmd /src/cmd
+RUN true
+
+# Self-contained, like Dockerfile, rather than copying a binary built by a prior CI job. That keeps
+# `docker build -f Dockerfile-metricsserver .` working on its own, without a build-binaries step to
+# produce ./build/<os>-<arch>/metricsserver first.
+RUN echo Building metrics server
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -a -ldflags "-X main.version=$VERSION -extldflags '-static'" -o "/bin/metricsserver" /src/cmd/metricsserver
+
+FROM registry.access.redhat.com/ubi9-minimal:${UBI_HASH}
+LABEL maintainers="WekaIO, LTD"
+LABEL maintainer="csi@weka.io"
+LABEL name="WEKA CSI Metrics Server"
+LABEL vendor="weka.io"
+LABEL summary="This image is used by the WEKA CSI Metrics Server"
+LABEL description="Metrics server for WEKA CSI volumes, exporting per-volume capacity and performance to Prometheus"
+LABEL url="https://www.weka.io"
+
+# The metrics server mounts nothing and shells out to nothing - it only talks to the Kubernetes and
+# WEKA APIs - so it needs none of the filesystem and SELinux tooling the CSI plugin image installs.
+RUN mkdir -p /licenses
+COPY LICENSE /licenses
+COPY --from=go-builder /bin/metricsserver /metricsserver
+ENTRYPOINT ["/metricsserver"]

@@ -38,10 +38,34 @@ const (
 
 	LegacySecretPath = "/legacy-volume-access"
 
-	CsiModeNode       CsiPluginMode = "node"
-	CsiModeController CsiPluginMode = "controller"
-	CsiModeAll        CsiPluginMode = "all"
+	CsiModeNode          CsiPluginMode = "node"
+	CsiModeController    CsiPluginMode = "controller"
+	CsiModeAll           CsiPluginMode = "all"
+	CsiModeMetricsServer CsiPluginMode = "metricsserver"
 )
+
+// servesCsiGrpc reports whether this mode runs the CSI gRPC surface - the Identity/Controller/Node
+// services, the socket they listen on, and the mounter behind them. Everything that follows from
+// having no gRPC surface (no endpoint to validate, no socket to health-check, no leader-gated gRPC
+// runnable to register) tests this one property, so it is named here rather than restated as a
+// comparison against CsiModeMetricsServer at each site.
+func (mode CsiPluginMode) servesCsiGrpc() bool {
+	return mode != CsiModeMetricsServer
+}
+
+// servesHealthProbes reports whether the manager should bind its HTTP health-probe server, which is
+// what answers /healthz and /readyz.
+//
+// Node pods must not bind it: they share the host network namespace with the controller, so any port
+// the node manager took would block the controller manager from using it. Every other mode has
+// probes pointed at it.
+//
+// This deliberately follows the mode rather than leader election, which it merely correlated with
+// until a metrics server could run without a lease - at which point tying the two together left that
+// pod with a liveness probe and nothing listening to answer it.
+func (mode CsiPluginMode) servesHealthProbes() bool {
+	return mode != CsiModeNode
+}
 
 var DefaultVolumePermissions fs.FileMode = 0750
 
