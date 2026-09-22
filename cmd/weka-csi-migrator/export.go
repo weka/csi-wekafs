@@ -65,6 +65,17 @@ password so that the archive is encrypted.`,
 					map[bool]string{true: "--include-secret-data", false: "--encrypt"}[includeSecretData],
 					passwordEnvVar)
 			}
+			// And the other way round: a password alone must not decide the output format.
+			// Encryption is asked for with --encrypt, or implied by --include-secret-data. A
+			// password left in the environment for some other invocation - a CI runner that
+			// exports it once for the whole job - would otherwise silently encrypt an archive the
+			// documented default says is plain, and the operator would not find out until someone
+			// tried to read it.
+			if !wantEncryption && password != "" {
+				zerolog.Ctx(cmd.Context()).Warn().
+					Msgf("%s is set but this archive is not encrypted; pass --encrypt to use it", passwordEnvVar)
+				password = ""
+			}
 
 			// Check the destination before doing any work. Collection is the slow part, and
 			// discovering "that file already exists" only after it finishes wastes the whole

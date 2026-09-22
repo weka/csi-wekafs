@@ -460,3 +460,50 @@ func TestExportChecksOutputBeforeCollecting(t *testing.T) {
 		t.Error("the cluster was queried before the output path was checked")
 	}
 }
+
+// A password left in the environment - a CI runner exporting it once for a whole job - must not
+// decide the output format. Encryption is asked for with --encrypt, or implied by
+// --include-secret-data; anything else silently produced an encrypted archive where the documented
+// default says plain, and nobody found out until someone tried to read it.
+func TestEnvironmentPasswordDoesNotEncryptWithoutTheFlag(t *testing.T) {
+	captureLogs(t)
+	notATerminal(t)
+	archivePath := filepath.Join(t.TempDir(), "ambient.wcsi")
+	t.Setenv(passwordEnvVar, "hunter2")
+
+	if _, err := runCLI(t, testCluster(), "export", "-o", archivePath, "--namespace", "infra"); err != nil {
+		t.Fatalf("export returned error: %v", err)
+	}
+	raw, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatalf("reading archive: %v", err)
+	}
+	if !strings.Contains(string(raw), `"encrypted":false`) {
+		t.Error("a password in the environment encrypted an archive that was not asked to be encrypted")
+	}
+	if strings.Contains(string(raw), "super-secret-password") {
+		t.Error("a redacted export leaked the password")
+	}
+}
+
+// And the other half: with that variable still set, the plain archive has to stay readable.
+// archive.Open refuses a password it does not need, so an ambient password used to make every
+// unencrypted archive unreadable - the default workflow could not be used at all.
+func TestPlainArchiveStaysReadableWithAPasswordInTheEnvironment(t *testing.T) {
+	captureLogs(t)
+	notATerminal(t)
+	archivePath := filepath.Join(t.TempDir(), "plain.wcsi")
+
+	if _, err := runCLI(t, testCluster(), "export", "-o", archivePath, "--namespace", "infra"); err != nil {
+		t.Fatalf("export returned error: %v", err)
+	}
+
+	t.Setenv(passwordEnvVar, "hunter2")
+	out, err := runCLI(t, testCluster(), "list", archivePath)
+	if err != nil {
+		t.Fatalf("list refused a plain archive while a password was set in the environment: %v", err)
+	}
+	if !strings.Contains(out, "pv-dir") {
+		t.Errorf("list did not report the exported volume: %s", out)
+	}
+}

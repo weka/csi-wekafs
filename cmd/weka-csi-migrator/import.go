@@ -153,6 +153,13 @@ func openArchive(path string, passwordStdin, ignoreIntegrity bool) (*archive.Rea
 		}
 		reader, warnings, err = open(password)
 	}
+	// The converse, and the reason a password in the environment used to make plain archives
+	// unreadable: archive.Open refuses a password it does not need, so an ambient
+	// WEKA_CSI_MIGRATOR_PASSWORD turned every unencrypted archive into an error. The password was
+	// not asked for by this archive, so drop it and read the archive as what it is.
+	if errors.Is(err, archive.ErrPasswordNotNeeded) && password != "" {
+		reader, warnings, err = open("")
+	}
 	if err != nil {
 		return nil, nil, err
 	}
