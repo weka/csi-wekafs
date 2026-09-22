@@ -230,3 +230,31 @@ func TestOutputIsReproducible(t *testing.T) {
 		t.Error("two identical exports produced different bytes")
 	}
 }
+
+// The key derivation parameters come out of the plaintext header, and the key has to be derived
+// before any of the archive can be authenticated - so costs beyond the supported range have to be
+// refused on sight. Without that, a crafted header naming gigabytes of memory made list, show and
+// import hang or get OOM killed on a file the operator only meant to inspect.
+func TestKDFParametersBeyondRangeAreRejected(t *testing.T) {
+	base, err := newKDFParams()
+	if err != nil {
+		t.Fatalf("generating parameters: %v", err)
+	}
+
+	// What the writer actually produces must keep working.
+	if _, err := deriveKey("pw", base); err != nil {
+		t.Fatalf("the parameters this tool writes were rejected: %v", err)
+	}
+
+	for name, p := range map[string]*KDFParams{
+		"memory":  {Time: base.Time, MemoryK: maxArgonMemoryK + 1, Threads: base.Threads, SaltB64: base.SaltB64},
+		"passes":  {Time: maxArgonTime + 1, MemoryK: base.MemoryK, Threads: base.Threads, SaltB64: base.SaltB64},
+		"threads": {Time: base.Time, MemoryK: base.MemoryK, Threads: maxArgonThreads + 1, SaltB64: base.SaltB64},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := deriveKey("pw", p); err == nil {
+				t.Error("accepted key derivation costs beyond the supported range")
+			}
+		})
+	}
+}

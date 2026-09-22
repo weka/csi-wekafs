@@ -95,6 +95,15 @@ func (c *Collector) Collect(ctx context.Context) (*archive.Writer, error) {
 	for i := range pvs {
 		pv := &pvs[i]
 
+		// Discarded before anything is said about it. The claim's namespace is on the volume
+		// itself, so a namespace-scoped export can drop foreign volumes without consulting the
+		// claim at all - and doing it first matters: the warnings below are persisted in the
+		// manifest and replayed by list and import, so raising them for a volume that never
+		// enters the archive describes objects the reader cannot find.
+		if c.opts.Namespace != "" && (pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.Namespace != c.opts.Namespace) {
+			continue
+		}
+
 		handle, handleErr := volumeid.Parse(pv.Spec.CSI.VolumeHandle)
 		if handleErr != nil {
 			// An unparseable handle is exported verbatim: the driver, not this tool, is the
@@ -108,11 +117,6 @@ func (c *Collector) Collect(ctx context.Context) (*archive.Writer, error) {
 			w.AddWarning("PersistentVolume %q is %s-backed: Weka cannot replicate snapshots, so this volume can only be restored to a Kubernetes cluster attached to the same Weka cluster", pv.Name, handle.Backing())
 		}
 
-		// The claim's namespace is on the volume itself, so a namespace-scoped export can
-		// discard foreign volumes without consulting the claim at all.
-		if c.opts.Namespace != "" && (pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.Namespace != c.opts.Namespace) {
-			continue
-		}
 		claim := claims.lookup(pv)
 
 		logger.Debug().

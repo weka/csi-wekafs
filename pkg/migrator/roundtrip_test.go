@@ -651,3 +651,30 @@ func TestTransformCollisionIsRefused(t *testing.T) {
 		t.Errorf("the refused import still created %d claim(s)", len(claims.Items))
 	}
 }
+
+// A namespaced export must not describe volumes it did not take. The warnings are persisted in the
+// manifest and replayed by list and import, so one naming a volume outside the exported namespace
+// sends the reader looking for something the archive does not contain - and with
+// --skip-unexportable it also reported skipping a volume that was never in scope.
+func TestNamespacedExportDoesNotWarnAboutOtherNamespaces(t *testing.T) {
+	// pv-snap is the volume that warns, and it lives in "default"; team-a holds only pv-fs.
+	for _, opts := range []collect.Options{
+		{IncludeSecretData: true, Namespace: "team-a"},
+		{IncludeSecretData: true, Namespace: "team-a", SkipUnexportable: true},
+	} {
+		reader := openArchive(t, exportTo(t, sourceCluster(), opts, ""), "")
+
+		for _, v := range reader.Manifest.Volumes {
+			if v.PVName != "pv-fs" {
+				t.Errorf("skipUnexportable=%v: exported %q, want only team-a's pv-fs",
+					opts.SkipUnexportable, v.PVName)
+			}
+		}
+		for _, w := range reader.Manifest.Warnings {
+			if strings.Contains(w, "pv-snap") || strings.Contains(w, "pv-dir") {
+				t.Errorf("skipUnexportable=%v: warning describes a volume outside the exported namespace: %q",
+					opts.SkipUnexportable, w)
+			}
+		}
+	}
+}

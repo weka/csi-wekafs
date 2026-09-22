@@ -24,6 +24,22 @@ const (
 	saltLen             = 16
 )
 
+// Upper bounds on the key derivation parameters an archive may ask for.
+//
+// The parameters come out of the archive header, which is plaintext and unauthenticated - the key
+// has to be derived before anything can be verified. Without a ceiling, a crafted header naming
+// several gigabytes of memory or a huge pass count makes list, show and import hang or get OOM
+// killed before they ever check a signature, on a file the user only meant to inspect.
+//
+// Set well above the parameters written today (3 passes, 64 MiB, 4 threads) so that raising those
+// later keeps older archives readable, and far below anything that threatens the container the CLI
+// runs in.
+const (
+	maxArgonTime    uint32 = 16
+	maxArgonMemoryK uint32 = 1 << 20 // 1 GiB
+	maxArgonThreads uint8  = 16
+)
+
 // newKDFParams generates fresh key derivation parameters with a random salt.
 func newKDFParams() (*KDFParams, error) {
 	salt := make([]byte, saltLen)
@@ -53,6 +69,10 @@ func deriveKey(password string, p *KDFParams) ([]byte, error) {
 	}
 	if p.Time == 0 || p.MemoryK == 0 || p.Threads == 0 {
 		return nil, errors.New("key derivation parameters are out of range")
+	}
+	if p.Time > maxArgonTime || p.MemoryK > maxArgonMemoryK || p.Threads > maxArgonThreads {
+		return nil, fmt.Errorf("%w: archive asks for key derivation costs beyond the supported range (%d passes, %d KiB, %d threads)",
+			ErrIntegrity, p.Time, p.MemoryK, p.Threads)
 	}
 	return argon2.IDKey([]byte(password), salt, p.Time, p.MemoryK, p.Threads, argonKeyLen), nil
 }
@@ -157,6 +177,12 @@ func decryptPayload(r io.Reader, key, headerSum []byte) ([]byte, error) {
 				return nil, fmt.Errorf("%w: wrong password, or the archive has been altered", ErrIntegrity)
 			}
 			sawFinal = true
+		}
+		if len(out)+len(plain) > maxPayloadSize {
+			// The plaintext path is bounded by the same limit. Frames authenticate individually, so
+			// without a total an archive that decrypts can still ask for unbounded memory simply by
+			// containing enough of them.
+			return nil, fmt.Errorf("%w: payload exceeds %d bytes", ErrIntegrity, maxPayloadSize)
 		}
 		out = append(out, plain...)
 		index++
