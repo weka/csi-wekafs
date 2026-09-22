@@ -1,0 +1,146 @@
+# Alert rules for the thresholds drawn on the "Weka CSI volume capacity" dashboard
+# (dashboards/volume-capacity.json). Apply to a cluster running the Prometheus Operator:
+#
+#   kubectl apply -n <prometheus-namespace> -f dashboards/volume-capacity-alerts.yaml
+#
+# For a plain Prometheus, lift the `groups:` block into your own rule file.
+#
+# Three things about these expressions are deliberate:
+#
+#   * last_over_time over 15m, not an instant selector. A reading carries the timestamp of its own
+#     measurement, and the metrics server serves a quota from cache for quotaCacheValiditySeconds
+#     (chart default 300s), so a volume emits roughly one sample per cache period rather than one
+#     per scrape. An instant query would evaluate against gaps and the alert would flap. The window
+#     must stay comfortably larger than quotaCacheValiditySeconds - raise it if you raise that.
+#
+#   * `> 0` on the denominator rather than clamp_min. A volume whose capacity reads zero has no
+#     threshold to be a percentage of, and clamping the divisor to 1 did not avoid the problem it
+#     was written for - it turned +Inf into 100 * used_bytes, which is just as far over 95% and
+#     fires both capacity alerts just as hard. Comparing instead drops those series.
+#
+#   * `or vector(0)` around the count in WekaCsiVolumeMetricsStale. count() of an empty vector is
+#     empty, not zero, so without it the rule goes silent in exactly the case it exists to catch -
+#     every volume ageing out of the window at once, which is what a total collection failure looks
+#     like in batch mode, where a filesystem's volumes share one timestamp and drop together.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: weka-csi-volume-capacity
+  labels:
+    app.kubernetes.io/name: csi-wekafsplugin
+    app.kubernetes.io/component: alerts
+spec:
+  groups:
+    - name: weka-csi-volume-capacity
+      rules:
+        # Recording rule so both alerts and any ad-hoc query share one definition of "utilisation",
+        # and so the expensive division is evaluated once per interval rather than per alert.
+        - record: weka_csi_volume:used_ratio
+          expr: |
+            100
+              * last_over_time(weka_csi_volume_used_bytes[15m])
+              / (last_over_time(weka_csi_volume_capacity_bytes[15m]) > 0)
+
+        - alert: WekaCsiVolumeAlmostFull
+          # No upper bound. Bounding this at < 95 would resolve the warning the moment the volume
+          # crossed 95%, while WekaCsiVolumeFull still has 15m to wait - leaving the fullest
+          # volumes with no alert firing at all. Both fire above 95% instead; suppress the warning
+          # with an Alertmanager inhibit_rule on severity if the duplicate is unwanted.
+          expr: weka_csi_volume:used_ratio >= 85
+          # Longer than the recording rule's last_over_time window, not just longer than the quota
+          # cache validity. One reading keeps the recorded series true for the whole 15m window, so
+          # `for: 15m` would have been satisfiable by a single sample - which is what it exists to
+          # prevent. At 20m the volume has to still be over the threshold on a later reading.
+          for: 20m
+          labels:
+            severity: warning
+          annotations:
+            summary: >-
+              PersistentVolume {{ $labels.pvc_namespace }}/{{ $labels.pvc_name }} is
+              {{ $value | printf "%.1f" }}% full
+            description: >-
+              PersistentVolume {{ $labels.pv_name }} (PVC {{ $labels.pvc_namespace }}/{{
+              $labels.pvc_name }}) on Weka filesystem {{ $labels.filesystem_name }}, tenant {{
+              $labels.organization }}, has used {{ $value | printf "%.1f" }}% of its capacity.
+              Expand the PersistentVolumeClaim or reclaim space before it fills.
+
+        - alert: WekaCsiVolumeFull
+          expr: weka_csi_volume:used_ratio >= 95
+          # Same reasoning as WekaCsiVolumeAlmostFull: longer than the 15m window, so one reading
+          # cannot fire it.
+          for: 20m
+          labels:
+            severity: critical
+          annotations:
+            summary: >-
+              PersistentVolume {{ $labels.pvc_namespace }}/{{ $labels.pvc_name }} is critically
+              full at {{ $value | printf "%.1f" }}%
+            description: >-
+              PersistentVolume {{ $labels.pv_name }} (PVC {{ $labels.pvc_namespace }}/{{
+              $labels.pvc_name }}) on Weka filesystem {{ $labels.filesystem_name }}, tenant {{
+              $labels.organization }}, has used {{ $value | printf "%.1f" }}% of its capacity.
+              Writes will start failing when it reaches the quota's hard limit.
+
+        # Neither of the next two is a capacity threshold. They are what make the two above
+        # trustworthy: if the metrics server stops collecting, utilisation freezes at its last value
+        # instead of going missing, and a volume can fill without either alert ever firing.
+        #
+        # WekaCsiVolumeMetricsStale catches a partial loss - some volumes stopped reporting while
+        # the server still runs. It compares against the monitored-volumes gauge, so it cannot
+        # outlive that gauge, and it says nothing useful once collection has stopped altogether.
+        # WekaCsiVolumeCapacityNotCollected is the one that covers that, and it keys off the volume
+        # readings themselves rather than off the gauge. The gauge is the wrong signal for "is
+        # anything collecting": it is a plain Gauge registered by every replica, so a standby that
+        # has never collected anything still publishes it as 0 on every scrape and it never goes
+        # absent while any pod is scrapeable.
+        #
+        # Note that both of these page after roughly 30 minutes, not 15: the range in the expression
+        # has to empty out before the expression turns true, and `for:` only starts counting then.
+        # That is deliberate for the partial-loss rule, which should not fire on one missed cycle;
+        # the rule below carries no `for:` precisely because its range already is the wait.
+        - alert: WekaCsiVolumeMetricsStale
+          expr: |
+            (count(count_over_time(weka_csi_volume_used_bytes[15m])) or vector(0))
+              < 0.9 * max(last_over_time(weka_csi_metricsserver_monitored_persistent_volumes[1h]))
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Weka CSI volume capacity metrics are stale
+            description: >-
+              Only {{ $value }} volumes reported capacity in the last 15 minutes, against the
+              number the metrics server believes it is monitoring. Check the metrics server's
+              weka_csi_metricsserver_fetch_* failure counters and its ability to reach the Weka
+              API.
+
+        # Two ways for collection to stop, and both have to be covered.
+        #
+        # The first disjunct is the leader having stopped collecting while the pods are still up and
+        # scrapeable. The volume readings carry the timestamp of their own measurement, so once the
+        # leader stops producing them no new samples land and the range empties out. It is guarded
+        # on the monitored-volumes gauge reading above zero *now*, not at any point in some past
+        # window: a fleet whose last Weka volume was deleted is a healthy empty fleet, and a guard
+        # looking back over hours would keep paging about it for hours. The leader keeps publishing
+        # its last count while it is up, so the guard holds for the case this is meant to catch.
+        #
+        # The second is no metrics-server replica being scrapeable at all - pods gone, crash
+        # looping, or the PodMonitor no longer matching. That one cannot decay, which is what makes
+        # it worth keeping alongside the first.
+        - alert: WekaCsiVolumeCapacityNotCollected
+          expr: |
+            (
+              absent_over_time(weka_csi_volume_used_bytes[15m])
+                and on()
+              (max(last_over_time(weka_csi_metricsserver_monitored_persistent_volumes[15m])) > 0)
+            )
+            or absent_over_time(weka_csi_metricsserver_monitored_persistent_volumes[15m])
+          labels:
+            severity: critical
+          annotations:
+            summary: Weka CSI volume capacity is not being collected
+            description: >-
+              No volume capacity readings have arrived for 15 minutes, so every volume's reading is
+              frozen at its last value and the capacity alerts above cannot fire. Check that the
+              metrics-server Deployment is running, that one of its replicas holds the leader lease,
+              and that its PodMonitor still matches it. Remove this rule file if the metrics server
+              is being retired, or this will keep firing.
