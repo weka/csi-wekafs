@@ -17,36 +17,30 @@ import (
 )
 
 // do Makes a basic API call to the client, returns an *ApiResponse that includes raw data, error message etc.
-func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values) (*ApiResponse, apiError) {
-	//construct URL path
-	if len(a.Credentials.Endpoints) < 1 {
+// do performs one attempt against the endpoint the caller chose.
+//
+// The endpoint is a parameter rather than something this function looks up. It is the node the URL
+// is built from, the node the Prometheus sample is labelled with, and the node whose own failure
+// counters are updated - and all three have to be the same one. Read from the client's shared
+// selection instead, each read could land on either side of a rotation by a concurrent request, so
+// a call could be sent to one node and attributed to another; and concurrent requests all read
+// whichever selection was written last, collapsing onto a single node instead of spreading.
+func (a *ApiClient) do(ctx context.Context, endpoint *ApiEndPoint, Method string, Path string, Payload *[]byte, Query url.Values) (*ApiResponse, apiError) {
+	if endpoint == nil {
 		return &ApiResponse{}, &ApiNoEndpointsError{
 			Err: errors.New("no endpoints could be found for API client"),
 		}
 	}
-	u, uErr := a.getUrl(ctx, Path)
-	if uErr != nil {
-		return &ApiResponse{}, uErr
-	}
+	u, _ := url.JoinPath(a.baseUrlForEndpoint(endpoint), Path)
 
 	// status is overwritten as soon as the outcome is known; the initial value only survives if the
 	// function returns through a path that sets none.
 	status := "error"
 	startTime := time.Now()
 
-	// Resolved here rather than in the defer, so the sample is labelled with the endpoint that
-	// actually served this request. Read at the end it would be whatever a concurrent
-	// rotateEndpoint had moved on to, pointing per-endpoint latency and error rates at a node that
-	// never saw the call. Taken next to the getUrl above, which is what picked it.
-	//
-	// Nil-checked because getEndpoint returns nil when the client has no endpoint to offer - that
-	// is why requireEndpoint exists for callers that need one, and this function reaches it below,
-	// so the nil case is on its own error path. Dereferencing inside a defer would replace the real
-	// error with a panic, in the one situation where the metric is most worth having.
-	endpointAddress := ""
-	if endpoint := a.getEndpoint(ctx); endpoint != nil {
-		endpointAddress = endpoint.IpAddress
-	}
+	// The same endpoint the URL above was built from, so per-endpoint latency and error rates point
+	// at the node that actually served the call.
+	endpointAddress := endpoint.IpAddress
 
 	defer func() {
 		labels := []string{
@@ -99,11 +93,11 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 
 	logger.Trace().Str("method", Method).Str("url", r.URL.RequestURI()).Str("payload", maskPayload(payload)).Msg("")
 
-	//perform the request and update endpoint with stats
-	endpoint, epErr := a.requireEndpoint(ctx)
-	if epErr != nil {
-		return &ApiResponse{}, epErr
-	}
+	// Stats go on the endpoint resolved at the top, not on a fresh resolution: this is where the
+	// per-endpoint failure and timeout counters are kept, and the whole point of them is to
+	// describe the node that served the request. Resolving again here credited a rotation's new
+	// selection with another node's failures, which is how a healthy endpoint acquires a bad
+	// record and a failing one looks clean.
 	endpoint.requestCount.Add(1)
 	start := time.Now()
 	response, err := a.client.Do(r)
@@ -255,6 +249,26 @@ func (a *ApiClient) do(ctx context.Context, Method string, Path string, Payload 
 	}
 }
 
+// endpointForNewRequest chooses the endpoint a request will use, and returns it rather than leaving
+// the caller to read it back off the client.
+//
+// Chosen once per request, not once per attempt: a retry reaches do() only after the failure path
+// has already moved off the endpoint that failed, and rotating again would pick from the rest -
+// which with two endpoints is exactly the endpoint that just failed, so every retry went back to
+// the broken node.
+//
+// Returned rather than stored because the selection is shared: two requests rotating at the same
+// time both used to read whichever write landed last, so they collapsed onto one node instead of
+// spreading over the management nodes, which is the entire point of rotating.
+func (a *ApiClient) endpointForNewRequest(ctx context.Context) (*ApiEndPoint, apiError) {
+	if a.rotateEndpointOnEachRequest {
+		if endpoint := a.apiEndpoints.Rotate(); endpoint != nil {
+			return endpoint, nil
+		}
+	}
+	return a.requireEndpoint(ctx)
+}
+
 // request wraps do with retries and some more error handling. It returns the token of the next
 // page when the backend indicates the result was truncated, or an empty string when it was not.
 func (a *ApiClient) request(ctx context.Context, Method string, Path string, Payload *[]byte, Query url.Values, v interface{}) (string, apiError) {
@@ -263,13 +277,25 @@ func (a *ApiClient) request(ctx context.Context, Method string, Path string, Pay
 	defer span.End()
 	ctx = log.With().Str("span_id", span.SpanContext().SpanID().String()).Logger().WithContext(ctx)
 	logger := log.Ctx(ctx)
+
+	// This request's own endpoint, carried through its retries rather than re-read from the client.
+	endpoint, epErr := a.endpointForNewRequest(ctx)
+	if epErr != nil {
+		return "", epErr
+	}
+
 	var nextToken string
 	f := func() apiError {
 		// Reset per attempt: a retry must not inherit the token of an attempt that later failed.
 		nextToken = ""
-		rawResponse, reqErr := a.do(ctx, Method, Path, Payload, Query)
+		rawResponse, reqErr := a.do(ctx, endpoint, Method, Path, Payload, Query)
 		if a.handleTransientErrors(ctx, reqErr) != nil { // transient network errors
-			a.rotateEndpoint(ctx)
+			// Away from the endpoint this attempt actually used, not from whatever the shared
+			// selection now holds - a concurrent request may have moved that somewhere else, and
+			// excluding it would leave this failed node eligible for the retry.
+			if next := a.rotateEndpointFrom(ctx, endpoint); next != nil {
+				endpoint = next
+			}
 			logger.Error().Err(reqErr).Msg("")
 			return reqErr
 		}

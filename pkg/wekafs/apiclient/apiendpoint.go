@@ -110,15 +110,29 @@ func (eps *ApiEndPoints) Keys() []string {
 // known, so a caller that rotates to escape a failure doesn't have to re-read the selection
 // afterwards (and risk logging one it never actually chose).
 func (eps *ApiEndPoints) Rotate() *ApiEndPoint {
+	return eps.RotateFrom(nil)
+}
+
+// RotateFrom picks a different endpoint from the one the caller names, rather than from whatever the
+// shared selection happens to be. A request that failed on one node has to move off *that* node: by
+// the time its failure is handled, a concurrent request may have moved the shared selection
+// somewhere else, and excluding that instead would leave the failed endpoint eligible - sending the
+// retry straight back to it.
+//
+// Passing nil means "different from the current selection", which is what Rotate does.
+func (eps *ApiEndPoints) RotateFrom(exclude *ApiEndPoint) *ApiEndPoint {
 	eps.Lock()
 	defer eps.Unlock()
 	if len(eps.endpoints) == 0 {
 		eps.currentEndpoint = nil
 		return nil
 	}
+	if exclude == nil {
+		exclude = eps.currentEndpoint
+	}
 	keys := make([]string, 0, len(eps.endpoints))
 	for k, v := range eps.endpoints {
-		if v == eps.currentEndpoint {
+		if v == exclude {
 			continue
 		}
 		keys = append(keys, k)
@@ -278,18 +292,27 @@ func (a *ApiClient) UpdateApiEndpoints(ctx context.Context) error {
 
 // rotateEndpoint switches to a random endpoint other than the one currently in use.
 func (a *ApiClient) rotateEndpoint(ctx context.Context) {
+	a.rotateEndpointFrom(ctx, nil)
+}
+
+// rotateEndpointFrom switches to a random endpoint other than the one named, and returns it. A
+// caller handling a failed request passes the endpoint that request was actually sent to, so the
+// move is away from that node regardless of what concurrent requests have done to the shared
+// selection in the meantime.
+func (a *ApiClient) rotateEndpointFrom(ctx context.Context, failed *ApiEndPoint) *ApiEndPoint {
 	logger := log.Ctx(ctx)
 	if a.apiEndpoints.Len() == 0 {
 		// Only reachable once the set is already empty, so a failure here leaves nothing worse
-		// behind - Rotate below reports it as no endpoint to switch to.
+		// behind - RotateFrom below reports it as no endpoint to switch to.
 		_ = a.resetDefaultEndpoints(ctx)
 	}
-	current := a.apiEndpoints.Rotate()
+	current := a.apiEndpoints.RotateFrom(failed)
 	if current == nil {
 		logger.Error().Msg("Failed to choose random endpoint, no endpoints exist")
-		return
+		return nil
 	}
 	logger.Debug().Str("new_endpoint", current.String()).Msg("Switched to new API endpoint")
+	return current
 }
 
 // getEndpoint returns last known endpoint to work against. It returns nil when the credentials
