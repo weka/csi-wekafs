@@ -162,21 +162,23 @@ func NewApiClient(ctx context.Context, credentials Credentials, opts ApiClientOp
 // prefix. It reports ApiNoEndpointsError, via requireEndpoint, rather than dereferencing a nil
 // endpoint when none is known.
 func (a *ApiClient) getBaseUrl(ctx context.Context) (string, apiError) {
-	scheme := ""
-	switch strings.ToUpper(a.Credentials.HttpScheme) {
-
-	case "HTTP":
-		scheme = "http"
-	case "HTTPS":
-		scheme = "https"
-	default:
-		scheme = "http"
-	}
 	endpoint, err := a.requireEndpoint(ctx)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s://%s:%d/api/v2", scheme, endpoint.IpAddress, endpoint.MgmtPort), nil
+	return a.baseUrlForEndpoint(endpoint), nil
+}
+
+// baseUrlForEndpoint builds the base URL for one specific endpoint, for a caller that has already
+// resolved which node it is talking to. Resolving the selection again instead would let a
+// concurrent rotation move it, and the request would go somewhere other than where the caller
+// thinks it went.
+func (a *ApiClient) baseUrlForEndpoint(endpoint *ApiEndPoint) string {
+	scheme := "http"
+	if strings.EqualFold(a.Credentials.HttpScheme, "https") {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s:%d/api/v2", scheme, endpoint.IpAddress, endpoint.MgmtPort)
 }
 
 // handleTransientErrors checks if the error returned by endpoint is a network error (transient by definition)
