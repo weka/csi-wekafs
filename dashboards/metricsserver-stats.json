@@ -118,6 +118,7 @@
         "y": 0
       },
       "id": 8,
+      "interval": "1m",
       "options": {
         "legend": {
           "calcs": [],
@@ -139,15 +140,16 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by(url) (weka_csi_api_request_count{pod=~\"$pod\"})",
+          "expr": "sum by(url) (increase(weka_csi_api_request_count{pod=~\"$pod\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Sum of URL requests over time",
-      "type": "timeseries"
+      "title": "URL requests per interval",
+      "type": "timeseries",
+      "description": "Counted as growth per interval, not as the raw counter. These are process-local totals and the panel sums every replica: after a leader failover the standby keeps exporting its frozen total while the new leader counts the same work again, so a raw sum sits at roughly twice the truth until that pod restarts. An increase is zero for a counter that is not moving, so a standby contributes nothing and a restart does not show up as a cliff."
     },
     {
       "datasource": {
@@ -694,6 +696,7 @@
         "y": 16
       },
       "id": 5,
+      "interval": "1m",
       "options": {
         "legend": {
           "calcs": [],
@@ -715,7 +718,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum without(pod) (weka_csi_metricsserver_pv_removals_count_total{pod=~\"$pod\"})",
+          "expr": "sum without(pod) (increase(weka_csi_metricsserver_pv_removals_count_total{pod=~\"$pod\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "PVs removed",
           "range": true,
@@ -727,7 +730,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum without(pod) (weka_csi_metricsserver_pv_additions_count_total{pod=~\"$pod\"})",
+          "expr": "sum without(pod) (increase(weka_csi_metricsserver_pv_additions_count_total{pod=~\"$pod\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "PVs added (Might lag)",
           "range": true,
@@ -735,7 +738,8 @@
         }
       ],
       "title": "Persistent Volumes added/removed from monitoring",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "Counted as growth per interval, not as the raw counter. These are process-local totals and the panel sums every replica: after a leader failover the standby keeps exporting its frozen total while the new leader counts the same work again, so a raw sum sits at roughly twice the truth until that pod restarts. An increase is zero for a counter that is not moving, so a standby contributes nothing and a restart does not show up as a cliff."
     }
   ],
   "refresh": "10s",
