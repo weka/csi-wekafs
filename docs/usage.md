@@ -551,8 +551,6 @@ If you cannot commit to both, leave the default in place.
 
 > **Note**: `sync_on_close` requires Weka cluster version 4.2 or later. On older clusters the
 > driver drops the option automatically and the protection described above is not available.
-> The same applies to any volume for which the driver cannot reach the Weka API, since it
-> cannot then determine the cluster version.
 
 ### Practical Examples
 

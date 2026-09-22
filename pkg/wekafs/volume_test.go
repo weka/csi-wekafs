@@ -54,7 +54,7 @@ func GetDriverForTest(t *testing.T) *WekaFsDriver {
 
 		KeepThinProvisioningRatioOnExpand: true,
 	})
-	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", "", CsiModeController, false, driverConfig)
+	driver, err := NewWekaFsDriver("csi.weka.io", nodeId, "unix://tmp/csi.sock", 10, "v1.0", CsiModeController, false, driverConfig)
 	if err != nil {
 		t.Fatalf("Failed to create new driver: %v", err)
 	}
@@ -268,8 +268,8 @@ func TestVolumeId(t *testing.T) {
 // underneath the volume's options at mount time. Pruning only the volume's set left it in.
 func TestWithUnsupportedMountOptionsPruned_PrunesTheMergedSet(t *testing.T) {
 	ctx := context.Background()
-	// apiClient nil means the cluster version cannot be determined, which drops the option
-	v := &Volume{}
+	// a cluster too old to accept sync_on_close, which is what drops the option
+	v := &Volume{apiClient: nonSupportingApiClient()}
 
 	defaults := NewMountOptionsFromString(NodeServerAdditionalMountOptions)
 	volumeOpts := NewMountOptionsFromString("readcache")
