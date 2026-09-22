@@ -323,17 +323,20 @@ func (a *ApiClient) DeleteNfsPermission(ctx context.Context, r *NfsPermissionDel
 	}
 	apiResponse := &ApiResponse{}
 	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
-	return classifyNfsPermissionDeleteError(err)
+	return classifyDeleteError(err, "PermissionDoesNotExistException")
 }
 
-// classifyNfsPermissionDeleteError maps a delete failure onto ObjectNotFoundError when the cluster is
-// telling us the permission is already gone - the state the caller wanted - and returns everything
-// else unchanged.
+// classifyDeleteError maps a delete failure onto ObjectNotFoundError when the cluster is telling us
+// the object is already gone - the state the caller wanted - and returns everything else unchanged.
 //
-// Unhandled errors used to fall out of the switch and be reported as a successful deletion, so a 500,
-// an authorization failure, or retries exhausted against an unreachable cluster left the permission
-// in place while telling the caller it had been removed.
-func classifyNfsPermissionDeleteError(err error) error {
+// The last part is the point. These handlers used to recognise the already-gone cases and let every
+// other error fall out of the switch into a bare return nil, so a 500, an authorization failure, or
+// retries exhausted against an unreachable cluster were all reported as a successful deletion while
+// the object stayed where it was.
+//
+// absentErrorCodes are the cluster's error codes that also mean "already gone" for this object type,
+// which differ per object.
+func classifyDeleteError(err error, absentErrorCodes ...string) error {
 	if err == nil {
 		return nil
 	}
@@ -342,7 +345,7 @@ func classifyNfsPermissionDeleteError(err error) error {
 		return ObjectNotFoundError
 	case *ApiBadRequestError:
 		for _, c := range t.ApiResponse.ErrorCodes {
-			if c == "PermissionDoesNotExistException" {
+			if slices.Contains(absentErrorCodes, c) {
 				return ObjectNotFoundError
 			}
 		}
@@ -574,19 +577,11 @@ func (a *ApiClient) DeleteNfsClientGroup(ctx context.Context, r *NfsClientGroupD
 	}
 	apiResponse := &ApiResponse{}
 	err := a.Delete(ctx, r.getApiUrl(a), nil, nil, apiResponse)
-	if err != nil {
-		switch t := err.(type) {
-		case *ApiNotFoundError:
-			return ObjectNotFoundError
-		case *ApiBadRequestError:
-			for _, c := range t.ApiResponse.ErrorCodes {
-				if c == "FilesystemDoesNotExistException" {
-					return ObjectNotFoundError
-				}
-			}
-		}
-	}
-	return nil
+	// ClientGroupDoesNotExistException is what the API returns for an absent client group, as
+	// GetNfsClientGroupByUid already relies on. FilesystemDoesNotExistException is what the previous
+	// implementation looked for - a copy from the filesystem handler - and is kept so nothing that
+	// used to be forgiven starts failing.
+	return classifyDeleteError(err, "ClientGroupDoesNotExistException", "FilesystemDoesNotExistException")
 }
 
 type NfsClientGroupRule struct {
