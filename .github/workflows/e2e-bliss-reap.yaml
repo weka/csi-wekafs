@@ -1,0 +1,62 @@
+# Deletes end-to-end clusters that outlived their run.
+#
+# This workflow exists because bliss has no TTL. `bliss provision` takes no expiry flag and
+# `bliss delete` is entirely manual, so a cluster kept for debugging - which is what the e2e
+# workflow does on failure, on purpose - stays up and billing until somebody remembers it. That
+# is a slow, quiet leak of the worst kind: nothing breaks, the bill just grows.
+#
+# Tags are not the mechanism. `--tag` reaches the cloud provider's resources but is not stored in
+# bliss's own state, so `bliss info` cannot report or filter on it. What bliss does report is
+# `created_at`, so age plus the `csi-e2e-` name prefix is what selects a cluster here. Nothing
+# without that prefix is ever touched, which is what keeps this from reaping somebody's
+# hand-built cluster that happens to be old.
+name: e2e-bliss-reap
+
+on:
+  schedule:
+    # Hourly. A cluster kept for debugging is worth keeping for hours, not days, and an hourly
+    # sweep bounds the overrun past max_age_hours to an hour.
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: 'Delete e2e clusters older than this many hours'
+        required: false
+        type: number
+        default: 12
+      dry_run:
+        description: 'List what would be deleted without deleting it'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two reapers at once: both would see the same expired cluster and the loser would fail
+  # on a cluster the winner already deleted.
+  group: e2e-bliss-reap
+  cancel-in-progress: false
+
+jobs:
+  reap:
+    name: reap expired e2e clusters
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install bliss
+        uses: ./.github/actions/setup-bliss
+        with:
+          version: ${{ vars.BLISS_VERSION || 'latest' }}
+          oci-config: ${{ secrets.OCI_CONFIG }}
+          oci-private-key: ${{ secrets.OCI_API_PRIVATE_KEY }}
+
+      - name: Reap
+        env:
+          MAX_AGE_HOURS: ${{ inputs.max_age_hours || 12 }}
+          # A scheduled run always deletes; only a manual run can ask to look without touching.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: ./tests/e2e/reap-clusters.sh

@@ -1,0 +1,232 @@
+# End-to-end tests against a Weka cluster built for the run.
+#
+# Trigger only. This provisions real cloud infrastructure and takes tens of minutes, so it is
+# not something to hang off every push.
+#
+# What this covers that tests/csi-sanity cannot:
+#   - Kubernetes. The sanity suite talks to the plugin's gRPC sockets directly, so the
+#     provisioner, resizer, snapshotter and health-monitor sidecars, the StorageClass, the
+#     PersistentVolumeClaim and the Helm chart are all untested by it.
+#   - The native Weka transport. Sanity pins the plugin to NFS and its three "_nfs" functions
+#     are the only ones wired up, so native mounts have never had CI coverage.
+#   - Mounting at all. Sanity skips NodeStageVolume and NodeUnstageVolume, so nothing in it
+#     ever mounts a volume.
+#   - A cluster that was installed rather than found. Sanity uses whatever cluster the
+#     self-hosted runner can reach.
+name: e2e-bliss
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or SHA to test'
+        required: false
+        type: string
+        default: dev
+      transports:
+        description: 'Which mount transports to exercise'
+        required: false
+        type: choice
+        options: [both, wekafs, nfs]
+        default: both
+      csi_image_tag:
+        description: 'csi-wekafs image tag to install. Empty uses the chart version of the ref.'
+        required: false
+        type: string
+        default: ''
+      weka_image:
+        description: 'Weka container image for the cluster, repo:tag'
+        required: false
+        type: string
+        default: ''
+      bliss_template:
+        description: 'bliss template for the OCI k3s cluster'
+        required: false
+        type: string
+        default: oci_k3_small
+      filesystem_name:
+        description: 'Weka filesystem the StorageClasses provision into'
+        required: false
+        type: string
+        default: default
+      keep_cluster_on_failure:
+        description: 'Leave the cluster up when tests fail, for debugging. The reaper collects it later.'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  # One at a time. Each run builds a cluster, and letting several dispatches overlap multiplies
+  # the cloud spend with no extra signal.
+  group: e2e-bliss
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: e2e on a fresh Weka cluster
+    runs-on: ubuntu-latest
+    # Provisioning alone can take half an hour, and both transports run in sequence after it.
+    timeout-minutes: 240
+    env:
+      # The run id makes the name unique, and the csi-e2e- prefix is what the reaper keys on.
+      # Changing this prefix means changing NAME_PREFIX in the reaper, or clusters stop being
+      # collected and quietly accumulate.
+      CLUSTER_NAME: csi-e2e-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Resolve what to install
+        id: resolve
+        run: |
+          set -euo pipefail
+          tag='${{ inputs.csi_image_tag }}'
+          if [[ -z "${tag}" ]]; then
+            # The chart's appVersion is the image the ref expects, so an unspecified tag
+            # installs the build that belongs to the code being tested rather than whatever
+            # happens to be newest in the registry.
+            tag="$(python3 -c "import yaml;print(yaml.safe_load(open('charts/csi-wekafsplugin/Chart.yaml'))['appVersion'])")"
+          fi
+          echo "csi_image_tag=${tag}" >> "$GITHUB_OUTPUT"
+
+          case '${{ inputs.transports }}' in
+            both) echo 'transports=wekafs nfs' >> "$GITHUB_OUTPUT" ;;
+            *)    echo 'transports=${{ inputs.transports }}' >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - uses: azure/setup-helm@v4
+      - uses: azure/setup-kubectl@v4
+
+      - name: Install bliss
+        uses: ./.github/actions/setup-bliss
+        with:
+          version: ${{ vars.BLISS_VERSION || 'latest' }}
+          oci-config: ${{ secrets.OCI_CONFIG }}
+          oci-private-key: ${{ secrets.OCI_API_PRIVATE_KEY }}
+          github-token: ${{ secrets.PAT }}
+
+      - name: Write the SSH key bliss gives the nodes
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 0700 ~/.ssh
+          printf '%s' '${{ secrets.BLISS_SSH_PUBLIC_KEY }}' > ~/.ssh/bliss.pub
+          chmod 0644 ~/.ssh/bliss.pub
+          # A trailing newline in the stored secret is a real and previously-seen cause of
+          # provisioning failures, and the error does not mention the key.
+          truncate -s -1 ~/.ssh/bliss.pub || true
+
+      - name: Provision the cluster
+        run: |
+          set -euo pipefail
+          printf '%s' '${{ secrets.BLISS_OCI_CONFIG_JSON }}' > /tmp/oci-provision.json
+          bliss provision oci-k3s \
+            --cluster-name "${CLUSTER_NAME}" \
+            --template '${{ inputs.bliss_template }}' \
+            --config-file /tmp/oci-provision.json \
+            --compartment-id '${{ secrets.OCI_COMPARTMENT_ID }}' \
+            --ssh-public-key-path ~/.ssh/bliss.pub \
+            --tag "owner=csi-wekafs-e2e" \
+            --tag "run-id=${{ github.run_id }}"
+
+      - name: Fetch the kubeconfig
+        run: |
+          set -euo pipefail
+          bliss extract cluster --cluster-name "${CLUSTER_NAME}" --kubeconfig "${RUNNER_TEMP}/kubeconfig"
+          chmod 0600 "${RUNNER_TEMP}/kubeconfig"
+          echo "KUBECONFIG=${RUNNER_TEMP}/kubeconfig" >> "$GITHUB_ENV"
+          kubectl get nodes -o wide
+
+      - name: Install the Weka operator and cluster
+        run: |
+          set -euo pipefail
+          # --no-csi on purpose: the CSI driver under test is installed from this checkout's
+          # chart, a step at a time per transport. Letting bliss install its own would pin us to
+          # a released chart and to one transport for the life of the cluster.
+          bliss install \
+            --cluster-name "${CLUSTER_NAME}" \
+            --no-csi \
+            --quay-username '${{ secrets.DOCKER_USERNAME }}' \
+            --quay-password '${{ secrets.DOCKER_PASSWORD }}' \
+            ${{ inputs.weka_image && format('--weka-image ''{0}''', inputs.weka_image) || '' }}
+
+      - name: Point the StorageClasses at the right filesystem
+        run: |
+          set -euo pipefail
+          sed -i "s|^  filesystemName: .*|  filesystemName: ${{ inputs.filesystem_name }}|" \
+            tests/e2e/manifests/storageclass-wekafs.yaml \
+            tests/e2e/manifests/storageclass-nfs.yaml
+          grep -H filesystemName tests/e2e/manifests/storageclass-*.yaml
+
+      - name: Run the suite, one transport at a time
+        env:
+          CSI_IMAGE_TAG: ${{ steps.resolve.outputs.csi_image_tag }}
+          WEKA_CLUSTER: csi-e2e-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          failed=""
+          for transport in ${{ steps.resolve.outputs.transports }}; do
+            echo "::group::install csi-wekafs (${transport})"
+            # Between transports the plugin is removed completely rather than upgraded in place.
+            # useNfs changes hostNetwork and the mounts the node pods hold, and a rolling
+            # upgrade across that leaves the old mounts behind.
+            helm uninstall csi-wekafsplugin -n csi-wekafs --wait 2>/dev/null || true
+            TRANSPORT="${transport}" ./tests/e2e/install-csi.sh
+            echo "::endgroup::"
+
+            echo "::group::external-storage suite (${transport})"
+            # Keep going after a failing transport: knowing that NFS passed and native did not
+            # is most of the diagnosis, and a second provisioning run to find out is 30 minutes.
+            ARTIFACTS="${GITHUB_WORKSPACE}/_artifacts/${transport}" \
+              ./tests/e2e/run-e2e.sh "${transport}" || failed="${failed} ${transport}"
+            echo "::endgroup::"
+          done
+          if [[ -n "${failed}" ]]; then
+            echo "Failing transports:${failed}"
+            exit 1
+          fi
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          set -uo pipefail
+          out="${GITHUB_WORKSPACE}/_artifacts/cluster"
+          mkdir -p "${out}"
+          kubectl get pods -A -o wide                        > "${out}/pods.txt"          2>&1 || true
+          kubectl get pv,pvc,volumesnapshot -A -o wide       > "${out}/volumes.txt"       2>&1 || true
+          kubectl get events -A --sort-by=.lastTimestamp     > "${out}/events.txt"        2>&1 || true
+          kubectl -n csi-wekafs logs -l app=csi-wekafsplugin-controller --all-containers --tail=-1 \
+                                                             > "${out}/controller.log"    2>&1 || true
+          kubectl -n csi-wekafs logs -l app=csi-wekafsplugin-node --all-containers --tail=-1 \
+                                                             > "${out}/node.log"          2>&1 || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ github.run_id }}
+          path: _artifacts/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Tear down
+        if: always()
+        run: |
+          set -uo pipefail
+          if [[ '${{ job.status }}' != 'success' && '${{ inputs.keep_cluster_on_failure }}' == 'true' ]]; then
+            echo "Tests did not pass and keep_cluster_on_failure is set."
+            echo "Cluster ${CLUSTER_NAME} is still up. To reach it:"
+            echo "    bliss extract cluster --cluster-name ${CLUSTER_NAME} --kubeconfig ./kubeconfig"
+            echo "When you are done:"
+            echo "    bliss delete ${CLUSTER_NAME}"
+            echo "If you forget, the e2e-bliss-reap workflow deletes it once it is old enough."
+            exit 0
+          fi
+          echo "Deleting ${CLUSTER_NAME}"
+          # A failure here is worth surfacing: a cluster that would not delete is one that keeps
+          # costing money, and the reaper's next pass is the only thing that will catch it.
+          bliss delete "${CLUSTER_NAME}"

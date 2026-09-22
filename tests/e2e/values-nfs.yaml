@@ -1,0 +1,14 @@
+# Chart values for the NFS transport leg of the end-to-end run.
+#
+# Unlike the sanity suite, this exercises NFS through Kubernetes: a real StorageClass, the
+# sidecars, a scheduled pod, and a mount the kubelet performs. The sanity suite skips
+# NodeStageVolume and NodeUnstageVolume, so nothing there ever mounts anything.
+pluginConfig:
+  mountProtocol:
+    useNfs: true
+    allowNfsFailback: false
+# The chart documents that host networking is forced on for NFS. Set here as well so that
+# reading these values tells the whole story rather than half of it.
+hostNetwork: true
+logLevel: 6
+useJsonLogging: true
