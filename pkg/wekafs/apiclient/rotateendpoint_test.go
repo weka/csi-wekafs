@@ -39,10 +39,14 @@ func TestRotateEndpointOnEachRequest(t *testing.T) {
 	quietLogs(t)
 	a := newClientWithEndpoints(t, true)
 
-	seen := map[string]bool{a.getEndpoint(context.Background()).String(): true}
-	for range 4 {
-		a.rotateForNewRequest()
-		seen[a.getEndpoint(context.Background()).String()] = true
+	ctx := context.Background()
+	seen := map[string]bool{}
+	for range 5 {
+		ep, err := a.endpointForNewRequest(ctx)
+		if err != nil {
+			t.Fatalf("no endpoint for request: %v", err)
+		}
+		seen[ep.String()] = true
 	}
 	if len(seen) < 2 {
 		t.Fatalf("expected requests to be spread over both endpoints, only ever used %v", seen)
@@ -55,58 +59,97 @@ func TestNoRotationWhenDisabled(t *testing.T) {
 	quietLogs(t)
 	a := newClientWithEndpoints(t, false)
 
-	want := a.getEndpoint(context.Background()).String()
+	ctx := context.Background()
+	want := a.getEndpoint(ctx).String()
 	for i := range 4 {
-		a.rotateForNewRequest()
-		if got := a.getEndpoint(context.Background()).String(); got != want {
+		ep, err := a.endpointForNewRequest(ctx)
+		if err != nil {
+			t.Fatalf("no endpoint for request: %v", err)
+		}
+		if got := ep.String(); got != want {
 			t.Fatalf("iteration %d: endpoint moved from %s to %s with rotation disabled", i, want, got)
 		}
 	}
 }
 
-// A retry must stay on the endpoint the failure handler moved to. do() used to rotate on every
-// attempt, and Rotate excludes only the current selection - so with two endpoints the retry was
-// sent straight back to the node that had just failed, every time, and failover never happened.
-//
-// This asserts the attempt itself does not rotate: the request below fails (nothing is listening),
-// which is the point - what matters is where the next attempt would be sent.
+// A retry must stay off the endpoint that failed. do() used to rotate on every attempt, and the
+// rotation excluded only the *shared* selection - so with two endpoints a retry went straight back
+// to the node that had just failed, every time, and failover never happened.
 func TestRetryStaysOffTheFailedEndpoint(t *testing.T) {
 	quietLogs(t)
 	a := newClientWithEndpoints(t, true)
 	ctx := context.Background()
 
-	failed := a.getEndpoint(ctx).String()
-	// What the transient-error path in request() does once an attempt fails.
-	a.rotateEndpoint(ctx)
-	afterFailover := a.getEndpoint(ctx).String()
-	if afterFailover == failed {
-		t.Fatalf("rotateEndpoint stayed on the failed endpoint %s", failed)
+	failed, err := a.endpointForNewRequest(ctx)
+	if err != nil {
+		t.Fatalf("no endpoint for request: %v", err)
+	}
+	next := a.rotateEndpointFrom(ctx, failed)
+	if next == nil || next == failed {
+		t.Fatalf("failure handling stayed on the failed endpoint %s", failed)
+	}
+}
+
+// And it must move off the endpoint *this* request used, not off whatever the shared selection
+// holds by then: a concurrent request moves that, and excluding it would leave this request's
+// failed node eligible for its own retry.
+func TestFailureMovesOffThisRequestsEndpoint(t *testing.T) {
+	quietLogs(t)
+	a := newClientWithEndpoints(t, true)
+	ctx := context.Background()
+
+	failed, err := a.endpointForNewRequest(ctx)
+	if err != nil {
+		t.Fatalf("no endpoint for request: %v", err)
+	}
+	// Stand in for a concurrent request moving the shared selection back onto the failed node.
+	for range 8 {
+		if a.apiEndpoints.Current() == failed {
+			break
+		}
+		a.apiEndpoints.Rotate()
+	}
+	if a.apiEndpoints.Current() != failed {
+		t.Skip("could not steer the shared selection onto the failed endpoint")
 	}
 
-	_, _ = a.do(ctx, "GET", "cluster", nil, nil)
-
-	if got := a.getEndpoint(ctx).String(); got != afterFailover {
-		t.Errorf("the attempt moved the endpoint from %s to %s; a retry would be sent back to the failed node %s",
-			afterFailover, got, failed)
+	if next := a.rotateEndpointFrom(ctx, failed); next == failed {
+		t.Errorf("retry would be sent back to the failed endpoint %s", failed)
 	}
 }
 
 // Everything in one attempt has to name the same endpoint: the URL it is sent to, the Prometheus
 // label it is counted under, and the per-endpoint counters that decide which node looks healthy.
-// Those were three separate reads of a shared selection that any concurrent rotation could move.
-func TestAttemptResolvesOneEndpoint(t *testing.T) {
+func TestAttemptUsesOnlyTheEndpointItWasGiven(t *testing.T) {
 	quietLogs(t)
 	a := newClientWithEndpoints(t, true)
 	ctx := context.Background()
 
-	chosen := a.getEndpoint(ctx)
 	endpoints := a.apiEndpoints.Snapshot()
+	var chosen *ApiEndPoint
+	for _, ep := range endpoints {
+		chosen = ep
+		break
+	}
+	// Stand in for a concurrent request having moved the shared selection elsewhere. An attempt
+	// that read the selection back instead of using the endpoint it was handed would now send the
+	// call to the wrong node - and, more to the point, credit the wrong node's failure counters.
+	for range 8 {
+		if a.apiEndpoints.Current() != chosen {
+			break
+		}
+		a.apiEndpoints.Rotate()
+	}
+	if a.apiEndpoints.Current() == chosen {
+		t.Skip("could not steer the shared selection off the chosen endpoint")
+	}
+
 	before := map[string]int64{}
 	for name, ep := range endpoints {
 		before[name] = ep.requestCount.Load()
 	}
 
-	_, _ = a.do(ctx, "GET", "cluster", nil, nil)
+	_, _ = a.do(ctx, chosen, "GET", "cluster", nil, nil)
 
 	for name, ep := range endpoints {
 		got := ep.requestCount.Load() - before[name]
@@ -115,7 +158,7 @@ func TestAttemptResolvesOneEndpoint(t *testing.T) {
 			want = 1
 		}
 		if got != want {
-			t.Errorf("endpoint %s counted %d requests, want %d - the attempt was attributed to a node it was not sent to",
+			t.Errorf("endpoint %s counted %d requests, want %d - the attempt did not stay on the endpoint it was given",
 				name, got, want)
 		}
 	}
