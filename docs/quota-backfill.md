@@ -86,8 +86,13 @@ surface.
 
 ### What "abnormal" actually means, and whether the volume can still be used
 
-**The volume is fully usable.** A volume with no quota mounts, reads, writes and expands exactly like
-any other. The only difference is that it can grow past its declared size without being stopped.
+**The volume is fully usable.** A volume with no quota mounts, reads and writes exactly like any
+other. The only difference is that it can grow past its declared size without being stopped.
+
+On 3.0 there is one thing it cannot do: reading or expanding its capacity fails, because the quota
+is the only place that capacity is recorded and there is no longer a fallback. The failure names
+the missing quota and says the volume itself is intact. That is the whole reason to run this repair
+before upgrading.
 
 `Abnormal` is advisory. The only thing that consumes it is the
 `csi-external-health-monitor-controller` sidecar, which turns it into warning Events on the
@@ -103,7 +108,7 @@ abnormal:
 | `filesystem <name> does not exist on the Weka cluster` | **No** — the data is gone |
 | `filesystem <name> is being removed` | **No** — it is going right now |
 | `path <path> does not exist on filesystem <name>` | **No** — the volume's directory is gone |
-| `has no quota, so its capacity is not enforced` (only with `reportVolumesWithoutQuotaAsAbnormal`) | **Yes** — it works, it is simply not enforced |
+| `has no quota, so its capacity is not enforced` (only with `reportVolumesWithoutQuotaAsAbnormal`) | **Yes** — it mounts, reads and writes; on 3.0 it cannot be expanded |
 | `has no Weka API credentials…` (only with `reportVolumesWithoutApiClientAsAbnormal`) | **Yes** — existing mounts and running pods are unaffected |
 
 The first three all mean the data is gone or going. Turning this setting on adds a fourth meaning to

@@ -17,7 +17,6 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/google/uuid"
-	"github.com/pkg/xattr"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -29,8 +28,25 @@ import (
 
 var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
 var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
-var ErrNoXattrOnVolume = errors.New("xattr not set on volume")
-var ErrBadXattrOnVolume = errors.New("could not parse xattr on volume")
+
+// ErrVolumeHasNoQuota is what a capacity read gets when the Weka cluster holds no directory quota
+// for the volume. Since the extended attribute was removed the quota is the only record of a
+// volume's capacity, so there is nothing else to fall back to - but the cluster's own answer here
+// is "object not found", which reads like the volume is gone. It is not: a volume with no quota
+// mounts and serves data exactly as before, its capacity is simply unrecorded and unenforced. This
+// is the case the 3.0 upgrade notes single out as the one most likely to be met.
+var ErrVolumeHasNoQuota = status.Errorf(codes.FailedPrecondition,
+	"volume has no quota on the Weka cluster, so its capacity can be neither read nor changed; "+
+		"the volume itself is intact and still usable. Create its quota first - see the upgrade "+
+		"notes on giving existing volumes their missing quota")
+
+// ErrVolumePathNotFound is the other thing the cluster calls "object not found": the volume's own
+// path, which for a snapshot-backed volume is reached through its snapshot's access point. It and
+// ErrVolumeHasNoQuota come back from the same sentinel and mean opposite things - one says the
+// volume's data is gone, the other says the volume is fine and only its limit is unrecorded - so
+// they are told apart by which step failed, never by the error alone.
+var ErrVolumePathNotFound = status.Errorf(codes.NotFound,
+	"volume path does not exist on the underlying filesystem")
 
 var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
 
@@ -592,19 +608,22 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (capacity int64, retE
 		return 0, err
 	}
 
-	if v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		size, err := v.getSizeFromQuota(ctx)
-		if err == nil {
-			logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
-			return int64(size), nil
-		}
+	// The quota is the only record of a volume's capacity. There is no longer a fallback to the
+	// extended attribute: a cluster that cannot answer here cannot enforce the capacity either, so
+	// reporting a number read from somewhere else would describe a limit nothing applies.
+	if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
+		return 0, status.Errorf(codes.FailedPrecondition,
+			"Weka cluster does not support directory quotas as volumes, which requires version %s or higher",
+			apiclient.MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
 	}
-	logger.Trace().Msg("Weka cluster does not support directory quotas as volumes, failing back to Xattr")
-	size, err := v.getSizeFromXattr(ctx)
+	size, err := v.getSizeFromQuota(ctx)
 	if err != nil {
+		if errors.Is(err, ErrVolumeHasNoQuota) {
+			logger.Error().Msg("Volume has no quota, so its capacity cannot be resolved")
+		}
 		return 0, err
 	}
-	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "xattr").Msg("Resolved current capacity")
+	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
 	return int64(size), nil
 }
 
@@ -736,27 +755,30 @@ func (v *Volume) UpdateCapacity(ctx context.Context, enforceCapacity *bool, capa
 		return err
 	}
 
-	// update capacity of the volume by updating quota object on its root directory (or XATTR)
+	// Capacity is set by writing a quota, and only by that. The extended-attribute fallback that used
+	// to stand in for old clusters is gone: it recorded a number without enforcing it, so a volume
+	// "set" that way could grow past its declared size unnoticed. A cluster that cannot take the
+	// quota is refused outright rather than served that way.
 	logger.Info().Int64("desired_capacity", capacityLimit).Msg("Updating volume capacity")
-	primaryFunc := func() error { return v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit) }
-	fallbackFunc := func() error { return v.updateCapacityXattr(ctx, enforceCapacity, capacityLimit) }
-	capacityEntity := "quota"
 	if !v.apiClient.SupportsQuotaDirectoryAsVolume() {
-		logger.Warn().Msg("Updating quota via API not supported by Weka cluster, falling back to extended attributes")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
-		logger.Warn().Msg("Updating quota via API is not supported by Weka cluster since filesystem is located in non-default organization, falling back to extended attributes. Upgrade to latest version of Weka software to enable quota enforcement")
-		primaryFunc = fallbackFunc
-		capacityEntity = "xattr"
-	} else if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
+		return status.Errorf(codes.FailedPrecondition,
+			"Weka cluster does not support directory quotas as volumes, which requires version %s or higher",
+			apiclient.MinimumSupportedWekaVersions.QuotaDirectoryAsVolume)
+	}
+	if !v.apiClient.SupportsAuthenticatedMounts() && v.apiClient.Credentials.Organization != "Root" {
+		return status.Errorf(codes.FailedPrecondition,
+			"Weka cluster cannot set quotas on a filesystem in the non-default organization %q, which requires version %s or higher",
+			v.apiClient.Credentials.Organization, apiclient.MinimumSupportedWekaVersions.MountFilesystemsUsingAuthToken)
+	}
+	if !v.apiClient.SupportsQuotaOnSnapshots() && v.isOnSnapshot() {
 		logger.Warn().Msg("Quota enforcement is not supported for snapshot-backed volumes on current version of Weka software. Upgrade to latest version of Weka software to enable quota enforcement")
 	}
-	err := primaryFunc()
+
+	err := v.updateCapacityQuota(ctx, enforceCapacity, capacityLimit)
 	if err == nil {
-		logger.Info().Int64("new_capacity", capacityLimit).Str("capacity_entity", capacityEntity).Msg("Successfully updated capacity for volume")
+		logger.Info().Int64("new_capacity", capacityLimit).Msg("Successfully updated capacity for volume")
 	} else {
-		logger.Error().Err(err).Str("capacity_entity", capacityEntity).Msg("Failed to set volume capacity")
+		logger.Error().Err(err).Msg("Failed to set volume capacity")
 	}
 	return err
 }
@@ -830,33 +852,6 @@ func (v *Volume) updateCapacityQuota(ctx context.Context, enforceCapacity *bool,
 	_, err = v.setQuota(ctx, enforceCapacity, uint64(capacityLimit))
 	return err
 
-}
-
-func (v *Volume) updateCapacityXattr(ctx context.Context, enforceCapacity *bool, capacityLimit int64) (retErr error) {
-	op := "updateCapacityXattr"
-	ctx, span := otel.Tracer(TracerName).Start(ctx, op)
-	defer span.End()
-	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
-
-	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
-
-	if !v.isMounted(ctx) {
-		mountErr, unmountFunc := v.MountUnderlyingFS(ctx)
-		if mountErr != nil {
-			return mountErr
-		}
-		defer deferUmount(unmountFunc, &retErr)
-	}
-
-	logger.Trace().Int64("desired_capacity", capacityLimit).Msg("Updating xattrs on volume")
-	if enforceCapacity != nil && *enforceCapacity {
-		logger.Warn().Msg("Capacity enforcement is unavailable when capacity is tracked via extended attributes")
-	}
-	err := setVolumeProperties(v.GetFullPath(ctx), capacityLimit, v.innerPath)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to update xattrs on volume, capacity is not set")
-	}
-	return err
 }
 
 func (v *Volume) Trash(ctx context.Context) error {
@@ -1028,9 +1023,22 @@ func (v *Volume) getQuota(ctx context.Context) (*apiclient.Quota, error) {
 	}
 	inodeId, err := v.getInodeId(ctx)
 	if err != nil {
+		if errors.Is(err, apiclient.ObjectNotFoundError) {
+			// The path did not resolve, so it is the volume's directory - or, for a
+			// snapshot-backed volume, the access point it is reached through - that is gone.
+			// Nothing about the quota is known yet, and saying "no quota, the volume is intact"
+			// here would send an operator to create a quota for data that no longer exists.
+			logger.Warn().Msg("Volume path does not resolve, so the volume's quota cannot be read")
+			return nil, ErrVolumePathNotFound
+		}
 		return nil, err
 	}
 	ret, err := v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
+	if errors.Is(err, apiclient.ObjectNotFoundError) {
+		// Reached only once the filesystem and the path have both resolved, so here the sentinel
+		// can only mean the quota, and the volume really is intact.
+		return nil, ErrVolumeHasNoQuota
+	}
 	if ret != nil {
 		logger.Trace().Interface("quota_type", ret.GetQuotaType()).Uint64("current_capacity", ret.GetCapacityLimit()).Msg("Successfully acquired existing quota for volume")
 	}
@@ -1046,25 +1054,9 @@ func (v *Volume) getSizeFromQuota(ctx context.Context) (uint64, error) {
 	if q != nil {
 		return q.GetCapacityLimit(), nil
 	}
-	return 0, errors.New("could not fetch quota from API")
-}
-
-// getSizeFromXattr returns volume size from extended attributes, mostly fallback for very old pre-API Weka clusters
-func (v *Volume) getSizeFromXattr(ctx context.Context) (size uint64, retErr error) {
-
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer deferUmount(unmount, &retErr)
-	if err != nil {
-		return 0, err
-	}
-
-	if capacityString, err := xattr.Get(v.GetFullPath(ctx), xattrCapacity); err == nil {
-		if capacity, err := strconv.ParseInt(string(capacityString), 10, 64); err == nil {
-			return uint64(capacity), nil
-		}
-		return 0, ErrBadXattrOnVolume
-	}
-	return 0, ErrNoXattrOnVolume
+	// No quota and no error means the same thing to the caller as the cluster saying so outright,
+	// so report it the same way rather than inventing a second error for the identical condition.
+	return 0, ErrVolumeHasNoQuota
 }
 
 // getFilesystemObj returns the Weka filesystem object
@@ -1106,7 +1098,7 @@ func (v *Volume) getSnapshotObj(ctx context.Context, fromCache bool) (*apiclient
 	return snapObj, nil // no snapshot found
 }
 
-// MountUnderlyingFS creates a mount using the volume mount options (plus specifically xattr true/false) and increases refcount to its path
+// MountUnderlyingFS creates a mount using the volume mount options and increases refcount to its path
 // returns UmnountFunc that can be executed to decrese refCount / unmount
 // NOTE: it always mounts only the filesystem directly. Any navigation inside should be done on the mount
 func (v *Volume) MountUnderlyingFS(ctx context.Context) (error, UnmountFunc) {
