@@ -33,14 +33,18 @@ spec:
         prometheus.io/port: '{{ .Values.metrics.metricsServerPort | default 9096 }}'
     {{- end }}
     spec:
-      {{- $metricsServerAffinity := dict -}}
+      {{- $metricsServerAffinity := deepCopy (.Values.metricsServer.affinity | default dict) -}}
       {{- if and .Values.hostNetwork (gt (int (.Values.metricsServer.replicas | default 1)) 1) }}
-      {{- /* See the plugin chart: under hostNetwork two replicas cannot share a node's ports, so
-             the guard is seeded first and whatever the user sets is layered over it. */}}
-      {{- $_ := set $metricsServerAffinity "podAntiAffinity" (dict "requiredDuringSchedulingIgnoredDuringExecution" (list (dict "topologyKey" "kubernetes.io/hostname" "labelSelector" (dict "matchLabels" (dict "app" (printf "%s-metrics-server" .Release.Name) "component" (printf "%s-metrics-server" .Release.Name) "release" .Release.Name))))) -}}
-      {{- end }}
-      {{- with .Values.metricsServer.affinity }}
-      {{- $metricsServerAffinity = mergeOverwrite $metricsServerAffinity (deepCopy .) -}}
+      {{- /* Under hostNetwork each replica binds the metrics and health ports on its own node, so
+             two of them cannot share one. The rule is appended to whatever podAntiAffinity is
+             configured rather than merged over it: replacing the map - which is what a plain
+             mergeOverwrite does - let a custom podAntiAffinity drop the guard and put the replicas
+             back on one node. To go without it, run one replica or turn hostNetwork off. */}}
+      {{- $guard := dict "topologyKey" "kubernetes.io/hostname" "labelSelector" (dict "matchLabels" (dict "app" (printf "%s-metrics-server" .Release.Name) "component" (printf "%s-metrics-server" .Release.Name) "release" .Release.Name)) -}}
+      {{- $antiAffinity := deepCopy (get $metricsServerAffinity "podAntiAffinity" | default dict) -}}
+      {{- $required := concat (get $antiAffinity "requiredDuringSchedulingIgnoredDuringExecution" | default list) (list $guard) -}}
+      {{- $_ := set $antiAffinity "requiredDuringSchedulingIgnoredDuringExecution" $required -}}
+      {{- $_ := set $metricsServerAffinity "podAntiAffinity" $antiAffinity -}}
       {{- end }}
       {{- if $metricsServerAffinity }}
       affinity:
