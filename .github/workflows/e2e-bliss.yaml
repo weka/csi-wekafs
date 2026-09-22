@@ -178,6 +178,12 @@ jobs:
             TRANSPORT="${transport}" ./tests/e2e/install-csi.sh
             echo "::endgroup::"
 
+            # Before spending an hour on the suite, prove the mount really used this
+            # transport. The suite cannot tell: it asks for a volume and gets one either way.
+            echo "::group::verify transport (${transport})"
+            TRANSPORT="${transport}" ./tests/e2e/verify-transport.sh
+            echo "::endgroup::"
+
             echo "::group::external-storage suite (${transport})"
             # Keep going after a failing transport: knowing that NFS passed and native did not
             # is most of the diagnosis, and a second provisioning run to find out is 30 minutes.

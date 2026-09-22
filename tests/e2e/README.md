@@ -28,10 +28,23 @@ automated coverage. That is what this closes.
 3. The weka-operator generates a CSI user and writes `weka-csi-<cluster>`. `install-csi.sh`
    copies the keys the chart needs into `csi-wekafs/csi-wekafs-api-secret`.
 4. For each transport: install the chart from `charts/csi-wekafsplugin` with
-   `values-<transport>.yaml`, run the suite, uninstall.
+   `values-<transport>.yaml`, check the mount really used that transport, run the suite,
+   uninstall.
 5. Logs, events and the JUnit report are uploaded whatever the outcome.
 6. The cluster is deleted — unless tests failed and `keep_cluster_on_failure` is set, which is
    the default.
+
+## Checking the transport, and why it is a separate step
+
+`verify-transport.sh` mounts one volume and reads `/proc/mounts` in the pod, asserting `wekafs`
+for the native leg and `nfs4`/`nfs` for the NFS one, then writes a file to prove the mount
+works rather than merely exists.
+
+The external-storage suite cannot do this. It asks for a volume, gets one, and is satisfied, so
+a native leg quietly served over NFS would pass the whole matrix while testing one transport
+twice. NFS failback does exactly that by design; `values-wekafs.yaml` turns it off, but a
+setting is an intention and this is the proof. The idea is taken from the operator team's own
+CSI test plan, which ends by checking that the mount on the node is of `wekafs` type.
 
 ## Running the tests against a cluster you already have
 
