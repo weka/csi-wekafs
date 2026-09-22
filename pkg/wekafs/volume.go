@@ -29,6 +29,17 @@ import (
 var ErrFilesystemHasUnderlyingSnapshots = status.Errorf(codes.FailedPrecondition, "volume cannot be deleted since it has underlying snapshots")
 var ErrFilesystemNotFound = status.Errorf(codes.FailedPrecondition, "underlying filesystem was not found")
 
+// ErrVolumeHasNoQuota is what a capacity read gets when the Weka cluster holds no directory quota
+// for the volume. Since the extended attribute was removed the quota is the only record of a
+// volume's capacity, so there is nothing else to fall back to - but the cluster's own answer here
+// is "object not found", which reads like the volume is gone. It is not: a volume with no quota
+// mounts and serves data exactly as before, its capacity is simply unrecorded and unenforced. This
+// is the case the 3.0 upgrade notes single out as the one most likely to be met.
+var ErrVolumeHasNoQuota = status.Errorf(codes.FailedPrecondition,
+	"volume has no quota on the Weka cluster, so its capacity can be neither read nor changed; "+
+		"the volume itself is intact and still usable. Create its quota first - see the upgrade "+
+		"notes on giving existing volumes their missing quota")
+
 var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
 
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)
@@ -599,10 +610,25 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (capacity int64, retE
 	}
 	size, err := v.getSizeFromQuota(ctx)
 	if err != nil {
-		return 0, err
+		if translated := capacityFromQuotaError(err); translated != err {
+			logger.Error().Err(err).Msg("Volume has no quota, so its capacity cannot be resolved")
+		}
+		return 0, capacityFromQuotaError(err)
 	}
 	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
 	return int64(size), nil
+}
+
+// capacityFromQuotaError names the condition the cluster describes only as "object not found".
+// Asked for a quota that does not exist, the cluster answers the same way it answers for a
+// filesystem that is gone, and with the extended attribute removed that answer now reaches the
+// operator unaltered - as an expand or a capacity read that sounds like the volume was lost.
+// Every other error is left exactly as it came.
+func capacityFromQuotaError(err error) error {
+	if errors.Is(err, apiclient.ObjectNotFoundError) {
+		return ErrVolumeHasNoQuota
+	}
+	return err
 }
 
 func (v *Volume) getCapacityFromFsSize(ctx context.Context) (int64, error) {
@@ -1019,7 +1045,9 @@ func (v *Volume) getSizeFromQuota(ctx context.Context) (uint64, error) {
 	if q != nil {
 		return q.GetCapacityLimit(), nil
 	}
-	return 0, errors.New("could not fetch quota from API")
+	// No quota and no error means the same thing to the caller as the cluster saying so outright,
+	// so report it the same way rather than inventing a second error for the identical condition.
+	return 0, apiclient.ObjectNotFoundError
 }
 
 // getFilesystemObj returns the Weka filesystem object
