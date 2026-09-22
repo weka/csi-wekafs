@@ -23,12 +23,16 @@ spec:
     controllerExpandSecretRef:
       name: csi-wekafs-api-secret
       namespace: csi-wekafs
-  # make PV schedulable only on nodes with WEKA CSI Plugin and healthy WEKA Client
+  # Make the PV schedulable only on nodes carrying the WEKA CSI Plugin's node label.
+  # The key embeds the driver name, so it is topology.<csiDriverName>/accessible - adjust it
+  # if the plugin was installed with a csiDriverName other than the default csi.weka.io.
+  # The plugin only sets this label while pluginConfig.manageNodeTopologyLabels is true; where
+  # it is false (Operator-managed clusters), match topology.csi.weka.io/global instead.
   nodeAffinity:
     required:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: topology.weka-infra.weka.io/accessible
+            - key: topology.csi.weka.io/accessible
               operator: In
               values:
                 - "true"
