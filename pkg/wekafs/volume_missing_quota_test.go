@@ -1,52 +1,64 @@
 package wekafs
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 )
 
-// A volume with no quota is the case the 3.0 upgrade notes call the most likely one to meet, and
-// the cluster describes it with the same words it uses for a filesystem that is gone. Now that the
-// extended attribute is no longer read, that answer is what an expand or a capacity read returns,
-// so it has to say which of the two happened.
-func TestMissingQuotaIsNotReportedAsAMissingVolume(t *testing.T) {
-	err := capacityFromQuotaError(apiclient.ObjectNotFoundError)
-
-	if !errors.Is(err, ErrVolumeHasNoQuota) {
-		t.Fatalf("a missing quota produced %v, want ErrVolumeHasNoQuota", err)
+// The Weka cluster says "object not found" for two conditions that mean opposite things: a volume
+// whose quota was never created, which is intact and merely unenforced, and a volume whose
+// directory - or, for a snapshot-backed volume, the access point it is reached through - is gone.
+// Now that the extended attribute is no longer read, whichever of the two comes back is what an
+// operator sees when a capacity read or an expand fails, so they must not be collapsed into one.
+func TestMissingQuotaAndMissingPathAreToldApart(t *testing.T) {
+	if explicitEndpoint {
+		t.Skip("runs against the in-memory fake cluster only")
 	}
-	st, ok := status.FromError(err)
-	if !ok || st.Code() != codes.FailedPrecondition {
+	driver := GetDriverForTest(t)
+	apiClient := GetApiClientForTest(t)
+	ctx := context.Background()
+
+	// The fake resolves only the filesystem root, and holds no quota for it: the path is there,
+	// the quota is not.
+	intact, err := NewVolumeFromId(ctx, "weka/v2/default", apiClient, driver.cs)
+	if err != nil {
+		t.Fatalf("building the filesystem-backed volume: %v", err)
+	}
+	_, err = intact.getQuota(ctx)
+	if !errors.Is(err, ErrVolumeHasNoQuota) {
+		t.Fatalf("volume with no quota reported %v, want ErrVolumeHasNoQuota", err)
+	}
+	st, _ := status.FromError(err)
+	if st.Code() != codes.FailedPrecondition {
 		t.Errorf("missing quota reported as %v, want FailedPrecondition", st.Code())
 	}
 	msg := strings.ToLower(st.Message())
-	if !strings.Contains(msg, "no quota") {
-		t.Errorf("message does not say the quota is missing: %q", st.Message())
+	if !strings.Contains(msg, "no quota") || strings.Contains(msg, "object not found") {
+		t.Errorf("missing quota still reads as a missing object: %q", st.Message())
 	}
-	if strings.Contains(msg, "object not found") {
-		t.Errorf("message still reads as a missing object: %q", st.Message())
-	}
-	// The distinction only helps if it survives: an operator who is told the capacity cannot be
-	// read needs to know the volume itself is not the thing that is gone.
 	if !strings.Contains(msg, "usable") && !strings.Contains(msg, "intact") {
 		t.Errorf("message does not say the volume is still usable: %q", st.Message())
 	}
-}
 
-// Everything that is not a missing quota has to pass through untouched, or a real failure gets
-// dressed up as a benign one and the repair advice sends the operator the wrong way.
-func TestOtherQuotaErrorsAreNotRewritten(t *testing.T) {
-	other := errors.New("connection refused")
-	if got := capacityFromQuotaError(other); got != other {
-		t.Errorf("unrelated error was rewritten to %v", got)
+	// Same filesystem, a directory the fake will not resolve. Reporting this as "no quota, the
+	// volume is intact" would send an operator to create a quota for data that is gone.
+	gone, err := NewVolumeFromId(ctx, "weka/v2/default/csi-volumes/vol-that-was-deleted", apiClient, driver.cs)
+	if err != nil {
+		t.Fatalf("building the directory-backed volume: %v", err)
 	}
-	if got := capacityFromQuotaError(nil); got != nil {
-		t.Errorf("nil error became %v", got)
+	_, err = gone.getQuota(ctx)
+	if errors.Is(err, ErrVolumeHasNoQuota) {
+		t.Fatalf("a volume whose path is gone was reported as merely missing its quota: %v", err)
+	}
+	if !errors.Is(err, ErrVolumePathNotFound) {
+		t.Fatalf("volume with no path reported %v, want ErrVolumePathNotFound", err)
+	}
+	if st, _ := status.FromError(err); st.Code() != codes.NotFound {
+		t.Errorf("missing path reported as %v, want NotFound", st.Code())
 	}
 }

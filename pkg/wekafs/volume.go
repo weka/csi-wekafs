@@ -40,6 +40,14 @@ var ErrVolumeHasNoQuota = status.Errorf(codes.FailedPrecondition,
 		"the volume itself is intact and still usable. Create its quota first - see the upgrade "+
 		"notes on giving existing volumes their missing quota")
 
+// ErrVolumePathNotFound is the other thing the cluster calls "object not found": the volume's own
+// path, which for a snapshot-backed volume is reached through its snapshot's access point. It and
+// ErrVolumeHasNoQuota come back from the same sentinel and mean opposite things - one says the
+// volume's data is gone, the other says the volume is fine and only its limit is unrecorded - so
+// they are told apart by which step failed, never by the error alone.
+var ErrVolumePathNotFound = status.Errorf(codes.NotFound,
+	"volume path does not exist on the underlying filesystem")
+
 var ErrFilesystemBiggerThanRequested = errors.New("could not resize filesystem since it is already larger than requested size")
 
 // Volume is a volume object representation, not necessarily instantiated (e.g. can exist or not exist)
@@ -610,25 +618,13 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (capacity int64, retE
 	}
 	size, err := v.getSizeFromQuota(ctx)
 	if err != nil {
-		if translated := capacityFromQuotaError(err); translated != err {
-			logger.Error().Err(err).Msg("Volume has no quota, so its capacity cannot be resolved")
+		if errors.Is(err, ErrVolumeHasNoQuota) {
+			logger.Error().Msg("Volume has no quota, so its capacity cannot be resolved")
 		}
-		return 0, capacityFromQuotaError(err)
+		return 0, err
 	}
 	logger.Debug().Uint64("current_capacity", size).Str("capacity_source", "quota").Msg("Resolved current capacity")
 	return int64(size), nil
-}
-
-// capacityFromQuotaError names the condition the cluster describes only as "object not found".
-// Asked for a quota that does not exist, the cluster answers the same way it answers for a
-// filesystem that is gone, and with the extended attribute removed that answer now reaches the
-// operator unaltered - as an expand or a capacity read that sounds like the volume was lost.
-// Every other error is left exactly as it came.
-func capacityFromQuotaError(err error) error {
-	if errors.Is(err, apiclient.ObjectNotFoundError) {
-		return ErrVolumeHasNoQuota
-	}
-	return err
 }
 
 func (v *Volume) getCapacityFromFsSize(ctx context.Context) (int64, error) {
@@ -1027,9 +1023,22 @@ func (v *Volume) getQuota(ctx context.Context) (*apiclient.Quota, error) {
 	}
 	inodeId, err := v.getInodeId(ctx)
 	if err != nil {
+		if errors.Is(err, apiclient.ObjectNotFoundError) {
+			// The path did not resolve, so it is the volume's directory - or, for a
+			// snapshot-backed volume, the access point it is reached through - that is gone.
+			// Nothing about the quota is known yet, and saying "no quota, the volume is intact"
+			// here would send an operator to create a quota for data that no longer exists.
+			logger.Warn().Msg("Volume path does not resolve, so the volume's quota cannot be read")
+			return nil, ErrVolumePathNotFound
+		}
 		return nil, err
 	}
 	ret, err := v.apiClient.GetQuotaByFileSystemAndInode(ctx, fsObj, inodeId)
+	if errors.Is(err, apiclient.ObjectNotFoundError) {
+		// Reached only once the filesystem and the path have both resolved, so here the sentinel
+		// can only mean the quota, and the volume really is intact.
+		return nil, ErrVolumeHasNoQuota
+	}
 	if ret != nil {
 		logger.Trace().Interface("quota_type", ret.GetQuotaType()).Uint64("current_capacity", ret.GetCapacityLimit()).Msg("Successfully acquired existing quota for volume")
 	}
@@ -1047,7 +1056,7 @@ func (v *Volume) getSizeFromQuota(ctx context.Context) (uint64, error) {
 	}
 	// No quota and no error means the same thing to the caller as the cluster saying so outright,
 	// so report it the same way rather than inventing a second error for the identical condition.
-	return 0, apiclient.ObjectNotFoundError
+	return 0, ErrVolumeHasNoQuota
 }
 
 // getFilesystemObj returns the Weka filesystem object
