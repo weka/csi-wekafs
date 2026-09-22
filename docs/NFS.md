@@ -23,6 +23,7 @@ While using the native WekaFS driver as the storage connectivity layer is the re
 * **Network configuration**: NFS interface group IP addresses must be accessible from the Kubernetes cluster nodes.
 * **Security**: NFS transport is generally less secure than the native WekaFS driver and may necessitate additional security measures.
 * **Quality of Service (QoS)**: QoS is not supported with NFS transport.
+* **Organizations and multitenancy**: NFS transport can only be used for filesystems in the `Root` organization. To use a filesystem belonging to a different organization, you must use the native WekaFS driver.
 
 ### Host Network mode
 
