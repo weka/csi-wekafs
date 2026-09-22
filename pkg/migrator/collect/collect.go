@@ -75,8 +75,19 @@ func (c *Collector) Collect(ctx context.Context) (*archive.Writer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Narrowed before anything is counted or said. Everything below - the empty-export warning,
+	// the count in the log, the per-volume warnings persisted in the manifest - describes what
+	// the archive actually holds, and a namespace-scoped export holds only this namespace's
+	// volumes. Reporting on the cluster-wide list instead would announce volumes the reader of
+	// the archive cannot find, and would call an empty namespaced export a success in silence.
+	pvs = c.inNamespace(pvs)
 	if len(pvs) == 0 {
-		w.AddWarning("no PersistentVolumes provisioned by driver %q were found", c.opts.DriverName)
+		if c.opts.Namespace != "" {
+			w.AddWarning("no PersistentVolumes provisioned by driver %q are bound to a claim in namespace %q",
+				c.opts.DriverName, c.opts.Namespace)
+		} else {
+			w.AddWarning("no PersistentVolumes provisioned by driver %q were found", c.opts.DriverName)
+		}
 	}
 	logger.Info().Int("count", len(pvs)).Msg("Found PersistentVolumes provisioned by the driver")
 
@@ -94,15 +105,6 @@ func (c *Collector) Collect(ctx context.Context) (*archive.Writer, error) {
 
 	for i := range pvs {
 		pv := &pvs[i]
-
-		// Discarded before anything is said about it. The claim's namespace is on the volume
-		// itself, so a namespace-scoped export can drop foreign volumes without consulting the
-		// claim at all - and doing it first matters: the warnings below are persisted in the
-		// manifest and replayed by list and import, so raising them for a volume that never
-		// enters the archive describes objects the reader cannot find.
-		if c.opts.Namespace != "" && (pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.Namespace != c.opts.Namespace) {
-			continue
-		}
 
 		handle, handleErr := volumeid.Parse(pv.Spec.CSI.VolumeHandle)
 		if handleErr != nil {
@@ -187,6 +189,22 @@ func (c *Collector) wekaVolumes(ctx context.Context) ([]corev1.PersistentVolume,
 	return out, nil
 }
 
+// inNamespace drops volumes whose claim lives elsewhere. The claim's namespace is on the volume
+// itself, so a namespace-scoped export can decide this without consulting the claim at all - which
+// is what lets it run before the claims are even listed.
+func (c *Collector) inNamespace(pvs []corev1.PersistentVolume) []corev1.PersistentVolume {
+	if c.opts.Namespace == "" {
+		return pvs
+	}
+	out := make([]corev1.PersistentVolume, 0, len(pvs))
+	for _, pv := range pvs {
+		if pv.Spec.ClaimRef != nil && pv.Spec.ClaimRef.Namespace == c.opts.Namespace {
+			out = append(out, pv)
+		}
+	}
+	return out
+}
+
 // claimIndex is every claim in scope, keyed by namespace and name.
 type claimIndex map[string]*corev1.PersistentVolumeClaim
 
@@ -207,11 +225,27 @@ func (c *Collector) claimIndex(ctx context.Context) (claimIndex, error) {
 
 // lookup returns the claim a volume is bound to, or nil. A dangling claimRef is tolerated so
 // that a Released volume can still be exported.
+//
+// The UID is part of the match, not decoration. A Released volume left behind by Retain keeps
+// pointing at a claim that has been deleted, and nothing stops that name being taken again by a
+// new claim on a new volume. Matching on namespace and name alone would hand both volumes the
+// same claim: the export would then pin that claim to whichever volume it reached first and
+// abort on the second, so one stale volume makes the whole export fail.
 func (i claimIndex) lookup(pv *corev1.PersistentVolume) *corev1.PersistentVolumeClaim {
-	if pv.Spec.ClaimRef == nil || pv.Spec.ClaimRef.Name == "" {
+	ref := pv.Spec.ClaimRef
+	if ref == nil || ref.Name == "" {
 		return nil
 	}
-	return i[pv.Spec.ClaimRef.Namespace+"/"+pv.Spec.ClaimRef.Name]
+	claim := i[ref.Namespace+"/"+ref.Name]
+	if claim == nil {
+		return nil
+	}
+	// An absent UID on either side is not a mismatch: a hand-written binding may carry none, and
+	// refusing those would drop claims that are almost certainly the right ones.
+	if ref.UID != "" && claim.UID != "" && ref.UID != claim.UID {
+		return nil
+	}
+	return claim
 }
 
 func (c *Collector) addPV(w *archive.Writer, pv *corev1.PersistentVolume, handle volumeid.Handle, handleParsed bool, claim *corev1.PersistentVolumeClaim) error {

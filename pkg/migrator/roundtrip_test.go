@@ -678,3 +678,59 @@ func TestNamespacedExportDoesNotWarnAboutOtherNamespaces(t *testing.T) {
 		}
 	}
 }
+
+// TestReleasedVolumeDoesNotClaimAReusedName is the Retain aftermath: a volume outlives its claim,
+// the claim's name is taken again by a new claim on a new volume, and the old volume's claimRef
+// still names it. Matching on namespace and name alone gives both volumes the live claim, which
+// pins it to the dead volume and then aborts the export outright on the duplicate.
+func TestReleasedVolumeDoesNotClaimAReusedName(t *testing.T) {
+	released := dynamicPV("pv-old", dirHandle, "sc-dir", "default", "pvc-shared")
+	released.Spec.PersistentVolumeReclaimPolicy = corev1.PersistentVolumeReclaimRetain
+	released.Status.Phase = corev1.VolumeReleased
+	released.Spec.ClaimRef.UID = types.UID("claim-uid-that-was-deleted")
+
+	live := dynamicPV("pv-new", "weka/v2/testfs//csi-volumes/vol-new", "sc-dir", "default", "pvc-shared")
+
+	cluster := fake.NewSimpleClientset(
+		secret("csi-wekafs", "csi-wekafs-api-secret"),
+		storageClass("sc-dir", "testfs"),
+		released,
+		live,
+		boundPVC("default", "pvc-shared", "sc-dir", "pv-new"),
+	)
+
+	reader := openArchive(t, exportTo(t, cluster, collect.Options{IncludeSecretData: true}, ""), "")
+
+	claimOf := map[string]string{}
+	for _, v := range reader.Manifest.Volumes {
+		claimOf[v.PVName] = v.PVCName
+	}
+	if got := claimOf["pv-new"]; got != "pvc-shared" {
+		t.Errorf("live volume lost its claim: pv-new -> %q, want pvc-shared", got)
+	}
+	if got := claimOf["pv-old"]; got != "" {
+		t.Errorf("released volume took a claim it was never bound to: pv-old -> %q, want none", got)
+	}
+}
+
+// TestEmptyNamespacedExportSaysSo covers the archive that is empty because of the namespace
+// filter, not because the cluster has no Weka volumes. Without a warning the operator gets a
+// successful-looking export of nothing.
+func TestEmptyNamespacedExportSaysSo(t *testing.T) {
+	opts := collect.Options{IncludeSecretData: true, Namespace: "team-with-no-weka-volumes"}
+	reader := openArchive(t, exportTo(t, sourceCluster(), opts, ""), "")
+
+	if len(reader.Manifest.Volumes) != 0 {
+		t.Fatalf("exported %d volumes from a namespace that has none", len(reader.Manifest.Volumes))
+	}
+	warned := false
+	for _, w := range reader.Manifest.Warnings {
+		if strings.Contains(w, "team-with-no-weka-volumes") {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("empty namespaced export carried no warning naming the namespace; warnings: %v",
+			reader.Manifest.Warnings)
+	}
+}
