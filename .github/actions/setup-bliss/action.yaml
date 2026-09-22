@@ -1,0 +1,73 @@
+name: setup-bliss
+description: >
+  Installs the bliss CLI and writes the OCI credentials it needs, so a job can provision,
+  inspect and delete clusters.
+
+inputs:
+  version:
+    description: 'bliss release to install, or "latest"'
+    required: false
+    default: latest
+  oci-config:
+    description: 'Contents of the OCI config file (the ~/.oci/config INI)'
+    required: true
+  oci-private-key:
+    description: 'OCI API signing key, PEM'
+    required: true
+  github-token:
+    description: 'Token able to read releases from weka/bliss'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install bliss
+      shell: bash
+      env:
+        BLISS_VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        mkdir -p "${RUNNER_TEMP}/bliss"
+        if [[ -n "${GH_TOKEN}" ]]; then
+          # weka/bliss is private, so the release assets need an authenticated fetch.
+          args=(--repo weka/bliss --pattern '*linux_amd64*' --dir "${RUNNER_TEMP}/bliss" --clobber)
+          [[ "${BLISS_VERSION}" == "latest" ]] || args+=("${BLISS_VERSION}")
+          gh release download "${args[@]}"
+        else
+          # Published releases, for a runner without a token that can read the repo.
+          url="https://weka.github.io/bliss/releases/bliss_${BLISS_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/bliss/bliss.tar.gz" "${url}"
+        fi
+        find "${RUNNER_TEMP}/bliss" -name '*.tar.gz' -exec tar -xz -C "${RUNNER_TEMP}/bliss" -f {} \;
+        BLISS_BIN="$(find "${RUNNER_TEMP}/bliss" -type f -name bliss -perm -u+x | head -1)"
+        [[ -n "${BLISS_BIN}" ]] || { echo "no bliss binary in the downloaded release" >&2; exit 1; }
+        install -m 0755 "${BLISS_BIN}" /usr/local/bin/bliss
+        bliss version
+
+    - name: Write OCI credentials
+      shell: bash
+      env:
+        OCI_CONFIG: ${{ inputs.oci-config }}
+        OCI_API_PRIVATE_KEY: ${{ inputs.oci-private-key }}
+      run: |
+        set -euo pipefail
+        # 0700/0600 is not belt-and-braces: the OCI SDK refuses a key file that is group- or
+        # world-readable, so a permissive umask on the runner turns into an auth failure whose
+        # message says nothing about permissions.
+        mkdir -p ~/.oci
+        chmod 0700 ~/.oci
+        printf '%s' "${OCI_API_PRIVATE_KEY}" > ~/.oci/api_key.pem
+        chmod 0600 ~/.oci/api_key.pem
+        printf '%s' "${OCI_CONFIG}" > ~/.oci/config
+        chmod 0600 ~/.oci/config
+        # The config's key_file must point at where the key actually landed. Rewriting it here
+        # means the stored secret does not have to encode a path that only exists on a runner.
+        if grep -q '^key_file' ~/.oci/config; then
+          sed -i "s|^key_file=.*|key_file=${HOME}/.oci/api_key.pem|" ~/.oci/config
+        else
+          echo "key_file=${HOME}/.oci/api_key.pem" >> ~/.oci/config
+        fi
+        # Never print the config: it carries the tenancy, user and fingerprint.
+        echo "OCI config written for profile(s): $(grep -oE '^\[.*\]' ~/.oci/config | tr -d '[]' | tr '\n' ' ')"

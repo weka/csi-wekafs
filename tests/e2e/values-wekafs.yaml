@@ -1,0 +1,13 @@
+# Chart values for the native Weka transport leg of the end-to-end run.
+#
+# This is the leg that has never had CI coverage. The sanity suite pins the plugin to NFS with
+# -usenfs and its three "_nfs" test functions are the only ones wired up, so every native mount
+# regression to date has had to be found by hand.
+pluginConfig:
+  mountProtocol:
+    useNfs: false
+    # No failback. The point of this leg is to prove the native mount works; silently serving the
+    # tests over NFS instead would turn a red run green and hide exactly what is being tested.
+    allowNfsFailback: false
+logLevel: 6
+useJsonLogging: true

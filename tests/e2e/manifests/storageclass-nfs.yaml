@@ -1,0 +1,25 @@
+# Directory-backed volumes over NFS. Identical to the native StorageClass by design: the
+# transport is chosen by the plugin's own configuration, not by the StorageClass, so running
+# the same class against both installs is what proves the choice is transparent to a user.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: e2e-nfs
+provisioner: csi.weka.io
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
+parameters:
+  volumeType: dir/v1
+  filesystemName: default
+  capacityEnforcement: HARD
+  csi.storage.k8s.io/provisioner-secret-name: &secretName csi-wekafs-api-secret
+  csi.storage.k8s.io/provisioner-secret-namespace: &secretNamespace csi-wekafs
+  csi.storage.k8s.io/controller-publish-secret-name: *secretName
+  csi.storage.k8s.io/controller-publish-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/controller-expand-secret-name: *secretName
+  csi.storage.k8s.io/controller-expand-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/node-stage-secret-name: *secretName
+  csi.storage.k8s.io/node-stage-secret-namespace: *secretNamespace
+  csi.storage.k8s.io/node-publish-secret-name: *secretName
+  csi.storage.k8s.io/node-publish-secret-namespace: *secretNamespace

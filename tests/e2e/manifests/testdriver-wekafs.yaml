@@ -1,0 +1,48 @@
+# Driver definition for the Kubernetes external-storage end-to-end suite
+# (k8s.io/kubernetes/test/e2e/storage/external), consumed via -storage.testdriver.
+#
+# The capabilities below are not aspirational: each one is what the driver actually advertises
+# over gRPC on this branch. Turning one on that the driver does not implement produces a wall of
+# failures that look like bugs and are not, so when this list changes, change it because
+# ControllerGetCapabilities or NodeGetCapabilities changed.
+#
+#   controllerExpansion   ControllerServiceCapability EXPAND_VOLUME
+#   snapshotDataSource    ControllerServiceCapability CREATE_DELETE_SNAPSHOT
+#   pvcDataSource         ControllerServiceCapability CLONE_VOLUME
+#   nodeExpansion=false   the node service does NOT advertise EXPAND_VOLUME: capacity is a Weka
+#                         quota, so there is nothing to grow on the node once the controller has
+#                         changed it
+#   block=false           the driver handles no block volume capability at all
+#
+# The capability key names are defined by the e2e suite, not by us, and they are matched by
+# string. A typo silently disables a whole test family rather than erroring, so check any edit
+# against testsuites.Capability in the Kubernetes release this suite is built from.
+StorageClass:
+  FromFile: storageclass-wekafs.yaml
+SnapshotClass:
+  FromFile: snapshotclass.yaml
+DriverInfo:
+  Name: csi.weka.io
+  SupportedSizeRange:
+    Min: 1Gi
+    Max: 1Ti
+  SupportedFsType:
+    # The empty string means "whatever the volume already is". A Weka volume is a directory on a
+    # filesystem that exists before the volume does, so there is no mkfs step and no fsType to
+    # ask for; naming one here would have the suite assert against a formatting step that never
+    # happens.
+    "": {}
+  Capabilities:
+    persistence: true
+    exec: true
+    multipods: true
+    RWX: true
+    singleNodeVolume: true
+    controllerExpansion: true
+    nodeExpansion: false
+    snapshotDataSource: true
+    pvcDataSource: true
+    fsGroup: true
+    block: false
+    volumeLimits: false
+    topology: false
