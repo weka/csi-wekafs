@@ -272,7 +272,9 @@ metricsServer:
   #    Under hostNetwork each replica binds the metrics and health ports on its own node, so the
   #    chart adds a required pod anti-affinity keeping them on separate nodes. With more replicas
   #    than nodes the extra ones stay Pending, which is the honest outcome - without it they would
-  #    fail to bind and crash loop. Setting metricsServer.affinity replaces this entirely.
+  #    fail to bind and crash loop. Any affinity you set is merged on top of it rather than
+  #    replacing it, so a chart-wide affinity cannot drop the guard by accident; to go without it,
+  #    run one replica or turn hostNetwork off.
   replicas: 2
   # -- optional log level for metrics server only (defaults to the chart-wide logLevel)
   logLevel: ~

@@ -33,23 +33,18 @@ spec:
         prometheus.io/port: '{{ .Values.metrics.metricsServerPort | default 9096 }}'
     {{- end }}
     spec:
-      {{- if .Values.metricsServer.affinity }}
+      {{- $metricsServerAffinity := dict -}}
+      {{- if and .Values.hostNetwork (gt (int (.Values.metricsServer.replicas | default 1)) 1) }}
+      {{- /* See the plugin chart: under hostNetwork two replicas cannot share a node's ports, so
+             the guard is seeded first and whatever the user sets is layered over it. */}}
+      {{- $_ := set $metricsServerAffinity "podAntiAffinity" (dict "requiredDuringSchedulingIgnoredDuringExecution" (list (dict "topologyKey" "kubernetes.io/hostname" "labelSelector" (dict "matchLabels" (dict "app" (printf "%s-metrics-server" .Release.Name) "component" (printf "%s-metrics-server" .Release.Name) "release" .Release.Name))))) -}}
+      {{- end }}
+      {{- with .Values.metricsServer.affinity }}
+      {{- $metricsServerAffinity = mergeOverwrite $metricsServerAffinity (deepCopy .) -}}
+      {{- end }}
+      {{- if $metricsServerAffinity }}
       affinity:
-        {{- toYaml .Values.metricsServer.affinity | nindent 8 }}
-      {{- else if and .Values.hostNetwork (gt (int (.Values.metricsServer.replicas | default 1)) 1) }}
-      # Under hostNetwork every replica binds the metrics and health ports on its own node, so two
-      # of them cannot share one. Required rather than preferred: a colocated replica does not run
-      # degraded, it fails to bind and crash loops, and a pod left Pending says so plainly. Set
-      # metricsServer.affinity yourself to take this over completely.
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - topologyKey: kubernetes.io/hostname
-              labelSelector:
-                matchLabels:
-                  app: {{ .Release.Name }}-metrics-server
-                  component: {{ .Release.Name }}-metrics-server
-                  release: {{ .Release.Name }}
+        {{- toYaml $metricsServerAffinity | nindent 8 }}
       {{- end }}
       {{- if .Values.metricsServer.nodeSelector }}
       nodeSelector:
