@@ -30,10 +30,9 @@ import (
 
 	"github.com/rs/zerolog/log"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -167,20 +166,19 @@ func (driver *WekaFsDriver) Run(ctx context.Context) {
 	}
 
 	if driver.csiMode == CsiModeNode {
-		// only if we manage node labels, first clean up before starting node server
+		// The controller block above didn't run in node mode, so the manager (and its embedded K8s
+		// client) is not yet initialized. Initialize it now without leader election – the node server
+		// only needs the client to read PVC/Pod annotations for per-pod mount option overrides.
+		if err := driver.initManager(ctx, false); err != nil {
+			log.Warn().Err(err).Msg("Failed to initialize Kubernetes client for node mode, per-pod mount option overrides will be unavailable")
+		}
+
+		// Stale labels are cleaned up before the node server starts serving, but only once the
+		// manager exists: label access now goes through it, so running this ahead of initManager
+		// left it looking at a nil manager and skipping silently.
 		if driver.config.manageNodeTopologyLabels {
 			log.Info().Msg("Cleaning up node stale labels")
 			driver.CleanupNodeLabels(ctx)
-		}
-
-		// In node-only mode the controller block above didn't run, so the manager (and
-		// its embedded K8s client) is not yet initialized.  Initialize it now without
-		// leader election – the node server only needs the client to read PVC/Pod
-		// annotations for per-pod mount option overrides.
-		if driver.csiMode == CsiModeNode {
-			if err := driver.initManager(ctx, false); err != nil {
-				log.Warn().Err(err).Msg("Failed to initialize Kubernetes client for node mode, per-pod mount option overrides will be unavailable")
-			}
 		}
 
 		log.Info().Msg("Loading NodeServer")
@@ -294,17 +292,29 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 	zapLogger := zap.New(zap.UseDevMode(false))
 	clog.SetLogger(zapLogger)
 
+	byObject := map[runtimeclient.Object]cache.ByObject{}
+
 	// When PVs are cached at all, keep only the fields the driver reads, so a large cluster's PV
 	// list stays cheap in memory.
-	cacheOpts := cache.Options{}
 	if d.config.requiresPvCaching() {
-		cacheOpts = cache.Options{
-			ByObject: map[runtimeclient.Object]cache.ByObject{
-				&v1.PersistentVolume{}: {
-					Transform: stripUnnecessaryPVFields,
-				},
-			},
+		byObject[&v1.PersistentVolume{}] = cache.ByObject{
+			Transform: stripUnnecessaryPVFields,
 		}
+	}
+
+	// The node server reads its own Node object to reconcile topology labels. controller-runtime
+	// starts an informer lazily on the first Get of a type, so without this the node pod would
+	// LIST and WATCH every Node in the cluster - on a large fleet that is one full Node cache per
+	// node pod. Scope it to this node alone; no other role touches Node objects.
+	if d.csiMode == CsiModeNode {
+		byObject[&v1.Node{}] = cache.ByObject{
+			Field: fields.OneTermEqualSelector("metadata.name", d.nodeID),
+		}
+	}
+
+	cacheOpts := cache.Options{}
+	if len(byObject) > 0 {
+		cacheOpts.ByObject = byObject
 	}
 
 	mgrOpts := ctrl.Options{
@@ -412,139 +422,4 @@ func (d *WekaFsDriver) initManager(ctx context.Context, leaderElection bool) err
 		Str("namespace", mgrOpts.LeaderElectionNamespace).
 		Msg("Kubernetes manager initialized")
 	return nil
-}
-
-// readNodeTopologyLabels reads the standard topology.kubernetes.io/zone and region
-// labels from the Kubernetes node object and stores them on the NodeServer.
-// Called once at startup before gRPC registration.
-func (d *WekaFsDriver) readNodeTopologyLabels(ctx context.Context) {
-	if d.ns == nil || d.manager == nil {
-		return
-	}
-	// Use the API reader (direct client) instead of the cached client because
-	// this runs before the manager is started and its informer cache is synced.
-	readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	node := &v1.Node{}
-	if err := d.manager.GetAPIReader().Get(readCtx, runtimeclient.ObjectKey{Name: d.nodeID}, node); err != nil {
-		log.Warn().Err(err).Msg("Failed to get node object for reading topology labels")
-		return
-	}
-	if zone, ok := node.Labels[TopologyKeyZone]; ok {
-		d.ns.zone = zone
-	}
-	if region, ok := node.Labels[TopologyKeyRegion]; ok {
-		d.ns.region = region
-	}
-	log.Info().Str("zone", d.ns.zone).Str("region", d.ns.region).Msg("Read standard topology labels from node")
-}
-
-func (d *WekaFsDriver) SetNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
-		return
-	}
-
-	if d.csiMode != CsiModeNode {
-		return
-	}
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create in-cluster config")
-		return
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create Kubernetes client")
-		return
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get node object from Kubernetes")
-		return
-	}
-
-	labelsToSet := make(map[string]string)
-	labelsToSet[TopologyKeyNode] = d.nodeID
-	labelsToSet[fmt.Sprintf(TopologyLabelNodePattern, d.name)] = d.nodeID
-	labelsToSet[fmt.Sprintf(TopologyLabelWekaLocalPattern, d.name)] = "true"
-	// Left out rather than guessed when there is no enabled transport. Probe cannot reach here in
-	// that state - it reports not ready and cleans the labels off instead - so this only leaves a
-	// previous value standing, which beats advertising a transport the node cannot serve.
-	if transport := nodeTransportLabel(ctx, d.mounters); transport != "" {
-		labelsToSet[fmt.Sprintf(TopologyLabelTransportPattern, d.name)] = transport
-	} else {
-		log.Error().Str("node", d.nodeID).Msg("No transport available, leaving the transport label unchanged")
-	}
-	updateNeeded := false
-
-	for label, value := range labelsToSet {
-		existing, ok := node.Labels[label]
-		if !ok || existing != value {
-			log.Info().Str("label", fmt.Sprintf("%s=%s", label, value)).Str("node", node.Name).Msg("Setting label on node")
-			node.Labels[label] = value
-			updateNeeded = true
-		}
-	}
-
-	if !updateNeeded {
-		return
-	}
-
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to update node labels")
-		return
-	}
-
-	log.Info().Msg("Successfully updated labels on node")
-}
-func (d *WekaFsDriver) CleanupNodeLabels(ctx context.Context) {
-	if d.config.isInDevMode() {
-		return
-	}
-	nodeLabelPatternsToRemove := []string{TopologyLabelNodePattern, TopologyLabelTransportPattern, TopologyLabelWekaLocalPattern}
-	nodeLabelsToRemove := []string{TopologyLabelTransportGlobal, TopologyLabelNodeGlobal, TopologyKeyNode}
-
-	for i, labelPattern := range nodeLabelPatternsToRemove {
-		nodeLabelPatternsToRemove[i] = fmt.Sprintf(labelPattern, d.name)
-	}
-	labelsToRemove := append(nodeLabelsToRemove, nodeLabelPatternsToRemove...)
-
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create in-cluster config")
-		return
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create Kubernetes client")
-		return
-	}
-
-	node, err := clientset.CoreV1().Nodes().Get(ctx, d.nodeID, metav1.GetOptions{})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to get node")
-		return
-	}
-
-	for _, label := range labelsToRemove {
-		delete(node.Labels, label)
-		log.Info().Str("label", label).Str("node", node.Name).Msg("Removing label from node")
-	}
-
-	_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to update node labels")
-		return
-	}
-
-	log.Info().Msg("Successfully removed labels from node")
-
-	//output, err := exec.Command("/bin/kubectl", "label", "node", d.nodeID, labelsString).Output()
-	//if err != nil {
-	//	log.Error().Err(err).Str("output", string(output)).Msg("Failed to remove labels from node")
-	//}
 }
