@@ -41,7 +41,9 @@ RUN microdnf install -y util-linux libselinux-utils pciutils \
     procps less container-selinux && \
     microdnf clean all && rm -rf /var/cache/dnf
 
-# nfs-utils supplies /sbin/mount.nfs. The NFS transport needs it at runtime
+# nfs-utils supplies /sbin/mount.nfs. The NFS transport needs it at runtime. UBI does not ship it,
+# so it comes from Rocky BaseOS; includepkgs limits that repo to what UBI lacks, so Rocky's newer
+# builds of shared packages (systemd, python3-pip-wheel, ...) cannot replace the UBI ones.
 RUN rpm --import https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-9 && \
     printf '%s\n' \
       '[rocky-baseos]' \
@@ -49,6 +51,7 @@ RUN rpm --import https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-9 && \
       'baseurl=https://dl.rockylinux.org/pub/rocky/9/BaseOS/$basearch/os/' \
       'gpgcheck=1' \
       'gpgkey=https://dl.rockylinux.org/pub/rocky/RPM-GPG-KEY-Rocky-9' \
+      'includepkgs=nfs-utils gssproxy rpcbind quota quota-nls libnfsidmap libev libverto-libev libbasicobjects libcollection libini_config libref_array e2fsprogs-libs' \
       'enabled=1' > /etc/yum.repos.d/rocky-baseos.repo && \
     microdnf install -y nfs-utils && \
     rm -f /etc/yum.repos.d/rocky-baseos.repo && \
