@@ -193,6 +193,31 @@ func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, 
 		return status.Error(codes.InvalidArgument, "Cannot use multiple content sources in CreateVolumeRequest")
 	}
 
+	return cs.checkCreateVolumeSecret(ctx, req)
+}
+
+// checkCreateVolumeSecret gates CreateVolume requests that carry no API secret of their own.
+// The driver has always accepted them, so the gate defaults to permissive and only warns; when
+// allowCreateVolumesWithoutSecret is turned off the request is refused even if cluster-wide legacy
+// secrets are configured, since those would bind the volume to credentials the StorageClass
+// never asked for.
+func (cs *ControllerServer) checkCreateVolumeSecret(ctx context.Context, req *csi.CreateVolumeRequest) error {
+	if len(req.GetSecrets()) > 0 {
+		return nil
+	}
+
+	if !cs.getConfig().allowCreateVolumesWithoutSecret {
+		return status.Error(codes.PermissionDenied,
+			"creating volumes without an API secret is not allowed: set csi.storage.k8s.io/provisioner-secret-name "+
+				"on the StorageClass, as the driver-wide legacy secret does not satisfy this")
+	}
+
+	log.Ctx(ctx).Warn().
+		Str("name", req.GetName()).
+		Bool("driver_wide_secret_available", cs.getApiStore().legacySecrets != nil).
+		Msg("CreateVolume request carries no API secret of its own. This is allowed for backward " +
+			"compatibility and will be refused if pluginConfig.allowedOperations.createVolumesWithoutSecret is disabled")
+
 	return nil
 }
 

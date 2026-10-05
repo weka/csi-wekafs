@@ -109,6 +109,7 @@ var (
 	allowMountOptionOverrides            = flag.Bool("allowmountoptionoverrides", false, "Allow mount option overrides via PVC and pod annotations")
 	keepThinProvisioningRatioOnExpand    = flag.Bool("keepthinprovisioningratioonexpand", true, "On filesystem expansion, scale thin-provisioning min-SSD and max-SSD to preserve their ratios to total capacity")
 	advertiseVolumeHealthSupport         = flag.Bool("advertisevolumehealthsupport", true, "Expose GET_VOLUME and VOLUME_CONDITION, allowing the CSI health monitor to report volume condition and capacity")
+	allowCreateVolumesWithoutSecret      = flag.Bool("allowcreatevolumeswithoutsecret", true, "Allow CreateVolume requests that carry no API secret of their own. When false, the StorageClass must reference a provisioner secret")
 	// Set by the build process
 	version = ""
 )
@@ -235,6 +236,7 @@ func handle(ctx context.Context) {
 		AllowProtocolContainers:          *allowProtocolContainers,
 		AllowEncryptionWithoutKms:        *allowEncryptionWithoutKms,
 		AllowMountOptionOverrides:        *allowMountOptionOverrides,
+		AllowCreateVolumesWithoutSecret:  *allowCreateVolumesWithoutSecret,
 
 		SuppressSnapshotSupport:      *suppressSnapshotsCapability,
 		SuppressVolumeCloneSupport:   *suppressVolumeCloneCapability,

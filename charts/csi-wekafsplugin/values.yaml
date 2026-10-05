@@ -259,6 +259,12 @@ pluginConfig:
     #    min-SSD and max-SSD are left unchanged and only total capacity (object tier) grows. Has no
     #    effect on thick (non-tiered) filesystems.
     keepThinProvisioningRatioOnExpand: true
+    # -- Allow creation of volumes from a StorageClass that does not reference a provisioner secret.
+    #    Enabled by default for backward compatibility; when enabled, such requests are logged with a warning.
+    #    When disabled, the StorageClass must set csi.storage.k8s.io/provisioner-secret-name, and falling
+    #    back to the driver-wide API secret is refused as well. Disabling this gates creation only:
+    #    volumes that already exist keep being published, expanded and deleted as before.
+    createVolumesWithoutSecret: true
   mutuallyExclusiveMountOptions:
     - "readcache,writecache,coherent,forcedirect"
     - "sync,async"

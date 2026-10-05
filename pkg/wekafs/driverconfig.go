@@ -53,6 +53,7 @@ type DriverConfig struct {
 	setOwnershipOnDynamicFilesystems  bool
 	allowMountOptionOverrides         bool
 	keepThinProvisioningRatioOnExpand bool
+	allowCreateVolumesWithoutSecret   bool
 }
 
 func (dc *DriverConfig) Log() {
@@ -86,6 +87,7 @@ func (dc *DriverConfig) Log() {
 		Bool("set_ownership_on_dynamic_filesystems", dc.setOwnershipOnDynamicFilesystems).
 		Bool("allow_mount_option_overrides", dc.allowMountOptionOverrides).
 		Bool("keep_thin_provisioning_ratio_on_expand", dc.keepThinProvisioningRatioOnExpand).
+		Bool("allow_create_volumes_without_secret", dc.allowCreateVolumesWithoutSecret).
 		Msg("Starting driver with the following configuration")
 
 }
@@ -93,7 +95,9 @@ func (dc *DriverConfig) Log() {
 // DriverConfigOptions carries the driver's startup settings into NewDriverConfig. Field names
 // mirror the command line flags in cmd/wekafsplugin, so the two map one to one and a new setting
 // is added in one obvious place. Every field is optional: the zero value is the "off" or
-// "unspecified" case, except where NewDriverConfig documents a default.
+// "unspecified" case, except where NewDriverConfig documents a default. For the settings whose
+// CLI flag defaults to true, the flag is the only place that default lives - an in-process caller
+// that leaves such a field unset gets the restrictive behaviour, not the shipped one.
 type DriverConfigOptions struct {
 	DynamicVolPath     string
 	VolumePrefix       string
@@ -146,6 +150,7 @@ type DriverConfigOptions struct {
 	EnforceDirVolTotalCapacity        bool
 	SetOwnershipOnDynamicFilesystems  bool
 	KeepThinProvisioningRatioOnExpand bool
+	AllowCreateVolumesWithoutSecret   bool
 }
 
 func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
@@ -202,6 +207,7 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		setOwnershipOnDynamicFilesystems:  opts.SetOwnershipOnDynamicFilesystems,
 		allowMountOptionOverrides:         opts.AllowMountOptionOverrides,
 		keepThinProvisioningRatioOnExpand: opts.KeepThinProvisioningRatioOnExpand,
+		allowCreateVolumesWithoutSecret:   opts.AllowCreateVolumesWithoutSecret,
 	}
 }
 

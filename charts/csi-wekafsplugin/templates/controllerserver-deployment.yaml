@@ -121,6 +121,7 @@ spec:
             - "--enforcedirvoltotalcapacity"
           {{- end }}
             - "--keepthinprovisioningratioonexpand={{ .Values.pluginConfig.allowedOperations.keepThinProvisioningRatioOnExpand }}"
+            - "--allowcreatevolumeswithoutsecret={{ .Values.pluginConfig.allowedOperations.createVolumesWithoutSecret }}"
             {{/* Tied to the sidecar: with nothing calling ControllerGetVolume, advertising the
                  capability would only make the driver watch every PV for no consumer. */}}
             - "--advertisevolumehealthsupport={{ .Values.controller.healthMonitor.enabled }}"
