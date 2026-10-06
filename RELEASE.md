@@ -1,3 +1,11 @@
+# Release v2.9.5
+<!-- Release notes generated using configuration in .github/release.yaml at main -->
+
+## What's Changed
+### Bug Fixes
+* fix: install nfs-utils in the driver image so NFS transport can mount by @rugggger in https://github.com/weka/csi-wekafs/pull/829
+
+
 # Release v2.9.4
 ## What's Changed
 
