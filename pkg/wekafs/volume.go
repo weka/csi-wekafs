@@ -1760,11 +1760,15 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 	}
 	if !fsObj.IsRemoving { // if filesystem is already removing, just wait
 		if v.server.getMounter().getTransport() == dataTransportNfs {
-			logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
-			err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
-			if err != nil {
-				logger.Error().Str("filesystem", v.FilesystemName).Err(err).Msg("Failed to remove NFS permissions, cannot delete filesystem")
-				return err
+			if v.server.getConfig().manageNfsPermissions {
+				logger.Trace().Str("filesystem", v.FilesystemName).Msg("Ensuring no NFS permissions exist that could block filesystem deletion")
+				err := v.apiClient.EnsureNoNfsPermissionsForFilesystem(ctx, fsObj.Name)
+				if err != nil {
+					logger.Error().Str("filesystem", v.FilesystemName).Err(err).Msg("Failed to remove NFS permissions, cannot delete filesystem")
+					return err
+				}
+			} else {
+				logger.Trace().Str("filesystem", v.FilesystemName).Msg("NFS permission management is disabled, not removing NFS permissions")
 			}
 		}
 		logger.Trace().Str("filesystem", v.FilesystemName).Msg("Attempting deletion of filesystem")

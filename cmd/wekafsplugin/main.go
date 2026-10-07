@@ -97,6 +97,7 @@ var (
 	allowNfsFailback                     = flag.Bool("allownfsfailback", false, "Allow NFS failback")
 	useNfs                               = flag.Bool("usenfs", false, "Use NFS for mounting volumes")
 	interfaceGroupName                   = flag.String("interfacegroupname", "", "Name of the NFS interface group to use for mounting volumes")
+	manageNfsPermissions                 = flag.Bool("manage-nfs-permissions", false, "Allow the plugin to create NFS client groups, client group rules and NFS permissions on the Weka cluster (NFS transport only). When false, the Weka admin must configure them")
 	clientGroupName                      = flag.String("clientgroupname", "", "Name of the NFS client group to use for managing NFS permissions")
 	nfsProtocolVersion                   = flag.String("nfsprotocolversion", "4.1", "NFS protocol version to use for mounting volumes")
 	wekafsContainerName                  = flag.String("wekafscontainername", "", "Name of the Weka container to use for mounting filesystems")
@@ -253,11 +254,12 @@ func handle(ctx context.Context) {
 		GrpcRequestTimeoutSeconds:     *grpcRequestTimeoutSeconds,
 		HealthProbeWekaTimeoutSeconds: *healthProbeWekaTimeoutSeconds,
 
-		AllowNfsFailback:   *allowNfsFailback,
-		UseNfs:             *useNfs,
-		InterfaceGroupName: *interfaceGroupName,
-		ClientGroupName:    *clientGroupName,
-		NfsProtocolVersion: *nfsProtocolVersion,
+		AllowNfsFailback:     *allowNfsFailback,
+		UseNfs:               *useNfs,
+		InterfaceGroupName:   *interfaceGroupName,
+		ClientGroupName:      *clientGroupName,
+		ManageNfsPermissions: *manageNfsPermissions,
+		NfsProtocolVersion:   *nfsProtocolVersion,
 
 		SkipGarbageCollection:             *skipGarbageCollection,
 		WaitForObjectDeletion:             *waitForObjectDeletion,

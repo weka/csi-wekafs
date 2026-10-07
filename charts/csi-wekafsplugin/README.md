@@ -146,6 +146,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | pluginConfig.mountProtocol.useNfs | bool | `false` | Use NFS transport for mounting Weka filesystems, off by default |
 | pluginConfig.mountProtocol.allowNfsFailback | bool | `false` | Allow Failback to NFS transport if Weka client fails to mount filesystem using native protocol |
 | pluginConfig.mountProtocol.interfaceGroupName | string | `""` | Specify name of NFS interface group to use for mounting Weka filesystems. If not set, first NFS interface group will be used |
+| pluginConfig.mountProtocol.manageNfsPermissions | bool | `true` | Allow the plugin to create NFS client group, client group rules and NFS permissions on the Weka cluster (NFS transport only). When false, the Weka admin must configure them |
 | pluginConfig.mountProtocol.clientGroupName | string | `""` | Specify existing client group name for NFS configuration. If not set, "WekaCSIPluginClients" group will be created |
 | pluginConfig.mountProtocol.nfsProtocolVersion | string | `"4.1"` | Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions |
 | pluginConfig.mountProtocol.wekafsContainerName | string | `""` | NOTE: for multiple clusters setup, set specific container name rather than attempt to identify it automatically |
