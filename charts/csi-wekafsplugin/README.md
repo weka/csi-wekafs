@@ -3,7 +3,7 @@ Helm chart for Deployment of WekaIO Container Storage Interface (CSI) plugin for
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/csi-wekafs)](https://artifacthub.io/packages/search?repo=csi-wekafs)
-![Version: 2.9.5](https://img.shields.io/badge/Version-2.9.5-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.9.5](https://img.shields.io/badge/AppVersion-v2.9.5-informational?style=flat-square)
+![Version: 2.9.6](https://img.shields.io/badge/Version-2.9.6-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: v2.9.6](https://img.shields.io/badge/AppVersion-v2.9.6-informational?style=flat-square)
 
 ## Homepage
 https://github.com/weka/csi-wekafs
@@ -16,7 +16,7 @@ https://github.com/weka/csi-wekafs
 
 ## Source Code
 
-* <https://github.com/weka/csi-wekafs/tree/v2.9.5>
+* <https://github.com/weka/csi-wekafs/tree/v2.9.6/charts/csi-wekafsplugin>
 
 ## Pre-requisite
 - Kubernetes cluster of version 1.18 and up, 1.19 and up recommended
@@ -69,7 +69,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 |-----|------|---------|-------------|
 | dynamicProvisionPath | string | `"csi-volumes"` | Directory in root of file system where dynamic volumes are provisioned |
 | csiDriverName | string | `"csi.weka.io"` | Name of the driver (and provisioner) |
-| csiDriverVersion | string | `"2.9.5"` | CSI driver version |
+| csiDriverVersion | string | `"2.9.6"` | CSI driver version |
 | images.livenessprobesidecar | string | `"registry.k8s.io/sig-storage/livenessprobe:v2.19.0"` | CSI liveness probe sidecar image URL |
 | images.attachersidecar | string | `"registry.k8s.io/sig-storage/csi-attacher:v4.12.0"` | CSI attacher sidecar image URL |
 | images.provisionersidecar | string | `"registry.k8s.io/sig-storage/csi-provisioner:v6.3.0"` | CSI provisioner sidecar image URL |
@@ -78,7 +78,7 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | images.snapshottersidecar | string | `"registry.k8s.io/sig-storage/csi-snapshotter:v8.6.0"` | CSI snapshotter sidecar image URL |
 | images.healthmonitorsidecar | string | `"registry.k8s.io/sig-storage/csi-external-health-monitor-controller:v0.18.0"` | CSI external health monitor sidecar image URL |
 | images.csidriver | string | `"quay.io/weka.io/csi-wekafs"` | CSI driver main image URL |
-| images.csidriverTag | string | `"2.9.5"` | CSI driver tag |
+| images.csidriverTag | string | `"2.9.6"` | CSI driver tag |
 | imagePullSecret | string | `""` | image pull secret required for image download. Must have permissions to access all images above.    Should be used in case of private registry that requires authentication |
 | globalPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for all CSI driver components |
 | controllerPluginTolerations | list | `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"}]` | Tolerations for CSI controller component only (by default same as global) |
@@ -146,8 +146,8 @@ helm install csi-wekafsplugin csi-wekafs/csi-wekafsplugin --namespace csi-wekafs
 | pluginConfig.mountProtocol.useNfs | bool | `false` | Use NFS transport for mounting Weka filesystems, off by default |
 | pluginConfig.mountProtocol.allowNfsFailback | bool | `false` | Allow Failback to NFS transport if Weka client fails to mount filesystem using native protocol |
 | pluginConfig.mountProtocol.interfaceGroupName | string | `""` | Specify name of NFS interface group to use for mounting Weka filesystems. If not set, first NFS interface group will be used |
-| pluginConfig.mountProtocol.manageNfsPermissions | bool | `true` | Allow the plugin to create NFS client group, client group rules and NFS permissions on the Weka cluster (NFS transport only). When false, the Weka admin must configure them |
 | pluginConfig.mountProtocol.clientGroupName | string | `""` | Specify existing client group name for NFS configuration. If not set, "WekaCSIPluginClients" group will be created |
+| pluginConfig.mountProtocol.manageNfsPermissions | bool | `true` | Allow the plugin to create NFS client group, client group rules and NFS permissions on the Weka cluster (NFS transport only). When false, the Weka admin must configure them |
 | pluginConfig.mountProtocol.nfsProtocolVersion | string | `"4.1"` | Specify NFS protocol version to use for mounting Weka filesystems. Default is "4.1", consult Weka documentation for supported versions |
 | pluginConfig.mountProtocol.wekafsContainerName | string | `""` | NOTE: for multiple clusters setup, set specific container name rather than attempt to identify it automatically |
 | pluginConfig.skipGarbageCollection | bool | `false` | Skip garbage collection of deleted directory-backed volume contents and only move them to trash. Default false |

@@ -1,7 +1,9 @@
-<!-- Release notes generated using configuration in .github/release.yaml at main -->
 
 ## What's Changed
 ### Bug Fixes
-* fix: install nfs-utils in the driver image so NFS transport can mount by @rugggger in https://github.com/weka/csi-wekafs/pull/829
+* fix: add a switch to let the Weka admin manage NFS client groups and exports by @rugggger in https://github.com/weka/csi-wekafs/pull/833
+### Miscellaneous
+* ci: add release-v3 workflow by @rugggger in https://github.com/weka/csi-wekafs/pull/834
+* ci: fix release-v3 version calculation on main by @rugggger in https://github.com/weka/csi-wekafs/pull/835
 
 
