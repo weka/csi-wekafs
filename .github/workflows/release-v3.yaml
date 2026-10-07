@@ -38,6 +38,7 @@ jobs:
         uses: codacy/git-version@2.8.7
         with:
           prefix: v
+          release-branch: main # default is master; any other branch gets a -<branch>.N.sha.X suffix
           minor-identifier: /feat(ure)*:/
           major-identifier: /breaking:/
 
