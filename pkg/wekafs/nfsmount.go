@@ -16,16 +16,17 @@ import (
 )
 
 type nfsMount struct {
-	mounter         *nfsMounter
-	fsName          string
-	mountPoint      string
-	kMounter        mount.Interface
-	debugPath       string
-	mountOptions    MountOptions
-	lastUsed        time.Time
-	mountIpAddress  string
-	clientGroupName string
-	protocolVersion apiclient.NfsVersionString
+	mounter              *nfsMounter
+	fsName               string
+	mountPoint           string
+	kMounter             mount.Interface
+	debugPath            string
+	mountOptions         MountOptions
+	lastUsed             time.Time
+	mountIpAddress       string
+	clientGroupName      string
+	manageNfsPermissions bool
+	protocolVersion      apiclient.NfsVersionString
 }
 
 func (m *nfsMount) getMountPoint() string {
@@ -178,10 +179,14 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 	}
 
 	if !m.isInDevMode() {
-		err := apiClient.EnsureNfsPermissions(ctx, m.fsName, apiclient.NfsVersionV4, m.clientGroupName)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to ensure NFS permissions")
-			return errors.New("failed to ensure NFS permissions")
+		if m.manageNfsPermissions {
+			err := apiClient.EnsureNfsPermissions(ctx, m.fsName, apiclient.NfsVersionV4, m.clientGroupName)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to ensure NFS permissions")
+				return errors.New("failed to ensure NFS permissions")
+			}
+		} else {
+			logger.Trace().Msg("NFS permission management is disabled, not ensuring NFS permissions")
 		}
 
 		mountTarget := m.mountIpAddress + ":/" + m.fsName
@@ -196,6 +201,7 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 		if err := os.MkdirAll(m.getMountPoint(), DefaultVolumePermissions); err != nil {
 			return err
 		}
+		var err error
 		maxRetries := 3
 		for i := 0; i < maxRetries; i++ {
 			err = m.kMounter.MountSensitive(mountTarget, m.getMountPoint(), "nfs", mountOptions.Strings(), mountOptionsSensitive)

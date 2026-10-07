@@ -21,6 +21,7 @@ type nfsMounter struct {
 	selinuxSupport        *bool
 	gc                    *innerPathVolGc
 	clientGroupName       string
+	manageNfsPermissions  bool
 	nfsProtocolVersion    string
 	exclusiveMountOptions []mutuallyExclusiveMountOptionSet
 	mountBaseDir          string
@@ -41,6 +42,7 @@ func newNfsMounter(ctx context.Context, driver *WekaFsDriver) *nfsMounter {
 	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc(ctx)
 	mounter.clientGroupName = driver.config.clientGroupName
+	mounter.manageNfsPermissions = driver.config.manageNfsPermissions
 	mounter.nfsProtocolVersion = driver.config.nfsProtocolVersion
 
 	return mounter
@@ -52,14 +54,15 @@ func (m *nfsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 	}
 	uniqueId := getStringSha1AsB32(fsName + ":" + options.String())
 	wMount := &nfsMount{
-		mounter:         m,
-		kMounter:        m.kMounter,
-		fsName:          fsName,
-		debugPath:       m.debugPath,
-		mountPoint:      m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
-		mountOptions:    options,
-		clientGroupName: m.clientGroupName,
-		protocolVersion: apiclient.NfsVersionString(fmt.Sprintf("V%s", m.nfsProtocolVersion)),
+		mounter:              m,
+		kMounter:             m.kMounter,
+		fsName:               fsName,
+		debugPath:            m.debugPath,
+		mountPoint:           m.mountBaseDir + "/" + getAsciiPart(fsName, 64) + "-" + uniqueId,
+		mountOptions:         options,
+		clientGroupName:      m.clientGroupName,
+		manageNfsPermissions: m.manageNfsPermissions,
+		protocolVersion:      apiclient.NfsVersionString(fmt.Sprintf("V%s", m.nfsProtocolVersion)),
 	}
 	return wMount
 }

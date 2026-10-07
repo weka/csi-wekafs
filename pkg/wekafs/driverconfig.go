@@ -40,6 +40,7 @@ type DriverConfig struct {
 	useNfs                            bool
 	interfaceGroupName                string
 	clientGroupName                   string
+	manageNfsPermissions              bool
 	nfsProtocolVersion                string
 	csiVersion                        string
 	skipGarbageCollection             bool
@@ -77,6 +78,7 @@ func (dc *DriverConfig) Log() {
 		Bool("use_nfs", dc.useNfs).
 		Str("interface_group_name", dc.interfaceGroupName).
 		Str("client_group_name", dc.clientGroupName).
+		Bool("manage_nfs_permissions", dc.manageNfsPermissions).
 		Bool("skip_garbage_collection", dc.skipGarbageCollection).
 		Bool("wait_for_object_deletion", dc.waitForObjectDeletion).
 		Str("tracing_url", dc.tracingUrl).
@@ -132,11 +134,12 @@ type DriverConfigOptions struct {
 	GrpcRequestTimeoutSeconds     int
 	HealthProbeWekaTimeoutSeconds int
 
-	AllowNfsFailback   bool
-	UseNfs             bool
-	InterfaceGroupName string
-	ClientGroupName    string
-	NfsProtocolVersion string
+	AllowNfsFailback     bool
+	UseNfs               bool
+	InterfaceGroupName   string
+	ClientGroupName      string
+	ManageNfsPermissions bool
+	NfsProtocolVersion   string
 
 	SkipGarbageCollection             bool
 	WaitForObjectDeletion             bool
@@ -190,6 +193,7 @@ func NewDriverConfig(opts DriverConfigOptions) *DriverConfig {
 		useNfs:                            opts.UseNfs,
 		interfaceGroupName:                opts.InterfaceGroupName,
 		clientGroupName:                   opts.ClientGroupName,
+		manageNfsPermissions:              opts.ManageNfsPermissions,
 		nfsProtocolVersion:                opts.NfsProtocolVersion,
 		csiVersion:                        opts.Version,
 		skipGarbageCollection:             opts.SkipGarbageCollection,

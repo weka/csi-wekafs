@@ -136,6 +136,11 @@ spec:
           {{- if .Values.pluginConfig.mountProtocol.clientGroupName }}
             - "--clientgroupname={{ .Values.pluginConfig.mountProtocol.clientGroupName }}"
           {{- end }}
+          {{- if hasKey .Values.pluginConfig.mountProtocol "manageNfsPermissions" }}
+            - "--manage-nfs-permissions={{ .Values.pluginConfig.mountProtocol.manageNfsPermissions }}"
+          {{- else }}
+            - "--manage-nfs-permissions=true"
+          {{- end }}
           {{- if .Values.pluginConfig.mountProtocol.nfsProtocolVersion }}
             - "--nfsprotocolversion={{ .Values.pluginConfig.mountProtocol.nfsProtocolVersion | toString}}"
           {{- end }}

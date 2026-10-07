@@ -567,6 +567,9 @@
                         "interfaceGroupName": {
                             "type": "string"
                         },
+                        "manageNfsPermissions": {
+                            "type": "boolean"
+                        },
                         "nfsProtocolVersion": {
                             "type": "string"
                         },

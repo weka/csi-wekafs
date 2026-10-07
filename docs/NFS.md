@@ -95,6 +95,25 @@ Those are the minimum prerequisites for using Weka CSI Plugin with NFS transport
 > You may predefine the NFS Client group with a network range (CIDR) in the Weka cluster, and then use the `pluginConfig.mountProtocol.nfsClientGroupName` 
 > parameter in the `values.yaml` file to specify the NFS Client group name.
 
+## Managing NFS configuration (`manageNfsPermissions`)
+
+The `pluginConfig.mountProtocol.manageNfsPermissions` value (binary flag `--manage-nfs-permissions`) controls whether the plugin changes NFS configuration on the Weka cluster.
+
+- `true` (Helm default): the plugin creates the client group, adds per-node IP rules and creates per-filesystem NFS permissions, as described below, and removes the filesystem's NFS permissions before deleting it.
+- `false` (binary default, used by the Weka operator): the plugin makes no NFS configuration changes. The Weka admin must create:
+  - a client group (set its name with `pluginConfig.mountProtocol.clientGroupName`),
+  - a rule in that group covering the Kubernetes node subnet (CIDR),
+  - for each filesystem, an NFS permission to that group: path `/`, RW, squash `none`, versions including the configured `nfsProtocolVersion`, auth `SYS`.
+
+  The filesystem's NFS permissions must also be removed by the admin before deleting a filesystem-backed PVC can succeed.
+
+Example CLI (consult `--help` of each command for the exact options):
+```
+weka nfs client-group add <group>
+weka nfs rules add ip <group> <cidr>
+weka nfs permission add <filesystem> <group>
+```
+
 ## Way of Operation
 The Weka CSI Plugin with NFS transport operates in the following way:
 Upon start of the Weka CSI Plugin, the plugin will:

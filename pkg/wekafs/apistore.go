@@ -210,10 +210,14 @@ func (api *ApiStore) fromCredentials(ctx context.Context, credentials apiclient.
 	if (api.config.allowNfsFailback || api.config.useNfs) && !api.config.isInDevMode() {
 		newClient.NfsInterfaceGroupName = api.config.interfaceGroupName
 		newClient.NfsClientGroupName = api.config.clientGroupName
-		err := newClient.RegisterNfsClientGroup(ctx)
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to register NFS client group")
-			return nil, err
+		if api.config.manageNfsPermissions {
+			err := newClient.RegisterNfsClientGroup(ctx)
+			if err != nil {
+				logger.Error().Err(err).Msg("Failed to register NFS client group")
+				return nil, err
+			}
+		} else {
+			logger.Debug().Msg("NFS permission management is disabled, not registering NFS client group")
 		}
 	}
 	api.apis[hash] = newClient
