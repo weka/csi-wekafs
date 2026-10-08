@@ -36,6 +36,12 @@ https://github.com/weka/csi-wekafs
 - [SELinux Support & Installation Notes](selinux/README.md)
 - [Using Weka CSI Plugin with NFS transport](docs/NFS.md)
 
+## Volume Root Permissions
+The StorageClass parameters `permissions`, `ownerUid` and `ownerGid` set the mode and ownership of the volume root.
+For filesystem- and snapshot-backed volumes they are applied only if at least one of them is set; otherwise the controller does not
+mount the filesystem and the root keeps the WEKA default (0775 root:root). Set `permissions` explicitly (e.g. `"0750"`) to control the mode,
+and prefer pod `securityContext.fsGroup` for group access. Directory volumes are not affected.
+
 ## Volume Health Monitoring
 The CSI plugin reports the condition and actual capacity of provisioned volumes through the CSI
 `ControllerGetVolume` call, and the bundled `csi-external-health-monitor-controller` sidecar surfaces

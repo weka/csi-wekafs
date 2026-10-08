@@ -5,6 +5,7 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -323,5 +324,38 @@ func TestWithUnsupportedMountOptionsPruned_KeepsReadonlyAttachment(t *testing.T)
 	pruned := v.withUnsupportedMountOptionsPruned(ctx, merged)
 	if !pruned.hasOption(MountOptionReadOnly) {
 		t.Errorf("Expected '%s' from a readonly attachment to survive the mount-time prune, got '%s'", MountOptionReadOnly, pruned.String())
+	}
+}
+
+func TestVolume_needsRootPermissionUpdate(t *testing.T) {
+	snapUuid := uuid.New()
+	tests := []struct {
+		name     string
+		v        *Volume
+		expected bool
+	}{
+		{"filesystem, no params", &Volume{FilesystemName: "fs"}, false},
+		{"filesystem, params set", &Volume{FilesystemName: "fs", permissions: 0o775}, true},
+		{"filesystem, only owner set", &Volume{FilesystemName: "fs", ownerUid: 1000}, true},
+		{"snapshot, no params", &Volume{FilesystemName: "fs", SnapshotAccessPoint: "ap"}, false},
+		{"snapshot uuid, params set", &Volume{FilesystemName: "fs", SnapshotUuid: &snapUuid, permissions: 0o775}, true},
+		{"directory on snapshot, no params", &Volume{FilesystemName: "fs", SnapshotAccessPoint: "ap", innerPath: "dir"}, false},
+		{"dir/v1, no params", &Volume{FilesystemName: "fs", innerPath: "dir"}, true},
+		{"dir/v1, params set", &Volume{FilesystemName: "fs", innerPath: "dir", permissions: 0o775}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.v.needsRootPermissionUpdate(); got != tt.expected {
+				t.Errorf("needsRootPermissionUpdate() = %v, expected %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// UpdateParams must return before touching mounts (a nil server would panic on mount) when nothing is set in StorageClass.
+func TestVolume_UpdateParams_SkipsMountWhenNoParamsSet(t *testing.T) {
+	v := &Volume{id: "weka/v2/fs", FilesystemName: "fs"}
+	if err := v.UpdateParams(context.Background()); err != nil {
+		t.Errorf("expected no error, got %v", err)
 	}
 }

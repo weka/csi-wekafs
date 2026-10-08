@@ -16,7 +16,10 @@ parameters:
   # GID of the volume owner, default 0 (root)
   #ownerGid: "1000"
 
-  # permissions in Unix octal format, default "0750"
+  # permissions in Unix octal format
+  # NOTE: for filesystem- and snapshot-backed volumes, mode/ownership of the volume root is applied only if at least one of
+  # permissions/ownerUid/ownerGid is set; otherwise the root keeps the WEKA default (0775 root:root).
+  # Set permissions explicitly (e.g. "0750") to control the mode. Prefer pod securityContext.fsGroup for group access.
   #permissions: "0775"
 
   # capacity enforcement mode (either SOFT or HARD)
