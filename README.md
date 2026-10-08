@@ -38,9 +38,8 @@ https://github.com/weka/csi-wekafs
 
 ## Volume Root Permissions
 The StorageClass parameters `permissions`, `ownerUid` and `ownerGid` set the mode and ownership of the volume root.
-They are applied only if at least one of them is set; otherwise the controller does not mount the filesystem to change them,
-and the root keeps the mode it was created with: the WEKA default (0775 root:root) for filesystem- and snapshot-backed volumes,
-0750 for directory volumes. Set `permissions` explicitly to control the mode, and prefer pod `securityContext.fsGroup` for group access.
+They are applied only if at least one of them is set; otherwise the volume root keeps the mode it was created with.
+Prefer pod `securityContext.fsGroup` for group access.
 
 ## Volume Health Monitoring
 The CSI plugin reports the condition and actual capacity of provisioned volumes through the CSI
