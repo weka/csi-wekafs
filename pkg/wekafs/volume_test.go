@@ -340,7 +340,7 @@ func TestVolume_needsRootPermissionUpdate(t *testing.T) {
 		{"snapshot, no params", &Volume{FilesystemName: "fs", SnapshotAccessPoint: "ap"}, false},
 		{"snapshot uuid, params set", &Volume{FilesystemName: "fs", SnapshotUuid: &snapUuid, permissions: 0o775}, true},
 		{"directory on snapshot, no params", &Volume{FilesystemName: "fs", SnapshotAccessPoint: "ap", innerPath: "dir"}, false},
-		{"dir/v1, no params", &Volume{FilesystemName: "fs", innerPath: "dir"}, true},
+		{"dir/v1, no params", &Volume{FilesystemName: "fs", innerPath: "dir"}, false},
 		{"dir/v1, params set", &Volume{FilesystemName: "fs", innerPath: "dir", permissions: 0o775}, true},
 	}
 	for _, tt := range tests {

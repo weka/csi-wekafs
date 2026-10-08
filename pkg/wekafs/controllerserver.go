@@ -311,6 +311,11 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	if volExists && volMatchesCapacity {
+		// a previous attempt may have created the volume but failed before applying permissions/ownership
+		if err := volume.UpdateParams(ctx); err != nil {
+			logger.Error().Err(err).Msg("Failed to set params on a volume")
+			return CreateVolumeError(ctx, codes.Internal, err.Error())
+		}
 		result = "SUCCESS"
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{

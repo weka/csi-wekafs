@@ -379,14 +379,11 @@ func (v *Volume) getSeedSnapshotAccessPoint() string {
 	return generateWekaSeedAccessPoint(v.FilesystemName)
 }
 
-// needsRootPermissionUpdate returns true if UpdateParams must mount the volume and chmod/chown its root.
-// Filesystem- and snapshot-backed (weka/v2) volumes keep the WEKA default root permissions unless the StorageClass
-// sets permissions, ownerUid or ownerGid. Directory volumes (dir/v1) are unchanged: they are mounted anyway.
+// needsRootPermissionUpdate returns true if UpdateParams must mount the volume and chmod/chown its root,
+// i.e. only if the StorageClass sets permissions, ownerUid or ownerGid. Otherwise the volume root keeps the mode it was
+// created with: WEKA default for filesystem- and snapshot-backed volumes, DefaultVolumePermissions for directories.
 func (v *Volume) needsRootPermissionUpdate() bool {
-	if v.isFilesystem() || v.isOnSnapshot() {
-		return v.permissions != 0 || v.ownerUid+v.ownerGid != 0
-	}
-	return true
+	return v.permissions != 0 || v.ownerUid+v.ownerGid != 0
 }
 
 // UpdateParams updates params on volume upon creation. Was part of Create initially, but must be done after content source is applied
@@ -399,7 +396,7 @@ func (v *Volume) UpdateParams(ctx context.Context) (retErr error) {
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
 	if !v.needsRootPermissionUpdate() {
-		logger.Debug().Msg("No permissions, ownerUid or ownerGid set in StorageClass, leaving volume root permissions at WEKA defaults")
+		logger.Debug().Msg("No permissions, ownerUid or ownerGid set in StorageClass, leaving volume root permissions as created")
 		return nil
 	}
 
