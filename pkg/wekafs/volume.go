@@ -379,6 +379,13 @@ func (v *Volume) getSeedSnapshotAccessPoint() string {
 	return generateWekaSeedAccessPoint(v.FilesystemName)
 }
 
+// needsRootPermissionUpdate returns true if UpdateParams must mount the volume and chmod/chown its root,
+// i.e. only if the StorageClass sets permissions, ownerUid or ownerGid. Otherwise the volume root keeps the mode it was
+// created with: WEKA default for filesystem- and snapshot-backed volumes, DefaultVolumePermissions for directories.
+func (v *Volume) needsRootPermissionUpdate() bool {
+	return v.permissions != 0 || v.ownerUid+v.ownerGid != 0
+}
+
 // UpdateParams updates params on volume upon creation. Was part of Create initially, but must be done after content source is applied
 func (v *Volume) UpdateParams(ctx context.Context) (retErr error) {
 	op := "UpdateParams"
@@ -387,6 +394,11 @@ func (v *Volume) UpdateParams(ctx context.Context) (retErr error) {
 	ctx = log.With().Str("trace_id", span.SpanContext().TraceID().String()).Str("span_id", span.SpanContext().SpanID().String()).Str("op", op).Logger().WithContext(ctx)
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
+
+	if !v.needsRootPermissionUpdate() {
+		logger.Debug().Msg("No permissions, ownerUid or ownerGid set in StorageClass, leaving volume root permissions as created")
+		return nil
+	}
 
 	err, unmount := v.MountUnderlyingFS(ctx)
 	defer deferUmount(unmount, &retErr)
@@ -556,12 +568,8 @@ func (v *Volume) getCapacityFromQuota(ctx context.Context) (capacity int64, retE
 
 	logger := log.Ctx(ctx).With().Str("volume_id", v.GetId()).Logger()
 
-	err, unmount := v.MountUnderlyingFS(ctx)
-	defer deferUmount(unmount, &retErr)
-	if err != nil {
-		return 0, err
-	}
-
+	// no mount here: getSizeFromQuota resolves the inode via API where supported, and the
+	// inode/xattr fallbacks mount on their own only when needed
 	if v.apiClient != nil && v.apiClient.SupportsQuotaDirectoryAsVolume() && !v.server.isInDevMode() {
 		size, err := v.getSizeFromQuota(ctx)
 		if err == nil {

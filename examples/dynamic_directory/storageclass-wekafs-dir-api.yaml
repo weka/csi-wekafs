@@ -17,7 +17,8 @@ parameters:
   # GID of the volume owner, default 0 (root)
   #ownerGid: "1000"
 
-  # permissions in Unix octal format, default "0750"
+  # permissions in Unix octal format. Applied only if any of permissions/ownerUid/ownerGid is set,
+  # otherwise the volume root keeps the mode it was created with
   #permissions: "0775"
 
   # capacity enforcement mode (either SOFT or HARD)
