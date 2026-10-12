@@ -114,6 +114,17 @@ weka nfs rules add ip <group> <cidr>
 weka nfs permission add <filesystem> <group>
 ```
 
+### Troubleshooting: NFS export missing
+
+If the mount fails because the filesystem is not exported to the node, volume creation or publishing fails with `FailedPrecondition`. With `--manage-nfs-permissions=false` the message looks like:
+```
+NFS export missing: NFS server 10.0.112.193 does not export filesystem "default" to this client (10.0.108.201).
+NFS permission management is disabled (--manage-nfs-permissions=false), so the Weka admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),
+and an NFS permission for filesystem "default" to that group allowing NFSv4.
+Details: mount -t nfs -o async,hard,rdirplus,vers=4.1 10.0.112.193:/default -> "No such file or directory"
+```
+Create the client group, a rule covering the client IP shown and an NFS permission for the named filesystem. With `--manage-nfs-permissions=true` the message instead asks you to check the plugin logs for errors creating these objects. Other mount failures (timeouts, connection refused) are reported as `NFS mount of filesystem ... failed` with the same `Details:` line.
+
 ## Way of Operation
 The Weka CSI Plugin with NFS transport operates in the following way:
 Upon start of the Weka CSI Plugin, the plugin will:

@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/mount-utils"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
@@ -222,7 +225,8 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 			time.Sleep(2 * time.Second) // Optional: Add a delay between retries
 		}
 		logger.Error().Err(err).Int("retry_count", maxRetries).Msg("Failed to mount after retries")
-		return err
+		return newNfsMountError(m.mountIpAddress, m.fsName, getLocalIpFacingServer(m.mountIpAddress), m.protocolVersion,
+			mountTarget, mountOptions.Strings(), m.manageNfsPermissions, err)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsName)
 		if err := os.MkdirAll(fakePath, DefaultVolumePermissions); err != nil {
@@ -232,4 +236,76 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 
 		return m.kMounter.Mount(fakePath, m.getMountPoint(), "", []string{"bind"})
 	}
+}
+
+// getLocalIpFacingServer returns the local IP address of this node that is used to reach the NFS server.
+// Opening a UDP "connection" sends no packets, it only makes the kernel pick the outgoing interface.
+func getLocalIpFacingServer(server string) string {
+	conn, err := net.Dial("udp", net.JoinHostPort(server, "2049"))
+	if err != nil {
+		return "unknown"
+	}
+	defer func() { _ = conn.Close() }()
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok || addr == nil {
+		return "unknown"
+	}
+	return addr.IP.String()
+}
+
+// nfsVersionLabel returns "NFSv3" or "NFSv4" for the configured protocol version
+func nfsVersionLabel(v apiclient.NfsVersionString) string {
+	if strings.HasPrefix(v.AsOption(), "3") {
+		return "NFSv3"
+	}
+	return "NFSv4"
+}
+
+// extractNfsMountReason returns the short reason from a k8s mount-utils error, falling back to the full error text
+func extractNfsMountReason(err error) string {
+	full := strings.TrimSpace(err.Error())
+	const marker = "reason given by server:"
+	var reason string
+	lines := strings.Split(full, "\n")
+	for _, line := range lines {
+		if idx := strings.Index(line, marker); idx >= 0 {
+			reason = strings.TrimSpace(line[idx+len(marker):])
+			break
+		}
+	}
+	if reason == "" {
+		for _, line := range lines {
+			if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "Output:"); ok && strings.TrimSpace(rest) != "" {
+				reason = strings.TrimSpace(rest)
+				break
+			}
+		}
+	}
+	if reason == "" {
+		return full
+	}
+	return reason
+}
+
+// newNfsMountError builds a gRPC FailedPrecondition error with the cause and the fix first and raw details last.
+// manageNfsPermissions selects whether the fix is for the Weka admin (plugin does not manage NFS) or a plugin log check.
+func newNfsMountError(server, fsName, clientIp string, version apiclient.NfsVersionString, mountTarget string, mountOptions []string, manageNfsPermissions bool, mountErr error) error {
+	reason := extractNfsMountReason(mountErr)
+	details := fmt.Sprintf("Details: mount -t nfs -o %s %s -> \"%s\"", strings.Join(mountOptions, ","), mountTarget, reason)
+	lower := strings.ToLower(reason)
+	if strings.Contains(lower, "no such file or directory") || strings.Contains(lower, "access denied") {
+		var fix string
+		if manageNfsPermissions {
+			fix = fmt.Sprintf("The plugin manages NFS permissions (--manage-nfs-permissions=true); check the plugin logs for errors creating the NFS client group, "+
+				"its rule for this node's IP, or the NFS permission for filesystem \"%s\".", fsName)
+		} else {
+			fix = fmt.Sprintf("NFS permission management is disabled (--manage-nfs-permissions=false), so the Weka admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),\n"+
+				"and an NFS permission for filesystem \"%s\" to that group allowing %s.", fsName, nfsVersionLabel(version))
+		}
+		return status.Errorf(codes.FailedPrecondition,
+			"NFS export missing: NFS server %s does not export filesystem \"%s\" to this client (%s).\n%s\n%s",
+			server, fsName, clientIp, fix, details)
+	}
+	return status.Errorf(codes.FailedPrecondition, "NFS mount of filesystem \"%s\" from server %s failed for client %s: %s\n%s",
+		fsName, server, clientIp, reason, details)
 }

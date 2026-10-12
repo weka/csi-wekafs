@@ -717,3 +717,12 @@ func stripUnnecessaryPVFields(obj interface{}) (interface{}, error) {
 
 	return minimal, nil
 }
+
+// grpcStatusError returns err unchanged if it already carries a meaningful gRPC status (code other than Unknown/OK),
+// so that callers can preserve it instead of re-wrapping it with a generic code. Otherwise returns nil.
+func grpcStatusError(err error) error {
+	if st, ok := status.FromError(err); ok && st.Code() != codes.Unknown && st.Code() != codes.OK {
+		return err
+	}
+	return nil
+}
