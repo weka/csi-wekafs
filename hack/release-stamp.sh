@@ -2,18 +2,19 @@
 # Stamp the repository for a release: chart versions, generated docs, and release notes.
 # Used by .github/workflows/release-v3.yaml; also runnable locally (then restore with git checkout).
 #
-#   hack/release-stamp.sh v3.0.0 notes.md
+#   hack/release-stamp.sh v3.0.0 notes.md [artifacthub-changes.json]
 #
 # Requires: yq, helm with the schema-gen plugin, docker (for helm-docs).
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "usage: $0 <vX.Y.Z> <notes-file>" >&2
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo "usage: $0 <vX.Y.Z> <notes-file> [artifacthub-changes-json]" >&2
   exit 2
 fi
 
 VERSION="$1"
 NOTES_FILE="$2"
+CHANGES_FILE="${3:-}"
 CHART="charts/csi-wekafsplugin"
 
 if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -30,10 +31,16 @@ if [[ ! -d "$CHART" ]]; then
 fi
 
 VERSION="$VERSION" hack/update-charts.sh >/dev/null
+# ArtifactHub reads the changes list as a YAML string, not a structured value.
+export CHANGES="[]"
+[[ -s "$CHANGES_FILE" ]] && CHANGES="$(yq -o=yaml -P '.' "$CHANGES_FILE")"
+# shellcheck disable=SC2016 # $changes is a yq variable
 yq -i '
+  (strenv(CHANGES) | from_yaml) as $changes |
   .annotations."artifacthub.io/prerelease" = "false" |
-  .annotations."artifacthub.io/containsSecurityUpdates" = "false" |
-  del(.annotations."artifacthub.io/changes")
+  .annotations."artifacthub.io/containsSecurityUpdates" = ($changes | any_c(.kind == "security") | tostring) |
+  del(.annotations."artifacthub.io/changes") |
+  with(select($changes | length > 0); .annotations."artifacthub.io/changes" = strenv(CHANGES))
 ' "$CHART/Chart.yaml"
 
 helm schema-gen "$CHART/values.yaml" >| "$CHART/values.schema.json"
