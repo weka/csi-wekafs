@@ -288,7 +288,7 @@ func extractNfsMountReason(err error) string {
 }
 
 // newNfsMountError builds a gRPC FailedPrecondition error with the cause and the fix first and raw details last.
-// manageNfsPermissions selects whether the fix is for the Weka admin (plugin does not manage NFS) or a plugin log check.
+// manageNfsPermissions selects whether the fix is for the WEKA cluster admin (plugin does not manage NFS) or a plugin log check.
 func newNfsMountError(server, fsName, clientIp string, version apiclient.NfsVersionString, mountTarget string, mountOptions []string, manageNfsPermissions bool, mountErr error) error {
 	reason := extractNfsMountReason(mountErr)
 	details := fmt.Sprintf("Details: mount -t nfs -o %s %s -> \"%s\"", strings.Join(mountOptions, ","), mountTarget, reason)
@@ -299,7 +299,7 @@ func newNfsMountError(server, fsName, clientIp string, version apiclient.NfsVers
 			fix = fmt.Sprintf("The plugin manages NFS permissions (--manage-nfs-permissions=true); check the plugin logs for errors creating the NFS client group, "+
 				"its rule for this node's IP, or the NFS permission for filesystem \"%s\".", fsName)
 		} else {
-			fix = fmt.Sprintf("NFS permission management is disabled (--manage-nfs-permissions=false), so the Weka admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),\n"+
+			fix = fmt.Sprintf("NFS permissions management is disabled (--manage-nfs-permissions=false), so the WEKA cluster admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),\n"+
 				"and an NFS permission for filesystem \"%s\" to that group allowing %s.", fsName, nfsVersionLabel(version))
 		}
 		return status.Errorf(codes.FailedPrecondition,

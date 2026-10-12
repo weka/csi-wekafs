@@ -45,7 +45,7 @@ func TestNewNfsMountError(t *testing.T) {
 		want   string
 	}{
 		"admin manages NFS": {false, head +
-			"NFS permission management is disabled (--manage-nfs-permissions=false), so the Weka admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),\n" +
+			"NFS permissions management is disabled (--manage-nfs-permissions=false), so the WEKA cluster admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),\n" +
 			"and an NFS permission for filesystem \"default\" to that group allowing NFSv4.\n" + details},
 		"plugin manages NFS": {true, head +
 			"The plugin manages NFS permissions (--manage-nfs-permissions=true); check the plugin logs for errors creating the NFS client group, its rule for this node's IP, or the NFS permission for filesystem \"default\".\n" + details},

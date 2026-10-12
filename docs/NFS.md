@@ -100,7 +100,7 @@ Those are the minimum prerequisites for using Weka CSI Plugin with NFS transport
 The `pluginConfig.mountProtocol.manageNfsPermissions` value (binary flag `--manage-nfs-permissions`) controls whether the plugin changes NFS configuration on the Weka cluster.
 
 - `true` (Helm default): the plugin creates the client group, adds per-node IP rules and creates per-filesystem NFS permissions, as described below, and removes the filesystem's NFS permissions before deleting it.
-- `false` (binary default, used by the Weka operator): the plugin makes no NFS configuration changes. The Weka admin must create:
+- `false` (binary default, used by the Weka operator): the plugin makes no NFS configuration changes. The WEKA cluster admin must create:
   - a client group (set its name with `pluginConfig.mountProtocol.clientGroupName`),
   - a rule in that group covering the Kubernetes node subnet (CIDR),
   - for each filesystem, an NFS permission to that group: path `/`, RW, squash `none`, versions including the configured `nfsProtocolVersion`, auth `SYS`.
@@ -119,7 +119,7 @@ weka nfs permission add <filesystem> <group>
 If the mount fails because the filesystem is not exported to the node, volume creation or publishing fails with `FailedPrecondition`. With `--manage-nfs-permissions=false` the message looks like:
 ```
 NFS export missing: NFS server 10.0.112.193 does not export filesystem "default" to this client (10.0.108.201).
-NFS permission management is disabled (--manage-nfs-permissions=false), so the Weka admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),
+NFS permissions management is disabled (--manage-nfs-permissions=false), so the WEKA cluster admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),
 and an NFS permission for filesystem "default" to that group allowing NFSv4.
 Details: mount -t nfs -o async,hard,rdirplus,vers=4.1 10.0.112.193:/default -> "No such file or directory"
 ```
