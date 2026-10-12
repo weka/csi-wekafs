@@ -71,6 +71,28 @@ jobs:
             -f tag_name="$VERSION" -f target_commitish=main -f previous_tag_name="$PREV" \
             --jq .body > "$RUNNER_TEMP/notes.md"
 
+      # ArtifactHub shows these as the chart version's "Changes" list. Kind comes from the PR label,
+      # as draft-v2 did; ci and tests PRs are left out since they change nothing for chart users.
+      - name: Generate ArtifactHub changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREV: ${{ steps.version.outputs.previous_tag }}
+        run: |
+          SINCE="$(git log -1 --format=%cI "$PREV")"
+          # shellcheck disable=SC2016 # $l is a jq variable
+          gh pr list --base main --state merged --limit 500 --search "merged:>$SINCE" \
+            --json number,title,url,labels --jq '
+              map([.labels[].name | ascii_downcase] as $l
+                | (if   $l | index("security")                          then "security"
+                   elif $l | index("feature")                           then "added"
+                   elif $l | index("enhancement")                       then "changed"
+                   elif $l | index("fix") or index("bug")               then "fixed"
+                   elif $l | index("documentation") or index("dependencies") then "changed"
+                   else empty end) as $kind
+                | {kind: $kind, description: .title, links: [{name: "PR #\(.number)", url: .url}]})
+            ' > "$RUNNER_TEMP/artifacthub-changes.json"
+          cat "$RUNNER_TEMP/artifacthub-changes.json"
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -136,7 +158,7 @@ jobs:
       - name: Stamp chart, docs and release notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: hack/release-stamp.sh "$VERSION" "$RUNNER_TEMP/notes.md"
+        run: hack/release-stamp.sh "$VERSION" "$RUNNER_TEMP/notes.md" "$RUNNER_TEMP/artifacthub-changes.json"
 
       # https://github.com/stefanzweifel/git-auto-commit-action#push-to-protected-branches
       - name: Commit release files
