@@ -4,7 +4,7 @@
 
 Kubernetes CSI (Container Storage Interface) driver for WekaFS, a high-performance distributed filesystem. Supports native Weka protocol and NFS transport, snapshots, encryption, dynamic/static provisioning, and observability via Prometheus metrics and OpenTelemetry tracing.
 
-**Current version**: 2.8.3
+**Current version**: 2.9.4
 **Language**: Go 1.26
 **Registry**: `quay.io/weka.io/csi-wekafs`
 **GitHub**: `github.com/weka/csi-wekafs`
@@ -75,6 +75,23 @@ Key components deployed:
 - **Node DaemonSet** with liveness probe sidecar
 - RBAC roles, CSIDriver resource, optional SELinux policy
 
+## Defaults must stay in sync
+
+Some defaults are restated in more than one place, and nothing validates the copies
+against each other, so they drift silently.
+
+- `charts/csi-wekafsplugin/values.yaml` ↔ the values table in `README.md`. Currently
+  paired: `dynamicProvisionPath`, `csiDriverVersion`, `controller.concurrency.*`,
+  `controller.healthPort`, `controller.maxConcurrentRequests`.
+- `charts/csi-wekafsplugin/values.yaml` ↔ the flag defaults in
+  `cmd/wekafsplugin/main.go`. Currently paired: `endpoint`, `drivername`,
+  `dynamic-path`, `metricsport`, `grpcrequesttimeoutseconds`.
+
+Change one, change the other in the same commit.
+
+`values.schema.json` carries no defaults by design — it types and validates only.
+Do not add defaults to it.
+
 ## Coding Conventions
 
 - Structured logging with Zerolog (use `log.Ctx(ctx)` for request-scoped loggers)
@@ -84,11 +101,58 @@ Key components deployed:
 - Controller-side Kubernetes access goes through the controller-runtime manager: `manager.GetClient()` for cached PV reads (indexed by `spec.csi.volumeHandle`), `manager.GetAPIReader()` for Secrets, so no Secret informer is started
 - Tests colocated with source files (`*_test.go`)
 
+## Comments
+
+Keep them minimal. Write a comment only when the code cannot be made obvious on its
+own: a Weka API quirk, a CSI spec requirement, a mount or namespace constraint, a
+deliberate omission, a workaround whose reason isn't visible in the diff. Do not
+comment what the code already says.
+
+The existing comments that carry information the reader cannot recover from the code
+are the bar — `nodeserver.go` explaining why releasing the parent wekafs mount does
+not break data access through the propagated bind mount, `constants.go` explaining
+why `garbageCollectionTimeout` exists at all, `apistore_test.go` explaining that a
+concurrent map read/write is a fatal Go runtime error rather than a benign race.
+
+The test is what happens when the code is wrong. Comment what fails *silently*, at
+runtime, on one platform only, or only under concurrency — those cost a cycle to
+rediscover. Say nothing about syntax, types, or signature shape: the compiler,
+`go vet` and the CSI sanity suite reject those instantly and loudly, so the comment
+buys nothing even when it is accurate.
+
+## Scope of a change
+
+Fix what was asked, and only that. Unrelated problems you notice along the way stay
+untouched — even obvious ones, even one-line ones. Mention them and offer to open a
+ticket instead.
+
+A change is in scope only if the requested fix does not work without it.
+
 ## Workflow Rules
 
-- **Run `/simplify` after every code change** to check for reuse, quality, and efficiency issues
+- **Run `/simplify` once the change is complete and working** — after the change as a
+  whole, not after each edit. It checks for reuse, quality, and efficiency issues.
 - **Keep CLAUDE.md up to date** when repo structure, conventions, or key patterns change
 - **Keep README.md up to date** when user-facing behavior, configuration, or deployment instructions change
+
+## Commit messages
+
+One subject line that stands on its own: conventional-commit type, then the
+user-visible outcome in plain words. `.github/workflows/lint_pr.yaml` gates the PR
+title on the same set — types `ci`, `chore`, `refactor`, `feat`, `fix`, `docs`,
+`style`, `breaking`, `test`, with optional scopes `deps`, `ci`, `CSI-<n>`,
+`WEKAPP-<n>`.
+
+Existing history is the bar:
+
+- `fix: install nfs-utils in the driver image so NFS transport can mount`
+- `fix: keep a readonly attachment readonly when an override removes "ro"`
+- `docs: explain sync_on_close, and correct the order mount options are applied in`
+
+A body is allowed, and only for the non-obvious *why* — the failure mode, the
+constraint, what was ruled out and why. That reasoning has nowhere else to live: PR
+descriptions in this repo are short and written for release notes, not for reviewers.
+No bullet summaries of the diff, no restating the subject in longer form.
 
 ## PR Descriptions
 
