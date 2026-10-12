@@ -422,6 +422,10 @@ func (ns *NodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		if errors.Is(err, apiclient.MountPermissionDenied) {
 			return NodePublishVolumeError(ctx, codes.PermissionDenied, err.Error())
 		}
+		if sErr := grpcStatusError(err); sErr != nil {
+			log.Ctx(ctx).Err(sErr).Msg("Error publishing volume")
+			return &csi.NodePublishVolumeResponse{}, sErr
+		}
 		return NodePublishVolumeError(ctx, codes.Internal, "Failed to mount a parent filesystem, check Authentication: "+err.Error())
 	}
 	// The parent wekafs mount lives in the container's private mount namespace and
