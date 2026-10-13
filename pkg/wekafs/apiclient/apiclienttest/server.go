@@ -200,3 +200,34 @@ func (s *Server) AddFilesystem(name string, totalBytes, freeBytes int64) {
 	}
 	s.fsNameIndex[name] = fsUid
 }
+
+// AddNfsPermission seeds an NFS permission for the named filesystem and client group. While it
+// exists, the fake refuses to delete that filesystem, like WEKA does.
+func (s *Server) AddNfsPermission(filesystem, group string) {
+	permUid := uuid.New().String()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nfsPermissions[permUid] = &nfsPermissionRecord{
+		Uid:               permUid,
+		Filesystem:        filesystem,
+		Group:             group,
+		Path:              "/",
+		PermissionType:    "RW",
+		SquashMode:        "none",
+		SupportedVersions: []string{"V3", "V4"},
+		AnonUid:           "65534",
+		AnonGid:           "65534",
+	}
+}
+
+// HasFilesystem reports whether a filesystem with the given name currently exists.
+func (s *Server) HasFilesystem(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	uid, ok := s.fsNameIndex[name]
+	if !ok {
+		return false
+	}
+	_, ok = s.filesystems[uid]
+	return ok
+}

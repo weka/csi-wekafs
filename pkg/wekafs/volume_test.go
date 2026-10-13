@@ -5,7 +5,10 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient/apiclienttest"
@@ -324,4 +327,87 @@ func TestWithUnsupportedMountOptionsPruned_KeepsReadonlyAttachment(t *testing.T)
 	if !pruned.hasOption(MountOptionReadOnly) {
 		t.Errorf("Expected '%s' from a readonly attachment to survive the mount-time prune, got '%s'", MountOptionReadOnly, pruned.String())
 	}
+}
+
+func TestVolume_needsRootPermissionUpdate(t *testing.T) {
+	snapUuid := uuid.New()
+	tests := []struct {
+		name     string
+		v        *Volume
+		expected bool
+	}{
+		{"filesystem, no params", &Volume{FilesystemName: "fs"}, false},
+		{"filesystem, params set", &Volume{FilesystemName: "fs", permissions: 0o775}, true},
+		{"filesystem, only owner set", &Volume{FilesystemName: "fs", ownerUid: 1000}, true},
+		{"snapshot, no params", &Volume{FilesystemName: "fs", SnapshotAccessPoint: "ap"}, false},
+		{"snapshot uuid, params set", &Volume{FilesystemName: "fs", SnapshotUuid: &snapUuid, permissions: 0o775}, true},
+		{"directory on snapshot, no params", &Volume{FilesystemName: "fs", SnapshotAccessPoint: "ap", innerPath: "dir"}, false},
+		{"dir/v1, no params", &Volume{FilesystemName: "fs", innerPath: "dir"}, false},
+		{"dir/v1, params set", &Volume{FilesystemName: "fs", innerPath: "dir", permissions: 0o775}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.v.needsRootPermissionUpdate(); got != tt.expected {
+				t.Errorf("needsRootPermissionUpdate() = %v, expected %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// UpdateParams must return before touching mounts (a nil server would panic on mount) when nothing is set in StorageClass.
+func TestVolume_UpdateParams_SkipsMountWhenNoParamsSet(t *testing.T) {
+	v := &Volume{id: "weka/v2/fs", FilesystemName: "fs"}
+	if err := v.UpdateParams(context.Background()); err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func newDeleteFilesystemTestVolume(t *testing.T, fsName string) *Volume {
+	t.Helper()
+	driver := GetDriverForTest(t)
+	apiClient := GetApiClientForTest(t)
+	cfg := NewDriverConfig(DriverConfigOptions{WaitForObjectDeletion: true})
+	cs := NewControllerServer("localhost", driver.api, &wekafsMounter{}, cfg, nil)
+	return &Volume{
+		FilesystemName: fsName,
+		apiClient:      apiClient,
+		server:         cs,
+	}
+}
+
+func TestVolume_deleteFilesystem(t *testing.T) {
+	if fakeServer == nil {
+		t.Skip("requires the in-memory fake WEKA API")
+	}
+	ctx := context.Background()
+
+	t.Run("refused by WEKA while NFS permissions exist", func(t *testing.T) {
+		name := "del-with-perm"
+		fakeServer.AddFilesystem(name, 1<<30, 1<<30)
+		fakeServer.AddNfsPermission(name, "default")
+		v := newDeleteFilesystemTestVolume(t, name)
+		err := v.deleteFilesystem(ctx)
+		if status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("expected FailedPrecondition, got %v", err)
+		}
+		if !fakeServer.HasFilesystem(name) {
+			t.Fatalf("filesystem must still exist after refused deletion")
+		}
+	})
+
+	t.Run("deleted when no permissions exist", func(t *testing.T) {
+		name := "del-no-perm"
+		fakeServer.AddFilesystem(name, 1<<30, 1<<30)
+		v := newDeleteFilesystemTestVolume(t, name)
+		if err := v.deleteFilesystem(ctx); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if fakeServer.HasFilesystem(name) {
+			t.Fatalf("filesystem should be gone")
+		}
+		// repeated delete is idempotent
+		if err := newDeleteFilesystemTestVolume(t, name).deleteFilesystem(ctx); err != nil {
+			t.Fatalf("repeated delete should succeed, got %v", err)
+		}
+	})
 }

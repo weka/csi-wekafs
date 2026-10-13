@@ -161,6 +161,16 @@ func CreateVolumeError(ctx context.Context, errorCode codes.Code, errorMessage s
 	return &csi.CreateVolumeResponse{}, err
 }
 
+// createVolumeErrorFrom keeps the gRPC status of err if it has one (e.g. FailedPrecondition for a missing NFS export),
+// otherwise reports err with errorCode
+func createVolumeErrorFrom(ctx context.Context, errorCode codes.Code, err error) (*csi.CreateVolumeResponse, error) {
+	if sErr := grpcStatusError(err); sErr != nil {
+		log.Ctx(ctx).Err(sErr).CallerSkipFrame(1).Msg("Error creating volume")
+		return &csi.CreateVolumeResponse{}, sErr
+	}
+	return CreateVolumeError(ctx, errorCode, err.Error())
+}
+
 // CheckCreateVolumeRequestSanity returns error if any generic validation fails
 func (cs *ControllerServer) CheckCreateVolumeRequestSanity(ctx context.Context, req *csi.CreateVolumeRequest) error {
 	ctx, span := otel.Tracer(TracerName).Start(ctx, "CheckCreateVolumeRequestSanity")
@@ -302,6 +312,9 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	if err != nil {
 		if !volExists {
+			if grpcStatusError(err) != nil {
+				return createVolumeErrorFrom(ctx, codes.Internal, err)
+			}
 			return CreateVolumeError(ctx, codes.Internal, fmt.Sprintf("Could not check if volume %s exists: %s", volume.GetId(), err.Error()))
 		} else {
 
@@ -311,6 +324,11 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 
 	if volExists && volMatchesCapacity {
+		// a previous attempt may have created the volume but failed before applying permissions/ownership
+		if err := volume.UpdateParams(ctx); err != nil {
+			logger.Error().Err(err).Msg("Failed to set params on a volume")
+			return createVolumeErrorFrom(ctx, codes.Internal, err)
+		}
 		result = "SUCCESS"
 		return &csi.CreateVolumeResponse{
 			Volume: &csi.Volume{
@@ -333,7 +351,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 		if err := volume.UpdateParams(ctx); err != nil {
 			logger.Error().Err(err).Msg("Failed to set params on a volume")
-			return CreateVolumeError(ctx, codes.Internal, err.Error())
+			return createVolumeErrorFrom(ctx, codes.Internal, err)
 		}
 
 		result = "SUCCESS"
@@ -362,7 +380,7 @@ func (cs *ControllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		if errors.Is(err, apiclient.MountPermissionDenied) {
 			return CreateVolumeError(ctx, codes.PermissionDenied, err.Error())
 		}
-		return CreateVolumeError(ctx, codes.Internal, err.Error())
+		return createVolumeErrorFrom(ctx, codes.Internal, err)
 	}
 
 	result = "SUCCESS"
@@ -492,6 +510,10 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	if err != nil {
 		if err == ErrFilesystemHasUnderlyingSnapshots {
 			return &csi.DeleteVolumeResponse{}, err
+		}
+		if sErr := grpcStatusError(err); sErr != nil {
+			log.Ctx(ctx).Err(sErr).Msg("Error deleting volume")
+			return &csi.DeleteVolumeResponse{}, sErr
 		}
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
