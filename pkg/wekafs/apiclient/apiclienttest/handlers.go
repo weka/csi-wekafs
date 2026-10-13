@@ -190,6 +190,7 @@ func (s *Server) routes() *http.ServeMux {
 
 	mux.HandleFunc("GET /api/v2/fileSystems", s.handleFsList)
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}", s.handleFsGet)
+	mux.HandleFunc("DELETE /api/v2/fileSystems/{uid}", s.handleFsDelete)
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}/resolvePath", s.handleResolvePath)
 	mux.HandleFunc("GET /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaGet)
 	mux.HandleFunc("PUT /api/v2/fileSystems/{uid}/quota/{inode}", s.handleQuotaPut)
@@ -328,6 +329,30 @@ func (s *Server) handleFsGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeData(w, fs.toWire())
+}
+
+// handleFsDelete mimics WEKA: deletion is refused with a 400 while any NFS permission still
+// references the filesystem; otherwise the filesystem is removed immediately.
+func (s *Server) handleFsDelete(w http.ResponseWriter, r *http.Request) {
+	uid := r.PathValue("uid")
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fs, ok := s.filesystems[uid]
+	if !ok {
+		writeError(w, http.StatusNotFound, "filesystem not found")
+		return
+	}
+	for _, p := range s.nfsPermissions {
+		if p.Filesystem == fs.Name {
+			writeError(w, http.StatusBadRequest, "filesystem has NFS permissions and cannot be deleted")
+			return
+		}
+	}
+	delete(s.filesystems, uid)
+	if s.fsNameIndex[fs.Name] == uid {
+		delete(s.fsNameIndex, fs.Name)
+	}
+	writeData(w, map[string]any{})
 }
 
 // handleResolvePath only needs to satisfy TestApiClient_ResolvePathToInode: "/" on a known

@@ -15,8 +15,8 @@ const k8sNoExportErr = "mount failed: exit status 32\nMounting command: mount\nM
 
 func TestNfsVersionLabel(t *testing.T) {
 	for in, want := range map[apiclient.NfsVersionString]string{"V4": "NFSv4", "V4.1": "NFSv4", "V3": "NFSv3", "V3.0": "NFSv3", "": "NFSv4"} {
-		if got := nfsVersionLabel(in); got != want {
-			t.Errorf("nfsVersionLabel(%q)=%q want %q", in, got, want)
+		if got := in.Label(); got != want {
+			t.Errorf("Label(%q)=%q want %q", in, got, want)
 		}
 	}
 }
@@ -53,7 +53,7 @@ func TestNewNfsMountError(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			err := newNfsMountError("10.0.112.193", "default", "10.0.108.201", "V4.1", "10.0.112.193:/default", opts, tc.manage, errors.New(k8sNoExportErr))
-			if status.Code(err) != codes.FailedPrecondition {
+			if status.Code(err) != codes.PermissionDenied {
 				t.Fatalf("code %v", status.Code(err))
 			}
 			if got := status.Convert(err).Message(); got != tc.want {
@@ -65,7 +65,7 @@ func TestNewNfsMountError(t *testing.T) {
 	for _, manage := range []bool{false, true} {
 		err := newNfsMountError("10.0.112.193", "default", "10.0.108.201", "V3", "10.0.112.193:/default", opts, manage, errors.New("Output: mount.nfs: Connection timed out"))
 		msg := status.Convert(err).Message()
-		if status.Code(err) != codes.FailedPrecondition || strings.Contains(msg, "export missing") ||
+		if status.Code(err) != codes.Internal || strings.Contains(msg, "export missing") ||
 			!strings.HasPrefix(msg, "NFS mount of filesystem \"default\" from server 10.0.112.193 failed for client 10.0.108.201: mount.nfs: Connection timed out\nDetails:") {
 			t.Errorf("unexpected (manage=%v): %s", manage, msg)
 		}

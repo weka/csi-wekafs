@@ -116,7 +116,7 @@ weka nfs permission add <filesystem> <group>
 
 ### Troubleshooting: NFS export missing
 
-If the mount fails because the filesystem is not exported to the node, volume creation or publishing fails with `FailedPrecondition`. With `--manage-nfs-permissions=false` the message looks like:
+If the mount fails because the filesystem is not exported to the node, volume creation or publishing fails with `PermissionDenied`. With `--manage-nfs-permissions=false` the message looks like:
 ```
 NFS export missing: NFS server 10.0.112.193 does not export filesystem "default" to this client (10.0.108.201).
 NFS permissions management is disabled (--manage-nfs-permissions=false), so the WEKA cluster admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),

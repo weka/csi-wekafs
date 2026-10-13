@@ -411,9 +411,12 @@ func (v *Volume) UpdateParams(ctx context.Context) (retErr error) {
 	defer syscall.Umask(oldMask)
 
 	volPath := v.GetFullPath(ctx)
-	if err := os.Chmod(volPath, v.permissions); err != nil {
-		logger.Error().Err(err).Str("full_path", volPath).Msg("Failed to change directory")
-		return err
+	// only ownerUid/ownerGid may be set, then keep the mode the volume root was created with
+	if v.permissions != 0 {
+		if err := os.Chmod(volPath, v.permissions); err != nil {
+			logger.Error().Err(err).Str("full_path", volPath).Msg("Failed to change directory")
+			return err
+		}
 	}
 
 	// Update volume UID/GID if set in storage class
@@ -1793,12 +1796,23 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 				return nil
 			}
 			if _, ok := err.(*apiclient.ApiBadRequestError); ok {
-				logger.Trace().Err(err).Msg("Bad request during filesystem deletion, probably already removed")
-				return nil
+				// a bad request may mean the filesystem is already gone, but WEKA also refuses deletion this way,
+				// e.g. while NFS permissions still exist for it. Only report success if it is really gone or being removed
+				fsObj, getErr := v.getFilesystemObj(ctx, false)
+				if getErr == nil && (fsObj == nil || fsObj.Uid == uuid.Nil) {
+					logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found after bad request, assuming repeating request")
+					return nil
+				}
+				if getErr != nil || !fsObj.IsRemoving {
+					logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("WEKA refused filesystem deletion")
+					return status.Errorf(codes.FailedPrecondition, "WEKA refused to delete filesystem %s: %s. "+
+						"If NFS permissions still exist for it, they must be removed before the filesystem can be deleted", v.FilesystemName, err)
+				}
+				logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem is already being removed")
+			} else {
+				logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")
+				return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
 			}
-			logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("Failed to delete filesystem")
-			return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s", v.FilesystemName, err)
-
 		}
 	}
 	fsUid := fsObj.Uid

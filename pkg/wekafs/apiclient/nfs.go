@@ -38,6 +38,14 @@ func (n NfsVersionString) AsWeka() NfsVersionString {
 	return NfsVersionString(strings.Split(n.String(), ".")[0])
 }
 
+// Label returns "NFSv3" or "NFSv4" for use in user-facing messages
+func (n NfsVersionString) Label() string {
+	if strings.HasPrefix(n.AsOption(), "3") {
+		return "NFSv3"
+	}
+	return "NFSv4"
+}
+
 func (s NfsVersionStrings) Matches(other []NfsVersionString) bool {
 	for _, v := range s {
 		if !slices.Contains(other, v) {

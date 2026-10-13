@@ -305,6 +305,7 @@ func (a *ApiClient) DeleteFileSystem(ctx context.Context, r *FileSystemDeleteReq
 				}
 			}
 		}
+		return err
 	}
 	return nil
 }

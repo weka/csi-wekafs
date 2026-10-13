@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -225,7 +224,11 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 			time.Sleep(2 * time.Second) // Optional: Add a delay between retries
 		}
 		logger.Error().Err(err).Int("retry_count", maxRetries).Msg("Failed to mount after retries")
-		return newNfsMountError(m.mountIpAddress, m.fsName, getLocalIpFacingServer(m.mountIpAddress), m.protocolVersion,
+		clientIp, ipErr := apiclient.GetNodeIpAddressByRouting(m.mountIpAddress)
+		if ipErr != nil {
+			clientIp = "unknown"
+		}
+		return newNfsMountError(m.mountIpAddress, m.fsName, clientIp, m.protocolVersion,
 			mountTarget, mountOptions.Strings(), m.manageNfsPermissions, err)
 	} else {
 		fakePath := filepath.Join(m.debugPath, m.fsName)
@@ -236,29 +239,6 @@ func (m *nfsMount) doMount(ctx context.Context, apiClient *apiclient.ApiClient, 
 
 		return m.kMounter.Mount(fakePath, m.getMountPoint(), "", []string{"bind"})
 	}
-}
-
-// getLocalIpFacingServer returns the local IP address of this node that is used to reach the NFS server.
-// Opening a UDP "connection" sends no packets, it only makes the kernel pick the outgoing interface.
-func getLocalIpFacingServer(server string) string {
-	conn, err := net.Dial("udp", net.JoinHostPort(server, "2049"))
-	if err != nil {
-		return "unknown"
-	}
-	defer func() { _ = conn.Close() }()
-	addr, ok := conn.LocalAddr().(*net.UDPAddr)
-	if !ok || addr == nil {
-		return "unknown"
-	}
-	return addr.IP.String()
-}
-
-// nfsVersionLabel returns "NFSv3" or "NFSv4" for the configured protocol version
-func nfsVersionLabel(v apiclient.NfsVersionString) string {
-	if strings.HasPrefix(v.AsOption(), "3") {
-		return "NFSv3"
-	}
-	return "NFSv4"
 }
 
 // extractNfsMountReason returns the short reason from a k8s mount-utils error, falling back to the full error text
@@ -287,7 +267,8 @@ func extractNfsMountReason(err error) string {
 	return reason
 }
 
-// newNfsMountError builds a gRPC FailedPrecondition error with the cause and the fix first and raw details last.
+// newNfsMountError builds a gRPC error with the cause and the fix first and raw details last: PermissionDenied when the
+// NFS server refuses the filesystem to this client (missing export), Internal for any other mount failure.
 // manageNfsPermissions selects whether the fix is for the WEKA cluster admin (plugin does not manage NFS) or a plugin log check.
 func newNfsMountError(server, fsName, clientIp string, version apiclient.NfsVersionString, mountTarget string, mountOptions []string, manageNfsPermissions bool, mountErr error) error {
 	reason := extractNfsMountReason(mountErr)
@@ -300,12 +281,12 @@ func newNfsMountError(server, fsName, clientIp string, version apiclient.NfsVers
 				"its rule for this node's IP, or the NFS permission for filesystem \"%s\".", fsName)
 		} else {
 			fix = fmt.Sprintf("NFS permissions management is disabled (--manage-nfs-permissions=false), so the WEKA cluster admin must create an NFS client group with a rule covering this node's IP (a subnet rule covers all K8s nodes),\n"+
-				"and an NFS permission for filesystem \"%s\" to that group allowing %s.", fsName, nfsVersionLabel(version))
+				"and an NFS permission for filesystem \"%s\" to that group allowing %s.", fsName, version.Label())
 		}
-		return status.Errorf(codes.FailedPrecondition,
+		return status.Errorf(codes.PermissionDenied,
 			"NFS export missing: NFS server %s does not export filesystem \"%s\" to this client (%s).\n%s\n%s",
 			server, fsName, clientIp, fix, details)
 	}
-	return status.Errorf(codes.FailedPrecondition, "NFS mount of filesystem \"%s\" from server %s failed for client %s: %s\n%s",
+	return status.Errorf(codes.Internal, "NFS mount of filesystem \"%s\" from server %s failed for client %s: %s\n%s",
 		fsName, server, clientIp, reason, details)
 }

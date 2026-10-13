@@ -511,6 +511,10 @@ func (cs *ControllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		if err == ErrFilesystemHasUnderlyingSnapshots {
 			return &csi.DeleteVolumeResponse{}, err
 		}
+		if sErr := grpcStatusError(err); sErr != nil {
+			log.Ctx(ctx).Err(sErr).Msg("Error deleting volume")
+			return &csi.DeleteVolumeResponse{}, sErr
+		}
 		return DeleteVolumeError(ctx, codes.Internal, err.Error())
 	}
 

@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient"
 	"github.com/wekafs/csi-wekafs/pkg/wekafs/apiclient/apiclienttest"
@@ -358,4 +360,54 @@ func TestVolume_UpdateParams_SkipsMountWhenNoParamsSet(t *testing.T) {
 	if err := v.UpdateParams(context.Background()); err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
+}
+
+func newDeleteFilesystemTestVolume(t *testing.T, fsName string) *Volume {
+	t.Helper()
+	driver := GetDriverForTest(t)
+	apiClient := GetApiClientForTest(t)
+	cfg := NewDriverConfig(DriverConfigOptions{WaitForObjectDeletion: true})
+	cs := NewControllerServer("localhost", driver.api, &wekafsMounter{}, cfg, nil)
+	return &Volume{
+		FilesystemName: fsName,
+		apiClient:      apiClient,
+		server:         cs,
+	}
+}
+
+func TestVolume_deleteFilesystem(t *testing.T) {
+	if fakeServer == nil {
+		t.Skip("requires the in-memory fake WEKA API")
+	}
+	ctx := context.Background()
+
+	t.Run("refused by WEKA while NFS permissions exist", func(t *testing.T) {
+		name := "del-with-perm"
+		fakeServer.AddFilesystem(name, 1<<30, 1<<30)
+		fakeServer.AddNfsPermission(name, "default")
+		v := newDeleteFilesystemTestVolume(t, name)
+		err := v.deleteFilesystem(ctx)
+		if status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("expected FailedPrecondition, got %v", err)
+		}
+		if !fakeServer.HasFilesystem(name) {
+			t.Fatalf("filesystem must still exist after refused deletion")
+		}
+	})
+
+	t.Run("deleted when no permissions exist", func(t *testing.T) {
+		name := "del-no-perm"
+		fakeServer.AddFilesystem(name, 1<<30, 1<<30)
+		v := newDeleteFilesystemTestVolume(t, name)
+		if err := v.deleteFilesystem(ctx); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if fakeServer.HasFilesystem(name) {
+			t.Fatalf("filesystem should be gone")
+		}
+		// repeated delete is idempotent
+		if err := newDeleteFilesystemTestVolume(t, name).deleteFilesystem(ctx); err != nil {
+			t.Fatalf("repeated delete should succeed, got %v", err)
+		}
+	})
 }
