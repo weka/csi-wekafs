@@ -1799,11 +1799,15 @@ func (v *Volume) deleteFilesystem(ctx context.Context) error {
 				// a bad request may mean the filesystem is already gone, but WEKA also refuses deletion this way,
 				// e.g. while NFS permissions still exist for it. Only report success if it is really gone or being removed
 				fsObj, getErr := v.getFilesystemObj(ctx, false)
-				if getErr == nil && (fsObj == nil || fsObj.Uid == uuid.Nil) {
+				if getErr != nil {
+					logger.Error().Err(getErr).Str("filesystem", v.FilesystemName).Msg("Failed to check filesystem after refused deletion")
+					return status.Errorf(codes.Internal, "Failed to delete filesystem %s: %s; could not check its state: %s", v.FilesystemName, err, getErr)
+				}
+				if fsObj == nil || fsObj.Uid == uuid.Nil {
 					logger.Debug().Str("filesystem", v.FilesystemName).Msg("Filesystem not found after bad request, assuming repeating request")
 					return nil
 				}
-				if getErr != nil || !fsObj.IsRemoving {
+				if !fsObj.IsRemoving {
 					logger.Error().Err(err).Str("filesystem", v.FilesystemName).Msg("WEKA refused filesystem deletion")
 					return status.Errorf(codes.FailedPrecondition, "WEKA refused to delete filesystem %s: %s. "+
 						"If NFS permissions still exist for it, they must be removed before the filesystem can be deleted", v.FilesystemName, err)

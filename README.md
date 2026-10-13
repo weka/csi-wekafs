@@ -39,7 +39,9 @@ https://github.com/weka/csi-wekafs
 ## Volume Root Permissions
 The StorageClass parameters `permissions`, `ownerUid` and `ownerGid` set the mode and ownership of the volume root.
 They are applied only if at least one of them is set; otherwise the volume root keeps the mode it was created with.
-Prefer pod `securityContext.fsGroup` for group access.
+Prefer pod `securityContext.fsGroup` for group access. Use these parameters when pod-level settings are not suitable,
+for example a ReadWriteMany volume shared by pods with different `fsGroup` or SELinux contexts, where per-pod ownership
+changes or relabeling would conflict.
 
 ## Volume Health Monitoring
 The CSI plugin reports the condition and actual capacity of provisioned volumes through the CSI

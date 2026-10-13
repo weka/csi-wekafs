@@ -274,7 +274,8 @@ func newNfsMountError(server, fsName, clientIp string, version apiclient.NfsVers
 	reason := extractNfsMountReason(mountErr)
 	details := fmt.Sprintf("Details: mount -t nfs -o %s %s -> \"%s\"", strings.Join(mountOptions, ","), mountTarget, reason)
 	lower := strings.ToLower(reason)
-	if strings.Contains(lower, "no such file or directory") || strings.Contains(lower, "access denied") {
+	if strings.Contains(lower, "no such file or directory") || strings.Contains(lower, "access denied") ||
+		strings.Contains(lower, "permission denied") {
 		var fix string
 		if manageNfsPermissions {
 			fix = fmt.Sprintf("The plugin manages NFS permissions (--manage-nfs-permissions=true); check the plugin logs for errors creating the NFS client group, "+

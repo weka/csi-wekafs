@@ -62,6 +62,14 @@ func TestNewNfsMountError(t *testing.T) {
 		})
 	}
 
+	for _, reason := range []string{"Permission denied", "access denied by server while mounting 10.0.112.193:/default"} {
+		err := newNfsMountError("10.0.112.193", "default", "10.0.108.201", "V4.1", "10.0.112.193:/default", opts, false,
+			errors.New("Output: mount.nfs: mounting 10.0.112.193:/default failed, reason given by server: "+reason))
+		if status.Code(err) != codes.PermissionDenied || !strings.HasPrefix(status.Convert(err).Message(), "NFS export missing:") {
+			t.Errorf("reason %q not classified as missing export: %v", reason, err)
+		}
+	}
+
 	for _, manage := range []bool{false, true} {
 		err := newNfsMountError("10.0.112.193", "default", "10.0.108.201", "V3", "10.0.112.193:/default", opts, manage, errors.New("Output: mount.nfs: Connection timed out"))
 		msg := status.Convert(err).Message()
