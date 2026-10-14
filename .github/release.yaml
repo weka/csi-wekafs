@@ -17,3 +17,7 @@ changelog:
         - ci
         - documentation
         - sidecar
+    # PRs without any of the labels above, so an unlabeled PR is never left out of the notes
+    - title: Other changes
+      labels:
+        - "*"
