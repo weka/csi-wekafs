@@ -1,9 +1,9 @@
 
 ## What's Changed
 ### Bug Fixes
-* fix: add a switch to let the Weka admin manage NFS client groups and exports by @rugggger in https://github.com/weka/csi-wekafs/pull/833
+* fix: don't mount to set volume root permissions unless the StorageClass asks for it by @rugggger in https://github.com/weka/csi-wekafs/pull/836
 ### Miscellaneous
-* ci: add release-v3 workflow by @rugggger in https://github.com/weka/csi-wekafs/pull/834
-* ci: fix release-v3 version calculation on main by @rugggger in https://github.com/weka/csi-wekafs/pull/835
+* ci: restore the ArtifactHub changes list in release-v3 by @rugggger in https://github.com/weka/csi-wekafs/pull/838
+* ci: label merged PRs from their title prefix for release notes and ArtifactHub changes by @rugggger in https://github.com/weka/csi-wekafs/pull/839
 
 
