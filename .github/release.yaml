@@ -1,6 +1,9 @@
 # https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
 changelog:
   categories:
+    - title: Breaking changes
+      labels:
+        - breaking
     - title: New features
       labels:
         - feature
@@ -17,3 +20,7 @@ changelog:
         - ci
         - documentation
         - sidecar
+    # PRs without any of the labels above, so an unlabeled PR is never left out of the notes
+    - title: Other changes
+      labels:
+        - "*"
