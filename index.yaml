@@ -3,6 +3,43 @@ entries:
   csi-wekafsplugin:
   - annotations:
       artifacthub.io/category: storage
+      artifacthub.io/changes: |-
+        - description: 'fix: don''t mount to set volume root permissions unless the StorageClass asks for it'
+          kind: fixed
+          links:
+            - name: 'PR #836'
+              url: https://github.com/weka/csi-wekafs/pull/836
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/signKey: |
+        fingerprint: BA9F2D31BE9193E01FA17450BCE0A5CF67AC0C59
+        url: https://weka.github.io/csi-wekafs/csi-public.gpg
+    apiVersion: v2
+    appVersion: v2.9.7
+    created: "2026-10-14T07:45:43.919889251Z"
+    description: Helm chart for Deployment of WekaIO Container Storage Interface (CSI)
+      plugin for WekaFS - the world fastest filesystem
+    digest: e827e05e46e0e0a3ede5f03693ea49b5b60a863c62bde140c8b72c5e00489da0
+    home: https://github.com/weka/csi-wekafs
+    icon: https://weka.github.io/csi-wekafs/logo.png
+    keywords:
+    - storage
+    - filesystem
+    - HPC
+    maintainers:
+    - email: csi@weka.io
+      name: WekaIO, Inc.
+      url: https://weka.io
+    name: csi-wekafsplugin
+    sources:
+    - https://github.com/weka/csi-wekafs/tree/v2.9.7/charts/csi-wekafsplugin
+    type: application
+    urls:
+    - https://github.com/weka/csi-wekafs/releases/download/v2.9.7/csi-wekafsplugin-2.9.7.tgz
+    version: 2.9.7
+  - annotations:
+      artifacthub.io/category: storage
       artifacthub.io/containsSecurityUpdates: "false"
       artifacthub.io/license: Apache-2.0
       artifacthub.io/prerelease: "false"
@@ -1726,4 +1763,4 @@ entries:
     urls:
     - https://weka.github.io/csi-wekafs/csi-wekafsplugin-0.6.2-0.tgz
     version: 0.6.2-0
-generated: "2026-10-14T07:02:43.673405377Z"
+generated: "2026-10-14T07:45:43.920077332Z"
