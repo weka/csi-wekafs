@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write # label merged PRs from their titles, see "Label merged PRs"
 
 concurrency:
   group: release-v3
@@ -60,6 +61,31 @@ jobs:
             echo "version=$VERSION"
             echo "previous_tag=$(git describe --tags --abbrev=0 HEAD)"
           } >> "$GITHUB_OUTPUT"
+
+      # Release notes and the ArtifactHub changes list are grouped by PR label. Labels are easy to forget,
+      # PR titles are enforced by lint_pr, so label every PR merged since the previous release that has no
+      # release label yet from its title prefix. Labels set by hand are left alone.
+      - name: Label merged PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREV: ${{ steps.version.outputs.previous_tag }}
+        run: |
+          SINCE="$(git log -1 --format=%cI "$PREV")"
+          # shellcheck disable=SC2016 # $t and $label are jq variables
+          gh pr list --base main --state merged --limit 500 --search "merged:>$SINCE" \
+            --json number,title,labels --jq '
+              .[]
+              | select([.labels[].name | ascii_downcase]
+                  | any(IN("security", "security fix", "breaking", "feature", "enhancement", "fix", "bug",
+                           "field issue", "documentation", "dependencies", "ci", "sidecar")) | not)
+              | (.title | ascii_downcase | capture("^(?<type>[a-z]+)(\\((?<scope>[^)]*)\\))?!?:")) as $t
+              | ({"feat": "feature", "fix": "fix", "docs": "documentation", "ci": "ci", "breaking": "breaking"}[$t.type]
+                 // (if $t.type == "chore" and $t.scope == "deps" then "dependencies" else empty end)) as $label
+              | "\(.number) \($label)"
+            ' | while read -r number label; do
+              echo "Labeling PR #$number as $label"
+              gh pr edit "$number" --repo "$GITHUB_REPOSITORY" --add-label "$label"
+            done
 
       - name: Generate release notes
         env:
