@@ -111,6 +111,15 @@ In order to use Weka CSI Plugin with SELinux enforcement, the following steps mu
    ```
    * If the output matches example, the policy is installed, proceed to next step.
    * If no output, policy is not installed, proceed to [Custom SELinux Policy Installation](#custom-selinux-policy-installation)
+
+   > **NOTE:** When the node component detects SELinux automatically (OpenShift, or without `selinuxSupport=enforced`),
+   > it adds an SELinux context to WekaFS mounts only if SELinux is on **and** the Weka policy is loaded.
+   > The decision is logged once at startup by the `wekafs` container of the node pod, e.g.:
+   > ```
+   > SELinux mount context decision selinux_mode=auto selinux_enabled=true wekafs_label_valid=false selinux_context_on_mounts=false
+   > ```
+   > `wekafs_label_valid=false` on an SELinux host means the policy is not loaded on that node, and a warning is logged:
+   > volumes are mounted without an SELinux context.
 7. Check if the node is labeled with plugin is operating in SELinux-compatible mode by issuing the following command:
    ```shell
    $ kubectl describe node don-kube-8 | grep csi.weka.io/selinux_enabled

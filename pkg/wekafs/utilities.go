@@ -8,10 +8,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -615,8 +617,11 @@ func isWekaRunning(ctx context.Context) bool {
 // An absent path means SELinux support was never asked for, and reporting false is right. The
 // controller never gets the mount and so always reports false: its mounts are consumed by the
 // privileged plugin itself rather than propagated to a workload container, so they need no context.
-func getSelinuxStatus(ctx context.Context) bool {
-	return selinuxEnabledAt(ctx, "/sys/fs/selinux/enforce")
+//
+// This answers only "is SELinux on". The NFS context (nfs_t) is part of every base policy, so that is
+// enough for NFS; wekafs mounts additionally need the Weka policy module, see wekafsSelinuxStatusAt.
+func getSelinuxStatus(ctx context.Context, selinuxfsDir string) bool {
+	return selinuxEnabledAt(ctx, filepath.Join(selinuxfsDir, "enforce"))
 }
 
 // selinuxEnabledAt is getSelinuxStatus with the selinuxfs path injected, so the states can be tested
@@ -638,6 +643,67 @@ func selinuxEnabledAt(ctx context.Context, enforcePath string) bool {
 	default:
 		return false
 	}
+}
+
+// wekafsSelinuxContext is the security context wekafs mounts are labelled with, without the quoting
+// the fscontext= mount option wraps it in.
+var wekafsSelinuxContext = fmt.Sprintf("system_u:object_r:%s:s0", selinuxContextWekaFs)
+
+// writeSelinuxContext asks the kernel to validate a security context by writing it to selinuxfs
+// "context" (security_check_context). It is a query and changes nothing on the host. It is a variable
+// so tests can produce the kernel's errors, which a regular file cannot.
+var writeSelinuxContext = func(contextPath, seContext string) error {
+	f, err := os.OpenFile(contextPath, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write([]byte(seContext))
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	return err
+}
+
+// selinuxContextValidAt reports whether the loaded SELinux policy defines seContext.
+// EINVAL means the policy does not know the context, and a missing selinuxfs means SELinux is off;
+// both are a plain "not valid". Anything else (read-only selinuxfs, permission denied) means the
+// question could not be asked, and is returned as an error.
+func selinuxContextValidAt(ctx context.Context, selinuxfsDir, seContext string) (bool, error) {
+	err := writeSelinuxContext(filepath.Join(selinuxfsDir, "context"), seContext)
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, syscall.EINVAL), errors.Is(err, fs.ErrNotExist):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+// wekafsSelinuxStatusAt decides whether wekafs mounts get the SELinux fscontext option.
+//
+// SELinux being on is not enough: wekafs_csi_volume_t exists only when Weka's policy module is loaded
+// on the host, and on a host without it a labelled mount fails or is mislabelled. So the context is
+// added only when SELinux is on and the kernel accepts the context. If the context check itself fails
+// unexpectedly, fall back to the SELinux state alone rather than silently dropping the label.
+//
+// enabled and labelValid are returned alongside the decision for logging.
+func wekafsSelinuxStatusAt(ctx context.Context, selinuxfsDir string) (use, enabled, labelValid bool) {
+	enabled = getSelinuxStatus(ctx, selinuxfsDir)
+	if !enabled {
+		return false, false, false
+	}
+	labelValid, err := selinuxContextValidAt(ctx, selinuxfsDir, wekafsSelinuxContext)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Str("selinuxfs_path", selinuxfsDir).Str("context", wekafsSelinuxContext).
+			Msg("Failed to validate SELinux context, deciding by SELinux state alone")
+		return true, true, false
+	}
+	if !labelValid {
+		log.Ctx(ctx).Warn().Str("context", wekafsSelinuxContext).
+			Msgf("SELinux is enabled but %s is not defined - Weka SELinux policy is not loaded on this node; mounting without SELinux context", selinuxContextWekaFs)
+	}
+	return labelValid, true, labelValid
 }
 
 // Die used to intentionally panic and exit, while updating termination log

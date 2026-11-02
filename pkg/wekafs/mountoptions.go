@@ -231,7 +231,7 @@ func (opts MountOptions) setSelinux(selinuxSupport bool, mountProtocol string) {
 	if selinuxSupport {
 		var o mountOption
 		if mountProtocol == MountProtocolWekafs {
-			o = newMountOptionFromString(fmt.Sprintf("fscontext=\"system_u:object_r:%s:s0\"", selinuxContextWekaFs))
+			o = newMountOptionFromString(fmt.Sprintf("fscontext=\"%s\"", wekafsSelinuxContext))
 		} else if mountProtocol == MountProtocolNfs {
 			o = newMountOptionFromString(fmt.Sprintf("context=\"system_u:object_r:%s:s0\"", selinuxContextNfs))
 		}

@@ -74,6 +74,7 @@ const (
 const (
 	selinuxContextWekaFs     = "wekafs_csi_volume_t"
 	selinuxContextNfs        = "nfs_t"
+	selinuxfsPath            = "/sys/fs/selinux"
 	MountOptionSyncOnClose   = "sync_on_close"
 	MountOptionReadOnly      = "ro"
 	MountOptionWriteCache    = "writecache"
