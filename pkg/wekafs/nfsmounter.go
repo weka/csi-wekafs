@@ -71,7 +71,7 @@ func (m *nfsMounter) getSelinuxStatus(ctx context.Context) bool {
 	if m.selinuxSupport != nil && *m.selinuxSupport {
 		return true
 	}
-	selinuxSupport := getSelinuxStatus(ctx)
+	selinuxSupport := getSelinuxStatus(ctx, selinuxfsPath)
 	m.selinuxSupport = &selinuxSupport
 	return *m.selinuxSupport
 }

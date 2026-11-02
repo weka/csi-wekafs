@@ -17,7 +17,8 @@ type wekafsMounter struct {
 	lock                    sync.Mutex
 	kMounter                mount.Interface
 	debugPath               string
-	selinuxSupport          *bool
+	selinuxSupport          *bool  // forced on by --selinux-support, otherwise the cached detection result
+	selinuxfsPath           string // where selinuxfs is mounted; a field only so tests can point it elsewhere
 	gc                      *innerPathVolGc
 	allowProtocolContainers bool
 	config                  *DriverConfig
@@ -45,10 +46,14 @@ func newWekafsMounter(ctx context.Context, driver *WekaFsDriver) *wekafsMounter 
 		log.Debug().Msg("SELinux support is forced")
 		selinuxSupport = &[]bool{true}[0]
 	}
-	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport, config: driver.config, mountBaseDir: mountBaseDirForRole(driver.csiMode)}
+	mounter := &wekafsMounter{mountMap: wekafsMountsMap{}, debugPath: driver.debugPath, selinuxSupport: selinuxSupport, selinuxfsPath: selinuxfsPath, config: driver.config, mountBaseDir: mountBaseDirForRole(driver.csiMode)}
 	mounter.gc = initInnerPathVolumeGc(mounter)
 	mounter.gc.config = driver.config
 	mounter.schedulePeriodicMountGc(ctx)
+	if driver.csiMode == CsiModeNode {
+		// Detect now rather than at the first mount, so the decision is in the node pod log from the start.
+		mounter.getSelinuxStatus(ctx)
+	}
 
 	return mounter
 }
@@ -70,13 +75,19 @@ func (m *wekafsMounter) NewMount(fsName string, options MountOptions) AnyMount {
 	return wMount
 }
 
+// getSelinuxStatus detects once and caches the result, negative included, so mounts on a node
+// without the Weka policy do not re-probe selinuxfs and repeat the warning.
 func (m *wekafsMounter) getSelinuxStatus(ctx context.Context) bool {
-	if m.selinuxSupport != nil && *m.selinuxSupport {
-		return true
+	if m.selinuxSupport != nil {
+		return *m.selinuxSupport
 	}
-	selinuxSupport := getSelinuxStatus(ctx)
-	m.selinuxSupport = &selinuxSupport
-	return *m.selinuxSupport
+	use, enabled, labelValid := wekafsSelinuxStatusAt(ctx, m.selinuxfsPath)
+	// Logged once, so support can read from the node pod log why mounts do or do not carry a context.
+	log.Ctx(ctx).Info().Str("selinux_mode", "auto").Str("selinuxfs_path", m.selinuxfsPath).
+		Bool("selinux_enabled", enabled).Bool("wekafs_label_valid", labelValid).
+		Bool("selinux_context_on_mounts", use).Msg("SELinux mount context decision")
+	m.selinuxSupport = &use
+	return use
 }
 
 func (m *wekafsMounter) mountWithOptions(ctx context.Context, fsName string, mountOptions MountOptions, apiClient *apiclient.ApiClient) (string, error, UnmountFunc) {
